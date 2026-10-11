@@ -4,6 +4,7 @@ import { copyText } from "../../lib/copy";
 import { speechSupported, stopIfSpeaking, toggleSpeech, useSpeechPhase } from "../../lib/speech";
 import type { Message } from "../../lib/types";
 import { ThinkingCard, ThoughtSummary } from "./Thought";
+import CopyButton from "../../ui/CopyButton";
 import { IconCheck, IconClose, IconCopy, IconEdit, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
 
 export type OutboxActions = { onResend: (id: string) => void; onDiscard: (id: string) => void };
@@ -30,18 +31,6 @@ function MessageActions({ message, onRegenerate }: { message: Message; onRegener
       {/* 半截回复：提醒内容不完整（重新生成就能补全） */}
       {message.status === "stopped" && <span className="msg-stopped"><IconStop size={12} />已停止</span>}
     </div>
-  );
-}
-
-/** 复制键：点后 1.5 秒内显示对勾（图标原地 pop 换，同 App CopyAction）。 */
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => { if (!copied) return; const t = setTimeout(() => setCopied(false), 1500); return () => clearTimeout(t); }, [copied]);
-  return (
-    <button className="icon-btn sm" aria-label={copied ? "已复制" : "复制"} title={copied ? "已复制" : "复制"}
-      onClick={async () => { await navigator.clipboard.writeText(text); setCopied(true); }}>
-      <span key={copied ? "y" : "n"} className="icon-pop">{copied ? <IconCheck size={16} /> : <IconCopy />}</span>
-    </button>
   );
 }
 

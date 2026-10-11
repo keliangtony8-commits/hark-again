@@ -270,5 +270,7 @@ abstract final class Layout {
   static const dialogMax = 400.0; // 居中对话框最宽多宽（平板上不拉满）
   static const chartHeight = 120.0; // 用量页逐日柱状图的绘图区高度
   static const skeletonHero = 148.0, skeletonStat = 104.0, skeletonChart = 200.0; // 用量页骨架：月卡 / 统计格 / 每日图（与内容同高，换态不跳版）
+  static const summaryFold = 280.0; // 摘要卡折起时正文露多高（再长就“展开全文”）
+  static const imageStrip = 176.0, imageTileWidth = 232.0; // 图片卡多张时横排：每张的高 / 宽；单张按 4:3 铺满
   static const seekPagesMax = 60; // 定位消息时最多往上翻多少屏（防止死循环）
 }

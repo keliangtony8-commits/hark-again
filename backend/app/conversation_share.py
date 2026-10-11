@@ -2,7 +2,7 @@
 唯一入口：load / share / unshare / state，路由 routes/conversations.py 与工具 agent/builtin/pages.py share_conversation 只转发。
 - 快照：分享那一刻的内容；对话之后有新消息 → state 里 stale=True，客户端提示“更新分享”，同一链接覆盖。
 - 停止分享 = 页面下线（pages_store 的 published=False），链接保留，再分享原链接复活。
-- 只放对外安全的东西：文字 / 代码 / 表格 / 链接 / 数字卡 / 生成的网页链接；
+- 只放对外安全的东西：文字 / 代码 / 表格 / 链接 / 数字卡 / 草稿 / 摘要文档 / 网络图片 / 生成的网页链接；
   审批卡、云浏览器画面不放，附件只写文件名（附件下载要登录，公开页给不了）。
 - 页面是服务端渲染的纯 HTML（不带脚本），Markdown 只认常用子集，先转义再加标签，杜绝注入。"""
 import html
@@ -141,6 +141,18 @@ def block_html(b: dict) -> str:
                 f'网页 · {e(b.get("title", ""))}</a>')
     if t == "file":
         return f'<span class="chip">附件 · {e(b.get("name", ""))}</span>'
+    if t == "draft":
+        return (f'<div class="draft"><div class="cap">草稿 · {e(b.get("title", ""))}</div>'
+                f'<div class="draft-body">{e(b.get("body", ""))}</div></div>')
+    if t == "summary":
+        sub = f'<div class="cap">{e(b["subtitle"])}</div>' if b.get("subtitle") else ""
+        return f'<article class="doc"><h3>{e(b.get("title", ""))}</h3>{sub}{markdown(b.get("markdown", ""))}</article>'
+    if t == "images":
+        figs = "".join(
+            f'<figure><img src="{e(it["url"], quote=True)}" alt="{e(it.get("caption") or "")}" loading="lazy" '
+            f'referrerpolicy="no-referrer">' + (f'<figcaption>{e(it["caption"])}</figcaption>' if it.get("caption") else "")
+            + "</figure>" for it in b.get("items", []) if _SAFE_URL.match(it.get("url", "")))
+        return f'<div class="images">{figs}</div>' if figs else ""
     return ""  # approval / browser / 未知：不公开
 
 
@@ -193,6 +205,12 @@ th{color:var(--text2);font-weight:500}
 .stat .value{font:500 22px/1.3 "Noto Serif SC","Songti SC",Georgia,serif}
 .chip{display:inline-block;background:var(--tile);border-radius:999px;padding:4px 12px;font-size:13px;margin:0 6px 12px 0}
 .msg.user .chip{background:rgba(255,255,255,.15)}
+.draft{background:var(--tile);border-radius:14px;padding:12px 16px;margin:0 0 12px}
+.draft .cap{margin-bottom:6px}.draft-body{white-space:pre-wrap}
+.doc{border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin:0 0 12px}.doc h3{margin-top:0}
+.images{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:0 0 12px}
+.images figure{margin:0}.images img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;background:var(--tile)}
+figcaption{color:var(--text2);font-size:13px;margin-top:4px}
 footer{color:var(--text2);font-size:12px;text-align:center;margin-top:40px}
 """
 

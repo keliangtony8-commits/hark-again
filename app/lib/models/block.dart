@@ -27,6 +27,13 @@ sealed class Block {
         'memory' => MemoryBlock(
             action: j['action'] as String? ?? 'saved',
             items: [for (final i in (j['items'] as List? ?? [])) MemoryChange.fromJson(i as Map<String, dynamic>)]),
+        'draft' => DraftBlock(title: j['title'] as String? ?? '草稿', body: j['body'] as String? ?? ''),
+        'summary' => SummaryBlock(
+            title: j['title'] as String? ?? '', subtitle: j['subtitle'] as String?, markdown: j['markdown'] as String? ?? ''),
+        'images' => ImagesBlock([
+            for (final i in (j['items'] as List? ?? []))
+              if (ImageItem.fromJson(i as Map<String, dynamic>) case final it when it.safe) it
+          ]),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -124,6 +131,35 @@ class MemoryBlock extends Block {
   final List<MemoryChange> items;
 }
 
+/// 草稿卡：用户要以自己名义发出去的文字（邮件连主题行、消息、帖子）。原样显示，复制 / 分享。
+class DraftBlock extends Block {
+  const DraftBlock({required this.title, required this.body});
+  final String title, body;
+}
+
+/// 摘要卡：用户自己读的长文（计划、行程、简报），带标题的一份 Markdown。
+class SummaryBlock extends Block {
+  const SummaryBlock({required this.title, this.subtitle, required this.markdown});
+  final String title, markdown;
+  final String? subtitle;
+}
+
+class ImageItem {
+  const ImageItem({required this.url, this.caption});
+  factory ImageItem.fromJson(Map<String, dynamic> j) => ImageItem(url: j['url'] as String? ?? '', caption: j['caption'] as String?);
+  final String url;
+  final String? caption;
+
+  /// 只显示 http(s) 图片（服务器已校验，客户端再守一道）
+  bool get safe => url.startsWith('https://') || url.startsWith('http://');
+}
+
+/// 图片卡：用户想看样子时的一组网络图片（1–6 张）。
+class ImagesBlock extends Block {
+  const ImagesBlock(this.items);
+  final List<ImageItem> items;
+}
+
 class UnknownBlock extends Block {
   const UnknownBlock(this.type);
   final String type;
@@ -151,6 +187,10 @@ String copyText(List<Block> blocks) => [
           PageBlock(:final title, :final url) => '$title $url',
           FileBlock(:final name) => '[文件：$name]',
           StatsBlock(:final items) => [for (final i in items) '${i.label}：${i.value}${i.note != null && i.note!.isNotEmpty ? '（${i.note}）' : ''}'].join('\n'),
+          DraftBlock(:final body) => body.trim(),
+          SummaryBlock(:final title, :final subtitle, :final markdown) =>
+            ['**$title**', if (subtitle != null && subtitle.isNotEmpty) subtitle, markdown.trim()].join('\n\n'),
+          ImagesBlock(:final items) => [for (final i in items) '- ${i.caption ?? '图片'} ${i.url}'].join('\n'),
           _ => '',
         },
     ].where((s) => s.isNotEmpty).join('\n\n');

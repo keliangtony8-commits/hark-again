@@ -392,6 +392,32 @@ class _RenderSizeReporter extends RenderProxyBox {
 
 /// 一段还在变长的文字只露出“最后几行”：固定高度、底对齐，顶上一截渐隐（像滚动的字幕）。
 /// 用于思考过程这类只关心最新进展的流式文字；lines 决定露几行，按 style 的字号和行高算高度。
+/// 长内容折起：最多露出 [maxHeight] 高，底边渐隐提示“还有”（摘要卡展开前）。只在确实很长时用。
+class FoldedBox extends StatelessWidget {
+  const FoldedBox({super.key, required this.maxHeight, required this.child});
+  final double maxHeight;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = context.palette.text;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: ShaderMask(
+        // 遮罩只看透明度：上面 70% 全显，往下渐隐到 0
+        shaderCallback: (r) => LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [ink, ink.withValues(alpha: 0)],
+          stops: const [0.7, 1],
+        ).createShader(r),
+        blendMode: BlendMode.dstIn,
+        child: SingleChildScrollView(physics: const NeverScrollableScrollPhysics(), child: child),
+      ),
+    );
+  }
+}
+
 class TailText extends StatelessWidget {
   const TailText(this.text, {super.key, required this.style, this.lines = 2});
   final String text;

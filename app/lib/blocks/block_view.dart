@@ -5,6 +5,7 @@ import '../models/block.dart';
 import '../theme/tokens.dart';
 import 'basic_blocks.dart';
 import 'browser_block.dart';
+import 'content_blocks.dart';
 import 'interactive_blocks.dart';
 import 'memory_block.dart';
 
@@ -24,6 +25,9 @@ class BlockView extends StatelessWidget {
         PageBlock b => PageBlockView(b),
         StatsBlock b => StatsBlockView(b),
         MemoryBlock b => MemoryBlockView(b),
+        DraftBlock b => DraftBlockView(b),
+        SummaryBlock b => SummaryBlockView(b),
+        ImagesBlock b => ImagesBlockView(b),
         UnknownBlock _ => const SizedBox.shrink(), // 新版服务器的新卡片：旧 App 安静忽略
       };
 }

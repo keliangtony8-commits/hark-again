@@ -13,7 +13,14 @@ export type MemoryBlock = {
   type: "memory"; action: "saved" | "updated" | "forgotten";
   items: { id: string; content: string; category: string; previous?: string | null }[];
 };
-export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock;
+/** 草稿卡：用户以自己名义发出去的文字（原样显示，复制/分享）。 */
+export type DraftBlock = { type: "draft"; title: string; body: string };
+/** 摘要卡：用户自己读的长文，带标题的一份 Markdown。 */
+export type SummaryBlock = { type: "summary"; title: string; subtitle?: string | null; markdown: string };
+/** 图片卡：想看样子时的 1–6 张网络图片。 */
+export type ImagesBlock = { type: "images"; items: { url: string; caption?: string | null }[] };
+export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
+  | DraftBlock | SummaryBlock | ImagesBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

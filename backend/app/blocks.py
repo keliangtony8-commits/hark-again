@@ -101,8 +101,35 @@ class MemoryBlock(BaseModel):
     items: list[MemoryItem] = Field(min_length=1)
 
 
+class DraftBlock(BaseModel):
+    """草稿卡：用户要拿去以自己名义发出的文字（邮件连主题行、微信消息、帖子、请假条）。
+    原样显示（不渲染 Markdown），一键复制 / 分享。"""
+    type: Literal["draft"] = "draft"
+    title: str  # 是什么、发给谁：“给房东的邮件”“朋友圈文案”
+    body: str
+
+
+class SummaryBlock(BaseModel):
+    """摘要卡：用户会自己读的长内容（计划、行程、简报、清单），带标题的一份 Markdown 文档。"""
+    type: Literal["summary"] = "summary"
+    title: str
+    subtitle: str | None = None  # 来源或范围：“杭州 · 10 月 18–19 日”“来自 xx.com”
+    markdown: str
+
+
+class ImageItem(BaseModel):
+    url: str = Field(pattern=r"^https?://")
+    caption: str | None = None
+
+
+class ImagesBlock(BaseModel):
+    """图片卡：用户想看样子时的一组网络图片（地址来自搜索/网页，不编造），最多 6 张。"""
+    type: Literal["images"] = "images"
+    items: list[ImageItem] = Field(min_length=1, max_length=6)
+
+
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
-                        PageBlock, StatsBlock, MemoryBlock],
+                        PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock],
                   Field(discriminator="type")]
 
 
@@ -134,4 +161,10 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[{verb}：" + "；".join(i["content"] for i in b["items"]) + "]")
         elif t == "file":
             parts.append(f"[文件：{b['name']}]")
+        elif t == "draft":
+            parts.append(f"[草稿「{b['title']}」]\n{b['body']}")
+        elif t == "summary":
+            parts.append(f"# {b['title']}\n" + (f"{b['subtitle']}\n" if b.get("subtitle") else "") + b["markdown"])
+        elif t == "images":
+            parts.append("[图片：" + "；".join((i.get("caption") or "") + " " + i["url"] for i in b["items"]) + "]")
     return "\n\n".join(parts)

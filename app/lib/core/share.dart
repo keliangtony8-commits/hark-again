@@ -21,3 +21,9 @@ Future<bool> shareLink(String url, {String? subject, Rect? origin}) async {
   final r = await SharePlus.instance.share(ShareParams(text: url, subject: subject, sharePositionOrigin: origin));
   return r.status == ShareResultStatus.success;
 }
+
+/// 分享一段纯文本（草稿卡：发到微信、邮件……）。返回 false = 用户取消或系统不支持。
+Future<bool> shareText(String text, {String? subject, Rect? origin}) async {
+  final r = await SharePlus.instance.share(ShareParams(text: text, subject: subject, sharePositionOrigin: origin));
+  return r.status == ShareResultStatus.success;
+}

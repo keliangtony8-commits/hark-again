@@ -42,6 +42,11 @@ mixin _LoopMotion<T extends StatefulWidget> on State<T>, SingleTickerProviderSta
   }
 }
 
+/// 网络图片下载好了再淡入（之前露出底下的占位底色）；缓存里同步拿到的直接显示。用作 Image.frameBuilder。
+Widget fadeInFrame(BuildContext context, Widget child, int? frame, bool wasSynchronouslyLoaded) => wasSynchronouslyLoaded
+    ? child
+    : AnimatedOpacity(opacity: frame == null ? 0 : 1, duration: context.motion(Motion.base), curve: Motion.ease, child: child);
+
 /// 出现时轻轻上浮淡入（新消息、列表项、卡片）。delay 用于列表错峰。
 class FadeSlideIn extends StatelessWidget {
   const FadeSlideIn({super.key, required this.child, this.delay = Duration.zero, this.offset = Motion.rise});

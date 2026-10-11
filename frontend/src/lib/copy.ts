@@ -20,6 +20,9 @@ export function copyText(blocks: Block[]): string {
       case "page": return `${b.title} ${b.url}`;
       case "stats": return b.items.map((i) => `${i.label}：${i.value}${i.note ? `（${i.note}）` : ""}`).join("\n");
       case "file": return `[文件：${b.name}]`;
+      case "draft": return b.body.trim();
+      case "summary": return [`**${b.title}**`, ...(b.subtitle ? [b.subtitle] : []), b.markdown.trim()].join("\n\n");
+      case "images": return b.items.map((i) => `- ${i.caption ?? "图片"} ${i.url}`).join("\n");
       default: return "";
     }
   }).filter(Boolean).join("\n\n");

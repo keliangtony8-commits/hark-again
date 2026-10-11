@@ -48,3 +48,5 @@ export const IconMore = (p: P) => <S size={16} {...p} d="M6 12h.01M12 12h.01M18 
 export const IconBolt = (p: P) => <S size={14} {...p} d="M13 3 5 13.5h6L10 21l8-10.5h-6z" />;
 export const IconGauge = (p: P) => <S {...p} d="M4 17a8 8 0 1 1 16 0M12 17l3.5-5M7 17h-.01M17 17h-.01" />;
 export const IconChevronDown = (p: P) => <S {...p} d="M6 9l6 6 6-6" />;
+export const IconShare = (p: P) => <S {...p} d="M12 15V4M8 8l4-4 4 4M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6" />;
+export const IconImageOff = (p: P) => <S {...p} d="M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15 9.5h.01" />;
