@@ -10,13 +10,21 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .approvals import FormReply
+
 
 Approver = Callable[[str, str, str], Awaitable[bool]]  # (approval_id, 标题, 详情) -> 是否批准
+Asker = Callable[[str, dict], Awaitable["FormReply | None"]]  # (form_id, 表单卡) -> 用户填的值；None = 取消
 
 
 async def deny_all(_id: str, _title: str, _detail: str) -> bool:
     """无人值守（定时任务）时的审批策略：高风险操作一律不做。"""
     return False
+
+
+async def nobody(_id: str, _form: dict) -> "FormReply | None":
+    """无人值守时没人填表：一律当作取消。"""
+    return None
 
 
 @dataclass
@@ -25,6 +33,7 @@ class ToolContext:
     project_id: str | None = None
     approve: Approver = deny_all
     conversation_id: str | None = None  # 当前对话（分享对话等“作用于这段对话本身”的工具用）
+    ask: Asker = nobody  # 在聊天里弹表单卡问用户（登录、验证码）
 
 
 @dataclass
@@ -52,6 +61,9 @@ class Tool:
     risk: Callable[[dict], str | None] | None = None  # 返回需要审批的理由；None = 直接执行
     # 需要审批时的卡片：返回一个带 state 的块（如订单卡），内核补上 id；None = 通用审批卡。参数不对就抛 ValueError。
     card: Callable[[dict], dict] | None = None
+    # 执行前要问用户的表单（如登录卡）：返回表单卡（不带 id/state）或 None = 不用问。
+    # 用户填完，值以 form=FormReply 传给 run；取消则不执行。模型传来的 form 参数一律丢弃。
+    form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None
 
     def available(self, ctx: ToolContext) -> bool:
         if self.scope == "project":
@@ -65,9 +77,10 @@ REGISTRY: dict[str, Tool] = {}
 
 
 def tool(name: str, label: str, description: str, parameters: dict, scope: str = "always",
-         risk: Callable[[dict], str | None] | None = None, card: Callable[[dict], dict] | None = None):
+         risk: Callable[[dict], str | None] | None = None, card: Callable[[dict], dict] | None = None,
+         form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None):
     def deco(fn):
-        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card)
+        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form)
         return fn
     return deco
 

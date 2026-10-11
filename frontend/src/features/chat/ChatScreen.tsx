@@ -48,7 +48,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   const open = (id: string | null, focus?: string) => { chat.open(id, focus); setDrawer(false); };
 
   return (
-    <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval }}>
+    <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval, replyForm: chat.replyForm }}>
       <div className={`chat ${leading ? "with-bar" : "floating"} ${drawer ? "drawer-open" : ""}`}>
         <ConversationList title={listTitle} list={chat.list} activeId={chat.activeId}
           onOpen={open} onDelete={chat.remove} onClose={() => setDrawer(false)} />

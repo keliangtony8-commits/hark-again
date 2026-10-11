@@ -173,6 +173,20 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
             yield ToolResult("用户没有批准这个操作，已取消。不要换方式绕过，告诉用户即可。")
             return
 
+    if t.form:
+        args.pop("form", None)  # 表单值只能来自用户，不能来自模型
+        reply = None
+        async for ev in _ask_form(builder, ctx, t, args):
+            if isinstance(ev, Asked):
+                reply = ev
+            else:
+                yield ev
+        if reply is not None:
+            if reply.reply is None:
+                yield ToolResult("用户没有填写，已取消。可以问问用户想怎么办，不要反复弹表单。")
+                return
+            args["form"] = reply.reply
+
     yield ToolStatus(call.id, call.name, t.label, "running")
     try:
         result = await t.run(ctx, **args)
@@ -185,6 +199,25 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
             yield builder.add(b)
     yield ToolStatus(call.id, call.name, t.label, "done")
     yield ToolResult(result.content, images=result.images)
+
+@dataclass
+class Asked:
+    reply: object  # FormReply | None（None = 取消）
+
+
+async def _ask_form(builder: MessageBuilder, ctx: ToolContext, t, args: dict):
+    """需要时插入表单卡 → 等用户填 → 卡片标 submitted / cancelled。最后产出 Asked；不用问就什么都不产出。
+    卡片上只留字段的说明，用户填的值不进卡片。"""
+    spec = await t.form(ctx, args)
+    if not spec:
+        return
+    fid = uuid.uuid4().hex
+    yield builder.add({**spec, "id": fid, "state": "pending"})
+    index = len(builder.blocks) - 1
+    reply = await ctx.ask(fid, builder.blocks[index])
+    yield builder.update(index, state="submitted" if reply is not None else "cancelled")
+    yield Asked(reply)
+
 
 async def _ask_approval(builder: MessageBuilder, ctx: ToolContext, reason: str, args: dict, card: dict | None = None):
     """插入审批卡（或工具自己的确认卡，如订单卡）→ 等用户决定 → 更新卡片状态。最后产出 bool。"""

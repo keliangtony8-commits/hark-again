@@ -37,6 +37,8 @@ async def ws_endpoint(ws: WebSocket):
                     turns.stop(event.get("conversation_id"))
                 case "approval.reply":
                     approvals.resolve(str(event.get("id")), bool(event.get("approved")))
+                case "form.reply":
+                    approvals.resolve_form(str(event.get("id")), event.get("values"), event.get("remember"))
     except WebSocketDisconnect:
         turns.close()
 
@@ -104,6 +106,10 @@ async def _approve(aid: str, _title: str, _detail: str) -> bool:
     return await approvals.wait(aid)  # 审批卡已随事件流推给前端，这里只等用户答复
 
 
+async def _ask(fid: str, form: dict):
+    return await approvals.wait_form(fid, [f["name"] for f in form.get("fields", [])])  # 表单卡已推给前端
+
+
 async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
     text = (event.get("text") or "").strip()
     files = _attachments(event.get("attachments") or [])
@@ -122,7 +128,7 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
         await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title})
-        await run_turn(db, conv, emit=emit, approve=_approve, stop=stop)
+        await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
 
 
 async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
@@ -143,7 +149,7 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title, "replaced": replaced,
                     **({"user_message": user_msg.to_wire()} if isinstance(text, str) else {})})
-        await run_turn(db, conv, emit=emit, approve=_approve, stop=stop)
+        await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
 
 
 def _attachments(ids: list[str]) -> list[dict]:

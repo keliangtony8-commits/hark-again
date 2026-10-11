@@ -14,7 +14,7 @@ from ..config import settings
 from ..models import Conversation, Message
 from . import loop
 from .context import build_history, build_system_prompt
-from .tools import Approver, ToolContext, deny_all
+from .tools import Approver, Asker, ToolContext, deny_all, nobody
 
 Emit = Callable[[dict], Awaitable[None]]
 
@@ -84,13 +84,14 @@ async def rewind(db: AsyncSession, conversation_id: str, message_id: str | None,
 
 
 async def run_turn(db: AsyncSession, conv: Conversation, emit: Emit = _silent,
-                   approve: Approver = deny_all, stop: asyncio.Event | None = None) -> Message | None:
+                   approve: Approver = deny_all, stop: asyncio.Event | None = None,
+                   ask: Asker = nobody) -> Message | None:
     with usage.scope(conv.id):  # 这一轮里所有模型调用（含摘要、记忆向量）都记在这个对话上
-        return await _run_turn(db, conv, emit, approve, stop)
+        return await _run_turn(db, conv, emit, approve, stop, ask)
 
 
 async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
-                    approve: Approver, stop: asyncio.Event | None) -> Message | None:
+                    approve: Approver, stop: asyncio.Event | None, ask: Asker = nobody) -> Message | None:
     """跑一轮并落库。被取消时不丢已生成的内容：半截回复以 status=stopped 存下，照常发 message.done；
     一个块都还没有就发 message.stopped。
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
@@ -107,7 +108,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     status = "done"
     interrupted = False
     try:
-        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid), builder, model):
+        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask), builder, model):
             if not isinstance(ev, loop.Done):
                 await emit(to_wire(ev))
     except asyncio.CancelledError:

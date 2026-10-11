@@ -324,6 +324,13 @@ export function useChat(projectId?: string) {
     if (!socket.current?.send({ type: "approval.reply", id, approved })) setError("连接已断开，连上后再点一次");
   }, []);
 
+  /** 表单卡（登录、验证码）的答复，同样实时、不排队。值只走这一条线，不进本地状态。 */
+  const replyForm = useCallback((id: string, values: Record<string, string> | null, remember: boolean) => {
+    const ok = !!socket.current?.send({ type: "form.reply", id, values, remember });
+    if (!ok) setError("连接已断开，连上后再点一次");
+    return ok;
+  }, []);
+
   /** 换这个对话的模型（null = 默认）。界面立刻变；服务器那边见文件头“模型”。 */
   const setModel = useCallback(async (choice: string | null) => {
     if (choice === modelRef.current) return;
@@ -341,7 +348,7 @@ export function useChat(projectId?: string) {
 
   return {
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
-    canRegenerate, canStop, editableId, focus, model, setModel, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, reconnect,
+    canRegenerate, canStop, editableId, focus, model, setModel, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };
 }
 

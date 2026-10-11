@@ -7,6 +7,7 @@ import 'basic_blocks.dart';
 import 'browser_block.dart';
 import 'commerce_blocks.dart';
 import 'content_blocks.dart';
+import 'form_block.dart';
 import 'interactive_blocks.dart';
 import 'memory_block.dart';
 
@@ -31,6 +32,7 @@ class BlockView extends StatelessWidget {
         ImagesBlock b => ImagesBlockView(b),
         ProductsBlock b => ProductsBlockView(b),
         OrderBlock b => OrderBlockView(b),
+        FormBlock b => FormBlockView(b),
         UnknownBlock _ => const SizedBox.shrink(), // 新版服务器的新卡片：旧 App 安静忽略
       };
 }

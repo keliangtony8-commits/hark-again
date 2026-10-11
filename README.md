@@ -162,3 +162,10 @@ postgres ~200M、litellm ~300M、searxng ~150M、backend+worker ~300M、browser 
 - 描述失败只给图片名、这一轮照常，下一轮自动重试；单轮最多补 6 张描述。用量记为 kind=vision。
 - 工具也能给模型看图：工具在 `ToolResult.images` 里放 `ToolImage(name, bytes)`，怎么给由 `vision.for_tool` 决定——能看图的别名 → 在本步工具结果之后补一条带原图的 user 消息（明确写“不是用户说的话”，只活在本轮工具循环里、不进历史）；不能看图 → 描述写进最后一个工具结果（按内容哈希缓存 `captions/sha-*.txt`）。一步最多 3 张，单张 ≤10MB。现有来源：`read_file` 读项目里的图片、`browser_look` 截云浏览器当前画面。新工具要给图只管填 images，别自己拼消息。
 - 冒烟：`python tests/smoke_vision.py`、`python tests/smoke_tool_images.py`。
+
+## 任务中的表单卡：登录 / 验证码（v0.83）
+- 工具可以声明 `form=` 钩子（`agent/tools.py` `Tool.form(ctx, args) -> 表单卡 | None`）：执行前需要问用户时返回一张 `form` 卡（不带 id/state），内核（`loop._ask_form`）插卡 → `ctx.ask(id, 卡)` 等答复 → 卡片改 submitted/cancelled → 值以 `form=FormReply(values, remember)` 传给 `run`；取消就不执行。模型传来的 `form` 参数一律丢弃。
+- 等答复的中心是 `agent/approvals.py`（审批 `wait/resolve` + 表单 `wait_form/resolve_form`），WebSocket `form.reply` 进来；无人值守（worker）`ctx.ask = nobody` → 取消。
+- 用户填的值只在内存里交给工具：不写进卡片、不落库、不进给模型的工具结果。
+- 现有使用者：`browser_login`（保险箱有该站登录就直接代填、不弹卡；没有 → 登录卡，用户可勾“记住到保险箱”）、`browser_code`（短信/邮箱验证码卡，填进指定输入框并回车）。图形验证码、扫码仍走实时画面接管。
+- 冒烟：`python tests/smoke_signin_form.py`。

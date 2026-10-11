@@ -177,9 +177,30 @@ class OrderBlock(BaseModel):
     state: Literal["pending", "approved", "rejected", "expired", "placed"] = "pending"
 
 
+class FormField(BaseModel):
+    name: str = Field(pattern=r"^[a-z_]{1,24}$")
+    label: str
+    kind: Literal["text", "email", "password", "code"] = "text"  # password 遮住；code 数字键盘 + 短信验证码自动填充
+    value: str | None = None  # 预填（只放不敏感的，如用户名）
+
+
+class FormBlock(BaseModel):
+    """表单卡：任务进行中向用户要东西（网站登录、验证码）。和审批卡一样挂起等答复（form.reply，id 即表单 id）。
+    pending → submitted / cancelled / expired。用户填的值不写进卡片：只交给发起的工具，不落库、不给模型看。"""
+    type: Literal["form"] = "form"
+    id: str
+    purpose: Literal["login", "code", "info"] = "info"
+    title: str
+    site: str | None = None  # 网站域名，卡片上显示“在 xxx 上”
+    fields: list[FormField] = Field(min_length=1, max_length=6)
+    remember: bool = False  # 是否提供“记住到保险箱”
+    action: str = "提交"
+    state: Literal["pending", "submitted", "cancelled", "expired"] = "pending"
+
+
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
-                        OrderBlock],
+                        OrderBlock, FormBlock],
                   Field(discriminator="type")]
 
 
@@ -206,6 +227,10 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[网页「{b['title']}」{b['url']}，slug: {b['slug']}]")
         elif t == "approval":
             parts.append(f"[审批：{b['title']}——{b['state']}]")
+        elif t == "form":
+            state = {"pending": "等用户填写", "submitted": "用户已填写", "cancelled": "用户取消了", "expired": "已过期"}.get(b.get("state"), "")
+            site = f"（{b['site']}）" if b.get("site") else ""
+            parts.append(f"[表单：{b['title']}{site}——{state}]")
         elif t == "memory":
             verb = {"saved": "已记住", "updated": "已修改记忆", "forgotten": "已忘掉"}.get(b["action"], "记忆")
             parts.append(f"[{verb}：" + "；".join(i["content"] for i in b["items"]) + "]")

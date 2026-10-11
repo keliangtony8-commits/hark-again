@@ -1,5 +1,5 @@
 // 聊天状态的唯一归属地（对应网页版 useChat）。
-// 把服务器事件流折叠成消息列表；界面只读 ChatState、只调 open/send/replyApproval。
+// 把服务器事件流折叠成消息列表；界面只读 ChatState、只调 open/send/replyApproval/replyForm。
 // family 参数：'' = 主聊天；项目 id = 该项目里的聊天。
 // 离线：先显示 chat_cache 里的上次内容（瞬开），再向服务器要新的；连不上就留着缓存并标 offline，界面给“离线”条。
 // 发件箱：发出的消息先作为 Outbox.queued 进列表；线通了就真正发出（sent），一次只在飞一条。
@@ -482,6 +482,13 @@ class ChatController extends Notifier<ChatState> {
     if (!_socket.send({'type': 'approval.reply', 'id': id, 'approved': approved})) {
       state = state.copyWith(error: () => '连接已断开，连上后再点一次');
     }
+  }
+
+  /// 表单卡（登录、验证码）的答复。values = null 表示取消。值只走这一条线，不进本地状态和缓存。
+  bool replyForm(String id, Map<String, String>? values, bool remember) {
+    final ok = _socket.send({'type': 'form.reply', 'id': id, 'values': values, 'remember': remember});
+    if (!ok) state = state.copyWith(error: () => '连接已断开，连上后再点一次');
+    return ok;
   }
 
   /// 换这个对话的模型（null = 默认）。界面立刻变；服务器那边见文件头“模型”。

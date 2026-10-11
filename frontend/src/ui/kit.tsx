@@ -96,7 +96,7 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
 
 /** 开关：没有可见文字，所以 label 必填（读屏念的就是它）。 */
 export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
-  return <button role="switch" aria-checked={on} aria-label={label} className={`toggle ${on ? "on" : ""}`} onClick={() => onChange(!on)} />;
+  return <button type="button" role="switch" aria-checked={on} aria-label={label} className={`toggle ${on ? "on" : ""}`} onClick={() => onChange(!on)} />;
 }
 
 /** 分段选择：选中块是一块滑动的底（--i 决定位置），三端同一手感。 */

@@ -27,8 +27,12 @@ export type OrderBlock = { type: "order"; id: string; merchant: string;
   items: { name: string; price: string; qty?: number; note?: string | null; image?: string | null }[];
   breakdown?: { label: string; amount: string }[]; total: string; payment?: string | null; destination?: string | null;
   order_number?: string | null; action?: string; state: "pending" | "approved" | "rejected" | "expired" | "placed" };
+/** 表单卡（浏览器任务里的登录 / 验证码）：答复走 form.reply；用户填的值不写进卡片。 */
+export type FormInput = { name: string; label: string; kind?: "text" | "email" | "password" | "code"; value?: string | null };
+export type FormBlock = { type: "form"; id: string; purpose?: "login" | "code" | "info"; title: string; site?: string | null;
+  fields: FormInput[]; remember?: boolean; action?: string; state: "pending" | "submitted" | "cancelled" | "expired" };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

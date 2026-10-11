@@ -11,7 +11,7 @@
 
 ## 2. 聊天（WebSocket `/ws?token=`）
 
-> 客户端约定：连接断了就退避重连；断线期间用户发的消息在客户端标“待发送”，连上再发 `user.message`；回复中途断线时，连上后 `GET /api/conversations/{id}` 补全（服务器照常落库）。`approval.reply`、`message.regenerate` 不排队。服务器按到达顺序一轮接一轮处理（不会丢掉刚结束时立刻发来的下一条）。
+> 客户端约定：连接断了就退避重连；断线期间用户发的消息在客户端标“待发送”，连上再发 `user.message`；回复中途断线时，连上后 `GET /api/conversations/{id}` 补全（服务器照常落库）。`approval.reply`、`form.reply`、`message.regenerate` 不排队。服务器按到达顺序一轮接一轮处理（不会丢掉刚结束时立刻发来的下一条）。
 > 重新生成：客户端先在本地撤掉旧回复；收到 `error` 或回复开始前断线 → `GET /api/conversations/{id}` 以服务器为准。
 > 停止：生成中发 `message.cancel`，停止键置灰，等服务器回 `message.done`（半截回复，`status: "stopped"`）或 `message.stopped`（还没吐字）再收尾；客户端不在本地先砍。断线 = 服务器也停下并把半截落库（`status: "stopped"`），重连后 `GET` 能看到。
 > 复制：纯客户端，把回复的块转成 Markdown（text 原样、code 加围栏、table 转 Markdown 表、links 列表；审批/浏览器等过程卡片不复制）。
@@ -23,6 +23,7 @@
 | `message.regenerate` | `conversation_id`, `message_id?`, `text?`, `model?` | 重新生成最后一条回复：删掉最后一条用户消息之后的回复，同一条用户消息再跑一轮（不保留旧版本）。`message_id` = 客户端眼中的最后一条回复，不是最新的就回 `error`、什么都不删；不带 = 上一轮失败没有回复时“重试”。带 `text` = **编辑**：最后一条用户消息的文字原地换成它（id 不变、附件保留、标题不动；文字空且没附件 → `error`）再答。带 `model` = 换模型重答（同 user.message，记到对话上）。不排队，线不通直接提示 |
 | `message.cancel` | `conversation_id?` | 停止正在生成的这一轮。带 id 就必须对得上正在跑的对话；没有在跑的轮次就忽略（刚好已说完）。不排队 |
 | `approval.reply` | `id`, `approved: bool` | 回答审批卡 |
+| `form.reply` | `id`, `values: {字段: 字符串} \| null`, `remember: bool` | 回答表单卡（v0.83 登录/验证码）；`null` = 取消。只收卡上有的字段、非字符串丢弃、单值 ≤512；值只交给发起的工具，不落库、不回模型。和 `approval.reply` 一样不排队 |
 
 服务器 → 客户端（一轮的顺序）：
 | type | 字段 | 说明 |
@@ -55,6 +56,7 @@
 | `summary` | `title, subtitle?, markdown`（摘要卡：用户自己读的长文——计划、行程、简报；标题 + 小字来源/范围 + Markdown；超过 600 字或 14 行客户端折起，“展开全文”。`show_summary` 产出） |
 | `products` | `title?`, `pick?`, `items: [{name, price?, image?, url?, meta?}]`（v0.81 商品宫格：1–12 项；image/url 只能 http(s)，`show_products` 先探测图片，打不开的 image 置 null（商品保留、客户端占位）；price 原样；pick = 一句推荐，卡底显示；客户端 2–4 列（每格 ≥148），点格子开 url；复制成 `- 名字 价格 补充 url` 列表） |
 | `order` | `id`, `merchant`, `items: [{name, price, qty=1, note?, image?}]`, `breakdown: [{label, amount}]`, `total`, `payment?`, `destination?`, `order_number?`, `action`（按钮字，≤12）, `state: pending\|approved\|rejected\|expired\|placed`（v0.81 订单卡：`confirm_order` 产出 pending，就是审批卡——按钮回 `approval.reply {id, approved}`，服务器 block.update 改 state；无人值守/停止 → rejected/expired；`show_receipt` 产出 placed 回执带订单号、没按钮。金额全原样，客户端不算账；过程卡，不进复制） |
+| `form` | `id`, `purpose: login\|code\|info`, `title`, `site?`, `fields: [{name, label, kind: text\|email\|password\|code, value?}]`（1..6）, `remember`（是否提供“记住到保险箱”）, `action`（按钮字）, `state: pending\|submitted\|cancelled\|expired`（v0.83 表单卡：`browser_login` 在保险箱没有该站登录时、`browser_code` 要验证码时产出；客户端回 `form.reply`，服务器 block.update 改 state；无人值守 → cancelled，停止 → expired。用户填的值从不出现在卡片里；过程卡，不进复制、不进分享网页） |
 | `images` | `items: [{url, caption?}]`（1–6 张网络图片，url 必须 http(s)；服务器 `show_images` 先逐张探测（状态 <400 且 content-type image/*），打不开的丢掉；客户端单张 4:3、多张横排，坏图留占位，只渲染 http(s)） |
 
 文件地址：upload → `/api/uploads/{id}?token=`；project → `/api/projects/{project_id}/files/{id}?token=`

@@ -39,6 +39,7 @@ sealed class Block {
             pick: j['pick'] as String?,
             items: [for (final i in (j['items'] as List? ?? [])) ProductItem.fromJson(i as Map<String, dynamic>)]),
         'order' => OrderBlock.fromJson(j),
+        'form' => FormBlock.fromJson(j),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -253,6 +254,44 @@ String plainText(List<Block> blocks) => blocks.whereType<TextBlock>().map((b) =>
 
 /// “复制”一条回复得到的 Markdown（和后端 blocks.py 的 blocks_to_text 同一套规则，表格转成 Markdown 表）。
 /// 只复制内容：审批卡、浏览器画面这类过程卡片不进剪贴板。
+/// 表单卡里的一个输入框。kind：text / email / password（遮住）/ code（数字键盘 + 短信验证码自动填充）。
+class FormInput {
+  const FormInput({required this.name, required this.label, this.kind = 'text', this.value});
+  factory FormInput.fromJson(Map<String, dynamic> j) => FormInput(
+      name: j['name'] as String? ?? '', label: j['label'] as String? ?? '', kind: j['kind'] as String? ?? 'text', value: j['value'] as String?);
+  final String name, label, kind;
+  final String? value; // 服务器预填的（只有不敏感的，如用户名）
+}
+
+/// 表单卡：任务进行中向用户要东西（网站登录、验证码），答复走 form.reply。
+/// 用户填的值只发给服务器交给浏览器，不写进卡片：卡片落库后只有 submitted / cancelled / expired。
+class FormBlock extends Block {
+  const FormBlock({
+    required this.id,
+    this.purpose = 'info',
+    required this.title,
+    this.site,
+    required this.fields,
+    this.remember = false,
+    this.action = '提交',
+    this.state = 'pending',
+  });
+  factory FormBlock.fromJson(Map<String, dynamic> j) => FormBlock(
+      id: j['id'] as String? ?? '',
+      purpose: j['purpose'] as String? ?? 'info',
+      title: j['title'] as String? ?? '',
+      site: j['site'] as String?,
+      fields: [for (final f in (j['fields'] as List? ?? [])) FormInput.fromJson(f as Map<String, dynamic>)],
+      remember: j['remember'] as bool? ?? false,
+      action: j['action'] as String? ?? '提交',
+      state: j['state'] as String? ?? 'pending');
+  final String id, purpose, title, action, state;
+  final String? site;
+  final List<FormInput> fields;
+  final bool remember; // 是否提供“记住到保险箱”
+  bool get pending => state == 'pending';
+}
+
 String copyText(List<Block> blocks) => [
       for (final b in blocks)
         switch (b) {

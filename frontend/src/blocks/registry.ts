@@ -12,6 +12,7 @@ import StatsBlock from "./StatsBlock";
 import MemoryBlock from "./MemoryBlock";
 import { DraftBlock, ImagesBlock, SummaryBlock } from "./ContentBlocks";
 import { OrderBlock, ProductsBlock } from "./CommerceBlocks";
+import FormBlock from "./FormBlock";
 
 // 新增一种卡片：写组件 → 在这里登记。渲染器和聊天流程不用改。
 export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Block, { type: K }> }> } = {
@@ -30,4 +31,5 @@ export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Bl
   images: ImagesBlock,
   products: ProductsBlock,
   order: OrderBlock,
+  form: FormBlock,
 };
