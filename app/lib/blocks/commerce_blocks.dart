@@ -15,6 +15,7 @@ import '../ui/glass.dart';
 import '../ui/kit.dart';
 import '../ui/motion.dart';
 import 'block_actions.dart';
+import 'block_frame.dart';
 import 'content_blocks.dart';
 
 class ProductsBlockView extends StatelessWidget {
@@ -140,15 +141,8 @@ class OrderBlockView extends StatelessWidget {
     final (label, color) = stateLabel(b, p);
     final ended = b.state == 'rejected' || b.state == 'expired';
     final small = context.text.bodySmall;
-    return AnimatedContainer(
-      duration: context.motion(Motion.base),
-      curve: Motion.ease,
-      padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x4, Sp.x4, Sp.x4),
-      decoration: BoxDecoration(
-        color: context.cardFill,
-        borderRadius: BorderRadius.circular(Radii.md),
-        border: Border.all(color: b.pending ? p.warning.withValues(alpha: 0.5) : context.hairline, width: b.pending ? 1.5 : 1),
-      ),
+    return BlockFrame(
+      tone: b.pending ? FrameTone.waiting : FrameTone.calm,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

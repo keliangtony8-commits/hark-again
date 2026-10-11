@@ -262,6 +262,7 @@ abstract final class Layout {
   static const wheel = 200.0; // 头像色轮直径
   static const segmentsMax = 320.0; // 分段导航最宽多宽（平板上不拉满）
   static const chatTitle = A11y.minTap; // 主聊天顶栏下那一行（标题胶囊 + 新对话钮）的高度
+  static const chatCardMax = 560.0; // 聊天里单独成卡的卡片块最宽多宽（手机上占满聊天区，平板封顶）
   static const bubbleMax = 0.86; // 聊天气泡/回复卡最宽占聊天区的比例（留出一侧空白，看得出谁在说）
   // 窗口断点（Material 3 window size classes），只由 ui/adaptive.dart 读
   static const mediumMin = 600.0; // ≥ 此宽：底部 Tab 换成左侧导航栏

@@ -80,6 +80,9 @@
 .ai-card { max-width: 86%; min-width: 0; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3);
   background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-lg); box-shadow: var(--elev-card); }
 .ai-card > :last-child { margin-bottom: 0; }
+/* 单独成卡的卡片块（v0.84）：不套回复卡，占满聊天区、封顶 560（= App Layout.chatCardMax）；卡片自己的 .card 就是外框 */
+.ai-block { width: 100%; max-width: 560px; min-width: 0; }
+.ai-block > .card { max-width: none; box-shadow: var(--elev-card); }
 .ai-card .blk-text > :last-child { margin-bottom: 0; }
 .glass-chip { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-full); }
 .caret { display: inline-block; width: 8px; height: 1.1em; vertical-align: -3px; margin-left: 2px; border-radius: 2px; background: var(--text-3); animation: blink 1s steps(2) infinite; }

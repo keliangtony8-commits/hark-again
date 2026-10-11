@@ -44,6 +44,84 @@ Map<String, dynamic> _msg(String id, String role, String text, {bool yesterday =
       ],
     };
 
+Map<String, dynamic> _cards(String id, List<Map<String, dynamic>> blocks) =>
+    {'id': id, 'role': 'assistant', 'created_at': DateTime.now().toUtc().toIso8601String(), 'blocks': blocks};
+
+// 聊天卡片家族（v0.84）：商品宫格 + 待确认订单
+final _shopChat = {
+  'id': 'c2',
+  'title': '耳机',
+  'messages': [
+    _msg('s1', 'user', '帮我挑个 300 块以内的蓝牙耳机，通勤用'),
+    _cards('s2', [
+      {'type': 'text', 'text': '三款都在 ¥300 以内，都有主动降噪。'},
+      {
+        'type': 'products',
+        'title': '通勤降噪耳机',
+        'pick': '选 QCY HT08：降噪最好，续航 40 小时。',
+        'items': [
+          {'name': 'QCY HT08', 'price': '¥239', 'meta': '降噪 -43dB · 40h'},
+          {'name': '漫步者 Lolli Pro 3', 'price': '¥299', 'meta': 'LDAC · 32h'},
+          {'name': '小米 Redmi Buds 6', 'price': '¥199', 'meta': '降噪 -49dB · 42h'},
+        ],
+      },
+    ]),
+    _msg('s3', 'user', '就 QCY 吧，下单'),
+    _cards('s4', [
+      {
+        'type': 'order',
+        'id': 'o1',
+        'merchant': 'QCY 京东自营旗舰店',
+        'items': [
+          {'name': 'QCY HT08 主动降噪耳机', 'price': '¥239.00', 'qty': 1, 'note': '黑色'}
+        ],
+        'breakdown': [
+          {'label': '运费', 'amount': '¥0.00'},
+          {'label': '店铺券', 'amount': '-¥10.00'}
+        ],
+        'total': '¥229.00',
+        'payment': '招商银行 储蓄卡 8841',
+        'destination': '学校南门菜鸟驿站',
+        'action': '确认下单',
+        'state': 'pending',
+      },
+    ]),
+  ],
+};
+
+// 任务中途的登录卡 + 记忆卡
+final _signInChat = {
+  'id': 'c3',
+  'title': '图书馆座位',
+  'messages': [
+    _msg('g1', 'user', '帮我约明天上午图书馆四楼的座位，我一般坐靠窗那排'),
+    _cards('g2', [
+      {
+        'type': 'memory',
+        'action': 'saved',
+        'items': [
+          {'id': 'mem12345', 'content': '图书馆习惯坐四楼靠窗', 'category': 'preference'}
+        ],
+      },
+      {'type': 'text', 'text': '图书馆预约系统要登录，保险箱里还没有它的账号。'},
+      {
+        'type': 'form',
+        'id': 'f1',
+        'purpose': 'login',
+        'title': '登录图书馆预约系统',
+        'site': 'seat.lib.example.edu',
+        'fields': [
+          {'name': 'username', 'label': '学号', 'kind': 'text'},
+          {'name': 'password', 'label': '密码', 'kind': 'password'}
+        ],
+        'remember': true,
+        'action': '登录',
+        'state': 'pending',
+      },
+    ]),
+  ],
+};
+
 String _ago(Duration d) => DateTime.now().subtract(d).toUtc().toIso8601String();
 
 class _Api implements Api {
@@ -90,6 +168,13 @@ class _Api implements Api {
     if (path.startsWith('/api/usage')) {
       return {'currency': 'CNY', 'budget': 50, 'priced': ['fast'], 'today': {'cost': 0.4, 'tokens': 86000, 'calls': 23}, 'month': {'cost': 12.3, 'tokens': 2100000, 'calls': 412}};
     }
+    if (path == '/api/memories') {
+      return [
+        {'id': 'mem12345', 'content': '图书馆习惯坐四楼靠窗', 'category': 'preference', 'updated_at': _ago(Duration.zero)}
+      ];
+    }
+    if (path == '/api/conversations/c2') return _shopChat;
+    if (path == '/api/conversations/c3') return _signInChat;
     if (path.startsWith('/api/conversations/')) {
       return {
         'id': 'c1',
@@ -115,7 +200,9 @@ class _Api implements Api {
     }
     if (path.startsWith('/api/conversations')) {
       return [
-        {'id': 'c1', 'title': '额度'}
+        {'id': 'c1', 'title': '额度'},
+        {'id': 'c2', 'title': '耳机'},
+        {'id': 'c3', 'title': '图书馆座位'},
       ];
     }
     return <dynamic>[];
@@ -184,6 +271,12 @@ void main() {
       router.go('/chat');
       await tester.runAsync(() => container.read(chatProvider('').notifier).open('c1'));
       await _shot(tester, '$mode-chat');
+      await tester.runAsync(() => container.read(chatProvider('').notifier).open('c2'));
+      await _shot(tester, '$mode-chat-shop');
+      await tester.dragFrom(const Offset(200, 400), const Offset(0, 600)); // 往回翻：商品宫格
+      await _shot(tester, '$mode-chat-shop-top');
+      await tester.runAsync(() => container.read(chatProvider('').notifier).open('c3'));
+      await _shot(tester, '$mode-chat-form');
       router.go('/projects');
       await _shot(tester, '$mode-projects');
       // 弹层（GlassSheet）：表单盖在项目页上，看玻璃透出的内容和 tile 底的输入框

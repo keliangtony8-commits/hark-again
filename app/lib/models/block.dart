@@ -248,12 +248,44 @@ class UnknownBlock extends Block {
   final String type;
 }
 
+/// 回复里的一段（v0.84）：连续的正文类块（文字、代码、表格、链接、数字、文件、草稿、图片、记忆）
+/// 放进同一张回复卡；卡片类块（要扫一眼或要点的：审批、订单、表单、商品、摘要、浏览器）单独成卡，
+/// 宽度占满聊天区，不再套在回复卡里（卡中卡、两层边框、窄得挤）。
+class ReplySegment {
+  const ReplySegment.prose(this.blocks) : card = false;
+  ReplySegment.card(Block block)
+      : blocks = [block],
+        card = true;
+  final List<Block> blocks;
+  final bool card;
+}
+
+bool standsAlone(Block b) => switch (b) {
+      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() => true,
+      _ => false,
+    };
+
+List<ReplySegment> replySegments(List<Block> blocks) {
+  final out = <ReplySegment>[];
+  var prose = <Block>[];
+  for (final b in blocks) {
+    if (b is UnknownBlock) continue; // 旧 App 不认识的新卡片：不占位，也不把前后正文切开
+    if (!standsAlone(b)) {
+      prose.add(b);
+      continue;
+    }
+    if (prose.isNotEmpty) out.add(ReplySegment.prose(prose));
+    prose = <Block>[];
+    out.add(ReplySegment.card(b));
+  }
+  if (prose.isNotEmpty) out.add(ReplySegment.prose(prose));
+  return out;
+}
+
 List<Block> blocksFrom(dynamic list) => [for (final b in (list as List? ?? [])) Block.fromJson(b as Map<String, dynamic>)];
 
 String plainText(List<Block> blocks) => blocks.whereType<TextBlock>().map((b) => b.text).join('\n').trim();
 
-/// “复制”一条回复得到的 Markdown（和后端 blocks.py 的 blocks_to_text 同一套规则，表格转成 Markdown 表）。
-/// 只复制内容：审批卡、浏览器画面这类过程卡片不进剪贴板。
 /// 表单卡里的一个输入框。kind：text / email / password（遮住）/ code（数字键盘 + 短信验证码自动填充）。
 class FormInput {
   const FormInput({required this.name, required this.label, this.kind = 'text', this.value});
@@ -292,6 +324,8 @@ class FormBlock extends Block {
   bool get pending => state == 'pending';
 }
 
+/// “复制”一条回复得到的 Markdown（和后端 blocks.py 的 blocks_to_text 同一套规则，表格转成 Markdown 表）。
+/// 只复制内容：审批卡、浏览器画面这类过程卡片不进剪贴板。
 String copyText(List<Block> blocks) => [
       for (final b in blocks)
         switch (b) {

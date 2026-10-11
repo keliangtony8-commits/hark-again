@@ -63,6 +63,15 @@ FIXTURES = {
         {"id": "m3", "role": "user", "blocks": [TEXT("那每个月 30 块预算够吗？")], "created_at": "2026-10-11T10:20:00+08:00"},
         {"id": "m4", "role": "assistant", "created_at": "2026-10-11T10:20:04+08:00", "blocks": [
             TEXT("够。按你现在每天约 40 次对话算，DeepSeek 一个月大约 ¥12，留出的余量还能跑每天的简报和面板刷新。")]},
+        # v0.84：卡片块单独成卡（不套回复卡），正文段仍是回复卡
+        {"id": "m5", "role": "user", "blocks": [TEXT("顺便帮我买那副 QCY 耳机")], "created_at": "Sun 2026-10-11 10:25 AM CST (UTC+08:00)"},
+        {"id": "m6", "role": "assistant", "created_at": "Sun 2026-10-11 10:25 AM CST (UTC+08:00)", "blocks": [
+            TEXT("券后 ¥229，送到学校南门驿站。确认后我去付款。"),
+            {"type": "order", "id": "o1", "merchant": "QCY 京东自营旗舰店",
+             "items": [{"name": "QCY HT08 主动降噪耳机", "price": "¥239.00", "qty": 1, "note": "黑色"}],
+             "breakdown": [{"label": "运费", "amount": "¥0.00"}, {"label": "店铺券", "amount": "-¥10.00"}],
+             "total": "¥229.00", "payment": "招商银行 储蓄卡 8841", "destination": "学校南门菜鸟驿站",
+             "action": "确认下单", "state": "pending"}]},
     ]},
     "/api/projects/pr1": {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW},
     "/api/conversations/c1/usage": {"currency": "CNY", "priced": ["fast"], "total": {"calls": 4, "tokens": 5200, "cost": 0.012, "models": []}},
@@ -160,13 +169,15 @@ def main():
                 page.screenshot(path=str(OUT / f"{name}-{theme}-sheet-panel.png"))
                 page.goto(base + "/#/me/tasks")
                 page.wait_for_timeout(500)
-                page.get_by_label("添加").first.click()
+                page.get_by_label("新定时任务").first.click()
                 page.wait_for_timeout(500)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-sheet-task.png"))
                 # 确认框（ui/dialog.tsx）：钥匙页点“删除”
                 page.goto(base + "/#/me/vault")
                 page.wait_for_timeout(500)
-                page.get_by_role("button", name="删除").first.click()
+                page.get_by_label("的操作").first.click()  # v0.79：删除收进行尾菜单
+                page.wait_for_timeout(300)
+                page.get_by_role("menuitem", name="删除").first.click()
                 page.wait_for_timeout(500)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-dialog.png"))
                 page.keyboard.press("Escape")

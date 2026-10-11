@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../ui/motion.dart';
 import '../ui/glass.dart';
+import 'block_frame.dart';
 
 class BrowserBlockView extends ConsumerStatefulWidget {
   const BrowserBlockView(this.block, {super.key});
@@ -58,13 +59,10 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: context.cardFill,
-        borderRadius: BorderRadius.circular(Radii.md),
-        border: Border.all(color: _control ? p.accent : context.hairline, width: _control ? 1.5 : 1),
-      ),
+    return BlockFrame(
+      tone: _control ? FrameTone.live : FrameTone.calm,
+      padding: EdgeInsets.zero,
+      clip: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x1, Sp.x2, Sp.x1),

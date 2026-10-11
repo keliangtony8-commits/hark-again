@@ -665,19 +665,22 @@ class _CountUpState extends State<CountUp> with SingleTickerProviderStateMixin {
 /// 加载态 ↔ 内容（骨架 → 卡片、空状态 ↔ 列表）：交叉淡化，高度跟着平滑变化，不硬切。
 /// 给 child 一个随“态”变化的 key（例如 ValueKey('loading') / ValueKey('list')），同一态内的更新不触发过渡。
 class FadeSwitcher extends StatelessWidget {
-  const FadeSwitcher({super.key, required this.child});
+  const FadeSwitcher({super.key, this.alignment = Alignment.topCenter, required this.child});
   final Widget child;
+
+  /// 新旧内容怎么叠：整块内容（列表/骨架/空态）居中即可；一行短字（卡片标题、状态字）要传 topStart，不然会跑到中间。
+  final AlignmentGeometry alignment;
 
   @override
   Widget build(BuildContext context) => AnimatedSize(
     duration: context.motion(Motion.base),
     curve: Motion.ease,
-    alignment: Alignment.topCenter,
+    alignment: alignment,
     child: AnimatedSwitcher(
       duration: context.motion(Motion.base),
       switchInCurve: Motion.ease,
       switchOutCurve: Motion.ease,
-      layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
+      layoutBuilder: (current, previous) => Stack(alignment: alignment, children: [...previous, ?current]),
       child: child,
     ),
   );

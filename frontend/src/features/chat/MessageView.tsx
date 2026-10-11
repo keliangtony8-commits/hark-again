@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BlockRenderer from "../../blocks/BlockRenderer";
+import { replySegments } from "../../blocks/registry";
 import { copyText } from "../../lib/copy";
 import { speechSupported, stopIfSpeaking, toggleSpeech, useSpeechPhase } from "../../lib/speech";
 import type { Message } from "../../lib/types";
@@ -79,20 +80,26 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
   }
   const running = message.tools?.filter((t) => t.state === "running") ?? [];
   const empty = message.pending && message.blocks.length === 0 && running.length === 0;
-  // AI 回复 = 左侧一张玻璃卡（块都在卡里）；还没出字时只是一颗“思考中”小胶囊
+  // AI 回复 = 若干段（blocks/registry replySegments）：正文段是左侧玻璃回复卡，卡片块单独成卡、占满聊天区；
+  // 运行中的工具条跟在最后一段正文里，最后一段是卡片时另起一张小回复卡。还没出字时只是一颗“思考中”小胶囊
+  const segments = replySegments(message.blocks);
+  const tools = message.pending ? running : [];
+  if (tools.length && (!segments.length || segments[segments.length - 1].card)) segments.push({ card: false, blocks: [] });
   return (
     <div className={`msg assistant ${last ? "last" : ""}`} data-msg-id={message.id}>
       {!empty && message.thought?.trim() && <ThoughtSummary message={message} />}
       {empty ? (message.thought?.trim()
         ? <ThinkingCard message={message} />
-        : <div className="thinking glass-chip"><span /><span /><span /></div>) : (
-        <div className="ai-card">
-          <BlockRenderer blocks={message.blocks} />
-          {message.pending && running.map((t) => (
-            <div key={t.id} className="tool-run"><span className="tool-spin" />{t.label}…</div>
-          ))}
-        </div>
-      )}
+        : <div className="thinking glass-chip"><span /><span /><span /></div>) : segments.map((s, i) => s.card ? (
+          <div key={i} className="ai-block"><BlockRenderer blocks={s.blocks} /></div>
+        ) : (
+          <div key={i} className="ai-card">
+            <BlockRenderer blocks={s.blocks} />
+            {i === segments.length - 1 && tools.map((t) => (
+              <div key={t.id} className="tool-run"><span className="tool-spin" />{t.label}…</div>
+            ))}
+          </div>
+        ))}
       {!message.pending && <MessageActions message={message} onRegenerate={onRegenerate} />}
     </div>
   );

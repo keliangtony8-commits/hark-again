@@ -89,6 +89,7 @@ class _MemoryBlockViewState extends ConsumerState<MemoryBlockView> {
             const SizedBox(width: Sp.x2),
             Expanded(
               child: FadeSwitcher(
+                alignment: AlignmentDirectional.topStart,
                 child: Text(_title(b.action, state), key: ValueKey(state), style: context.text.labelMedium?.copyWith(color: p.text2)),
               ),
             ),
@@ -111,7 +112,7 @@ class _MemoryBlockViewState extends ConsumerState<MemoryBlockView> {
           for (final i in b.items) ...[
             Padding(
               padding: const EdgeInsets.only(right: Sp.x3, top: Sp.x1),
-              child: FadeSwitcher(child: Text(i.content, key: ValueKey(strike), style: body)),
+              child: FadeSwitcher(alignment: AlignmentDirectional.topStart, child: Text(i.content, key: ValueKey(strike), style: body)),
             ),
             if (i.previous != null && i.previous!.isNotEmpty && state != MemoryCardState.undone)
               Padding(

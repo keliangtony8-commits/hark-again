@@ -99,6 +99,8 @@ ThemeData buildTheme(Brightness brightness) {
       filled: true,
       fillColor: WidgetStateColor.resolveWith((s) => s.contains(WidgetState.focused) ? p.surface : p.tile),
       hintStyle: t(Fs.md, Weights.body, p.text3),
+      labelStyle: t(Fs.md, Weights.body, p.text2),
+      floatingLabelStyle: t(Fs.sm, Weights.body, p.text2), // 浮起的标签不用强调色（v2.1 克制）
       contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: const BorderSide(color: Colors.transparent)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: const BorderSide(color: Colors.transparent)),

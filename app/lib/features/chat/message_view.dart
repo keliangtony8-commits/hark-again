@@ -1,6 +1,8 @@
 // 设计 v2：用户 = 右侧强调色胶囊；助手 = 左侧玻璃卡（假玻璃，不模糊），两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
 // 一条消息：用户 = 右侧气泡（没发出的带“待发送/发送失败”状态行；长按出菜单：复制，最后一条另有“编辑”）；助手 = 全宽块列表 + 工具进度 + 思考动画，
 // 生成完的回复下方一行操作（复制、朗读；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,7 +36,7 @@ class MessageView extends StatelessWidget {
   @override
   Widget build(BuildContext context) => FadeSlideIn(
         child: LayoutBuilder(
-          builder: (context, c) => message.isUser ? _user(context, c.maxWidth * Layout.bubbleMax) : _assistant(context, c.maxWidth * Layout.bubbleMax),
+          builder: (context, c) => message.isUser ? _user(context, c.maxWidth * Layout.bubbleMax) : _assistant(context, c.maxWidth),
         ),
       );
 
@@ -117,9 +119,29 @@ class MessageView extends StatelessWidget {
         SheetAction(Icons.delete_outline_rounded, '删除', danger: true, onTap: () => onDiscard?.call(message.id)),
       ]);
 
-  Widget _assistant(BuildContext context, double maxWidth) {
+  /// 回复 = 若干段（models/block.dart replySegments）：正文段是左侧玻璃回复卡（最宽 bubbleMax），
+  /// 卡片块（审批/订单/表单/商品/摘要/浏览器）单独成卡、占满聊天区（平板封顶 Layout.chatCardMax）。
+  /// 运行中的工具小条跟在最后一段正文里；最后一段是卡片时另起一张小回复卡。
+  Widget _assistant(BuildContext context, double width) {
+    final maxWidth = width * Layout.bubbleMax;
     final running = message.pending ? message.tools.where((t) => t.running).toList() : const <ToolRun>[];
     final thinking = message.pending && message.blocks.isEmpty && running.isEmpty;
+    final segments = replySegments(message.blocks);
+    final chips = [for (final t in running) _ToolChip(t.label)];
+    if (chips.isNotEmpty && (segments.isEmpty || segments.last.card)) segments.add(const ReplySegment.prose([]));
+    Widget prose(ReplySegment s, {required bool tail}) => ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: GlassSurface(
+            radius: Radii.lg,
+            shadow: false,
+            padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (s.blocks.isNotEmpty) BlockList(s.blocks),
+              if (tail)
+                for (final (i, c) in chips.indexed) Padding(padding: EdgeInsets.only(top: s.blocks.isEmpty && i == 0 ? 0 : Sp.x2), child: c),
+            ]),
+          ),
+        );
     // 还一个字都没有：只是一颗小玻璃胶囊里三个跳点，不先撑开一张空卡；
     // 推理模型吐出思考内容后，胶囊长成小卡，滚动露出最新两行（不存库，正文一来就换成回复卡）
     final body = thinking
@@ -132,30 +154,34 @@ class MessageView extends StatelessWidget {
                 child: TypingDots(),
               )
             : ThinkingCard(key: const ValueKey('thought'), text: message.thought, since: message.thinkFrom)
-        : GlassSurface(
-            key: const ValueKey('card'),
-            radius: Radii.lg,
-            shadow: false,
-            padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (message.blocks.isNotEmpty) BlockList(message.blocks),
-              for (final t in running) Padding(padding: EdgeInsets.only(top: message.blocks.isEmpty ? 0 : Sp.x2), child: _ToolChip(t.label)),
-            ]),
-          );
+        : Column(key: const ValueKey('card'), crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (final (i, s) in segments.indexed)
+              Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 0 : Sp.x3),
+                child: s.card
+                    ? ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: math.min(width, Layout.chatCardMax)),
+                        child: BlockView(s.blocks.single),
+                      )
+                    : prose(s, tail: i == segments.length - 1),
+              ),
+          ]);
     // 思考卡收成回复上方的一行（正文开始流出时就收），用 RiseSwitcher 长出来，不是一跳
     final summary = !thinking && message.thought.trim().isNotEmpty;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          RiseSwitcher(child: summary ? ThoughtSummary(key: const ValueKey('summary'), message: message) : null),
-          AnimatedSize(
-            duration: context.motion(Motion.base),
-            curve: Motion.ease,
-            alignment: Alignment.topLeft,
-            child: AnimatedSwitcher(duration: context.motion(Motion.fast), child: body),
-          ),
-        ]),
+        child: RiseSwitcher(child: summary ? ThoughtSummary(key: const ValueKey('summary'), message: message) : null),
+      ),
+      AnimatedSize(
+        duration: context.motion(Motion.base),
+        curve: Motion.ease,
+        alignment: Alignment.topLeft,
+        child: AnimatedSwitcher(
+          duration: context.motion(Motion.fast),
+          layoutBuilder: (current, previous) => Stack(alignment: Alignment.topLeft, children: [...previous, ?current]),
+          child: body,
+        ),
       ),
       if (!message.pending && (last || message.stopped))
         _ReplyActions(id: message.id, text: copyText(message.blocks), spoken: speakableText(message.blocks), stopped: message.stopped, onRegenerate: onRegenerate),

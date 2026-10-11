@@ -46,7 +46,7 @@ void main() {
       'lib/shell/top_bar.dart': 1, // 导航未读点
       'lib/features/home/home_screen.dart': 1, // 收件箱未读点
       'lib/features/auth/login_screen.dart': 2, // 品牌标
-      'lib/blocks/browser_block.dart': 1, // 接管中的边框（唯一关键状态）
+      'lib/blocks/block_frame.dart': 1, // 卡片外框 live 语气 = 浏览器接管中（唯一关键状态）
       'lib/features/chat/attachment_tray.dart': 1, // 上传进度
       'lib/features/chat/message_view.dart': 1, // 生成中进度
       'lib/features/me/task_detail.dart': 1, // 运行中脉冲

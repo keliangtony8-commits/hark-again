@@ -12,6 +12,7 @@ import '../ui/motion.dart';
 import '../ui/format.dart';
 import '../ui/kit.dart';
 import 'block_actions.dart';
+import 'block_frame.dart';
 import '../ui/glass.dart';
 
 
@@ -78,15 +79,8 @@ class ApprovalBlockView extends StatelessWidget {
       'expired' => ('已过期', p.text3),
       _ => ('等你确认', p.warning),
     };
-    return AnimatedContainer(
-      duration: Motion.base,
-      curve: Motion.ease,
-      padding: const EdgeInsets.all(Sp.x4),
-      decoration: BoxDecoration(
-        color: context.cardFill,
-        borderRadius: BorderRadius.circular(Radii.md),
-        border: Border.all(color: block.pending ? p.warning.withValues(alpha: 0.5) : context.hairline, width: block.pending ? 1.5 : 1),
-      ),
+    return BlockFrame(
+      tone: block.pending ? FrameTone.waiting : FrameTone.calm,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Icon(Icons.shield_outlined, size: 18, color: color),

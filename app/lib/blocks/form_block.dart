@@ -12,6 +12,7 @@ import '../ui/glass.dart';
 import '../ui/kit.dart';
 import '../ui/motion.dart';
 import 'block_actions.dart';
+import 'block_frame.dart';
 
 class FormBlockView extends StatefulWidget {
   const FormBlockView(this.block, {super.key});
@@ -73,15 +74,8 @@ class _FormBlockViewState extends State<FormBlockView> {
     final canReply = BlockActions.of(context)?.onForm != null;
     final (label, color) = FormBlockView.stateLabel(b, p);
     final open = b.pending && canReply && !_sent;
-    return AnimatedContainer(
-      duration: context.motion(Motion.base),
-      curve: Motion.ease,
-      padding: const EdgeInsets.all(Sp.x4),
-      decoration: BoxDecoration(
-        color: context.cardFill,
-        borderRadius: BorderRadius.circular(Radii.md),
-        border: Border.all(color: b.pending ? p.warning.withValues(alpha: 0.5) : context.hairline, width: b.pending ? 1.5 : 1),
-      ),
+    return BlockFrame(
+      tone: b.pending ? FrameTone.waiting : FrameTone.calm,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
           PopSwitcher(
@@ -112,7 +106,7 @@ class _FormBlockViewState extends State<FormBlockView> {
       for (final (i, f) in b.fields.indexed)
         Padding(
           padding: EdgeInsets.only(top: i == 0 ? Sp.x4 : Sp.x2),
-          child: _field(f, autofocus: i == 0 && b.fields.every((x) => (x.value ?? '').isEmpty), isLast: f.name == last),
+          child: _field(f, isLast: f.name == last),
         ),
     ]);
     return Column(key: const ValueKey('form'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -149,12 +143,11 @@ class _FormBlockViewState extends State<FormBlockView> {
     ]);
   }
 
-  Widget _field(FormInput f, {required bool autofocus, required bool isLast}) {
+  Widget _field(FormInput f, {required bool isLast}) {
     final secret = f.kind == 'password';
     final shown = _revealed.contains(f.name);
     return TextField(
       controller: _ctl[f.name],
-      autofocus: autofocus,
       obscureText: secret && !shown,
       enableSuggestions: !secret,
       autocorrect: false,

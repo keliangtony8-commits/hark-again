@@ -33,3 +33,23 @@ export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Bl
   order: OrderBlock,
   form: FormBlock,
 };
+
+/** 卡片类块（v0.84，和 App models/block.dart standsAlone 同一份名单）：要扫一眼或要点的，单独成卡、占满聊天区，不套在回复卡里。 */
+export const STANDALONE: ReadonlySet<Block["type"]> = new Set<Block["type"]>(["approval", "order", "form", "products", "summary", "browser"]);
+
+export type ReplySegment = { card: boolean; blocks: Block[] };
+
+/** 回复按段排：连续正文类块合成一段（一张回复卡），卡片块各自成段；不认识的块不占位、不切开正文。 */
+export function replySegments(blocks: Block[]): ReplySegment[] {
+  const out: ReplySegment[] = [];
+  let prose: Block[] = [];
+  for (const b of blocks) {
+    if (!(b.type in registry)) continue;
+    if (!STANDALONE.has(b.type)) { prose.push(b); continue; }
+    if (prose.length) out.push({ card: false, blocks: prose });
+    prose = [];
+    out.push({ card: true, blocks: [b] });
+  }
+  if (prose.length) out.push({ card: false, blocks: prose });
+  return out;
+}
