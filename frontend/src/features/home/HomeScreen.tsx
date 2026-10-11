@@ -10,16 +10,16 @@ import { formatDate } from "../../lib/format";
 import LaunchComposer, { useAskInNewChat } from "../../shell/LaunchComposer";
 import { ShellLead } from "../../shell/ShellLead";
 import { WidePill } from "../../ui/glass";
-import { IconChat, IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconSun, IconTrash } from "../../ui/icons";
+import { IconChat, IconChevron, IconClock, IconEdit, IconHistory, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconSun, IconTrash } from "../../ui/icons";
 import { Menu, Page, Section, Skeleton, stagger } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf, EMPTY_TASK } from "../me/TaskSheet";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
+import { InboxRow } from "./InboxRow";
 import { OfferImage, OfferSource } from "./OfferMedia";
 import { agendaDetail, agendaHint, agendaNowAt, clockOf, agendaProblem, agendaSummary, briefTaskOf, MORNING_BRIEF, PREP_DAY_LABEL, PREP_DAY_PROMPT, SCHEDULE_BRIEF_LABEL, todayAgenda } from "./todayAgenda";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
-import { cardGlance } from "../../lib/reportGlance";
 
 /** 错峰入场第 i 拍（.enter 读 --i；超过 10 拍不再加，= App Motion.stagger）。 */
 const nth = stagger;
@@ -73,6 +73,7 @@ export default function HomeScreen() {
   const ask = (text: string) => text.trim() && askNew(text.trim());
   const live = cards.items.filter((c) => !c.dismissed && !c.snoozed_until);
   const snoozed = cards.items.filter((c) => c.kind === "action" && !c.dismissed && !!c.snoozed_until);
+  const later = cards.items.filter((c) => c.kind === "report" && !c.dismissed && !!c.snoozed_until); // 稍后再看中
   const actions = live.filter((c) => c.kind === "action");
   const panels = live.filter((c) => c.kind === "panel");
   const reports = live.filter((c) => c.kind === "report").slice(0, 5);
@@ -190,20 +191,17 @@ export default function HomeScreen() {
         <div className="enter" style={nth(panels.length)}><WidePill label="创建一个新面板" onClick={() => setNewPanel(true)} /></div>
       </Section>
 
-      {reports.length > 0 && (
+      {(reports.length > 0 || later.length > 0) && (
         <Section title="收件箱" action={inbox.summary.unread > 0 ? <button className="btn btn-ghost btn-sm" onClick={() => inbox.markRead()}>全部已读</button> : undefined}>
-          <div className="list enter" style={nth(1)}>
-            {reports.map((r) => (
-              <button key={r.id} className={`row report-row ${r.unread ? "unread" : ""}`} onClick={() => openReport(r)}>
-                <span className="row-icon"><IconInbox /></span>
-                <div className="row-body">
-                  <div className="row-title">{r.title}</div>
-                  <div className="row-sub">{cardGlance(r)}</div>
-                </div>
-                <span className="row-trail">{timeOf(r.updated_at)}<IconChevron /></span>
-              </button>
-            ))}
-          </div>
+          {reports.length > 0 && (
+            <div className="list enter" style={nth(1)}>
+              {reports.map((r) => (
+                <InboxRow key={r.id} card={r} time={timeOf(r.updated_at)} onOpen={openReport}
+                  snooze={snooze} read={(c) => inbox.markRead([c.id])} dismiss={dismiss} />
+              ))}
+            </div>
+          )}
+          <SnoozedRow cards={later} onSnooze={snooze} noun="稍后再看" />
         </Section>
       )}
 

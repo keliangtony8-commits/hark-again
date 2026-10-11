@@ -37,6 +37,11 @@
 .section-note { color: var(--text-3); } /* 区块标题行尾的一句摘要，和标题同一小字层级 */
 
 /* 未读报告：图标右上角强调色小点 */
+/* 收件箱行：左边整块是“打开”按钮，行尾时间 + 更多菜单（菜单不能嵌在按钮里） */
+.report-row { padding: 0 var(--sp-2) 0 0; transition: background var(--dur-fast) var(--ease); }
+.report-row:hover { background: var(--tile); }
+.report-open { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; align-self: stretch;
+  padding: var(--sp-3) 0 var(--sp-3) var(--sp-4); text-align: left; color: inherit; }
 .report-row .row-icon { position: relative; }
 .report-row.unread .row-icon::after { content: ""; position: absolute; top: -2px; right: -2px; width: 10px; height: 10px;
   border-radius: var(--r-full); background: var(--accent); box-shadow: 0 0 0 2px var(--glass); animation: pop var(--dur) var(--ease); }

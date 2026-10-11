@@ -1,6 +1,6 @@
 // Home 卡片的“稍后提醒”（规则在 backend app/card_snooze.py；App features/home/card_snooze.dart 同规则）：
 // - SnoozeMenu：建议卡标题右边的小钮 → 快捷时刻（与一次性任务同一张表 lib/timeShortcuts.ts）
-// - SnoozedRow：“为你准备”底部一行“N 条稍后提醒 · 最早 …”，展开后每条可现在放回
+// - SnoozedRow：“为你准备”/“收件箱”底部一行“N 条稍后提醒|稍后再看 · 最早 …”，展开后每条可现在放回（报告的行内菜单在 InboxRow.tsx）
 // 客户端只看 snoozed_until 是否为空来藏卡，不比本机时钟。
 import { useState } from "react";
 import { formatWhen } from "../../lib/format";
@@ -19,7 +19,7 @@ export function SnoozeMenu({ card, onSnooze }: { card: HomeCard; onSnooze: Snooz
   );
 }
 
-export function SnoozedRow({ cards, onSnooze }: { cards: HomeCard[]; onSnooze: Snooze }) {
+export function SnoozedRow({ cards, onSnooze, noun = "稍后提醒" }: { cards: HomeCard[]; onSnooze: Snooze; noun?: "稍后提醒" | "稍后再看" }) {
   const [open, setOpen] = useState(false);
   if (cards.length === 0) return null;
   const sorted = [...cards].sort((a, b) => a.snoozed_until!.localeCompare(b.snoozed_until!));
@@ -27,7 +27,7 @@ export function SnoozedRow({ cards, onSnooze }: { cards: HomeCard[]; onSnooze: S
     <div className={`snoozed ${open ? "open" : ""}`}>
       <button className="snoozed-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <IconSnooze size={16} />
-        <span>{sorted.length} 条稍后提醒 · 最早 {formatWhen(sorted[0].snoozed_until!)}</span>
+        <span>{sorted.length} 条{noun} · 最早 {formatWhen(sorted[0].snoozed_until!)}</span>
         <IconChevron />
       </button>
       {open && (

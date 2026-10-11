@@ -151,7 +151,8 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
         except ValueError as e:
             return ToolResult(str(e))
         await db.commit()
-        return ToolResult(f"「{card.title}」先收起来了，{until} 再放回 Home 提醒。")
+        where = "收件箱" if card.kind == "report" else " Home "
+        return ToolResult(f"「{card.title}」先收起来了，{until} 再放回{where}提醒。")
     if action == "unsnooze":
         if card.snoozed_until is None:
             return ToolResult(f"「{card.title}」本来就在 Home 上。")

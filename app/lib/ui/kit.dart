@@ -138,7 +138,7 @@ class PullRefresh extends StatelessWidget {
 
 class RowTile extends StatelessWidget {
   const RowTile(
-      {super.key, this.icon, required this.title, this.subtitle, this.problem, this.trailing, this.onTap, this.leading, this.dimmed = false});
+      {super.key, this.icon, required this.title, this.subtitle, this.problem, this.trailing, this.onTap, this.onLongPress, this.leading, this.dimmed = false});
   final IconData? icon;
   final Widget? leading;
   final String title;
@@ -149,6 +149,9 @@ class RowTile extends StatelessWidget {
   final String? problem;
   final Widget? trailing;
   final VoidCallback? onTap;
+
+  /// 长按：这一行的更多操作（收件箱行的“稍后再看/已读/收起”）。行尾最好同时给一颗可见的“更多”钮，长按只是捷径。
+  final VoidCallback? onLongPress;
 
   /// 这一项是关着的（停用的技能、暂停的任务）：图标和文字变淡，行尾的开关/按钮保持原样——
   /// 控件一起淡掉看着像“点不了”（v1.08）。整行都不能用时才在外面包 Dimmed。
@@ -194,7 +197,9 @@ class RowTile extends StatelessWidget {
       ]),
       ),
     );
-    return onTap == null ? row : InkWell(onTap: onTap, borderRadius: BorderRadius.circular(Radii.md), child: row);
+    return onTap == null && onLongPress == null
+        ? row
+        : InkWell(onTap: onTap, onLongPress: onLongPress, borderRadius: BorderRadius.circular(Radii.md), child: row);
   }
 }
 

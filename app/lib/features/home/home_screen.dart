@@ -24,6 +24,7 @@ import '../chat/open_conversation.dart';
 import 'action_card.dart';
 import 'card_snooze.dart';
 import 'inbox.dart';
+import 'report_actions.dart';
 import '../me/task_form.dart';
 import '../me/tasks_screen.dart' show createTask;
 import 'new_panel.dart';
@@ -83,6 +84,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final all = (cards.value ?? const <HomeCard>[]).where((c) => !c.dismissed);
     final snoozed = all.where((c) => c.snoozed && c.kind == 'action').toList(); // 稍后提醒中：只显示一行入口
+    final later = all.where((c) => c.snoozed && c.kind == 'report').toList(); // 稍后再看中：收件箱底部一行
     final items = all.where((c) => !c.snoozed).toList();
     final actions = items.where((c) => c.kind == 'action').toList();
     final panels = items.where((c) => c.kind == 'panel').toList();
@@ -111,7 +113,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             FadeSlideIn(delay: Motion.stagger(i), child: ActionCard(card: actions[i], onDo: _send, onOpen: _openOffer)),
                         ]),
             ),
-            SnoozedCards(cards: snoozed),
+            SnoozedCards(cards: snoozed, noun: snoozeNoun('action')),
             const SectionTitle('面板'),
             FadeSwitcher(
               child: cards.isLoading
@@ -131,24 +133,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               delay: Motion.stagger(panels.length),
               child: WidePill(icon: Icons.add_rounded, label: '创建一个新面板', onTap: () => createPanel(context, ref)),
             ),
-            if (reports.isNotEmpty) ...[
+            if (reports.isNotEmpty || later.isNotEmpty) ...[
               SectionTitle('收件箱',
                   trailing: unread > 0
                       ? TextButton(onPressed: () => ref.read(inboxProvider.notifier).markRead(), child: const Text('全部已读'))
                       : null),
-              FadeSlideIn(
-                delay: Motion.stagger(1),
-                child: GlassGroup(children: [
-                  for (final r in reports)
-                    RowTile(
-                      leading: _UnreadBadge(unread: r.unread),
-                      title: r.title,
-                      subtitle: r.glance,
-                      trailing: Text(hm(r.updatedAt), style: context.text.labelSmall),
-                      onTap: () => _openReport(r),
-                    ),
-                ]),
+              FadeSwitcher(
+                child: reports.isEmpty
+                    ? const SizedBox(key: ValueKey('none'), width: double.infinity)
+                    : FadeSlideIn(
+                        key: const ValueKey('list'),
+                        delay: Motion.stagger(1),
+                        child: GlassGroup(children: [
+                          for (final r in reports) InboxRow(key: ValueKey(r.id), card: r, time: hm(r.updatedAt), onOpen: () => _openReport(r)),
+                        ]),
+                      ),
               ),
+              SnoozedCards(cards: later, noun: snoozeNoun('report')),
             ],
             TodaySection(tasks: tasks, loading: ref.watch(tasksProvider).isLoading, onPrep: () => _send(prepDayPrompt),
                 onSchedule: () => createTask(context, ref, starter: morningBrief)),
@@ -276,16 +277,6 @@ class _NowLine extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 收件箱行首图标；未读时右上角一个强调色小点，读过后缩没。
-class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.unread});
-  final bool unread;
-
-  @override
-  Widget build(BuildContext context) =>
-      DotBadge(visible: unread, color: context.palette.accent, child: const IconBadge(Icons.inbox_outlined));
 }
 
 /// 问候：日期 + 早上好。输入框在底部的全局胶囊里（LaunchComposer）。

@@ -49,7 +49,7 @@ void main() {
       'lib/ui/motion.dart': 1, // 跳转定位的闪烁底（accentSoft）
       'lib/ui/glass.dart': 2, // 壁纸右下 5% 光晕
       'lib/shell/top_bar.dart': 1, // 导航未读点
-      'lib/features/home/home_screen.dart': 1, // 收件箱未读点
+      'lib/features/home/report_actions.dart': 1, // 收件箱未读点（InboxRow）
       'lib/features/auth/login_screen.dart': 2, // 品牌标
       'lib/blocks/block_frame.dart': 1, // 卡片外框 live 语气 = 浏览器接管中（唯一关键状态）
       'lib/features/chat/attachment_tray.dart': 1, // 上传进度

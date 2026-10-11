@@ -2,6 +2,8 @@
 
 未读状态在服务端，网页和 App 共享：任一端读过，另一端的角标同步消失。
 “读过”= 打开了报告对应的对话（conversations.get 调 mark_read）或点了“全部已读”。
+latest = 最近“来到”收件箱的未读：按 updated_at 排——新报告、到点叫醒的“稍后再看”（card_snooze.wake_due 把 updated_at
+设成叫醒时刻）、重新提议的建议都算刚到，客户端横幅照样弹；mark_read 不改 updated_at，所以“读过”不会让别的条目冒成最新。
 """
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -29,7 +31,7 @@ async def mark_read(db: AsyncSession, *, ids: list[str] | None = None, conversat
 
 async def summary(db: AsyncSession) -> dict:
     count = await db.scalar(select(func.count()).select_from(HomeCard).where(*_UNREAD)) or 0
-    latest = await db.scalar(select(HomeCard).where(*_UNREAD).order_by(HomeCard.created_at.desc()).limit(1))
+    latest = await db.scalar(select(HomeCard).where(*_UNREAD).order_by(HomeCard.updated_at.desc(), HomeCard.created_at.desc()).limit(1))
     return {
         "unread": count,
         "latest": None if latest is None else {
