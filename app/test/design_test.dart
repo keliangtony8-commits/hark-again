@@ -35,6 +35,11 @@ void main() {
     expect(bad, isEmpty);
   });
 
+  test('页面级动作在标题栏：不用 Material 悬浮钮（它不吃设计令牌）', () {
+    final bad = [for (final f in _dart('lib')) if (f.readAsStringSync().contains('FloatingActionButton(')) f.path];
+    expect(bad, isEmpty);
+  });
+
   // 强调色（橙）只留给四种“信号”：未读点、进度/运行中、链接/搜索命中、页面里唯一的关键状态。
   // 其余一律墨色或 text2。新增用法必须在这里登记角色，不能随手 p.accent——这就是“每屏 ≤2 处”的落地方式。
   test('强调色克制：accent 只出现在登记过的信号位', () {

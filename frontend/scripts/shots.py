@@ -53,6 +53,10 @@ FIXTURES = {
          "run_requested": False, "last_run_at": NOW, "last_status": "ok", "next_run_at": None},
         {"id": "t3", "name": "晚间复盘", "prompt": "", "cron": "0 21 * * *", "active": True, "output": "report",
          "run_requested": False, "last_run_at": None, "last_status": None, "next_run_at": None},
+        # v1.00：连续失败被自动暂停的任务（进“需要留意”组）
+        {"id": "t4", "name": "考研倒计时面板", "prompt": "", "cron": "0 7 * * *", "active": False, "output": "panel",
+         "run_requested": False, "last_run_at": NOW, "last_status": "error", "next_run_at": None,
+         "fail_streak": 3, "paused_reason": "failures"},
     ],
     "/api/projects": [
         {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW,

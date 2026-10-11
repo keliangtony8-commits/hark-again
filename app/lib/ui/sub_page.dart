@@ -6,7 +6,7 @@
 // 页面里的 PageBody / 聊天列表照常读安全区就会让出来（和 ShellPage、FloatingFooter 是同一个约定）。
 // 下拉刷新用 kit 的 PullRefresh：它读同一个让位线，转圈从标题栏下面出来而不是被挡住。
 //
-// 页面只换 Scaffold → SubPage，不自己写 AppBar 颜色/模糊。减少透明度时标题栏变实色、不模糊。
+// 页面只换 Scaffold → SubPage，不自己写 AppBar 颜色/模糊。新建等页面级动作放 actions（标题栏右侧），不用悬浮钮。减少透明度时标题栏变实色、不模糊。
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -22,7 +22,6 @@ class SubPage extends StatelessWidget {
     required this.body,
     this.actions = const [],
     this.leading,
-    this.floatingActionButton,
     this.drawer,
     this.endDrawer,
   });
@@ -31,7 +30,6 @@ class SubPage extends StatelessWidget {
   final Widget body;
   final List<Widget> actions;
   final Widget? leading;
-  final Widget? floatingActionButton;
   final Widget? drawer, endDrawer;
 
   @override
@@ -40,7 +38,6 @@ class SubPage extends StatelessWidget {
       backgroundColor: Colors.transparent, // 透出壁纸
       extendBodyBehindAppBar: true,
       appBar: GlassAppBar(title: title, actions: actions, leading: leading),
-      floatingActionButton: floatingActionButton,
       drawer: drawer,
       endDrawer: endDrawer,
       body: body,

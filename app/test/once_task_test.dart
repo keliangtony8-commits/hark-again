@@ -57,7 +57,7 @@ void main() {
     addTearDown(tester.view.reset);
     final api = _Api(tasks: [], runs: []);
     await pump(tester, api, '/me/tasks');
-    await tester.tap(find.byType(FloatingActionButton));
+    await tester.tap(find.byTooltip('新定时任务'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '带伞');
     await tester.enterText(find.byType(TextField).at(1), '提醒我：带伞');

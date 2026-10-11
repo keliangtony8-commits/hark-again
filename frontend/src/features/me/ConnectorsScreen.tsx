@@ -7,10 +7,18 @@ import { IconAlert, IconChevron, IconPlus, IconShield, IconSpark } from "../../u
 import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
 import { connectorSummary, mcpProblemText, sortAccounts, sortServers } from "./connectorLibrary";
 import { confirmDialog } from "../../ui/dialog";
+import { monogramOf } from "../../lib/monogram";
 
 const favicon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
 const EMPTY_MCP = { name: "", url: "", token: "" };
 const hostOf = (url: string) => { try { return new URL(url).host; } catch { return url; } };
+
+/** 品牌小图标；取不到（离线、被拦）就换成名字首字的字标，不露破图。 */
+function ConnectorLogo({ c }: { c: Connector }) {
+  const [broken, setBroken] = useState(false);
+  if (broken || !c.logo) return <span className="row-monogram" aria-hidden="true">{monogramOf(c.name)}</span>;
+  return <img src={favicon(c.logo)} alt="" width={20} height={20} onError={() => setBroken(true)} />;
+}
 
 /** 连接器：OAuth 账户、MCP 服务器、API Key 三种接入方式，按“越省事越靠前”排列。
  *  版式同技能/定时任务页：页头摘要 → 分区 → 行错峰进场；MCP 为空时起步卡。 */
@@ -69,7 +77,7 @@ export default function ConnectorsScreen() {
           <div className="list">
             {sortAccounts(accounts.items).map((c) => (
               <div key={c.id} className={`row enter ${!c.account && !c.configured ? "row-off" : ""}`} style={stagger(++n)}>
-                <span className="row-icon"><img src={favicon(c.logo)} alt="" width={20} height={20} /></span>
+                <span className="row-icon"><ConnectorLogo c={c} /></span>
                 <div className="row-body">
                   <div className="row-title">{c.name}</div>
                   <div className="row-sub">{c.account ?? (c.configured ? c.desc : "服务器还没配置这个应用（见 .env.example）")}</div>

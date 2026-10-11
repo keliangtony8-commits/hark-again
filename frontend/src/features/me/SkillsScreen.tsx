@@ -78,7 +78,7 @@ export default function SkillsScreen() {
           <button className="skill-row" onClick={() => show(s)}>
             <span className="row-icon"><IconSpark /></span>
             <span className="row-body"><span className="row-title">{s.name}</span><span className="row-sub">{s.description}</span></span>
-            {s.customized && <span className="chip on">已自定义</span>}
+            {s.customized && <span className="row-hint">已自定义</span>}
             <span className="row-trail"><IconChevron /></span>
           </button>
           <Toggle on={onOf(s)} label={`启用「${s.name}」`} onChange={(v) => { if (!(s.id in pending)) toggle(s, v); }} />

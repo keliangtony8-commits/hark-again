@@ -34,11 +34,8 @@ class TasksScreen extends ConsumerWidget {
     final tasks = ref.watch(tasksProvider);
     return SubPage(
       title: const Text('定时任务'),
-      floatingActionButton: FloatingActionButton(
-        tooltip: '新定时任务',
-        onPressed: () => createTask(context, ref),
-        child: const Icon(Icons.add_rounded),
-      ),
+      // 新建放标题栏右侧（和技能页、网页版同一位置），不用 Material 悬浮钮——它不吃设计令牌
+      actions: [IconButton(icon: const Icon(Icons.add_rounded), tooltip: '新定时任务', onPressed: () => createTask(context, ref))],
       body: AsyncBody<ScheduledTask>(
         value: tasks,
         onRetry: () => ref.invalidate(tasksProvider),

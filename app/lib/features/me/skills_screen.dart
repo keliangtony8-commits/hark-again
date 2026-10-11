@@ -139,7 +139,7 @@ class _SkillRowState extends ConsumerState<_SkillRow> {
           title: s.name,
           subtitle: s.description,
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (s.customized) const Pill('已自定义', strong: true),
+            if (s.customized) const Padding(padding: EdgeInsets.only(right: Sp.x2), child: RowHint('已自定义')),
             Semantics(
               label: '启用「${s.name}」',
               child: Switch(value: on, onChanged: _pending == null ? _toggle : null),

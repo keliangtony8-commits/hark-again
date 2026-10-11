@@ -92,7 +92,7 @@ class PageRow extends ConsumerWidget {
         trailing: SwapSwitcher(
           child: pg.published
               ? Icon(Icons.chevron_right_rounded, key: const ValueKey('live'), color: context.palette.text3)
-              : const Pill('已下线', key: ValueKey('off')),
+              : const RowHint('已下线', key: ValueKey('off')),
         ),
         onTap: () => _menu(context, ref),
       ),

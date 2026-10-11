@@ -284,6 +284,16 @@ class _Api implements Api {
         {'id': 'mc3', 'name': 'Linear', 'url': 'https://mcp.linear.app/sse', 'has_token': true, 'problem': 'auth'},
       ];
     }
+    if (path == '/api/tasks') {
+      // v1.00：一条正常、一条连续失败被自动暂停（进“需要留意”组）、一条手动停
+      return [
+        {'id': 't1', 'name': '早间简报', 'prompt': '', 'cron': '0 8 * * *', 'active': true, 'output': 'report',
+         'last_run_at': _ago(const Duration(hours: 3)), 'last_status': 'ok'},
+        {'id': 't2', 'name': '考研倒计时面板', 'prompt': '', 'cron': '0 7 * * *', 'active': false, 'output': 'panel',
+         'last_run_at': _ago(const Duration(hours: 4)), 'last_status': 'error', 'fail_streak': 3, 'paused_reason': 'failures'},
+        {'id': 't3', 'name': '晚间复盘', 'prompt': '', 'cron': '0 21 * * *', 'active': false, 'output': 'report'},
+      ];
+    }
     if (path.startsWith('/api/usage')) return _usage();
     if (path == '/api/memories') {
       return [
@@ -456,6 +466,9 @@ void main() {
       await _shot(tester, '$mode-me');
       router.push('/me/connectors'); // 连接器：MCP 行上的问题（v0.97）
       await _shot(tester, '$mode-connectors');
+      router.pop();
+      router.push('/me/tasks'); // 定时任务：自动暂停的进“需要留意”（v1.00）
+      await _shot(tester, '$mode-tasks');
       router.pop();
       router.push('/me/usage'); // 子页面（SubPage 玻璃标题栏）
       await _shot(tester, '$mode-usage');
