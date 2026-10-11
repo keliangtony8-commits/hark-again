@@ -8,6 +8,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocks/block_actions.dart';
+import '../../core/speech.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../models/message.dart';
@@ -35,6 +36,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   String? _target;
   int _flash = 0;
   bool _seeking = false;
+  late final SpeechController _speech = ref.read(speechProvider.notifier); // dispose 里不能再用 ref
 
   /// 在 build 里发现有待定位的消息：下一帧取走并开始找（不在 build 里改状态）。
   void _maybeSeek(ChatState chat) {
@@ -73,7 +75,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _speech; // 先取好，卸载时用
+  }
+
+  @override
   void dispose() {
+    _speech.stop(); // 离开聊天区就别再读了
     _scroll.dispose();
     super.dispose();
   }
@@ -82,6 +91,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   Widget build(BuildContext context) {
     final chat = ref.watch(chatProvider(widget.projectId));
     final ctl = ref.read(chatProvider(widget.projectId).notifier);
+    ref.listen(chatProvider(widget.projectId).select((s) => s.activeId), (_, _) => _speech.stop()); // 换对话 = 停读
     final editing = _editing?.id == chat.editableId ? _editing : null;
     final inset = MediaQuery.paddingOf(context).top; // 有 AppBar 时为 0；主聊天里 = 状态栏 + 浮动顶栏
     _maybeSeek(chat);

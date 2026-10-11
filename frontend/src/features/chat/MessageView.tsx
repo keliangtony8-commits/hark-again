@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import BlockRenderer from "../../blocks/BlockRenderer";
 import { copyText } from "../../lib/copy";
-import { speak, speechSupported, stopSpeaking } from "../../lib/speech";
+import { speechSupported, stopIfSpeaking, toggleSpeech, useSpeechPhase } from "../../lib/speech";
 import type { Message } from "../../lib/types";
 import { IconCheck, IconClose, IconCopy, IconEdit, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
 
@@ -9,17 +9,18 @@ export type OutboxActions = { onResend: (id: string) => void; onDiscard: (id: st
 
 /** 回复下方的操作条：复制、朗读；最后一条另有“重新生成”（由 ChatView 决定给不给）。回复生成完才出现，避免流式时跳动。 */
 function MessageActions({ message, onRegenerate }: { message: Message; onRegenerate?: () => void }) {
-  const [speaking, setSpeaking] = useState(false);
-  useEffect(() => () => { if (speaking) stopSpeaking(); }, [speaking]);
+  const phase = useSpeechPhase(message.id);
+  useEffect(() => () => stopIfSpeaking(message.id), [message.id]);
   const md = copyText(message.blocks);
   const spoken = message.blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
   return (
     <div className="msg-actions">
       {md && <CopyButton text={md} />}
       {speechSupported && spoken && (
-        <button className="icon-btn sm" aria-label={speaking ? "停止朗读" : "朗读"} title={speaking ? "停止朗读" : "朗读"}
-          onClick={() => { if (speaking) { stopSpeaking(); setSpeaking(false); } else { setSpeaking(true); speak(spoken, () => setSpeaking(false)); } }}>
-          {speaking ? <IconStop /> : <IconSpeaker />}
+        <button className={`icon-btn sm speak-btn ${phase}`} aria-label={phase === "idle" ? "朗读" : "停止朗读"}
+          title={phase === "idle" ? "朗读" : "停止朗读"} onClick={() => toggleSpeech(message.id, spoken)}>
+          {/* 准备中（向服务器要语音）= 闪烁的小点；在读 = 停止方块 */}
+          {phase === "loading" ? <span className="speak-dot" /> : phase === "playing" ? <IconStop /> : <IconSpeaker />}
         </button>
       )}
       {onRegenerate && (

@@ -211,3 +211,7 @@
 .share-stale { animation: rise var(--dur) var(--ease); }
 .share-stop { align-self: center; }
 .share-note { color: var(--text-2); font-size: var(--fs-xs); text-align: center; margin-top: var(--sp-3); animation: fade var(--dur) var(--ease); }
+/* 朗读键：准备中闪点（与录音中同一节奏）、在读时用墨色（不是强调色） */
+.speak-btn.playing { color: var(--text); }
+.speak-dot { width: 7px; height: 7px; border-radius: var(--r-full); background: currentColor; animation: blink var(--dur-pulse) var(--ease) infinite; }
+@media (prefers-reduced-motion: reduce) { .speak-dot { animation: none; opacity: .6; } }

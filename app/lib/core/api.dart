@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -43,6 +44,28 @@ class Api {
   Future<dynamic> put(String path, Object body) =>
       _send(() => http.put(uri(path), headers: _headers, body: jsonEncode(body)));
   Future<dynamic> delete(String path) => _send(() => http.delete(uri(path), headers: _headers));
+
+  /// 返回二进制的 POST（朗读的 mp3）：错误照常按 {detail} 抛 ApiError。
+  Future<Uint8List> postBytes(String path, Object body) async {
+    final http.Response res;
+    try {
+      res = await http.post(uri(path), headers: _headers, body: jsonEncode(body)).timeout(const Duration(seconds: 60));
+    } on SocketException {
+      throw ApiError('连不上服务器');
+    } on TimeoutException {
+      throw ApiError('连接超时');
+    } on http.ClientException {
+      throw ApiError('连不上服务器');
+    }
+    if (res.statusCode == 401) {
+      await _ref.read(sessionProvider.notifier).signOut();
+      throw ApiError('登录已过期', 401);
+    }
+    if (res.statusCode >= 400) {
+      throw ApiError(_detail(_decode(res)) ?? '请求失败（${res.statusCode}）', res.statusCode);
+    }
+    return res.bodyBytes;
+  }
 
   Future<dynamic> upload(String path, File file) => _send(() async {
         final req = http.MultipartRequest('POST', uri(path))

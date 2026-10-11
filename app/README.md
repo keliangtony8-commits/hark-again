@@ -19,6 +19,7 @@ lib/
   ui/format.dart        文件大小、相对时间、金额（formatMoney）、token（formatTokens）
   core/links.dart       打开外部链接（url_launcher 只在这里）
   core/share.dart       系统分享面板（share_plus 只在这里）：shareTextFile
+  core/speech.dart      朗读唯一入口（audioplayers / flutter_tts 只在这里）：speechProvider.toggle(id, text)；服务器 tts=server → POST /api/voice/speak 播 mp3，否则或失败 → 系统语音；同时只读一段，ChatView 卸载/换对话即停；测试用 speechEngineProvider 换假引擎（test/speech_test.dart）
   core/                 session（安全存储 token）、api（REST）、chat_socket（WS 重连 + 连接状态流，不排队）、resource（通用增删改查，可带 cacheKey 离线可读）、cache（本地离线缓存）
   models/               block（消息块，sealed）、message、resources、memory（记忆分类名/顺序、多词搜索+分类筛选、MemoryDigest）、usage（用量报表 + 预算档位）、export
   blocks/               每种消息块一个组件；block_view.dart 是唯一分发点

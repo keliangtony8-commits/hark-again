@@ -1,10 +1,12 @@
 // 设计 v2：用户 = 右侧强调色胶囊；助手 = 左侧玻璃卡（假玻璃，不模糊），两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
 // 一条消息：用户 = 右侧气泡（没发出的带“待发送/发送失败”状态行；长按出菜单：复制，最后一条另有“编辑”）；助手 = 全宽块列表 + 工具进度 + 思考动画，
-// 生成完的回复下方一行操作（复制；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
+// 生成完的回复下方一行操作（复制、朗读；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocks/block_view.dart';
+import '../../core/speech.dart';
 import '../../models/block.dart';
 import '../../models/message.dart';
 import '../../theme/app_theme.dart';
@@ -150,7 +152,7 @@ class MessageView extends StatelessWidget {
         ),
       ),
       if (!message.pending && (last || message.stopped))
-        _ReplyActions(text: copyText(message.blocks), stopped: message.stopped, onRegenerate: onRegenerate),
+        _ReplyActions(id: message.id, text: copyText(message.blocks), spoken: speakableText(message.blocks), stopped: message.stopped, onRegenerate: onRegenerate),
     ]);
   }
 }
@@ -200,8 +202,10 @@ class _OutboxStatus extends StatelessWidget {
 
 /// 回复下方的操作行：低调的小图标（不抢内容），“重新生成”随可用状态淡入淡出。
 class _ReplyActions extends StatelessWidget {
-  const _ReplyActions({required this.text, this.stopped = false, this.onRegenerate});
+  const _ReplyActions({required this.id, required this.text, required this.spoken, this.stopped = false, this.onRegenerate});
+  final String id;
   final String text;
+  final String spoken; // 只含正文，没有就不给朗读键
   final bool stopped; // 半截回复：行尾标“已停止”，提醒内容不完整（重新生成就能补全）
   final VoidCallback? onRegenerate;
 
@@ -224,6 +228,7 @@ class _ReplyActions extends StatelessWidget {
             Clipboard.setData(ClipboardData(text: text));
             showToast(context, '已复制');
           }),
+        if (spoken.isNotEmpty) _SpeakButton(id: id, text: spoken),
         AnimatedSwitcher(
           duration: context.motion(Motion.fast),
           child: onRegenerate == null
@@ -237,6 +242,35 @@ class _ReplyActions extends StatelessWidget {
           Text('已停止', style: context.text.bodySmall?.copyWith(color: p.text3)),
         ],
       ]),
+    );
+  }
+}
+
+/// 朗读键：喇叭 →（向服务器要语音时）闪烁的小点 → 停止方块；同一时间只有一条在读（core/speech.dart）。
+class _SpeakButton extends ConsumerWidget {
+  const _SpeakButton({required this.id, required this.text});
+  final String id;
+  final String text;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final phase = ref.watch(speechProvider.select((s) => s.phaseOf(id)));
+    final icon = switch (phase) {
+      SpeechPhase.idle => Icon(Icons.volume_up_rounded, key: const ValueKey('idle'), color: p.text3),
+      SpeechPhase.loading => SizedBox.square(
+          key: const ValueKey('loading'), dimension: 18, child: Center(child: PulseDot(color: p.text2))),
+      SpeechPhase.playing => Icon(Icons.stop_rounded, key: const ValueKey('playing'), color: p.ink),
+    };
+    return IconButton(
+      onPressed: () async {
+        final err = await ref.read(speechProvider.notifier).toggle(id, text);
+        if (err != null && context.mounted) showToast(context, err);
+      },
+      tooltip: phase == SpeechPhase.idle ? '朗读' : '停止朗读',
+      iconSize: 18,
+      visualDensity: VisualDensity.compact,
+      icon: AnimatedSwitcher(duration: context.motion(Motion.fast), child: icon),
     );
   }
 }

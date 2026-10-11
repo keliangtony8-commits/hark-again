@@ -38,7 +38,19 @@ export const http = {
   put: <T>(p: string, body: unknown) => request<T>(p, { method: "PUT", body: JSON.stringify(body) }),
   del: (p: string) => request(p, { method: "DELETE" }),
   upload,
+  postBlob,
 };
+
+/** 返回二进制的 POST（朗读的 mp3）。错误照常按 {detail} 抛出。 */
+async function postBlob(path: string, body: unknown): Promise<Blob> {
+  const res = await fetch(server.get() + path, {
+    method: "POST", body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth.get() ?? ""}` },
+  });
+  if (res.status === 401) { notifyUnauthorized(); throw new Error("未登录"); }
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
+  return res.blob();
+}
 
 /** 上传文件（multipart，不能设 Content-Type，让浏览器自己带 boundary）。 */
 async function upload<T>(path: string, file: File): Promise<T> {
