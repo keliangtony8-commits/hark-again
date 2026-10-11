@@ -34,6 +34,8 @@ def to_wire(ev: loop.Event) -> dict:
             return {"type": "block.delta", "index": index, "text": text}
         case loop.ToolStatus(id, name, label, state):
             return {"type": "tool.status", "id": id, "name": name, "label": label, "state": state}
+        case loop.Thinking(text):
+            return {"type": "thinking.delta", "text": text}
     raise ValueError(ev)
 
 

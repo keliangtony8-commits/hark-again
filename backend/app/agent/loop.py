@@ -8,7 +8,7 @@ import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
-from ..llm import Turn, stream_turn
+from ..llm import Reasoning, Turn, stream_turn
 from .tools import REGISTRY, ToolContext, schemas
 
 MAX_STEPS = 6  # 防止工具死循环烧钱
@@ -41,11 +41,17 @@ class ToolStatus:
 
 
 @dataclass
+class Thinking:
+    """模型的思考片段：只用于“思考中”时给用户看进度，不进 MessageBuilder（不落库、不回传）。"""
+    text: str
+
+
+@dataclass
 class Done:
     blocks: list[dict]
 
 
-Event = BlockStart | BlockUpdate | TextDelta | ToolStatus | Done
+Event = BlockStart | BlockUpdate | TextDelta | ToolStatus | Thinking | Done
 
 
 @dataclass
@@ -103,6 +109,8 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         async for item in stream_turn(messages, tools if step < MAX_STEPS - 1 else None, model):
             if isinstance(item, Turn):
                 turn = item
+            elif isinstance(item, Reasoning):
+                yield Thinking(item.text)
             else:
                 for ev in builder.text(item):
                     yield ev

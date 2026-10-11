@@ -238,6 +238,8 @@ class ChatController extends Notifier<ChatState> {
           final cur = i < m.blocks.length ? m.blocks[i] : const TextBlock('');
           return m.copyWith(blocks: _setAt(m.blocks, i, cur is TextBlock ? cur.append(e['text'] as String) : cur));
         });
+      case 'thinking.delta':
+        _patchPending((m) => m.think(e['text'] as String? ?? ''));
       case 'tool.status':
         _patchPending((m) {
           final run = ToolRun(id: e['id'] as String, label: e['label'] as String? ?? '', running: e['state'] == 'running');

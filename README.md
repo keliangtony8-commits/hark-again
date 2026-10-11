@@ -5,7 +5,7 @@ Caddy (HTTPS, 静态前端, 反代)
   ├─ /            → frontend (React PWA)
   └─ /api, /ws    → backend (FastAPI)
                        ├─ Postgres  (会话/项目/记忆/任务/卡片，Alembic 迁移)
-                       ├─ LiteLLM   (模型网关 → DeepSeek 等，花费上限)
+                       ├─ LiteLLM   (模型网关 → 阶跃 Step Plan / DeepSeek 等，花费上限；小 VPS 可直连省掉)
                        └─ SearXNG   (自托管搜索，免费)
 ```
 
@@ -14,11 +14,19 @@ Caddy (HTTPS, 静态前端, 反代)
 - `frontend/`：网页版，作为电脑端
 - 两端都只依赖 `docs/protocol.md` 这份协议；后端不关心是哪个客户端
 
-## 可选：语音与记忆检索
-在 `.env` 填 `SILICONFLOW_API_KEY`（硅基流动，有免费额度）后：语音输入（SenseVoice）和记忆向量检索（bge-m3）自动启用；不填也能用，记忆退回“最近 N 条”。
+## 模型（默认阶跃 Step Plan）
+- `.env` 填 `STEP_API_KEY`。网关别名：`fast` = step-3.7-flash（日常、能看图）、`smart` = step-5-preview（深度）、`lite` = step-3.5-flash（摘要等后台小活）。国内账号把 `deploy/litellm/config.yaml` 的 `api_base` 和 `STEP_BASE_URL` 换成 `api.stepfun.com`。
+- 推理模型的思考过程会实时显示在“思考中”小卡里（WS `thinking.delta`），不存库、不回传给模型。
+- 有的供应商每个流式包都带累计用量：`llm.py` 只记最后一次（中途停止也记已花的）。
+- 直连模式（不跑 LiteLLM，省约 500MB 内存）：`LLM_BASE_URL` 填供应商地址、`LLM_API_KEY`、`MODEL_MAP` 把别名翻成真实模型名，见 `.env.example`。
+- 真接口测试：`STEP_API_KEY=... python backend/tests/live_stepfun.py`（约 4 次调用：工具调用往返 + 朗读→识别）。
+
+## 语音与记忆检索
+- `VOICE_PROVIDER=stepfun`（默认）：语音输入用 stepaudio-2.5-asr（App 的 m4a、网页的 webm 由后端 ffmpeg 转 wav），朗读用 stepaudio-2.5-tts（`POST /api/voice/speak`，音色 `STEP_TTS_VOICE`）。`gateway`：识别走网关 `stt` 别名，朗读用设备自带语音。逻辑全在 `backend/app/voice.py`。
+- 记忆向量检索：填 `SILICONFLOW_API_KEY`（硅基流动 bge-m3，免费额度）；不填记忆退回“最近 N 条”。
 
 ## 启动
-1. `cp .env.example .env`，填 DEEPSEEK_API_KEY、OWNER_PASSWORD、JWT_SECRET、DOMAIN
+1. `cp .env.example .env`，填 STEP_API_KEY、OWNER_PASSWORD、JWT_SECRET、DOMAIN
 2. `docker compose up -d --build`
 3. 浏览器打开 https://你的域名 （没有域名先用 DOMAIN=:80，访问 http://IP）
 

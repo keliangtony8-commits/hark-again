@@ -19,7 +19,8 @@ class Message {
       this.pending = false,
       this.outbox = Outbox.sent,
       this.stopped = false,
-      this.createdAt});
+      this.createdAt,
+      this.thought = ''});
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
       id: j['id'] as String,
@@ -40,12 +41,23 @@ class Message {
   /// 本地时间；老服务器不给、正在生成的占位消息没有 → null（日期分隔把它算进上一条的那天）。
   final DateTime? createdAt;
 
+  /// 推理模型此刻的思考（WS thinking.delta 累积，只留尾部 [thoughtKeep] 字）。只在生成中给用户看进度，
+  /// 服务器不存、message.done 换上的正式消息里没有。
+  final String thought;
+  static const thoughtKeep = 2000;
+
   bool get isUser => role == 'user';
+
+  /// 追加一段思考，超长只留尾部（思考可能有几万字，界面只看最近的）。
+  Message think(String delta) {
+    final t = thought + delta;
+    return copyWith(thought: t.length > thoughtKeep ? t.substring(t.length - thoughtKeep) : t);
+  }
 
   /// 还在本机、没进服务器的消息（待发送或发送失败）。
   bool get unsent => outbox != Outbox.sent;
 
-  Message copyWith({List<Block>? blocks, List<ToolRun>? tools, bool? pending, Outbox? outbox}) => Message(
+  Message copyWith({List<Block>? blocks, List<ToolRun>? tools, bool? pending, Outbox? outbox, String? thought}) => Message(
       id: id,
       role: role,
       blocks: blocks ?? this.blocks,
@@ -53,7 +65,8 @@ class Message {
       pending: pending ?? this.pending,
       outbox: outbox ?? this.outbox,
       stopped: stopped,
-      createdAt: createdAt);
+      createdAt: createdAt,
+      thought: thought ?? this.thought);
 }
 
 /// 第 i 条消息前要不要画日期分隔：第一条有时间的消息、或与上一条有时间的消息不在同一个本地日。

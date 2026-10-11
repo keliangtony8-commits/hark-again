@@ -381,3 +381,39 @@ class _RenderSizeReporter extends RenderProxyBox {
     WidgetsBinding.instance.addPostFrameCallback((_) => onSize(s)); // 布局中不能 setState：下一帧再报
   }
 }
+
+/// 一段还在变长的文字只露出“最后几行”：固定高度、底对齐，顶上一截渐隐（像滚动的字幕）。
+/// 用于思考过程这类只关心最新进展的流式文字；lines 决定露几行，按 style 的字号和行高算高度。
+class TailText extends StatelessWidget {
+  const TailText(this.text, {super.key, required this.style, this.lines = 2});
+  final String text;
+  final TextStyle style;
+  final int lines;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context);
+    final lineH = scale.scale(style.fontSize ?? Fs.sm) * (style.height ?? Fs.lineHeight);
+    return SizedBox(
+      height: lineH * lines,
+      child: ShaderMask(
+        // 遮罩只看透明度：上面 0 → 第一行中间 1，颜色本身不画出来
+        shaderCallback: (r) => LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [style.color!.withValues(alpha: 0), style.color!],
+          stops: [0, 0.5 / lines],
+        ).createShader(r),
+        blendMode: BlendMode.dstIn,
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.bottomLeft,
+            minHeight: 0,
+            maxHeight: double.infinity,
+            child: Text(text, style: style),
+          ),
+        ),
+      ),
+    );
+  }
+}

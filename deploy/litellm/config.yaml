@@ -1,14 +1,25 @@
-# 模型网关：业务代码只认别名 fast / smart，换供应商只改这里
+# 模型网关：业务代码只认别名 fast / smart / lite，换供应商只改这里
+# 默认：阶跃 Step Plan（OpenAI 兼容）。国内账号把 api_base 换成 https://api.stepfun.com/step_plan/v1
 model_list:
-  - model_name: fast
+  - model_name: fast        # 日常对话：快、能看图、会推理
     litellm_params:
-      model: deepseek/deepseek-chat
-      api_key: os.environ/DEEPSEEK_API_KEY
-  - model_name: smart
+      model: openai/step-3.7-flash
+      api_base: https://api.stepfun.ai/step_plan/v1
+      api_key: os.environ/STEP_API_KEY
+  - model_name: smart       # 深度：旗舰 agent 模型，1M 上下文
     litellm_params:
-      model: deepseek/deepseek-reasoner
-      api_key: os.environ/DEEPSEEK_API_KEY
-  # 语音识别：硅基流动 SenseVoice，中文好、便宜（没填 key 时语音按钮会提示未配置）
+      model: openai/step-5-preview
+      api_base: https://api.stepfun.ai/step_plan/v1
+      api_key: os.environ/STEP_API_KEY
+  - model_name: lite        # 后台小活（滚动摘要、记忆整理）：最便宜
+    litellm_params:
+      model: openai/step-3.5-flash
+      api_base: https://api.stepfun.ai/step_plan/v1
+      api_key: os.environ/STEP_API_KEY
+  # 想换回 DeepSeek：把上面三段的 litellm_params 换成
+  #   model: deepseek/deepseek-chat   （smart 用 deepseek/deepseek-reasoner）
+  #   api_key: os.environ/DEEPSEEK_API_KEY
+  # 语音识别（VOICE_PROVIDER=gateway 时才用；stepfun 时后端直连阶跃 ASR）：硅基流动 SenseVoice
   - model_name: stt
     litellm_params:
       model: openai/FunAudioLLM/SenseVoiceSmall

@@ -117,15 +117,18 @@ class MessageView extends StatelessWidget {
   Widget _assistant(BuildContext context, double maxWidth) {
     final running = message.pending ? message.tools.where((t) => t.running).toList() : const <ToolRun>[];
     final thinking = message.pending && message.blocks.isEmpty && running.isEmpty;
-    // 还一个字都没有：只是一颗小玻璃胶囊里三个跳点，不先撑开一张空卡
+    // 还一个字都没有：只是一颗小玻璃胶囊里三个跳点，不先撑开一张空卡；
+    // 推理模型吐出思考内容后，胶囊长成小卡，滚动露出最新两行（不存库，正文一来就换成回复卡）
     final body = thinking
-        ? const GlassSurface(
-            key: ValueKey('thinking'),
-            radius: Radii.full,
-            shadow: false,
-            padding: EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
-            child: TypingDots(),
-          )
+        ? message.thought.trim().isEmpty
+            ? const GlassSurface(
+                key: ValueKey('thinking'),
+                radius: Radii.full,
+                shadow: false,
+                padding: EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
+                child: TypingDots(),
+              )
+            : _Thought(key: const ValueKey('thought'), text: message.thought)
         : GlassSurface(
             key: const ValueKey('card'),
             radius: Radii.lg,
@@ -234,6 +237,36 @@ class _ReplyActions extends StatelessWidget {
           Text('已停止', style: context.text.bodySmall?.copyWith(color: p.text3)),
         ],
       ]),
+    );
+  }
+}
+
+/// 思考中的小卡：标题行（跳点 + “思考中”）+ 最新两行思考，换行压成空格，整体次要色。
+class _Thought extends StatelessWidget {
+  const _Thought({super.key, required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = context.text.bodySmall!.copyWith(color: context.palette.text3);
+    return Semantics(
+      liveRegion: true,
+      label: '正在思考',
+      excludeSemantics: true,
+      child: GlassSurface(
+        radius: Radii.lg,
+        shadow: false,
+        padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            const TypingDots(),
+            const SizedBox(width: Sp.x2),
+            Text('思考中', style: context.text.labelMedium?.copyWith(color: context.palette.text2)),
+          ]),
+          const SizedBox(height: Sp.x2),
+          TailText(text.replaceAll(RegExp(r'\s+'), ' ').trim(), style: style),
+        ]),
+      ),
     );
   }
 }

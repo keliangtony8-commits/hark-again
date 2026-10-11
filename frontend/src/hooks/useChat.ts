@@ -9,6 +9,9 @@ import { useConversations } from "./useConversations";
 type Thread = { id: string | null; messages: Message[] };
 
 const isUnsent = (m: Message) => !!m.outbox;
+/** 思考可能有几万字，界面只看最近的：只留尾部（与 App Message.thoughtKeep 相同）。 */
+const THOUGHT_KEEP = 2000;
+const keepTail = (t: string) => (t.length > THOUGHT_KEEP ? t.slice(-THOUGHT_KEEP) : t);
 const plainText = (blocks: Block[]) => blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
 
 /**
@@ -103,6 +106,9 @@ export function useChat(projectId?: string) {
           blocks[e.index] = { type: "text", text: (b?.text ?? "") + e.text };
           return { ...p, blocks };
         });
+        break;
+      case "thinking.delta":
+        patchPending((p) => ({ ...p, thought: keepTail((p.thought ?? "") + e.text) }));
         break;
       case "tool.status": {
         const { type: _t, ...run } = e;

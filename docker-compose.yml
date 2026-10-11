@@ -15,7 +15,8 @@ services:
     image: ghcr.io/berriai/litellm:main-stable
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      STEP_API_KEY: ${STEP_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
     volumes: [./deploy/litellm/config.yaml:/app/config.yaml:ro]
@@ -59,7 +60,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://assistant:${POSTGRES_PASSWORD}@postgres:5432/assistant
-      LLM_BASE_URL: http://litellm:4000
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://litellm:4000}
       SEARXNG_URL: http://searxng:8080
       SANDBOX_URL: http://sandbox:9000
       SANDBOX_TOKEN: ${SANDBOX_TOKEN}
@@ -82,7 +83,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://assistant:${POSTGRES_PASSWORD}@postgres:5432/assistant
-      LLM_BASE_URL: http://litellm:4000
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://litellm:4000}
       SEARXNG_URL: http://searxng:8080
       SANDBOX_URL: http://sandbox:9000
       SANDBOX_TOKEN: ${SANDBOX_TOKEN}

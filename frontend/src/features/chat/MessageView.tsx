@@ -91,7 +91,12 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
   // AI 回复 = 左侧一张玻璃卡（块都在卡里）；还没出字时只是一颗“思考中”小胶囊
   return (
     <div className={`msg assistant ${last ? "last" : ""}`} data-msg-id={message.id}>
-      {empty ? <div className="thinking glass-chip"><span /><span /><span /></div> : (
+      {empty ? (message.thought?.trim()
+        ? <div className="thought ai-card" role="status" aria-label="正在思考">
+            <div className="thought-head"><span className="thinking"><span /><span /><span /></span>思考中</div>
+            <div className="thought-tail" aria-hidden><p>{message.thought.replace(/\s+/g, " ").trim()}</p></div>
+          </div>
+        : <div className="thinking glass-chip"><span /><span /><span /></div>) : (
         <div className="ai-card">
           <BlockRenderer blocks={message.blocks} />
           {message.pending && running.map((t) => (

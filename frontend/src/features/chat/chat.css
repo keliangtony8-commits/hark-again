@@ -83,6 +83,13 @@
 .ai-card .blk-text > :last-child { margin-bottom: 0; }
 .glass-chip { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-full); }
 .caret { display: inline-block; width: 8px; height: 1.1em; vertical-align: -3px; margin-left: 2px; border-radius: 2px; background: var(--text-3); animation: blink 1s steps(2) infinite; }
+/* 推理模型的思考：胶囊长成小卡，固定两行高、底对齐露出最新内容，顶部渐隐（App 的 TailText） */
+.thought { gap: var(--sp-2); width: 86%; animation: rise var(--dur) var(--ease) both; }
+.thought-head { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); letter-spacing: var(--label-tracking); }
+.thought-head .thinking { padding: 0; }
+.thought-tail { height: calc(2 * 1.6 * var(--fs-sm)); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 25%); -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 25%); }
+.thought-tail p { margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-3); }
 .thinking { display: flex; gap: 5px; padding: var(--sp-3) var(--sp-4); }
 .thinking span { width: 7px; height: 7px; border-radius: var(--r-full); background: var(--text-3); animation: bounce 1.2s infinite var(--ease); }
 .thinking span:nth-child(2) { animation-delay: 0.15s; }

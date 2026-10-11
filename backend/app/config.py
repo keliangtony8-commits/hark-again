@@ -5,8 +5,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(protected_namespaces=("settings_",))  # 允许 model_prices 这类字段名
     database_url: str
+    # 模型接口：默认指向自带的 LiteLLM 网关（业务只认别名 fast / smart）。
+    # 省内存的“直连模式”：LLM_BASE_URL 直接填供应商的 OpenAI 兼容地址（如阶跃 Step Plan），
+    # LLM_API_KEY 填供应商 key，MODEL_MAP 把别名翻译成真实模型名；不用跑 LiteLLM 容器。
     llm_base_url: str
-    litellm_master_key: str
+    litellm_master_key: str = ""
+    llm_api_key: str = ""           # 空 = 用 LITELLM_MASTER_KEY（网关模式）
+    model_map: dict[str, str] = {}  # 别名 → 上游模型名；空 = 网关自己翻译
     default_model: str = "fast"
     # 聊天里可选的模型：别名 → 显示名，顺序 = 客户端切换顺序。每个对话可以选一个（conversations.model），
     # 没选或选的别名后来被删了就用 default_model。定时任务、摘要不受影响
@@ -24,8 +29,16 @@ class Settings(BaseSettings):
     max_upload_mb: int = 20
     sandbox_url: str = "http://sandbox:9000"
     sandbox_token: str = "change-me"
-    stt_model: str = "stt"
-    embed_model: str = "embed"  # LiteLLM 里的向量别名  # LiteLLM 里的语音识别别名
+    stt_model: str = "stt"      # 语音识别别名（gateway 模式走 OpenAI 音频接口）
+    embed_model: str = "embed"  # 记忆检索的向量别名
+    # 语音供应商：gateway = 识别走网关 stt 别名、朗读用设备自带语音；
+    # stepfun = 识别用阶跃 stepaudio-2.5-asr（SSE）、朗读用 stepaudio-2.5-tts（服务器合成，更自然）
+    voice_provider: str = "gateway"
+    step_api_key: str = ""
+    step_base_url: str = "https://api.stepfun.ai/step_plan/v1"  # 国内账号用 https://api.stepfun.com/step_plan/v1
+    step_asr_model: str = "stepaudio-2.5-asr"
+    step_tts_model: str = "stepaudio-2.5-tts"
+    step_tts_voice: str = "elegantgentle-female"
     browser_url: str = "http://browser:9100"
     browser_token: str = "change-me"
     vault_key: str = ""  # Fernet 密钥，见 .env.example
