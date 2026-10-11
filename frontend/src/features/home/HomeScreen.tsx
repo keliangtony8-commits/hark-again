@@ -5,7 +5,7 @@ import { useInbox } from "../../hooks/useInbox";
 import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { HomeCard, ScheduledTask } from "../../lib/types";
-import { cardRoute, cardTarget, type CardTarget } from "../../lib/cardTargets";
+import { cardEyebrow, cardRoute, cardTarget, type CardTarget } from "../../lib/cardTargets";
 import { scheduleLabel, todayAt } from "../../lib/taskLabels";
 import { formatDate } from "../../lib/format";
 import LaunchComposer, { useAskInNewChat } from "../../shell/LaunchComposer";
@@ -128,6 +128,7 @@ export default function HomeScreen() {
         ) : actions.map((c, i) => {
           const target = cardTarget(c.target);
           const started = c.origin === "agent" && !!c.conversation_id;
+          const eyebrow = cardEyebrow(c, target);
           const Icon = target?.Icon ?? (started ? IconChat : IconSpark);
           return (
             <div key={c.id} className="glass-card action-card enter" style={nth(i)}>
@@ -135,7 +136,7 @@ export default function HomeScreen() {
               <div className="action-card-head">
                 <span className="row-icon icon-pop" key={String(started)}><Icon /></span>
                 <div className="action-card-title">
-                  {c.origin === "agent" && <span className="action-card-eyebrow fade-in" key={String(started)}>{started ? "已交给助手 · 看看进展" : c.action_prompt ? "可以替你做" : "需要你亲自处理"}</span>}
+                  {eyebrow && <span className="action-card-eyebrow fade-in" key={eyebrow}>{eyebrow}</span>}
                   {c.title}
                 </div>
                 <SnoozeMenu card={c} onSnooze={snooze} />

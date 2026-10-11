@@ -4,20 +4,20 @@
 ok / error、错误原因、耗时、对话 id，并更新 scheduled_tasks.last_status（列表页一眼看到“上次失败”）。
 每个任务只留最近 KEEP 条，旧的在 finish() 里顺手删。
 
-失败提醒（系统提醒的统一做法：action 卡 + alerts_sent 去重键，见 usage.check_budget）：
+失败提醒（走 system_alerts，去处 task:<id>）：
 - 只在“连续失败的第一次”发卡（上一次是 ok 或从没跑过）；接着失败不再打扰，卡上写的是第一次的原因；
-- 卡挂在任务上（task_id）+ target="tasks"（客户端“查看任务”直达该任务详情），删任务时一起删；
+- 卡挂在任务上（target="tasks" + task_id，客户端“查看任务”直达该任务详情），删任务时一起删；
 - 下一次成功 → 收起这个任务的失败卡（恢复了就不该还挂着）。
 worker 中途被杀会留下 running 行：recover_stale() 在 worker 启动时把它们标成 error。"""
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .blocks import text_to_blocks
+from . import system_alerts
 from .config import settings
-from .models import AlertSent, Conversation, HomeCard, ScheduledTask, TaskRun
+from .models import Conversation, HomeCard, ScheduledTask, TaskRun
 
 KEEP = 30
 ERROR_MAX = 500
@@ -44,8 +44,7 @@ async def finish(db: AsyncSession, task: ScheduledTask, run: TaskRun, error: str
     await _prune(db, task.id)
     card = None
     if error is None:
-        await db.execute(update(HomeCard).where(HomeCard.task_id == task.id, HomeCard.kind == "action")
-                         .values(dismissed=True))
+        await system_alerts.clear(db, f"task:{task.id}")
     elif previous != "error":
         card = await _alert(db, task, run, now)
     await db.commit()
@@ -59,20 +58,15 @@ async def _prune(db: AsyncSession, task_id: str) -> None:
 
 
 async def _alert(db: AsyncSession, task: ScheduledTask, run: TaskRun, now: datetime) -> HomeCard | None:
-    key = f"task:{task.id}:{run.id}"  # 键含运行 id：同一次运行收尾两遍也只有一张（worker 串行，不会并发撞键）
-    if await db.get(AlertSent, key):
-        return None
-    db.add(AlertSent(key=key))
     local = now.astimezone(ZoneInfo(settings.timezone))
     what = "面板没刷新成功，上面还是上一次的内容。" if task.output == "panel" else "这次的报告没有出来。"
     text = (f"{local:%m月%d日 %H:%M} 那次运行失败：{run.error}\n\n"
             f"{what}之后仍按计划重试；连着失败不会重复提醒，恢复后这张卡自动收起。")
-    card = HomeCard(kind="action", title=f"定时任务「{task.name}」没跑成功", blocks=text_to_blocks(text),
-                    task_id=task.id, target="tasks", unread=True,
-                    action_prompt=(f"我的定时任务「{task.name}」刚才运行失败了，错误是：{run.error}。"
-                                   f"它的提示词是：{task.prompt}。帮我看看原因，需要的话建议怎么改提示词或时间。"))
-    db.add(card)
-    return card
+    # 键含运行 id：同一次运行收尾两遍也只有一张
+    return await system_alerts.post(
+        db, key=f"task:{task.id}:{run.id}", title=f"定时任务「{task.name}」没跑成功", text=text, open=f"task:{task.id}",
+        prompt=(f"我的定时任务「{task.name}」刚才运行失败了，错误是：{run.error}。"
+                f"它的提示词是：{task.prompt}。帮我看看原因，需要的话建议怎么改提示词或时间。"))
 
 
 async def recover_stale(db: AsyncSession, now: datetime | None = None) -> int:

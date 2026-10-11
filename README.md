@@ -81,6 +81,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - credentials.py 按 URL 解析凭证：OAuth 连接优先，其次保险箱
 - browser_client.py 调云浏览器服务
 - pages_store.py 可分享网页（/p/<slug>/，带沙盒 CSP）；meta.source 记来源，find_by_source / wire
+- system_alerts.py 系统提醒唯一入口（v0.95）：post() 去重（alerts_sent，begin_nested 防并发）、去处走 card_targets、replace 收起同去处旧系统卡；clear(open) 恢复后收起。用户：usage.check_budget（usage）、task_runs（task:<id>）、connectors/oauth.expired（connectors：refresh 被拒 / 过期无续期凭证 / api_request 对方 401 → 卡 + ReconnectNeeded 说明给模型；键含密文指纹，同一 token 只一次；complete/forget 收起；网络错误不算失效）。智能体提议的卡（origin=agent）永不被它收起
 - home_offers.py 助手提议的 Home 建议卡唯一入口（工具 offer_on_home：kind=action + origin=agent + action_label 按钮字 + action_prompt；同标题原地更新、重新未读、清稍后提醒；同时最多 MAX_LIVE=5 张，多了收起最旧的智能体建议，系统提醒不动；manage_home list 标“你提议的”/“用户已点按钮开始做”）；start() = 点主按钮开对话并链回卡上（routes/home.py POST /api/cards/{id}/start，v0.89，复用 conversation_id 列无迁移）；v0.91 配图 image_url + 原页 link_url（clean_url 只收 http(s)；配图由工具用 display.probe_image 先探测，打不开就照放不带图；原页不合格拒卡）。迁移 0021
 - card_targets.py 卡片“去处”唯一入口（v0.93）：resolve(db, open) → (target, task_id)，open = usage/memory/skills/connectors/vault/pages/tasks 或 task:<id>（→ tasks + task_id）/ project:<id>（校验存在，否则 ValueError 中文）；offer_on_home open 参数（只有本人能做的事 open 不给 prompt，卡没有“去做”）；去处是项目时 start() 开的对话放进该项目（项目删了放回主聊天）。客户端两张同样的表（App action_card.dart cardTargets、网页 lib/cardTargets.ts），新去处三处各加一行。迁移 0022（home_cards.target 32→64）
 - card_snooze.py Home 卡片“稍后提醒”唯一入口（check/snooze/on_patch 是 /api/cards PATCH 的 on_update 钩子；wake_due 由 worker 每轮叫醒到点的卡：清空 + 重新未读 + 顶到最前；wire 让 snoozed_until 总带时区；manage_home 的 snooze/unsnooze 也走它）
@@ -135,7 +136,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - 要用户点头才执行的工具：`risk` 返回理由即走审批；想让审批卡就是业务卡（订单卡），再给 `card=fn(args)->块`，内核补 id/state=pending，批准/拒绝后更新 state，停止时 pending 变 expired。card 抛 ValueError = 参数不对，错误交回模型、不弹卡。冒烟 `python tests/smoke_commerce_cards.py`
 - 每个对话选模型：可选列表只在 settings.chat_models（CHAT_MODELS），解析只在 llm.chat_model（不认识 → 默认）；客户端的选择经 runner.apply_model 落到 conversations.model（WS user.message / message.regenerate 的 model 字段，或 PATCH）；定时任务、摘要不读它。新增“按对话的设置”照这个路子：列 + PATCH + 随消息可带
 - 模型调用：只经 llm.py（stream_turn/complete/embed），它负责记账（流式用 stream_options.include_usage，最后一包带用量）；新代码不要直接用 openai 客户端，否则花费漏记。单价 MODEL_PRICES（每百万 token，写入时算好存下，改价不改历史），MONTHLY_BUDGET 只提醒不拦截；中途停止的那次调用拿不到用量、不记。
-- 系统提醒（不是定时任务产出的）一律用 HomeCard kind=action + 去重表 alerts_sent（key 自带周期），不要在卡上记“发过没”——用户删卡后不应重发；要带客户端去处就填 target，并在两端的 cardTargets 表各加一行（去处要落到具体对象时 route 用占位，如 /me/tasks/{task} 由 cardRoute 换成卡上的 task_id）
+- 系统提醒（不是定时任务产出的）一律走 system_alerts.post(key, title, text, open, prompt?)：kind=action + origin 空 + 去处 open（经 card_targets.resolve，如 usage / connectors / task:<id>）+ 去重表 alerts_sent（key 自带周期），不要在卡上记“发过没”——用户删卡后不应重发；事情恢复了调 system_alerts.clear(open)。只有本人能做的事（重连账号）不写 prompt，客户端眉题“需要你亲自处理”。新去处在两端的 cardTargets 表各加一行（去处要落到具体对象时 route 用占位，如 /me/tasks/{task} 由 cardRoute 换成卡上的 task_id）
 - 改表结构：改 models.py → `alembic revision --autogenerate -m 说明`
 - 新卡片：blocks.py 加类 → blocks/ 加组件 → registry 登记
 - 新简单资源：models.py 加表 → resources.py 加一行

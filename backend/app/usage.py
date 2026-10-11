@@ -10,8 +10,8 @@
 累计，供 GET /api/conversations/{id}/usage（聊天页顶栏的“本对话用量”）；day_report() 出某一天（用户时区）
 的按模型拆分，供 GET /api/usage/days/{date}（用量图上点某天）。三者同一个 _aggregate 形状。
 提醒：每记一笔后 check_budget() 看本月花费有没有跨过 MONTHLY_BUDGET 的某一档（BUDGET_ALERTS），
-跨过就在 Home 放一张 action 卡（target="usage"，客户端显示“查看用量”）。每月每档每个预算值只发一次，
-去重靠 alerts_sent 表（主键冲突 = 发过，并发两笔同时跨档也只有一张）；新的一档会把旧的预算卡收起。
+跨过就经 system_alerts 在 Home 放一张提醒卡（去处 usage，客户端显示“查看用量”）。每月每档每个预算值只发一次
+（去重键 budget:月:档:预算），新的一档会把旧的预算卡收起。
 已知缺口：中途停止的那次流式调用拿不到 usage（供应商在最后一个包才给），不记。"""
 import calendar
 import contextlib
@@ -20,16 +20,16 @@ from contextvars import ContextVar
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .blocks import text_to_blocks
+from . import system_alerts
 from .config import settings
 from .db import SessionLocal
-from .models import AlertSent, Conversation, HomeCard, UsageRecord
+from .models import Conversation, HomeCard, UsageRecord
 
 log = logging.getLogger(__name__)
+BUDGET_PROMPT = "看看我这个月的模型花费主要花在哪些模型和对话上，给我三条具体的省钱建议。"
 _conversation: ContextVar[str | None] = ContextVar("usage_conversation", default=None)
 
 
@@ -74,7 +74,7 @@ def _money(v: float) -> str:
     return f"{sign}{v:.2f}" if sign else f"{v:.2f} {settings.currency}"
 
 
-def _budget_card(level: float, cost: float, budget: float, local: datetime) -> HomeCard:
+def _budget_alert(level: float, cost: float, budget: float, local: datetime) -> tuple[str, str]:
     pct = round(cost / budget * 100)
     if level >= 1:
         title = "本月模型花费已超出预算"
@@ -86,8 +86,7 @@ def _budget_card(level: float, cost: float, budget: float, local: datetime) -> H
         text = (f"本月已用 **{_money(cost)}**，预算 {_money(budget)}（{pct}%）。\n\n"
                 f"照这个速度，月底大约 {_money(cost / elapsed * days)}。")
         title = f"本月模型花费已到预算的 {round(level * 100)}%"
-    return HomeCard(kind="action", title=title, blocks=text_to_blocks(text), target="usage", unread=True,
-                    action_prompt="看看我这个月的模型花费主要花在哪些模型和对话上，给我三条具体的省钱建议。")
+    return title, text
 
 
 async def check_budget(db: AsyncSession, now: datetime | None = None) -> HomeCard | None:
@@ -103,19 +102,10 @@ async def check_budget(db: AsyncSession, now: datetime | None = None) -> HomeCar
         return None
     local = now.astimezone(ZoneInfo(settings.timezone))
     key = f"budget:{local:%Y-%m}:{round(level * 100)}:{budget:g}"  # 改了预算 = 新的一组档位
-    if await db.get(AlertSent, key):
-        return None
-    try:
-        db.add(AlertSent(key=key))
-        await db.flush()
-    except IntegrityError:  # 并发的另一笔已经发了
-        await db.rollback()
-        return None
-    await db.execute(update(HomeCard).where(HomeCard.kind == "action", HomeCard.target == "usage",
-                                            HomeCard.dismissed.is_(False)).values(dismissed=True))
-    card = _budget_card(level, cost, budget, local)
-    db.add(card)
-    await db.commit()
+    title, text = _budget_alert(level, cost, budget, local)
+    card = await system_alerts.post(db, key=key, title=title, text=text, open="usage", prompt=BUDGET_PROMPT)
+    if card is not None:  # 新的一档顶掉旧的预算卡（system_alerts replace）
+        await db.commit()
     return card
 
 

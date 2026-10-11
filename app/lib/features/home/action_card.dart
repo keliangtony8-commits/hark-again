@@ -2,7 +2,8 @@
 // 去处（HomeCard.target）是服务端说“这件事在客户端的哪一页看”，比如预算提醒 → 用量页。值 = 名字 或 名字:id
 // （规则见后端 app/card_targets.py）。route 里的 {task} 换成卡上的 task_id（任务失败提醒 → 那个任务的详情），
 // {id} 换成值里冒号后的 id（project:<id> → 那个项目）；缺了就退到列表页。
-// 助手提议的卡可以只有去处没有指令（重新连接账号这类只能本人做的事）：眉题“需要你亲自处理”，去处按钮是主按钮。
+// 卡可以只有去处没有指令（重新连接账号这类只能本人做的事；系统提醒“连接已失效”也是）：眉题“需要你亲自处理”，
+// 去处按钮是主按钮。眉题规则只在 cardEyebrow 一处（网页版 lib/cardTargets.ts cardEyebrow 同规则）。
 // 标题右边一个“稍后提醒”小钮（features/home/card_snooze.dart）：先收起，到点再放回。
 // 助手提议的卡（card.offered）：标题上方一行“可以替你做”，主按钮用卡上的字（actionText）。点了走 startOffer：
 // 服务端开新对话并记在卡上，App 打开它并发指令；卡留在主页变成“已交给助手”（card.started），主按钮“查看对话”回到那段，
@@ -69,6 +70,14 @@ Future<void> startOffer(WidgetRef ref, HomeCard card, OpenConversation open) asy
   await inbox.refresh();
 }
 
+/// 标题上方那行小字：已开始 → 已交给助手；助手提议且能替你做 → 可以替你做；
+/// 没有指令只有去处（助手提议或系统提醒，如“连接已失效”）→ 需要你亲自处理；其余（普通系统提醒）没有。
+String? cardEyebrow(HomeCard card, CardTarget? target) {
+  if (card.started) return '已交给助手 · 看看进展';
+  if (card.actionPrompt == null) return target != null ? '需要你亲自处理' : null;
+  return card.offered ? '可以替你做' : null;
+}
+
 /// 去处的真实路由：{task} ← card.taskId，{id} ← target 里冒号后的 id；缺哪个就连同前面的 / 一起去掉（退到列表）。
 String cardRoute(CardTarget t, HomeCard card) {
   final slots = {'task': card.taskId, 'id': card.target == null ? null : splitTarget(card.target!).$2};
@@ -105,6 +114,7 @@ class ActionCard extends ConsumerWidget {
 
     // 按钮一排等宽：忽略（开始后叫“收起”）永远是次按钮；有“去做”时它是主按钮，否则去处是主按钮
     final started = card.started;
+    final eyebrow = cardEyebrow(card, target);
     final buttons = <Widget>[
       PillButton(label: started ? '收起' : '忽略', onTap: dismiss),
       if (target != null) PillButton(label: target.label, icon: target.icon, primary: card.actionPrompt == null, onTap: () => open(target)),
@@ -128,10 +138,10 @@ class ActionCard extends ConsumerWidget {
             const SizedBox(width: Sp.x3),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                if (card.offered)
+                if (eyebrow != null)
                   SwapSwitcher(
-                    child: Text(started ? '已交给助手 · 看看进展' : (card.actionPrompt == null ? '需要你亲自处理' : '可以替你做'),
-                        key: ValueKey(started), style: context.text.labelSmall?.copyWith(color: context.palette.text3)),
+                    child: Text(eyebrow,
+                        key: ValueKey(eyebrow), style: context.text.labelSmall?.copyWith(color: context.palette.text3)),
                   ),
                 Text(card.title, style: context.text.titleMedium),
               ]),

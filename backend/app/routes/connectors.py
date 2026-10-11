@@ -42,8 +42,7 @@ async def start(provider: str, client: Literal["web", "app"] = "web"):
 @router.delete("/{provider}")
 async def disconnect(provider: str, db: AsyncSession = Depends(get_session)):
     if c := await db.scalar(select(Connection).where(Connection.provider == provider)):
-        await db.delete(c)
-        await db.commit()
+        await oauth.forget(db, c)
     return {"ok": True}
 
 
