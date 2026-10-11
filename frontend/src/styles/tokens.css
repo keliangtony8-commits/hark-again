@@ -105,6 +105,7 @@
   --stagger: 30ms;   /* 列表逐项入场的间隔，与 App Motion.stagger 一致 */
   --op-dimmed: 0.6; /* 停用/下线的行，与 App Op.dimmed 一致 */
   --dur-spin: 1000ms; /* 刷新图标转一圈，与 App Motion.spin 一致 */
+  --dur-count: 700ms; /* 面板关键数字滚到新值，与 App Motion.count 一致（ui/CountUp.tsx 读它） */
   --dur-pulse: 1200ms; /* 闪烁小点（朗读准备中），与 App Motion.pulse 一致 */
   --dur-flash: 1600ms; /* 搜索命中的消息闪一下：先停住再淡出，与 App Motion.flash 一致 */
 }

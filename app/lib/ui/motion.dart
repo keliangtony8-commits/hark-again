@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
+import 'format.dart';
 import 'glass_mode.dart';
 
 extension MotionContext on BuildContext {
@@ -586,5 +587,93 @@ class TurnIcon extends StatelessWidget {
     duration: context.motion(Motion.base),
     curve: Motion.ease,
     child: child,
+  );
+}
+
+/// 数字滚到新值（面板关键数字、用量大数）：第一次出现从 0 滚上来，值变了从旧值滚到新值，前后缀/小数位/千分位不变。
+/// 不是“恰好一个数字”的值（'17:42'、'晴'）、或前后缀变了，直接换字不滚。减少动态时直接给终值。
+/// 读屏念的是最终值（外层 ValueTile 自己合并语义），滚动中的中间值不打扰。
+class CountUp extends StatefulWidget {
+  const CountUp(this.value, {super.key, this.style, this.maxLines = 1, this.overflow = TextOverflow.ellipsis});
+  final String value;
+  final TextStyle? style;
+  final int maxLines;
+  final TextOverflow overflow;
+
+  @override
+  State<CountUp> createState() => _CountUpState();
+}
+
+class _CountUpState extends State<CountUp> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: Motion.count);
+  late final _t = CurvedAnimation(parent: _c, curve: Motion.ease);
+  NumberParts? _to;
+  double _from = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _to = NumberParts.parse(widget.value);
+    if (_to != null && _to!.value != 0) {
+      _c.forward();
+    } else {
+      _c.value = 1;
+    }
+  }
+
+  @override
+  void didUpdateWidget(CountUp old) {
+    super.didUpdateWidget(old);
+    if (old.value == widget.value) return;
+    final next = NumberParts.parse(widget.value);
+    final prev = _to;
+    _to = next;
+    if (next == null || prev == null || prev.prefix != next.prefix || prev.suffix != next.suffix || prev.decimals != next.decimals) {
+      _c.value = 1; // 换了“形状”：直接换字
+      return;
+    }
+    _from = _current(prev); // 半路又变了也从眼前这个数接着滚
+    _c.forward(from: 0);
+  }
+
+  double _current(NumberParts p) => _from + (p.value - _from) * _t.value;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  Text _text(String s) => Text(s, style: widget.style, maxLines: widget.maxLines, overflow: widget.overflow);
+
+  @override
+  Widget build(BuildContext context) {
+    final to = _to;
+    if (to == null || context.reduceMotion) return _text(widget.value);
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (_, _) => _text(_c.isCompleted ? widget.value : to.format(_current(to))),
+    );
+  }
+}
+
+/// 加载态 ↔ 内容（骨架 → 卡片、空状态 ↔ 列表）：交叉淡化，高度跟着平滑变化，不硬切。
+/// 给 child 一个随“态”变化的 key（例如 ValueKey('loading') / ValueKey('list')），同一态内的更新不触发过渡。
+class FadeSwitcher extends StatelessWidget {
+  const FadeSwitcher({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSize(
+    duration: context.motion(Motion.base),
+    curve: Motion.ease,
+    alignment: Alignment.topCenter,
+    child: AnimatedSwitcher(
+      duration: context.motion(Motion.base),
+      switchInCurve: Motion.ease,
+      switchOutCurve: Motion.ease,
+      layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
+      child: child,
+    ),
   );
 }

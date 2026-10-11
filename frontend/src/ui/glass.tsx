@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import CountUp from "./CountUp";
 import { IconPlus, IconUser } from "./icons";
 
 /** 设计 v2 零件的 React 外壳（样式全在 glass.css，和 App ui/glass.dart 同名同义）。 */
@@ -6,7 +7,7 @@ export function ValueTile({ label, value, note }: { label: string; value: string
   return (
     <div className="tile">
       <div className="tile-label">{label}</div>
-      <div className="tile-value">{value}</div>
+      <div className="tile-value"><CountUp value={value} /></div>
       {note && <div className="tile-note">{note}</div>}
     </div>
   );

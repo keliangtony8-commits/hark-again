@@ -8,6 +8,9 @@ import '../chat/open_conversation.dart';
 
 String newPanelPrompt(String what) => '帮我在主页做一个面板：$what';
 
+/// 还没有面板时给的几个起点（点一下就交给聊天去搭）。网页版 NewPanelSheet.tsx panelIdeas 同一组。
+const panelIdeas = ['明天的天气', '美元兑人民币汇率', '我的快递到哪了', '今天的课表和作业'];
+
 Future<void> createPanel(BuildContext context, WidgetRef ref) async {
   final v = await showFormSheet(
     context,

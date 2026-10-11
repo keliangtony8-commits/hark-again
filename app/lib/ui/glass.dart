@@ -197,7 +197,7 @@ class ValueTile extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: context.text.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: Sp.x1),
-          Text(value, style: context.text.displaySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+          CountUp(value, style: context.text.displaySmall),
           if (note != null && note!.isNotEmpty) Text(note!, style: context.text.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
         ]),
       ),

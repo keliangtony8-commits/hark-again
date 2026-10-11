@@ -185,6 +185,7 @@ abstract final class Motion {
   static const pulse = Duration(milliseconds: 1200); // 录音/实时红点
   static const spin = Duration(seconds: 1); // 刷新图标转一圈
   static const flash = Duration(milliseconds: 1600); // 搜索命中的消息闪一下：先停住再淡出
+  static const count = Duration(milliseconds: 700); // 面板关键数字滚到新值（入场从 0 起、刷新从旧值起）
 
   /// 列表错峰入场：第 i 项晚 i 拍，超过 10 项不再加（长列表不拖沓）。
   static const staggerStep = Duration(milliseconds: 30);

@@ -97,20 +97,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: PageBody(children: [
             const _Hero(),
             const SectionTitle('为你准备'),
-            if (cards.isLoading)
-              const SkeletonList(rows: 2)
-            else if (actions.isEmpty && snoozed.isEmpty)
-              const _Onboarding()
-            else
-              for (var i = 0; i < actions.length; i++)
-                FadeSlideIn(delay: Motion.stagger(i), child: ActionCard(card: actions[i], onDo: _send)),
+            // 每一段都是“骨架 → 内容 / 空状态”交叉淡化（FadeSwitcher），同一态里的更新不再过渡；卡片错峰浮上来
+            FadeSwitcher(
+              child: cards.isLoading
+                  ? const SkeletonList(key: ValueKey('loading'), rows: 2)
+                  : actions.isEmpty && snoozed.isEmpty
+                      ? const _Onboarding(key: ValueKey('empty'))
+                      : Column(key: const ValueKey('list'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          for (var i = 0; i < actions.length; i++)
+                            FadeSlideIn(delay: Motion.stagger(i), child: ActionCard(card: actions[i], onDo: _send)),
+                        ]),
+            ),
             SnoozedCards(cards: snoozed),
             const SectionTitle('面板'),
-            for (var i = 0; i < panels.length; i++)
-              FadeSlideIn(
-                delay: Motion.stagger(i),
-                child: _PanelCard(card: panels[i], refreshing: panels[i].taskId != null && refreshing.contains(panels[i].taskId)),
-              ),
+            FadeSwitcher(
+              child: cards.isLoading
+                  ? const SkeletonList(key: ValueKey('loading'), rows: 1)
+                  : panels.isEmpty
+                      ? _PanelIdeas(key: const ValueKey('empty'), onPick: (idea) => _send(newPanelPrompt(idea)))
+                      : Column(key: const ValueKey('list'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          for (var i = 0; i < panels.length; i++)
+                            FadeSlideIn(
+                              delay: Motion.stagger(i),
+                              child: _PanelCard(
+                                  card: panels[i], refreshing: panels[i].taskId != null && refreshing.contains(panels[i].taskId)),
+                            ),
+                        ]),
+            ),
             FadeSlideIn(
               delay: Motion.stagger(panels.length),
               child: WidePill(icon: Icons.add_rounded, label: '创建一个新面板', onTap: () => createPanel(context, ref)),
@@ -120,16 +133,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   trailing: unread > 0
                       ? TextButton(onPressed: () => ref.read(inboxProvider.notifier).markRead(), child: const Text('全部已读'))
                       : null),
-              GlassGroup(children: [
-                for (final r in reports)
-                  RowTile(
-                    leading: _UnreadBadge(unread: r.unread),
-                    title: r.title,
-                    subtitle: _preview(r),
-                    trailing: Text(hm(r.updatedAt), style: context.text.labelSmall),
-                    onTap: () => _openReport(r),
-                  ),
-              ]),
+              FadeSlideIn(
+                delay: Motion.stagger(1),
+                child: GlassGroup(children: [
+                  for (final r in reports)
+                    RowTile(
+                      leading: _UnreadBadge(unread: r.unread),
+                      title: r.title,
+                      subtitle: _preview(r),
+                      trailing: Text(hm(r.updatedAt), style: context.text.labelSmall),
+                      onTap: () => _openReport(r),
+                    ),
+                ]),
+              ),
             ],
           ]),
           ),
@@ -177,7 +193,7 @@ class _Hero extends StatelessWidget {
 
 /// 还没有要处理的事时的引导卡：衬线大标题 + 一句话 + 去连接（设计 v2：引导卡标题用衬线点缀）。
 class _Onboarding extends StatelessWidget {
-  const _Onboarding();
+  const _Onboarding({super.key});
 
   @override
   Widget build(BuildContext context) => GlassCard(
@@ -187,6 +203,29 @@ class _Onboarding extends StatelessWidget {
           Text('连接邮箱和日历后，我会在这里主动提醒你要处理的事。', style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
           const SizedBox(height: Sp.x4),
           PillButton(label: '去连接', icon: Icons.hub_outlined, onTap: () => context.push('/me/connectors')),
+        ]),
+      );
+}
+
+/// 还没有面板：一句话说清面板是什么 + 几个起点胶囊（点了就开新对话去搭），下面仍是“创建一个新面板”。
+class _PanelIdeas extends StatelessWidget {
+  const _PanelIdeas({super.key, required this.onPick});
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: Layout.cardGap),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Sp.x1),
+            child: Text('面板会按时替你盯着一件事，打开主页一眼就看到。',
+                style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
+          ),
+          const SizedBox(height: Sp.x3),
+          Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [
+            for (var i = 0; i < panelIdeas.length; i++)
+              FadeSlideIn(delay: Motion.stagger(i, from: 1), child: GlassChip(label: panelIdeas[i], onTap: () => onPick(panelIdeas[i]))),
+          ]),
         ]),
       );
 }
@@ -228,6 +267,7 @@ class _PanelCard extends ConsumerWidget {
           SheetAction(Icons.delete_outline_rounded, '移除', onTap: remove, danger: true),
         ]);
 
+    // 内容区刷完从 Dimmed 恢复，关键数字（ValueTile → CountUp）从旧值滚到新值。
     // 头一行：标题 + 更新时间 + 刷新/更多（编辑、刷新记录、移除；小图标，可点区域仍 ≥ A11y.minTap）；下面是内容块（关键数字是一块块 ValueTile）
     return Padding(
       padding: const EdgeInsets.only(bottom: Layout.cardGap),
@@ -236,7 +276,8 @@ class _PanelCard extends ConsumerWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Expanded(child: Text(card.title, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
-            Text(refreshing ? '刷新中…' : hm(card.updatedAt), style: context.text.labelSmall),
+            // 刷新中 ↔ 新时间：旧字上滑淡出、新字浮上来（刷完那一下看得见“更新了”）
+            SwapSwitcher(child: Text(refreshing ? '刷新中…' : hm(card.updatedAt), key: ValueKey(refreshing ? '' : hm(card.updatedAt)), style: context.text.labelSmall)),
             if (card.taskId != null)
               IconButton(
                 onPressed: refreshing ? null : refresh,

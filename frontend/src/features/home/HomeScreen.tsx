@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import BlockRenderer from "../../blocks/BlockRenderer";
 import { useInbox } from "../../hooks/useInbox";
@@ -14,11 +14,13 @@ import { WidePill } from "../../ui/glass";
 import { IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconTrash } from "../../ui/icons";
 import { Menu, Page, Section, Skeleton } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
-import NewPanelSheet from "./NewPanelSheet";
+import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
 
+/** 错峰入场第 i 拍（.enter 读 --i；超过 10 拍不再加，= App Motion.stagger）。 */
+const nth = (i: number) => ({ "--i": Math.min(i, 10) }) as CSSProperties;
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 /** 收件箱一行预览：取结果里第一段文字，去掉 Markdown 符号。 */
 const preview = (c: HomeCard) => {
@@ -102,16 +104,16 @@ export default function HomeScreen() {
 
       <Section title="为你准备">
         {cards.loading ? <Skeleton rows={2} /> : actions.length === 0 && snoozed.length === 0 ? (
-          <div className="glass-card onboarding">
+          <div className="glass-card onboarding enter">
             <h3 className="glass-title">连接邮箱和日历，我会主动提醒你</h3>
             <p className="glass-sub">要回的邮件、快到的截止日期、明天的课，都会出现在这里。</p>
             <div className="pills"><Link className="pill primary" to="/me/connectors"><IconPlug size={18} />去连接</Link></div>
           </div>
-        ) : actions.map((c) => {
+        ) : actions.map((c, i) => {
           const target = cardTarget(c.target);
           const Icon = target?.Icon ?? IconSpark;
           return (
-            <div key={c.id} className="glass-card action-card">
+            <div key={c.id} className="glass-card action-card enter" style={nth(i)}>
               <div className="action-card-head">
                 <span className="row-icon"><Icon /></span>
                 <div className="action-card-title">{c.title}</div>
@@ -131,13 +133,23 @@ export default function HomeScreen() {
       </Section>
 
       <Section title="面板">
-        {panels.map((p) => {
+        {cards.loading ? <Skeleton rows={1} /> : panels.length === 0 ? (
+          // 还没有面板：一句话 + 几个起点胶囊（点了开新对话去搭），下面仍是“创建一个新面板”
+          <div className="panel-ideas enter">
+            <p>面板会按时替你盯着一件事，打开主页一眼就看到。</p>
+            <div className="panel-idea-list">
+              {panelIdeas.map((idea, i) => <button key={idea} className="panel-idea enter" style={nth(i + 1)} onClick={() => ask(newPanelPrompt(idea))}>{idea}</button>)}
+            </div>
+          </div>
+        ) : panels.map((p, i) => {
           const busy = !!p.task_id && refreshing.has(p.task_id);
+          const time = busy ? "刷新中…" : timeOf(p.updated_at);
           return (
-            <div key={p.id} className={`glass-card panel ${busy ? "busy" : ""}`}>
+            <div key={p.id} className={`glass-card panel enter ${busy ? "busy" : ""}`} style={nth(i)}>
               <div className="panel-head">
                 <span className="panel-title">{p.title}</span>
-                <span className="panel-time">{busy ? "刷新中…" : timeOf(p.updated_at)}</span>
+                {/* 换字时 key 变 → 新字浮上来（刷完那一下看得见“更新了”）；内容里的关键数字由 CountUp 从旧值滚到新值 */}
+                <span key={time} className="panel-time enter">{time}</span>
                 {p.task_id && <button className="icon-btn sm" onClick={() => refreshPanel(p.task_id!)} disabled={busy} aria-label="刷新"><IconRefresh /></button>}
                 <Menu trigger={<IconMore />} items={[
                   ...(taskOf(p) ? [
@@ -151,12 +163,12 @@ export default function HomeScreen() {
             </div>
           );
         })}
-        <WidePill label="创建一个新面板" onClick={() => setNewPanel(true)} />
+        <div className="enter" style={nth(panels.length)}><WidePill label="创建一个新面板" onClick={() => setNewPanel(true)} /></div>
       </Section>
 
       {reports.length > 0 && (
         <Section title="收件箱" action={inbox.summary.unread > 0 ? <button className="btn btn-ghost btn-sm" onClick={() => inbox.markRead()}>全部已读</button> : undefined}>
-          <div className="list">
+          <div className="list enter" style={nth(1)}>
             {reports.map((r) => (
               <button key={r.id} className={`row report-row ${r.unread ? "unread" : ""}`} onClick={() => openReport(r)}>
                 <span className="row-icon"><IconInbox /></span>

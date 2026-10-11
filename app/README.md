@@ -82,3 +82,4 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - 强调色克制落地（v0.60）：`p.accent`/`accentSoft` 只做信号——未读点、进度/运行中、链接/搜索命中、唯一关键状态（浏览器接管）。数据条/图表/占比条用 `p.ink`，状态字、标签、成功勾用 `p.text2`；TextButton 前景是墨色。`test/design_test.dart`「强调色克制」按文件登记允许次数，新增用法先登记角色。
 
 - v0.67：features/chat/thought_view.dart 管“思考”的两种样子（生成中 ThinkingCard 带秒数；完成后 ThoughtSummary 可展开）；内容下方的小图标键一律用 ui/kit.dart 的 QuietAction / CopyAction（复制原地变对勾，不弹提示条），图标换状态用 motion.dart 的 PopSwitcher，箭头转向用 TurnIcon。
+- v0.69：数字展示值统一走 motion.dart 的 CountUp（ValueTile 已接；解析规则在 ui/format.dart NumberParts：恰好一个数字才滚），“加载 ↔ 内容 ↔ 空状态”换态统一用 FadeSwitcher（给 child 随态变化的 key）；新时长令牌 Motion.count。网页对应 ui/CountUp.tsx + lib/numberParts.ts（--dur-count），入场错峰用 base.css 的 .enter + style --i。

@@ -16,6 +16,15 @@
 .panel.busy .panel-body { opacity: var(--op-dimmed); }
 .panel-time { font-size: var(--fs-xs); color: var(--text-3); }
 
+/* 还没有面板：说明一句 + 起点胶囊（假玻璃，和对话页建议同一材质） */
+.panel-ideas p { margin: 0 var(--sp-1) var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); }
+.panel-idea-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--card-gap); }
+.panel-idea { min-height: 44px; padding: 0 var(--sp-4); border-radius: var(--r-full); background: var(--glass); border: 1px solid var(--glass-border);
+  box-shadow: var(--elev-card); font-size: var(--fs-sm); color: var(--text);
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur) var(--ease); }
+.panel-idea:hover { border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
+.panel-idea:active { transform: scale(.97); }
+
 .today-row { display: flex; gap: var(--sp-3); align-items: center; }
 .today-time { font-size: var(--fs-sm); color: var(--text-3); width: 52px; flex: none; }
 

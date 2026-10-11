@@ -63,3 +63,41 @@ String formatDay(DateTime t, {DateTime? now}) {
   if (diff == 1) return '昨天';
   return l.year == n.year ? formatDate(l) : '${l.year}年${formatDate(l)}';
 }
+
+/// 一个展示值里“唯一的那个数字”（面板关键数字滚动用）：'¥1,280.50 / 月' → 前缀 '¥'、1280.5、两位小数、千分位、后缀 ' / 月'。
+/// 只认恰好一个数字的值；'17:42'、'2026-10-11'、'3/5' 这类有好几段数字的、或没有数字的返回 null（照原样显示，不滚动）。
+/// 正负号留在前缀里（'+1.2%'、'-3°C'），所以滚动时符号不闪。
+class NumberParts {
+  const NumberParts(this.prefix, this.value, this.decimals, this.grouped, this.suffix);
+  final String prefix, suffix;
+  final double value;
+  final int decimals;
+  final bool grouped;
+
+  static final _num = RegExp(r'\d[\d,]*(?:\.\d+)?');
+  static const _maxDigits = 15; // 再长 double 就不精确了，不滚
+
+  static NumberParts? parse(String s) {
+    final all = _num.allMatches(s).toList();
+    if (all.length != 1) return null;
+    final m = all.single;
+    final raw = m.group(0)!;
+    final grouped = raw.contains(',');
+    if (grouped && !RegExp(r'^\d{1,3}(,\d{3})+(\.\d+)?$').hasMatch(raw)) return null; // '1,2,3' 不是千分位
+    final plain = raw.replaceAll(',', '');
+    if (plain.replaceAll('.', '').length > _maxDigits) return null;
+    final dot = plain.indexOf('.');
+    return NumberParts(s.substring(0, m.start), double.parse(plain), dot < 0 ? 0 : plain.length - dot - 1, grouped, s.substring(m.end));
+  }
+
+  /// 用同样的前后缀、小数位、千分位把 v 写回去（滚动中的每一帧）。
+  String format(double v) {
+    var n = v.abs().toStringAsFixed(decimals);
+    if (grouped) {
+      final parts = n.split('.');
+      final whole = parts[0].replaceAllMapped(RegExp(r'\B(?=(\d{3})+$)'), (_) => ',');
+      n = parts.length > 1 ? '$whole.${parts[1]}' : whole;
+    }
+    return '$prefix$n$suffix';
+  }
+}
