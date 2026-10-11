@@ -21,9 +21,12 @@ import 'message_view.dart';
 import 'model_choice.dart';
 
 class ChatView extends ConsumerStatefulWidget {
-  const ChatView({super.key, this.projectId = '', this.suggestions = const []});
+  const ChatView({super.key, this.projectId = '', this.suggestions = const [], this.empty});
   final String projectId;
   final List<String> suggestions;
+
+  /// 还没有消息时画什么（项目首屏 ProjectHome）；null = 通用的“今天想做点什么？”+ 建议。send = 发一条新消息。
+  final Widget Function(BuildContext context, void Function(String text) send)? empty;
 
   @override
   ConsumerState<ChatView> createState() => _ChatViewState();
@@ -140,7 +143,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           return Stack(children: [
             Positioned.fill(
               child: chat.messages.isEmpty
-                  ? Padding(padding: EdgeInsets.only(top: inset, bottom: bottom), child: _Empty(suggestions: widget.suggestions, onPick: (s) => ctl.send(s)))
+                  ? Padding(padding: EdgeInsets.only(top: inset, bottom: bottom), child: widget.empty?.call(context, (s) => ctl.send(s)) ?? _Empty(suggestions: widget.suggestions, onPick: (s) => ctl.send(s)))
                   : Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: Layout.contentMax),

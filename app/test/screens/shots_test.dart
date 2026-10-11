@@ -433,6 +433,14 @@ class _Api implements Api {
         ],
       };
     }
+    if (path == '/api/conversations?project_id=p1') {
+      return [
+        {'id': 'pc1', 'title': '英语真题第一轮复盘', 'updated_at': _ago(const Duration(hours: 2))},
+        {'id': 'pc2', 'title': '择校：南大还是浙大', 'pinned': true, 'updated_at': _ago(const Duration(days: 6))},
+        {'id': 'pc3', 'title': '政治大纲背诵计划', 'updated_at': _ago(const Duration(days: 1))},
+        {'id': 'pc4', 'title': '数学错题本', 'updated_at': _ago(const Duration(days: 3))},
+      ];
+    }
     if (path.startsWith('/api/conversations')) {
       return [
         {'id': 'c1', 'title': '额度'},
@@ -605,7 +613,9 @@ void main() {
       router.pop();
       router.push('/me/usage'); // 子页面（SubPage 玻璃标题栏）
       await _shot(tester, '$mode-usage');
-      router.go('/projects/p1'); // 项目详情（v1.08）
+      router.go('/projects/p1'); // 项目详情（v1.08）；v1.10 首屏 = 名字 + 规则 + 最近对话
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200))); // 项目对话列表先过一遍缓存（真异步）
       await _shot(tester, '$mode-project');
       router.go('/projects/p1/brief');
       await _shot(tester, '$mode-brief');

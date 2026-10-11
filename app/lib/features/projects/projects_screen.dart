@@ -21,6 +21,7 @@ import '../../shell/launch_composer.dart';
 import '../chat/chat_scaffold.dart';
 import 'project_files_sheet.dart';
 import 'project_form.dart';
+import 'project_home.dart';
 
 /// 新建项目并直接进去。
 Future<void> createProject(BuildContext context, WidgetRef ref) async {
@@ -44,6 +45,21 @@ Future<bool> deleteProject(BuildContext context, WidgetRef ref, Project project)
   await ref.read(projectsProvider.notifier).remove(project.id);
   return true;
 }
+
+/// 项目的操作菜单（列表卡 ⋯ / 长按、项目内标题栏 ⋯ 共用这一份）；onDeleted = 真的删了之后（项目内用来退出页面）。
+Future<void> showProjectMenu(BuildContext context, WidgetRef ref, Project project, {VoidCallback? onDeleted}) =>
+    showActionSheet<void>(
+      context,
+      title: '${project.emoji} ${project.name}',
+      actions: [
+        SheetAction(Icons.edit_outlined, '编辑名称和图标', onTap: () => editProject(context, ref, project)),
+        SheetAction(Icons.article_outlined, '规则与档案', onTap: () => context.push('/projects/${project.id}/brief')),
+        SheetAction(Icons.folder_open_rounded, '项目文件', onTap: () => showProjectFiles(context, project.id)),
+        SheetAction(Icons.delete_outline_rounded, '删除项目', danger: true, onTap: () async {
+          if (await deleteProject(context, ref, project)) onDeleted?.call();
+        }),
+      ],
+    );
 
 /// 最近有动静的排前面（项目本身或其中任一对话的最后更新）。
 List<Project> byActivity(List<Project> list) {
@@ -102,7 +118,7 @@ class ProjectsScreen extends ConsumerWidget {
             child: _ProjectTile(
               project: p,
               onTap: () => context.push('/projects/${p.id}'),
-              onMenu: () => _menu(context, ref, p),
+              onMenu: () => showProjectMenu(context, ref, p),
             ),
           ),
       ]);
@@ -121,16 +137,6 @@ class ProjectsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _menu(BuildContext context, WidgetRef ref, Project project) => showActionSheet<void>(
-        context,
-        title: '${project.emoji} ${project.name}',
-        actions: [
-          SheetAction(Icons.edit_outlined, '编辑名称和图标', onTap: () => editProject(context, ref, project)),
-          SheetAction(Icons.article_outlined, '规则与档案', onTap: () => context.push('/projects/${project.id}/brief')),
-          SheetAction(Icons.folder_open_rounded, '项目文件', onTap: () => showProjectFiles(context, project.id)),
-          SheetAction(Icons.delete_outline_rounded, '删除项目', danger: true, onTap: () => deleteProject(context, ref, project)),
-        ],
-      );
 }
 
 /// 页头：小标签一行 + 衬线大标题（和主页问候、“我的”同一层级）。标签内容变化时换一下，不跳高度。
@@ -242,9 +248,12 @@ class _ProjectTile extends StatelessWidget {
   }
 }
 
+/// 项目内：项目聊天。标题栏只留“项目对话”和一颗 ⋯（文件 / 规则与档案 / 编辑 / 删除，与列表菜单同一份）——
+/// 以前四颗图标挤在一起把标题压短（v1.10）。没打开对话时是项目首屏 ProjectHome。
 class ProjectDetailScreen extends ConsumerWidget {
   const ProjectDetailScreen({super.key, required this.id});
   final String id;
+  static const suggestions = ['总结一下这个项目现在的进度', '帮我列个下一步计划'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -254,12 +263,17 @@ class ProjectDetailScreen extends ConsumerWidget {
       historyTooltip: '项目对话',
       title: Text(project == null ? '项目' : '${project.emoji} ${project.name}', maxLines: 1, overflow: TextOverflow.ellipsis),
       actions: [
-        IconButton(icon: const Icon(Icons.folder_open_rounded), tooltip: '项目文件', onPressed: () => showProjectFiles(context, id)),
-        IconButton(icon: const Icon(Icons.article_outlined), tooltip: '规则与档案', onPressed: () => context.push('/projects/$id/brief')),
         if (project != null)
-          IconButton(icon: const Icon(Icons.edit_outlined), tooltip: '编辑项目', onPressed: () => editProject(context, ref, project)),
+          IconButton(
+            icon: const Icon(Icons.more_horiz_rounded),
+            tooltip: '项目菜单',
+            onPressed: () => showProjectMenu(context, ref, project, onDeleted: () {
+              if (context.mounted && context.canPop()) context.pop();
+            }),
+          ),
       ],
-      suggestions: const ['总结一下这个项目现在的进度', '帮我列个下一步计划'],
+      suggestions: suggestions,
+      empty: (context, send) => ProjectHome(projectId: id, project: project, suggestions: suggestions, onPick: send),
     );
   }
 }

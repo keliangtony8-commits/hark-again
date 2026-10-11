@@ -19,6 +19,8 @@ type Props = OutboxActions & {
   /** 输入框主按钮左边的插槽（模型钮）。 */
   accessory?: ReactNode;
   onSend: (t: string, files?: Upload[]) => void; onReconnect: () => void; greeting?: string;
+  /** 没有消息时画什么（项目首屏）；空 = 通用问候 EmptyState。 */
+  empty?: ReactNode;
 };
 
 /** 长连接断开时的提示条（输入胶囊上方的一颗玻璃胶囊）：待发送的消息会在连上后自动发出，“重试”跳过退避立刻重连。 */
@@ -37,7 +39,7 @@ const PIN_SLACK = 32;
 
 /** 编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
  *  编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。 */
-export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, focus, onFocused, accessory, onSend, onReconnect, onResend, onDiscard, greeting }: Props) {
+export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, focus, onFocused, accessory, onSend, onReconnect, onResend, onDiscard, greeting, empty: emptyView }: Props) {
   const last = messages[messages.length - 1];
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const editing = draft && draft.id === editableId ? draft : null;
@@ -95,7 +97,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
     <>
       <div className="thread" ref={thread} style={pad} onScroll={onScroll}>
         {messages.length === 0 ? (
-          <EmptyState onPick={(t) => onSend(t)} subtitle={greeting} />
+          emptyView ?? <EmptyState onPick={(t) => onSend(t)} subtitle={greeting} />
         ) : (
           <div className="thread-inner">
             {messages.map((m, i) => (

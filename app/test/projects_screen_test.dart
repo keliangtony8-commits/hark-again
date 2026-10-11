@@ -7,6 +7,7 @@ import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/projects/project_form.dart';
+import 'package:assistant/features/projects/project_home.dart';
 import 'package:assistant/features/projects/projects_screen.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/ui/motion.dart';
@@ -28,6 +29,12 @@ class _Api implements Api {
     {'id': 'p1', 'name': '考研', 'emoji': '📚', 'rules': '回答用中文', 'conversation_count': 3, 'last_active_at': now.subtract(const Duration(days: 3)).toIso8601String()},
     {'id': 'p2', 'name': '找实习', 'emoji': '💼', 'rules': '', 'conversation_count': 0, 'last_active_at': now.subtract(const Duration(minutes: 5)).toIso8601String()},
   ];
+  late final convs = <Map<String, dynamic>>[
+    {'id': 'c1', 'title': '真题第一轮', 'updated_at': now.subtract(const Duration(days: 2)).toIso8601String()},
+    {'id': 'c2', 'title': '单词计划', 'updated_at': now.subtract(const Duration(hours: 1)).toIso8601String()},
+    {'id': 'c3', 'title': '择校', 'pinned': true, 'updated_at': now.subtract(const Duration(days: 9)).toIso8601String()},
+    {'id': 'c4', 'title': '政治大纲', 'updated_at': now.subtract(const Duration(days: 4)).toIso8601String()},
+  ];
   final calls = <String>[];
   final bodies = <Object?>[];
 
@@ -35,6 +42,11 @@ class _Api implements Api {
   Future<dynamic> get(String path) async {
     if (path == '/api/inbox') return {'unread': 0, 'latest': null};
     if (path == '/api/projects') return [...projects];
+    if (path == '/api/conversations?project_id=p1') return [...convs];
+    if (path.startsWith('/api/conversations/')) {
+      final id = path.split('/').last;
+      return {'id': id, 'title': id, 'messages': [{'id': 'm-$id', 'role': 'user', 'blocks': [{'type': 'text', 'text': '续聊 $id'}]}]};
+    }
     return <dynamic>[];
   }
 
@@ -73,7 +85,7 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-Future<_Api> _pump(WidgetTester tester) async {
+Future<_Api> _pump(WidgetTester tester, {String at = '/projects'}) async {
   tester.view.physicalSize = const Size(400, 860);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -90,6 +102,10 @@ Future<_Api> _pump(WidgetTester tester) async {
   await _settle(tester);
   container.read(routerProvider).go('/projects');
   await _settle(tester);
+  if (at != '/projects') {
+    container.read(routerProvider).push(at);
+    await _settle(tester);
+  }
   return api;
 }
 
@@ -173,5 +189,60 @@ void main() {
     await _settle(tester);
     expect(api.bodies.last, {'name': '旅行', 'emoji': '✈️'});
     expect(projectEmojis, contains('✈️'));
+  });
+
+  test('projectRecent：置顶在前，再按更新新→旧，最多 3 条；projectLine 规则 > 档案 > 引导', () {
+    ConversationSummary c(String id, {int? daysAgo, bool pinned = false}) => ConversationSummary(
+        id: id, title: id, pinned: pinned, updatedAt: daysAgo == null ? null : DateTime(2026, 10, 12).subtract(Duration(days: daysAgo)));
+    final list = [c('old', daysAgo: 9), c('none'), c('new', daysAgo: 0), c('pin', daysAgo: 30, pinned: true), c('mid', daysAgo: 3)];
+    expect(projectRecent(list).map((e) => e.id), ['pin', 'new', 'mid']);
+    expect(projectRecent(list, max: 9).map((e) => e.id), ['pin', 'new', 'mid', 'old', 'none']);
+    expect(projectLine(Project.fromJson({'id': 'a', 'rules': '回答用中文\n第二行', 'brief': '# 档案\n目标 985'})), '回答用中文');
+    expect(projectLine(Project.fromJson({'id': 'a', 'brief': '# 档案\n- 目标 985'})), '目标 985');
+    expect(projectLine(Project.fromJson({'id': 'a'})), startsWith('还没有规则和档案'));
+  });
+
+  testWidgets('项目内：标题栏只有“项目对话”和 ⋯；首屏有名字、规则、最近 3 条对话和起步建议', (tester) async {
+    await _pump(tester, at: '/projects/p1');
+    expect(find.byTooltip('项目对话'), findsOneWidget);
+    expect(find.byTooltip('项目菜单'), findsOneWidget);
+    expect(find.byTooltip('项目文件'), findsNothing);
+    expect(find.byTooltip('编辑项目'), findsNothing);
+    expect(find.text('今天想做点什么？'), findsNothing);
+    expect(find.byType(ProjectHome), findsOneWidget);
+    expect(find.text('回答用中文'), findsOneWidget);
+    expect(find.text('最近的对话'), findsOneWidget);
+    expect(find.text('全部 4 个'), findsOneWidget);
+    final ys = [for (final t in ['择校', '单词计划', '真题第一轮']) tester.getTopLeft(find.text(t)).dy];
+    expect(ys, orderedEquals([...ys]..sort()));
+    expect(find.text('政治大纲'), findsNothing);
+    expect(find.text('或者新开一段'), findsOneWidget);
+    expect(find.text('总结一下这个项目现在的进度'), findsOneWidget);
+  });
+
+  testWidgets('项目首屏：点最近对话 → 打开续聊；⋯ 菜单 = 列表同一份', (tester) async {
+    await _pump(tester, at: '/projects/p1');
+    await tester.tap(find.text('单词计划'));
+    await _settle(tester);
+    expect(find.text('续聊 c2'), findsOneWidget);
+    expect(find.byType(ProjectHome), findsNothing);
+    await tester.tap(find.byTooltip('项目菜单'));
+    await _settle(tester);
+    for (final t in ['编辑名称和图标', '规则与档案', '项目文件', '删除项目']) {
+      expect(find.text(t), findsOneWidget);
+    }
+  });
+
+  testWidgets('项目内删除：确认后退回列表', (tester) async {
+    final api = await _pump(tester, at: '/projects/p1');
+    await tester.tap(find.byTooltip('项目菜单'));
+    await _settle(tester);
+    await tester.tap(find.text('删除项目'));
+    await _settle(tester);
+    await tester.tap(find.text('删除'));
+    await _settle(tester);
+    expect(api.calls, ['DELETE /api/projects/p1']);
+    expect(find.byType(ProjectHome), findsNothing);
+    expect(find.text('1 个项目 · 最近 5 分钟前'), findsOneWidget);
   });
 }

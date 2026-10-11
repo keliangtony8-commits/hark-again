@@ -26,3 +26,26 @@
 .brief-editor { min-height: 320px !important; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .form-field small.danger, .brief-error { color: var(--danger); }
 .brief-note { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--text-3); }
+
+/* 项目首屏（v1.10，= App ProjectHome）：靠左、从标题栏下往下排，宽度同聊天正文 */
+.project-home { max-width: var(--content-w); width: 100%; margin: 0 auto;
+  padding: var(--thread-top) var(--gutter) calc(var(--footer-h, 88px) + var(--sp-4)); }
+.project-home-head { display: flex; align-items: center; gap: var(--sp-4); }
+.project-home-mark { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-tile); background: var(--tile); font-size: 26px; }
+.project-home-titles { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.project-home-titles h1 { margin: 0; font-family: var(--font-serif); font-weight: var(--fw-title); font-size: calc(var(--fs-xl) - 4px); line-height: 1.2;
+  letter-spacing: var(--display-tracking); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.project-home-line { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; margin-top: var(--sp-3);
+  text-align: left; color: var(--text-2); border-radius: var(--r-sm); transition: color var(--dur) var(--ease); }
+.project-home-line > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.project-home-line > svg { flex: none; color: var(--text-3); transition: transform var(--dur) var(--ease); }
+.project-home-line:hover { color: var(--text); }
+.project-home-line:hover > svg { transform: translateX(2px); }
+.project-home .section:first-of-type { margin-top: var(--sp-5); }
+.project-home-starters { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.project-starter { min-height: 40px; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm);
+  background: var(--glass); border: 1px solid var(--glass-border); transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.project-starter:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
+.project-starter:active { transform: scale(.97); transition-duration: var(--dur-fast); }
+@media (min-width: 861px) { .project-home-recent { display: none; } } /* 宽屏历史栏常驻左侧，不重复 */
+@media (prefers-reduced-motion: reduce) { .project-home-line > svg, .project-starter { transition: none; } .project-starter:hover { transform: none; } }

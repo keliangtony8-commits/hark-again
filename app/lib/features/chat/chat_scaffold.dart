@@ -28,6 +28,7 @@ class ChatScaffold extends StatefulWidget {
     this.actions = const [],
     this.suggestions = const [],
     this.historyTooltip = '历史',
+    this.empty,
   });
 
   final String projectId;
@@ -35,6 +36,9 @@ class ChatScaffold extends StatefulWidget {
   final List<Widget> actions;
   final List<String> suggestions;
   final String historyTooltip;
+
+  /// 没有消息时的首屏（见 ChatView.empty）。
+  final Widget Function(BuildContext context, void Function(String text) send)? empty;
 
   @override
   State<ChatScaffold> createState() => _ChatScaffoldState();
@@ -93,7 +97,7 @@ class _ChatScaffoldState extends State<ChatScaffold> {
                 )
               : null,
         ),
-        Expanded(key: const ValueKey('chat'), child: ChatView(projectId: widget.projectId, suggestions: widget.suggestions)),
+        Expanded(key: const ValueKey('chat'), child: ChatView(projectId: widget.projectId, suggestions: widget.suggestions, empty: widget.empty)),
       ]),
     );
   }
@@ -149,7 +153,7 @@ class _ChatScaffoldState extends State<ChatScaffold> {
                   )
                 : null,
           ),
-          Expanded(key: const ValueKey('chat'), child: ChatView(projectId: widget.projectId, suggestions: widget.suggestions)),
+          Expanded(key: const ValueKey('chat'), child: ChatView(projectId: widget.projectId, suggestions: widget.suggestions, empty: widget.empty)),
         ]),
       ),
     );

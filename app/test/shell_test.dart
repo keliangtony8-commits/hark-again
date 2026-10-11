@@ -76,7 +76,7 @@ void main() {
     router.go('/projects/p1');
     await _settle(tester);
     expect(_barShown(tester), isFalse);
-    expect(find.byTooltip('项目文件'), findsOneWidget); // 子页面有自己的 AppBar
+    expect(find.byTooltip('项目对话'), findsOneWidget); // 子页面有自己的 AppBar
 
     await tester.tapAt(tester.getCenter(find.text('聊天'))); // 隐藏的顶栏不挡也不接点击
     await _settle(tester);
