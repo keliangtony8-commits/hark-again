@@ -109,13 +109,14 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .danger-text { color: var(--danger); }
 button.row-body { text-align: left; }
 .row-icon.file-ext { width: 32px; height: 32px; border-radius: var(--r-sm); background: var(--tile); font-size: 9px; font-weight: var(--fw-strong); letter-spacing: .04em; }
-.skill-intro { margin: var(--sp-2) 0 0; }
-.skill-intro .page-hero-label { margin: 0 var(--sp-1) var(--sp-2); }
+/* 列表子页的页头（技能 / 定时任务）：摘要小标签 + 一句说明；空库的起步模板卡。 */
+.page-intro { margin: var(--sp-2) 0 0; }
+.page-intro .page-hero-label { margin: 0 var(--sp-1) var(--sp-2); }
 .skill-search { margin: 0 0 var(--sp-2); }
-.skill-starters { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-4); }
-.skill-starters .row-sub { margin: 0; }
-.skill-starter-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
-.skill-starter-list .btn { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.starters { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-4); }
+.starters .row-sub { margin: 0; }
+.starter-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.starter-list .btn { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .skill-name { margin: 0 var(--sp-1) var(--sp-1); font-size: var(--fs-lg); font-weight: var(--fw-strong); }
 .skill-read { background: var(--tile); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); }
 .skill-body-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: var(--sp-2) 0; font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }

@@ -90,7 +90,7 @@ export default function SkillsScreen() {
   return (
     <Page header={<PageHeader title="技能" back action={
       <button className="icon-btn" onClick={() => show({ name: "", description: "", body: "" })} aria-label="新建技能"><IconPlus /></button>} />}>
-      <div className="skill-intro enter">
+      <div className="page-intro enter">
         <span key={skills.loading ? "" : summary} className="page-hero-label enter">{skills.loading ? "" : summary}</span>
         <p className="desc">技能是我做某类事的固定方法。我会在合适的时候按它做；停用的留在库里，我看不到。</p>
       </div>
@@ -104,10 +104,10 @@ export default function SkillsScreen() {
           {(!searching || mine.length > 0) && (
             <Section title={`我的${mine.length ? ` · ${mine.length}` : ""}`}>
               {mine.length ? rows(mine) : (
-                <div className="list skill-starters enter">
+                <div className="list starters enter">
                   <div className="row-title">还没有自己写的</div>
                   <p className="row-sub">在这里写，或在聊天里说“把刚才的做法存成技能”。也可以从一个开始改：</p>
-                  <div className="skill-starter-list">
+                  <div className="starter-list">
                     {SKILL_STARTERS.map((st) => (
                       <button key={st.name} className="btn btn-ghost" onClick={() => show({ ...st }, {})}><IconPlus size={16} />{st.name}</button>
                     ))}

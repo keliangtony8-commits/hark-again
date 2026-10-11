@@ -44,6 +44,7 @@ class _SchedulePickerState extends State<SchedulePicker> {
   late final _shortcuts = onceShortcuts(_now);
   late bool _custom = _isCustom(widget.controller.value);
   String _lastCron = cronPresets.first.$2;
+  late final String _ownCron = widget.controller.value.cron; // 打开时带来的 cron（已有任务 / 起步模板）
 
   ValueNotifier<TaskPlan> get _c => widget.controller;
 
@@ -64,8 +65,8 @@ class _SchedulePickerState extends State<SchedulePicker> {
     final plan = _c.value;
     final presets = [
       ...cronPresets,
-      // 已有任务的 cron 不在常用项里：也显示出来，保持选中
-      if (!plan.isOnce && plan.cron.isNotEmpty && !cronPresets.any((p) => p.$2 == plan.cron)) (describeCron(plan.cron), plan.cron),
+      // 带来的 cron 不在常用项里：一直留一颗（选了别的还能点回来）
+      if (_ownCron.isNotEmpty && !cronPresets.any((p) => p.$2 == _ownCron)) (describeCron(_ownCron), _ownCron),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
       if (!widget.repeatOnly) ...[

@@ -111,7 +111,7 @@ void main() {
   testWidgets('list shows last failure and opens detail', (tester) async {
     final api = FakeApi(tasks: [taskJson()], runs: [runJson('r1', 'error', error: '模型调用失败：401')]);
     await pump(tester, api, '/me/tasks');
-    expect(find.textContaining('上次失败'), findsOneWidget);
+    expect(find.text('每天 08:00 · 上次失败'), findsOneWidget); // 页头摘要里也有“1 个上次失败”
     expect(find.bySemanticsLabel(RegExp('上次运行失败')), findsOneWidget);
     await tester.tap(find.text('每日新闻'));
     await tester.pumpAndSettle();
