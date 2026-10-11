@@ -47,16 +47,15 @@ class TasksScreen extends ConsumerWidget {
           var i = 0; // 整页错峰序号：页头之后一行一行进
           Widget rows(List<ScheduledTask> items) =>
               ListGroup(children: [for (final t in items) _TaskRow(task: t, delay: Motion.stagger(i++, from: 1))]);
-          Widget count(List<ScheduledTask> items) => Text('${items.length}', style: context.text.labelSmall);
           return PullRefresh(
             onRefresh: () => ref.read(tasksProvider.notifier).reload(),
             child: PageBody(children: [
-              _Intro(summary: taskSummary(list), next: nextUp(list)),
-              if (list.isEmpty) const FadeSlideIn(child: _Starters()),
-              if (g.attention.isNotEmpty) ...[SectionTitle('需要留意', trailing: count(g.attention)), rows(g.attention)],
-              if (g.running.isNotEmpty) ...[SectionTitle('在跑', trailing: count(g.running)), rows(g.running)],
-              if (g.panels.isNotEmpty) ...[SectionTitle('Home 面板', trailing: count(g.panels)), rows(g.panels)],
-              if (g.idle.isNotEmpty) ...[SectionTitle('已停下', trailing: count(g.idle)), rows(g.idle)],
+              PageIntro(summary: taskSummary(list), line: _nextLine(nextUp(list))),
+              if (list.isEmpty) const _Starters(),
+              if (g.attention.isNotEmpty) ...[SectionTitle('需要留意', count: g.attention.length), rows(g.attention)],
+              if (g.running.isNotEmpty) ...[SectionTitle('在跑', count: g.running.length), rows(g.running)],
+              if (g.panels.isNotEmpty) ...[SectionTitle('Home 面板', count: g.panels.length), rows(g.panels)],
+              if (g.idle.isNotEmpty) ...[SectionTitle('已停下', count: g.idle.length), rows(g.idle)],
             ]),
           );
         },
@@ -65,49 +64,24 @@ class TasksScreen extends ConsumerWidget {
   }
 }
 
-/// 页头：摘要小标签 + 下一个要跑的（没有就是一句说明）。
-class _Intro extends StatelessWidget {
-  const _Intro({required this.summary, required this.next});
-  final String summary;
-  final (String, String)? next;
+/// 页头第二行：下一个要跑的；没有就是一句说明。
+String _nextLine((String, String)? next) =>
+    next == null ? '到点我会自己去做，做完把结果发给你；面板按计划刷新。' : '下一个：${next.$1} · ${next.$2}';
 
-  @override
-  Widget build(BuildContext context) {
-    final line = next == null ? '到点我会自己去做，做完把结果发给你；面板按计划刷新。' : '下一个：${next!.$1} · ${next!.$2}';
-    return FadeSlideIn(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, 0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SwapSwitcher(child: Text(summary, key: ValueKey(summary), style: context.text.labelSmall)),
-          const SizedBox(height: Sp.x2),
-          SwapSwitcher(
-            child: Text(line, key: ValueKey(line), style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-/// 空列表：一句引导 + 起步模板（点了带内容打开新建表单，没点“创建”前什么都不会存）。
+/// 空列表：起步模板（点了带内容打开新建表单，没点“创建”前什么都不会存）。
 class _Starters extends ConsumerWidget {
   const _Starters();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => Padding(
         padding: const EdgeInsets.only(top: Sp.x4),
-        child: AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('还没有定时任务', style: context.text.titleSmall),
-            const SizedBox(height: Sp.x1),
-            Text('在这里建，或在聊天里说“每天早上 8 点给我今天的天气和日程”。也可以从一个开始改：',
-                style: context.text.bodySmall?.copyWith(color: context.palette.text2)),
-            const SizedBox(height: Sp.x3),
-            Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [
-              for (final st in taskStarters)
-                PillButton(label: st.name, icon: Icons.add_rounded, onTap: () => createTask(context, ref, starter: st)),
-            ]),
-          ]),
+        child: StarterCard(
+          title: '还没有定时任务',
+          text: '在这里建，或在聊天里说“每天早上 8 点给我今天的天气和日程”。也可以从一个开始改：',
+          starters: [
+            for (final st in taskStarters)
+              PillButton(label: st.name, icon: Icons.add_rounded, onTap: () => createTask(context, ref, starter: st)),
+          ],
         ),
       );
 }

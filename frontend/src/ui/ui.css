@@ -268,6 +268,10 @@ button.run-row:hover { background: var(--tile); }
 /* 列表行的“停用”态（已下线的 Page、停用的技能）：变淡，切换有过渡 */
 .row { transition: opacity var(--dur) var(--ease); }
 .row.row-off { opacity: var(--op-dimmed); }
+/* 行尾的脱敏说明（保险箱 ••••abcd、“已连接”）：小字 text3，和 App 的 labelSmall 尾巴一致 */
+.row-hint { flex: none; color: var(--text-3); font-size: var(--fs-xs); letter-spacing: var(--label-tracking); }
+/* 入场动画让每行自成层叠上下文：行内菜单打开时抬高本行，弹出层才盖得住下一行 */
+.row:has(.menu.open) { position: relative; z-index: 3; }
 .skill-row { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .skill-toggle { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: 0 0 var(--sp-3); }
 /* 技能编辑弹层顶部的出身说明：内置原样灰底，自定义版强调色底；切换时淡入 */

@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useResource } from "../../hooks/useResource";
 import type { VaultSecret } from "../../lib/types";
-import { IconPlus, IconShield } from "../../ui/icons";
-import { Hint, Page, PageHeader, Sheet, Skeleton } from "../../ui/kit";
+import { IconMore, IconPlus, IconShield, IconTrash, IconUser } from "../../ui/icons";
+import { Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+import { SECRET_KINDS, groupSecrets, secretHint, vaultSummary } from "./connectorLibrary";
 import { confirmDialog } from "../../ui/dialog";
 
 type Kind = "api_key" | "login";
 const EMPTY = { kind: "login" as Kind, name: "", username: "", value: "", hosts: "", header_name: "Authorization", header_prefix: "Bearer " };
 const KINDS: { id: Kind; label: string }[] = [{ id: "login", label: "网站登录" }, { id: "api_key", label: "API Key" }];
 
-/** 保险箱：只能存和删，存进去就再也看不到明文。
+/** 保险箱：只能存和删，存进去就再也看不到明文。版式同技能/定时任务页（页头摘要 → 起步卡 → 分组带数量 → 错峰进场）。
  *  网站登录 → 云浏览器里代填；API Key → 按域名进请求头。两类严格分开使用。 */
 export default function VaultScreen() {
   const secrets = useResource<VaultSecret>("/api/vault");
@@ -28,27 +29,49 @@ export default function VaultScreen() {
   const isLogin = draft?.kind === "login";
   const valid = draft && draft.name.trim() && draft.value.length >= 4 && draft.hosts.trim() && (!isLogin || draft.username.trim());
 
+  const start = (kind: Kind) => { setDraft({ ...EMPTY, kind }); setAdvanced(false); setErr(null); };
+  const remove = async (s: VaultSecret) => {
+    if (await confirmDialog({ title: `删除「${s.name}」？`, text: "用到它的任务会拿不到这把钥匙，直到你重新存入。" })) void secrets.remove(s.id);
+  };
+  const g = groupSecrets(secrets.items);
+  let n = 0;
+  const rows = (items: VaultSecret[]) => (
+    <div className="list">
+      {items.map((s) => {
+        const hint = secretHint(s);
+        return (
+          <div key={s.id} className="row enter" style={stagger(++n)}>
+            <span className="row-icon">{s.kind === "login" ? <IconUser /> : <IconShield />}</span>
+            <div className="row-body">
+              <div className="row-title">{s.name}</div>
+              <div className="row-sub">{s.hosts.join("、")}</div>
+            </div>
+            {hint && <span className="row-hint">{hint}</span>}
+            <Menu trigger={<IconMore />} label={`${s.name} 的操作`} items={[{ label: "删除", icon: <IconTrash />, danger: true, onSelect: () => void remove(s) }]} />
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <Page header={<PageHeader title="保险箱" back action={
-      <button className="icon-btn" onClick={() => { setDraft(EMPTY); setAdvanced(false); }} aria-label="添加"><IconPlus /></button>} />}>
-      <p className="desc">加密存在你自己的服务器上，只用于你指定的网站。我只知道“有这把钥匙”，永远看不到内容。</p>
-      {secrets.loading ? <Skeleton /> : secrets.items.length === 0 ? (
-        <Hint icon={<IconShield size={26} />} title="保险箱是空的"
-          text="存一个网站登录，我在云浏览器里能替你登录；存一个 API Key，我就能调用那个服务。"
-          action={<button className="btn btn-primary" onClick={() => setDraft(EMPTY)}><IconPlus />添加</button>} />
-      ) : (
-        <div className="list">
-          {secrets.items.map((s) => (
-            <div key={s.id} className="row">
-              <span className="row-icon"><IconShield /></span>
-              <div className="row-body">
-                <div className="row-title">{s.name}</div>
-                <div className="row-sub">{s.kind === "login" ? `登录 · ${s.username}` : `API Key · ••••${s.preview}`} · {s.hosts.join("、")}</div>
-              </div>
-              <button className="btn btn-danger btn-sm" onClick={async () => { if (await confirmDialog({ title: `删除「${s.name}」？`, text: "用到它的任务会拿不到这把钥匙。" })) void secrets.remove(s.id); }}>删除</button>
-            </div>
-          ))}
-        </div>
+      <button className="icon-btn" onClick={() => start("login")} aria-label="存入"><IconPlus /></button>} />}>
+      <PageIntro loading={secrets.loading} summary={vaultSummary(secrets.items)}
+        line="加密存在你自己的服务器上，只用于你指定的网站。我只知道“有这把钥匙”，回复里永远看不到内容。" />
+      {secrets.loading ? <Skeleton /> : (
+        <>
+          {secrets.items.length === 0 && (
+            <StarterCard title="保险箱是空的" text="存一个网站登录，我在云浏览器里能替你登录；存一个 API Key，我就能调用那个服务。">
+              {SECRET_KINDS.map((k) => (
+                <button key={k.kind} className="btn btn-ghost" onClick={() => start(k.kind)}>
+                  {k.kind === "login" ? <IconUser size={16} /> : <IconShield size={16} />}{k.label}</button>
+              ))}
+            </StarterCard>
+          )}
+          {g.logins.length > 0 && <Section title={`网站登录 · ${g.logins.length}`}>{rows(g.logins)}</Section>}
+          {g.keys.length > 0 && <Section title={`API Key · ${g.keys.length}`}>{rows(g.keys)}</Section>}
+        </>
       )}
       {draft && (
         <Sheet title="存进保险箱" onClose={() => setDraft(null)} actions={<>

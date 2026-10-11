@@ -32,9 +32,12 @@ class PageBody extends StatelessWidget {
 }
 
 class SectionTitle extends StatelessWidget {
-  const SectionTitle(this.title, {super.key, this.trailing});
+  const SectionTitle(this.title, {super.key, this.trailing, this.count});
   final String title;
   final Widget? trailing;
+
+  /// 区块里有几项：和标题同一小字层级放在行尾（有 trailing 时以 trailing 为准）。
+  final int? count;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -42,8 +45,48 @@ class SectionTitle extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(Sp.x1, Layout.sectionGap - Sp.x3, Sp.x1, Sp.x3),
         child: Row(children: [
           Expanded(child: Text(title, style: context.text.labelSmall)),
-          ?trailing,
-        ]),
+          trailing ?? (count == null ? null : Text('$count', style: context.text.labelSmall)),
+        ].nonNulls.toList()),
+      );
+}
+
+/// 子页面页头（v0.75 起各“我的”子页共用）：一行小标签摘要（变化时换一下）+ 一句说明（也可变化）。
+/// 子页面不再放大标题；层级 = 摘要小字 → 说明正文 text2 → 下面的分区。
+class PageIntro extends StatelessWidget {
+  const PageIntro({super.key, required this.summary, required this.line});
+  final String summary, line;
+
+  @override
+  Widget build(BuildContext context) => FadeSlideIn(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, 0),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SwapSwitcher(child: Text(summary, key: ValueKey(summary), style: context.text.labelSmall)),
+            const SizedBox(height: Sp.x2),
+            SwapSwitcher(child: Text(line, key: ValueKey(line), style: context.text.bodyMedium?.copyWith(color: context.palette.text2))),
+          ]),
+        ),
+      );
+}
+
+/// 起步卡：列表为空时代替“空空如也”——标题 + 一句引导 + 一排起步按钮（PillButton）。
+/// 点按钮只是带内容打开新建表单，用户没确认前什么都不会存。
+class StarterCard extends StatelessWidget {
+  const StarterCard({super.key, required this.title, required this.text, required this.starters});
+  final String title, text;
+  final List<Widget> starters;
+
+  @override
+  Widget build(BuildContext context) => FadeSlideIn(
+        child: AppCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: context.text.titleSmall),
+            const SizedBox(height: Sp.x1),
+            Text(text, style: context.text.bodySmall?.copyWith(color: context.palette.text2)),
+            const SizedBox(height: Sp.x3),
+            Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: starters),
+          ]),
+        ),
       );
 }
 

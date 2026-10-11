@@ -1,4 +1,5 @@
 // 保险箱：API Key 和网站登录。只能存、看脱敏预览、删；明文永不回到手机上。
+// 版式与技能/定时任务页同一套：页头摘要 + 说明 → 空时起步卡 → 分组（带数量）→ 行错峰进场。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,10 +8,12 @@ import '../../core/resource.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
+import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import 'connector_library.dart';
 
 class VaultScreen extends ConsumerWidget {
   const VaultScreen({super.key});
@@ -20,73 +23,114 @@ class VaultScreen extends ConsumerWidget {
     final secrets = ref.watch(secretsProvider);
     return SubPage(
       title: const Text('保险箱'),
-      floatingActionButton: FloatingActionButton(onPressed: () => _add(context, ref), tooltip: '存入', child: const Icon(Icons.add_rounded)),
+      actions: [IconButton(icon: const Icon(Icons.add_rounded), tooltip: '存入', onPressed: () => addSecret(context, ref))],
       body: AsyncBody<SecretItem>(
         value: secrets,
         onRetry: () => ref.invalidate(secretsProvider),
-        empty: const EmptyHint(
-          icon: Icons.lock_outline_rounded,
-          title: '保险箱是空的',
-          text: '存一个 API Key 或网站登录。我只在请求对应域名时使用它，回复里永远看不到明文。',
-        ),
         builder: (list) {
-          final keys = [for (final s in list) if (!s.isLogin) s];
-          final logins = [for (final s in list) if (s.isLogin) s];
-          return PageBody(children: [
-            if (keys.isNotEmpty) ...[const SectionTitle('API Key'), ListGroup(children: [for (final s in keys) _SecretRow(s)])],
-            if (logins.isNotEmpty) ...[const SectionTitle('网站登录'), ListGroup(children: [for (final s in logins) _SecretRow(s)])],
-            const SizedBox(height: Sp.x3),
-            Center(child: Text('加密保存在你自己的服务器上', style: context.text.labelSmall)),
-          ]);
+          final g = groupSecrets(list);
+          var i = 0; // 整页错峰序号
+          Widget rows(List<SecretItem> items) => ListGroup(children: [for (final s in items) _SecretRow(s, delay: Motion.stagger(i++, from: 1))]);
+          return PullRefresh(
+            onRefresh: () => ref.read(secretsProvider.notifier).reload(),
+            child: PageBody(children: [
+              PageIntro(summary: vaultSummary(list), line: '加密存在你自己的服务器上，只用于你指定的网站。我只知道“有这把钥匙”，回复里永远看不到内容。'),
+              if (list.isEmpty) const _Starters(),
+              if (g.logins.isNotEmpty) ...[SectionTitle('网站登录', count: g.logins.length), rows(g.logins)],
+              if (g.keys.isNotEmpty) ...[SectionTitle('API Key', count: g.keys.length), rows(g.keys)],
+            ]),
+          );
         },
       ),
     );
   }
+}
 
-  Future<void> _add(BuildContext context, WidgetRef ref) async {
-    final kind = await showActionSheet<String>(context, title: '存入什么？', actions: const [
-      SheetAction(Icons.key_rounded, 'API Key', value: 'api_key'),
-      SheetAction(Icons.person_outline_rounded, '网站登录（用户名 + 密码）', value: 'login'),
-    ]);
-    if (kind == null || !context.mounted) return;
-    final login = kind == 'login';
-    final v = await showFormSheet(context, title: login ? '新网站登录' : '新 API Key', submit: '加密保存', fields: [
-      FieldSpec('name', '名称', hint: login ? '比如：学校教务系统' : '比如：OpenWeather'),
-      FieldSpec('hosts', '用于哪些域名', hint: login ? 'jwxt.example.edu.cn' : 'api.openweathermap.org（多个用逗号分开）', keyboard: TextInputType.url),
-      if (login) const FieldSpec('username', '用户名'),
-      FieldSpec('value', login ? '密码' : 'Key', obscure: true),
-    ]);
-    if (v == null || !context.mounted) return;
-    try {
-      await ref.read(secretsProvider.notifier).create({
-        'kind': kind,
-        'name': v['name'],
-        'value': v['value'],
-        'hosts': [for (final h in v['hosts']!.split(RegExp(r'[,，\s]+'))) if (h.isNotEmpty) h],
-        if (login) 'username': v['username'],
-      });
-    } on ApiError catch (e) {
-      if (context.mounted) showToast(context, e.message);
-    }
+/// 存入一把钥匙：没给 [kind] 先问存哪类，再弹对应表单。页头 +、起步卡共用。
+Future<void> addSecret(BuildContext context, WidgetRef ref, {String? kind}) async {
+  kind ??= await showActionSheet<String>(context, title: '存入什么？', actions: [
+    for (final k in secretKinds) SheetAction(_kindIcon(k.kind), '${k.label} · ${k.desc}', value: k.kind),
+  ]);
+  if (kind == null || !context.mounted) return;
+  final login = kind == 'login';
+  final v = await showFormSheet(context,
+      title: login ? '新网站登录' : '新 API Key',
+      subtitle: '保存后不会再显示，发往其他网站的请求不会带上它',
+      submit: '加密保存',
+      fields: [
+        FieldSpec('name', '名称', hint: login ? '比如：学校教务系统' : '比如：OpenWeather'),
+        FieldSpec('hosts', login ? '网站域名' : '只用于这些域名',
+            hint: login ? 'jwxt.example.edu.cn' : 'api.openweathermap.org（多个用逗号分开）', keyboard: TextInputType.url),
+        if (login) const FieldSpec('username', '用户名 / 手机号 / 邮箱'),
+        FieldSpec('value', login ? '密码' : 'Key', obscure: true),
+      ]);
+  if (v == null || !context.mounted) return;
+  try {
+    await ref.read(secretsProvider.notifier).create({
+      'kind': kind,
+      'name': v['name'],
+      'value': v['value'],
+      'hosts': [for (final h in v['hosts']!.split(RegExp(r'[,，\s]+'))) if (h.isNotEmpty) h],
+      if (login) 'username': v['username'],
+    });
+    if (context.mounted) showToast(context, '已加密保存「${v['name']}」');
+  } on ApiError catch (e) {
+    if (context.mounted) showToast(context, e.message);
   }
 }
 
-class _SecretRow extends ConsumerWidget {
-  const _SecretRow(this.s);
-  final SecretItem s;
+IconData _kindIcon(String kind) => kind == 'login' ? Icons.person_outline_rounded : Icons.key_rounded;
+
+/// 空保险箱：两类各一个起步按钮，直接打开对应表单。
+class _Starters extends ConsumerWidget {
+  const _Starters();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => SwipeToDelete(
-        id: s.id,
-        confirm: () => confirmDanger(context, title: '删除「${s.name}」？', text: '用到它的任务会失败，直到你重新存入。'),
-        onDelete: () => ref.read(secretsProvider.notifier).remove(s.id),
-        child: FadeSlideIn(
-          child: RowTile(
-            icon: s.isLogin ? Icons.person_outline_rounded : Icons.key_rounded,
-            title: s.name,
-            subtitle: [if (s.username != null) s.username!, s.hosts.join('、')].join(' · '),
-            trailing: Text(s.preview, style: context.text.labelSmall?.copyWith(fontFamily: 'monospace')),
-          ),
+  Widget build(BuildContext context, WidgetRef ref) => Padding(
+        padding: const EdgeInsets.only(top: Sp.x4),
+        child: StarterCard(
+          title: '保险箱是空的',
+          text: '存一个网站登录，我在云浏览器里能替你登录；存一个 API Key，我就能调用那个服务。',
+          starters: [
+            for (final k in secretKinds)
+              PillButton(label: k.label, icon: _kindIcon(k.kind), onTap: () => addSecret(context, ref, kind: k.kind)),
+          ],
         ),
       );
+}
+
+Future<bool> _confirmDelete(BuildContext context, SecretItem s) =>
+    confirmDanger(context, title: '删除「${s.name}」？', text: '用到它的任务会失败，直到你重新存入。');
+
+class _SecretRow extends ConsumerWidget {
+  const _SecretRow(this.s, {this.delay = Duration.zero});
+  final SecretItem s;
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hint = secretHint(s);
+    return SwipeToDelete(
+      id: s.id,
+      confirm: () => _confirmDelete(context, s),
+      onDelete: () => ref.read(secretsProvider.notifier).remove(s.id),
+      child: FadeSlideIn(
+        delay: delay,
+        child: RowTile(
+          icon: _kindIcon(s.kind),
+          title: s.name,
+          subtitle: s.hosts.join('、'),
+          trailing: hint.isEmpty ? null : Text(hint, style: context.text.labelSmall),
+          onTap: () => _manage(context, ref),
+        ),
+      ),
+    );
+  }
+
+  /// 点一行：看清它用于哪里，删除也在这里（左滑之外的明面入口）。
+  void _manage(BuildContext context, WidgetRef ref) => showActionSheet<void>(context, title: '${s.name} · ${s.hosts.join('、')}', actions: [
+        SheetAction(Icons.delete_outline_rounded, '删除', danger: true, onTap: () async {
+          if (await _confirmDelete(context, s)) await ref.read(secretsProvider.notifier).remove(s.id);
+        }),
+      ]);
 }

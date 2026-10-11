@@ -3,7 +3,7 @@ import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { Skill } from "../../lib/types";
 import { IconChevron, IconPlus, IconSearch, IconSpark } from "../../ui/icons";
-import { Hint, Page, PageHeader, SearchField, Section, Segmented, Sheet, Skeleton, Toggle, stagger } from "../../ui/kit";
+import { Hint, Page, PageHeader, PageIntro, SearchField, Section, Segmented, Sheet, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
 import { confirmDialog } from "../../ui/dialog";
 import Markdown from "../../ui/Markdown";
 import { SKILL_SEARCH_FROM, SKILL_STARTERS, filterSkills, fromBuiltin, isOn, skillSummary } from "./skillLibrary";
@@ -90,10 +90,7 @@ export default function SkillsScreen() {
   return (
     <Page header={<PageHeader title="技能" back action={
       <button className="icon-btn" onClick={() => show({ name: "", description: "", body: "" })} aria-label="新建技能"><IconPlus /></button>} />}>
-      <div className="page-intro enter">
-        <span key={skills.loading ? "" : summary} className="page-hero-label enter">{skills.loading ? "" : summary}</span>
-        <p className="desc">技能是我做某类事的固定方法。我会在合适的时候按它做；停用的留在库里，我看不到。</p>
-      </div>
+      <PageIntro loading={skills.loading} summary={summary} line="技能是我做某类事的固定方法。我会在合适的时候按它做；停用的留在库里，我看不到。" />
       {skills.loading ? <Skeleton /> : (
         <>
           {skills.items.length >= SKILL_SEARCH_FROM && <SearchField className="skill-search" value={query} onChange={setQuery} placeholder="搜索技能" />}
@@ -104,15 +101,11 @@ export default function SkillsScreen() {
           {(!searching || mine.length > 0) && (
             <Section title={`我的${mine.length ? ` · ${mine.length}` : ""}`}>
               {mine.length ? rows(mine) : (
-                <div className="list starters enter">
-                  <div className="row-title">还没有自己写的</div>
-                  <p className="row-sub">在这里写，或在聊天里说“把刚才的做法存成技能”。也可以从一个开始改：</p>
-                  <div className="starter-list">
-                    {SKILL_STARTERS.map((st) => (
-                      <button key={st.name} className="btn btn-ghost" onClick={() => show({ ...st }, {})}><IconPlus size={16} />{st.name}</button>
-                    ))}
-                  </div>
-                </div>
+                <StarterCard title="还没有自己写的" text="在这里写，或在聊天里说“把刚才的做法存成技能”。也可以从一个开始改：">
+                  {SKILL_STARTERS.map((st) => (
+                    <button key={st.name} className="btn btn-ghost" onClick={() => show({ ...st }, {})}><IconPlus size={16} />{st.name}</button>
+                  ))}
+                </StarterCard>
               )}
             </Section>
           )}

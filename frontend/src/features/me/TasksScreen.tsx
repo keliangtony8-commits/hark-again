@@ -4,7 +4,7 @@ import { useResource } from "../../hooks/useResource";
 import { scheduleLabel, taskStateLabel } from "../../lib/taskLabels";
 import type { ScheduledTask } from "../../lib/types";
 import { IconChevron, IconPlus } from "../../ui/icons";
-import { Page, PageHeader, Section, Skeleton, Toggle, stagger } from "../../ui/kit";
+import { Page, PageHeader, PageIntro, Section, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
 import { TaskIcon } from "./SchedulePicker";
 import TaskSheet, { EMPTY_TASK, type TaskDraft } from "./TaskSheet";
 import { TASK_STARTERS, groupTasks, nextUp, taskSummary } from "./taskLibrary";
@@ -50,22 +50,15 @@ export default function TasksScreen() {
   return (
     <Page header={<PageHeader title="定时任务" back action={
       <button className="icon-btn" onClick={() => setCreating(EMPTY_TASK)} aria-label="新定时任务"><IconPlus /></button>} />}>
-      <div className="page-intro enter">
-        <span key={tasks.loading ? "" : summary} className="page-hero-label enter">{tasks.loading ? "" : summary}</span>
-        <p key={tasks.loading ? "" : line} className="desc enter">{tasks.loading ? "\u00a0" : line}</p>
-      </div>
+      <PageIntro loading={tasks.loading} summary={summary} line={line} />
       {tasks.loading ? <Skeleton /> : (
         <>
           {!tasks.items.length && (
-            <div className="list starters enter">
-              <div className="row-title">还没有定时任务</div>
-              <p className="row-sub">在这里建，或在聊天里说“每天早上 8 点给我今天的天气和日程”。也可以从一个开始改：</p>
-              <div className="starter-list">
-                {TASK_STARTERS.map((st) => (
-                  <button key={st.name} className="btn btn-ghost" onClick={() => setCreating({ ...EMPTY_TASK, ...st })}><IconPlus size={16} />{st.name}</button>
-                ))}
-              </div>
-            </div>
+            <StarterCard title="还没有定时任务" text="在这里建，或在聊天里说“每天早上 8 点给我今天的天气和日程”。也可以从一个开始改：">
+              {TASK_STARTERS.map((st) => (
+                <button key={st.name} className="btn btn-ghost" onClick={() => setCreating({ ...EMPTY_TASK, ...st })}><IconPlus size={16} />{st.name}</button>
+              ))}
+            </StarterCard>
           )}
           {g.attention.length > 0 && <Section title={`需要留意 · ${g.attention.length}`}>{rows(g.attention)}</Section>}
           {g.running.length > 0 && <Section title={`在跑 · ${g.running.length}`}>{rows(g.running)}</Section>}

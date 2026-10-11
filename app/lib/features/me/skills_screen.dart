@@ -55,7 +55,7 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
           return PullRefresh(
             onRefresh: () => ref.read(skillsProvider.notifier).reload(),
             child: PageBody(children: [
-              _Intro(summary: skillSummary(list)),
+              PageIntro(summary: skillSummary(list), line: '技能是我做某类事的固定方法。我会在合适的时候按它做；停用的留在库里，我看不到。'),
               if (list.length >= skillSearchFrom) ...[
                 const SizedBox(height: Sp.x4),
                 SearchField(controller: _query, hint: '搜索技能', onChanged: (_) => setState(() {}), onClear: () => setState(_query.clear)),
@@ -68,11 +68,11 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
                   action: TextButton(onPressed: () => setState(_query.clear), child: const Text('清除搜索')),
                 ),
               if (!searching || mine.isNotEmpty) ...[
-                SectionTitle('我的技能', trailing: mine.isEmpty ? null : Text('${mine.length}', style: context.text.labelSmall)),
-                if (mine.isEmpty) const FadeSlideIn(child: _Starters()) else rows(mine),
+                SectionTitle('我的技能', count: mine.isEmpty ? null : mine.length),
+                if (mine.isEmpty) const _Starters() else rows(mine),
               ],
               if (builtin.isNotEmpty) ...[
-                SectionTitle('内置', trailing: Text('${builtin.length}', style: context.text.labelSmall)),
+                SectionTitle('内置', count: builtin.length),
                 rows(builtin),
               ],
             ]),
@@ -83,42 +83,18 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
   }
 }
 
-/// 页头：一行小标签摘要（数字变化时换一下）+ 一句说明。和“我的”、用量页同一层级，子页面里不再放大标题。
-class _Intro extends StatelessWidget {
-  const _Intro({required this.summary});
-  final String summary;
-
-  @override
-  Widget build(BuildContext context) => FadeSlideIn(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, 0),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SwapSwitcher(child: Text(summary, key: ValueKey(summary), style: context.text.labelSmall)),
-            const SizedBox(height: Sp.x2),
-            Text('技能是我做某类事的固定方法。我会在合适的时候按它做；停用的留在库里，我看不到。',
-                style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
-          ]),
-        ),
-      );
-}
-
-/// “我的技能”为空：一句引导 + 起步模板（点了带内容进新建页，没保存前什么都不会存）。
+/// “我的技能”为空：起步模板（点了带内容进新建页，没保存前什么都不会存）。
 class _Starters extends StatelessWidget {
   const _Starters();
 
   @override
-  Widget build(BuildContext context) => AppCard(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('还没有自己写的', style: context.text.titleSmall),
-          const SizedBox(height: Sp.x1),
-          Text('在这里写，或在聊天里说“把刚才的做法存成技能”。也可以从一个开始改：',
-              style: context.text.bodySmall?.copyWith(color: context.palette.text2)),
-          const SizedBox(height: Sp.x3),
-          Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [
-            for (final st in skillStarters)
-              PillButton(label: st.name, icon: Icons.add_rounded, onTap: () => context.push('/me/skills/new', extra: st)),
-          ]),
-        ]),
+  Widget build(BuildContext context) => StarterCard(
+        title: '还没有自己写的',
+        text: '在这里写，或在聊天里说“把刚才的做法存成技能”。也可以从一个开始改：',
+        starters: [
+          for (final st in skillStarters)
+            PillButton(label: st.name, icon: Icons.add_rounded, onTap: () => context.push('/me/skills/new', extra: st)),
+        ],
       );
 }
 

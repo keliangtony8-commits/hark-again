@@ -11,10 +11,12 @@ import '../../core/resource.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
+import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import 'connector_library.dart';
 
 /// OAuth 回调带回来的结果（深链的查询参数）。没有结果时为 null。
 class OAuthResult {
@@ -83,30 +85,52 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
       body: AsyncBody<Connector>(
         value: accounts,
         onRetry: () => ref.invalidate(connectorsProvider),
-        builder: (list) => PullRefresh(
-          onRefresh: () => Future.wait([ref.read(connectorsProvider.notifier).reload(), ref.read(mcpServersProvider.notifier).reload()]),
-          child: PageBody(children: [
-            const SectionTitle('账户'),
-            ListGroup(children: [for (final (i, c) in list.indexed) FadeSlideIn(delay: Motion.stagger(i), child: _AccountRow(c))]),
-            SectionTitle('MCP 服务器', trailing: TextButton.icon(onPressed: _addMcp, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('添加'))),
-            switch (mcp) {
-              AsyncData(:final value) when value.isEmpty =>
-                const AppCard(child: Text('接入任何支持 MCP（Streamable HTTP）的服务，我就能用它的工具。')),
-              AsyncData(:final value) => ListGroup(children: [for (final s in value) _McpRow(s)]),
-              AsyncError(:final error) => AppCard(child: Text('$error')),
-              _ => const SkeletonList(rows: 1),
-            },
-            const SectionTitle('其他服务'),
-            ListGroup(children: [
-              RowTile(
-                icon: Icons.key_rounded,
-                title: 'API Key 与网站登录',
-                subtitle: '没有现成连接器的服务，把 Key 存进保险箱就能调用',
-                onTap: () => context.push('/me/vault'),
+        builder: (list) {
+          var i = 0; // 整页错峰序号：账户 → MCP → 其他服务一行一行进
+          Duration next() => Motion.stagger(i++, from: 1);
+          final servers = mcp.value;
+          return PullRefresh(
+            onRefresh: () => Future.wait([ref.read(connectorsProvider.notifier).reload(), ref.read(mcpServersProvider.notifier).reload()]),
+            child: PageBody(children: [
+              PageIntro(
+                summary: connectorSummary(list, servers),
+                line: '连接后我能读你的邮件、日历和代码仓库。发邮件、提交代码这类动作，永远先问你。',
               ),
+              SectionTitle('账户', count: list.isEmpty ? null : list.length),
+              ListGroup(children: [for (final c in sortAccounts(list)) _AccountRow(c, delay: next())]),
+              SectionTitle('MCP 服务器',
+                  trailing: servers == null || servers.isEmpty
+                      ? null
+                      : QuietAction(icon: const Icon(Icons.add_rounded), tooltip: '添加 MCP 服务器', onPressed: _addMcp)),
+              FadeSwitcher(
+                child: switch (mcp) {
+                  AsyncData(:final value) when value.isEmpty => StarterCard(
+                      key: const ValueKey('empty'),
+                      title: '接入任何 MCP 服务',
+                      text: '填一个支持 MCP（Streamable HTTP）的地址，我先连一次确认能用，之后就能用它的工具。',
+                      starters: [PillButton(label: '添加 MCP 服务器', icon: Icons.add_rounded, onTap: _addMcp)],
+                    ),
+                  AsyncData(:final value) =>
+                    ListGroup(key: const ValueKey('list'), children: [for (final s in value) _McpRow(s, delay: next())]),
+                  AsyncError(:final error) => AppCard(key: const ValueKey('error'), child: Text('$error')),
+                  _ => const SkeletonList(key: ValueKey('loading'), rows: 1),
+                },
+              ),
+              const SectionTitle('其他服务'),
+              ListGroup(children: [
+                FadeSlideIn(
+                  delay: next(),
+                  child: RowTile(
+                    icon: Icons.key_rounded,
+                    title: 'API Key 与网站登录',
+                    subtitle: '没有现成连接器的服务，把钥匙存进保险箱就能用',
+                    onTap: () => context.push('/me/vault'),
+                  ),
+                ),
+              ]),
             ]),
-          ]),
-        ),
+          );
+        },
       ),
     );
   }
@@ -128,17 +152,29 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
 }
 
 class _AccountRow extends ConsumerWidget {
-  const _AccountRow(this.c);
+  const _AccountRow(this.c, {this.delay = Duration.zero});
   final Connector c;
+  final Duration delay;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return RowTile(
-      icon: _icons[c.id] ?? Icons.link_rounded,
-      title: c.name,
-      subtitle: c.connected ? c.account : (c.configured ? c.desc : '服务器还没配置这个应用（见 .env.example）'),
-      trailing: c.connected ? const Pill('已连接', strong: true) : null,
-      onTap: !c.configured && !c.connected ? null : () => c.connected ? _manage(context, ref) : _connect(context, ref),
+    final usable = c.configured || c.connected;
+    return FadeSlideIn(
+      delay: delay,
+      child: Dimmed(
+        dimmed: !usable, // 服务器没配这个应用：留在列表里告诉你有这项，但点不了
+        child: RowTile(
+          icon: _icons[c.id] ?? Icons.link_rounded,
+          title: c.name,
+          subtitle: c.connected ? c.account : (c.configured ? c.desc : '服务器还没配置这个应用（见 .env.example）'),
+          trailing: SwapSwitcher(
+            child: c.connected
+                ? const Pill('已连接', strong: true, key: ValueKey('on'))
+                : (usable ? Text('连接', key: const ValueKey('off'), style: context.text.labelSmall) : const SizedBox.shrink(key: ValueKey('none'))),
+          ),
+          onTap: !usable ? null : () => c.connected ? _manage(context, ref) : _connect(context, ref),
+        ),
+      ),
     );
   }
 
@@ -165,20 +201,24 @@ class _AccountRow extends ConsumerWidget {
 }
 
 class _McpRow extends ConsumerWidget {
-  const _McpRow(this.s);
+  const _McpRow(this.s, {this.delay = Duration.zero});
   final McpServerItem s;
+  final Duration delay;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => SwipeToDelete(
         id: s.id,
         confirm: () => confirmDanger(context, title: '移除 ${s.name}？'),
         onDelete: () => ref.read(mcpServersProvider.notifier).remove(s.id),
-        child: RowTile(
-          icon: Icons.extension_outlined,
-          title: s.name,
-          subtitle: hostOf(s.url),
-          trailing: s.hasToken ? const Pill('带令牌') : null,
-          onTap: () => _showTools(context, ref),
+        child: FadeSlideIn(
+          delay: delay,
+          child: RowTile(
+            icon: Icons.extension_outlined,
+            title: s.name,
+            subtitle: hostOf(s.url),
+            trailing: s.hasToken ? const Pill('带令牌') : null,
+            onTap: () => _showTools(context, ref),
+          ),
         ),
       );
 
@@ -192,13 +232,26 @@ class _McpRow extends ConsumerWidget {
             if (snap.hasError) return EmptyHint(icon: Icons.cloud_off_rounded, title: '连不上', text: '${snap.error}');
             if (!snap.hasData) return const Padding(padding: EdgeInsets.all(Sp.x5), child: SkeletonList());
             final list = snap.data as List;
-            return ListView(controller: scroll, children: [
-              ListTile(title: Text('${s.name} 的工具', style: ctx.text.titleLarge), subtitle: Text('共 ${list.length} 个')),
-              for (final t in list)
-                ListTile(
-                  leading: const Icon(Icons.build_outlined),
-                  title: Text('${t['name']}'),
-                  subtitle: Text('${t['description'] ?? ''}', maxLines: 3, overflow: TextOverflow.ellipsis),
+            return ListView(controller: scroll, padding: const EdgeInsets.only(bottom: Sp.x5), children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x5, Sp.x3),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${list.length} 个工具 · ${hostOf(s.url)}', style: ctx.text.labelSmall),
+                  const SizedBox(height: Sp.x1),
+                  Text(s.name, style: ctx.text.titleLarge),
+                ]),
+              ),
+              if (list.isEmpty)
+                const EmptyHint(icon: Icons.handyman_outlined, title: '没有工具', text: '这个服务器连得上，但没有提供任何工具。'),
+              for (final (i, t) in list.indexed)
+                FadeSlideIn(
+                  delay: Motion.stagger(i),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x5),
+                    leading: const IconBadge(Icons.build_outlined),
+                    title: Text('${t['name']}'),
+                    subtitle: Text('${t['description'] ?? ''}', maxLines: 3, overflow: TextOverflow.ellipsis),
+                  ),
                 ),
             ]);
           },

@@ -58,6 +58,27 @@ export function Section({ title, action, children, enter }: { title?: string; ac
   );
 }
 
+/** 子页页头（= App PageIntro）：一行小标签摘要（变化时重新入场）+ 一句说明。loading 时留位不闪。 */
+export function PageIntro({ summary, line, loading }: { summary: string; line: string; loading?: boolean }) {
+  return (
+    <div className="page-intro enter">
+      <span key={loading ? "" : summary} className="page-hero-label enter">{loading ? "" : summary}</span>
+      <p key={loading ? "" : line} className="desc enter">{loading ? "\u00a0" : line}</p>
+    </div>
+  );
+}
+
+/** 起步卡（= App StarterCard）：列表为空时代替空状态——标题 + 引导 + 一排起步按钮。 */
+export function StarterCard({ title, text, children }: { title: string; text: string; children: ReactNode }) {
+  return (
+    <div className="list starters enter">
+      <div className="row-title">{title}</div>
+      <p className="row-sub">{text}</p>
+      <div className="starter-list">{children}</div>
+    </div>
+  );
+}
+
 export function Hint({ icon, title, text, action }: { icon: ReactNode; title: string; text: string; action?: ReactNode }) {
   return (
     <div className="hint">
