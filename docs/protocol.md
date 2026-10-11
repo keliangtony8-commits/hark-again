@@ -53,6 +53,8 @@
 | `memory` | `action: saved\|updated\|forgotten`, `items: [{id, content, category, previous?}]`（记忆卡：本轮记住/改了/忘掉了什么；只由记忆工具产出。“已撤销”不在块里：客户端对照 GET /api/memories 推算——saved 的 id 不在 = 已撤销，updated 内容等于 previous = 已改回，forgotten 内容都在 = 已恢复；撤销走 /api/memories 的 DELETE / PATCH / POST。客户端收到 block.start 的记忆卡时重拉记忆列表） |
 | `draft` | `title, body`（草稿卡：用户以自己名义发出的文字——邮件第一行 Subject:、消息、帖子；正文原样显示不渲染 Markdown；客户端 复制 / 系统分享。模型用 `show_draft` 产出） |
 | `summary` | `title, subtitle?, markdown`（摘要卡：用户自己读的长文——计划、行程、简报；标题 + 小字来源/范围 + Markdown；超过 600 字或 14 行客户端折起，“展开全文”。`show_summary` 产出） |
+| `products` | `title?`, `pick?`, `items: [{name, price?, image?, url?, meta?}]`（v0.81 商品宫格：1–12 项；image/url 只能 http(s)，`show_products` 先探测图片，打不开的 image 置 null（商品保留、客户端占位）；price 原样；pick = 一句推荐，卡底显示；客户端 2–4 列（每格 ≥148），点格子开 url；复制成 `- 名字 价格 补充 url` 列表） |
+| `order` | `id`, `merchant`, `items: [{name, price, qty=1, note?, image?}]`, `breakdown: [{label, amount}]`, `total`, `payment?`, `destination?`, `order_number?`, `action`（按钮字，≤12）, `state: pending\|approved\|rejected\|expired\|placed`（v0.81 订单卡：`confirm_order` 产出 pending，就是审批卡——按钮回 `approval.reply {id, approved}`，服务器 block.update 改 state；无人值守/停止 → rejected/expired；`show_receipt` 产出 placed 回执带订单号、没按钮。金额全原样，客户端不算账；过程卡，不进复制） |
 | `images` | `items: [{url, caption?}]`（1–6 张网络图片，url 必须 http(s)；服务器 `show_images` 先逐张探测（状态 <400 且 content-type image/*），打不开的丢掉；客户端单张 4:3、多张横排，坏图留占位，只渲染 http(s)） |
 
 文件地址：upload → `/api/uploads/{id}?token=`；project → `/api/projects/{project_id}/files/{id}?token=`

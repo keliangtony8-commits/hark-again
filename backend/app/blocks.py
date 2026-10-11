@@ -128,8 +128,58 @@ class ImagesBlock(BaseModel):
     items: list[ImageItem] = Field(min_length=1, max_length=6)
 
 
+class ProductItem(BaseModel):
+    name: str
+    price: str | None = None  # 原样显示，数在前单位在后：“¥189”“¥89 / 晚”
+    image: str | None = Field(default=None, pattern=r"^https?://")  # 来自商品页的真实图；打不开的服务器已置空
+    url: str | None = Field(default=None, pattern=r"^https?://")  # 读到这一项的那个页面
+    meta: str | None = None  # 一行补充：“4.8 分 · 京东自营”“明天到”
+
+
+class ProductsBlock(BaseModel):
+    """商品宫格：挑东西、看样子也是挑选的一部分时（商品、二手、酒店、民宿、花）。一格 = 图 + 名字 + 价格。"""
+    type: Literal["products"] = "products"
+    title: str | None = None
+    pick: str | None = None  # 一句推荐和理由，显示在卡片底部
+    items: list[ProductItem] = Field(min_length=1, max_length=12)
+
+
+class OrderLine(BaseModel):
+    name: str
+    price: str  # 原样：“¥59.00”
+    qty: int = Field(default=1, ge=1)
+    note: str | None = None  # 规格：“黑色 · M 码”
+    image: str | None = Field(default=None, pattern=r"^https?://")
+
+
+class OrderFee(BaseModel):
+    label: str  # 运费、优惠、税
+    amount: str  # 原样：“-¥10.00”
+
+
+ORDER_STATES = ("pending", "approved", "rejected", "expired", "placed")
+
+
+class OrderBlock(BaseModel):
+    """订单卡：下单/付款前给用户确认的那一步，或下单后的回执。
+    pending = 等用户在卡上点“确认下单”（和审批卡共用 approval.reply，id 即审批 id）；approved / rejected / expired 同审批卡；
+    placed = 已下单的回执（带 order_number，没有按钮）。金额全部原样显示，服务器不算账。"""
+    type: Literal["order"] = "order"
+    id: str
+    merchant: str  # 付给谁、哪家店：“瑞幸咖啡 · 五道口店”
+    items: list[OrderLine] = Field(min_length=1)
+    breakdown: list[OrderFee] = Field(default_factory=list)
+    total: str
+    payment: str | None = None  # 页面上的叫法：“招行信用卡 9258”
+    destination: str | None = None  # 送到哪 / 什么时候：“宿舍 6 号楼，放门口”“周六 19:00”
+    order_number: str | None = None
+    action: str = "确认下单"  # 按钮上的字（≤12 字）
+    state: Literal["pending", "approved", "rejected", "expired", "placed"] = "pending"
+
+
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
-                        PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock],
+                        PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
+                        OrderBlock],
                   Field(discriminator="type")]
 
 
@@ -167,4 +217,14 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"# {b['title']}\n" + (f"{b['subtitle']}\n" if b.get("subtitle") else "") + b["markdown"])
         elif t == "images":
             parts.append("[图片：" + "；".join((i.get("caption") or "") + " " + i["url"] for i in b["items"]) + "]")
+        elif t == "products":
+            lines = [" ".join(x for x in (i["name"], i.get("price"), i.get("meta"), i.get("url")) if x) for i in b["items"]]
+            parts.append("[商品" + (f"「{b['title']}」" if b.get("title") else "") + "：\n" + "\n".join(lines) + "]"
+                         + (f"\n推荐：{b['pick']}" if b.get("pick") else ""))
+        elif t == "order":
+            state = {"pending": "等用户确认", "approved": "用户已确认", "rejected": "用户拒绝了", "expired": "已过期",
+                     "placed": "已下单"}.get(b.get("state"), "")
+            items = "；".join(f"{i['name']} ×{i.get('qty', 1)} {i['price']}" for i in b["items"])
+            no = f"，订单号 {b['order_number']}" if b.get("order_number") else ""
+            parts.append(f"[订单 {b['merchant']}：{items}；合计 {b['total']}——{state}{no}]")
     return "\n\n".join(parts)

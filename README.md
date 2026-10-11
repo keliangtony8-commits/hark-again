@@ -128,7 +128,8 @@ docker compose --profile build-only build sandbox-image                      # �
 - CRUD 资源要带“算出来的只读字段”（不存库）：crud_router(extra=lambda obj: {...})，所有增删改查接口一致带上（例：任务 next_run_at）
 - PATCH 时要派生字段或拒绝：crud_router(on_update=fn(obj, changes))，在写库前改 changes（例：项目 brief → brief_by/brief_updated_at）
 - 只读字段要查库（计数、聚合）：crud_router(annotate=async (db, objs) -> {id: {...}})，一批记录一条 GROUP BY，别在 extra 里逐条查（例：项目 conversation_count / last_active_at）
-- 新块类型：blocks.py 加模型 + agent/builtin/display.py 加 show_* 工具 + App models/block.dart 与 blocks/ + 网页 blocks/registry.ts（例：stats；v0.78 draft/summary/images 三张内容卡都在 display.py，客户端 app blocks/content_blocks.dart、web blocks/ContentBlocks.tsx）
+- 新块类型：blocks.py 加模型 + agent/builtin/display.py 加 show_* 工具 + App models/block.dart 与 blocks/ + 网页 blocks/registry.ts（例：stats；v0.78 draft/summary/images 三张内容卡都在 display.py，客户端 app blocks/content_blocks.dart、web blocks/ContentBlocks.tsx；v0.81 products 在 display.py、order 在 agent/builtin/orders.py，客户端 commerce_blocks.dart / CommerceBlocks.tsx）
+- 要用户点头才执行的工具：`risk` 返回理由即走审批；想让审批卡就是业务卡（订单卡），再给 `card=fn(args)->块`，内核补 id/state=pending，批准/拒绝后更新 state，停止时 pending 变 expired。card 抛 ValueError = 参数不对，错误交回模型、不弹卡。冒烟 `python tests/smoke_commerce_cards.py`
 - 每个对话选模型：可选列表只在 settings.chat_models（CHAT_MODELS），解析只在 llm.chat_model（不认识 → 默认）；客户端的选择经 runner.apply_model 落到 conversations.model（WS user.message / message.regenerate 的 model 字段，或 PATCH）；定时任务、摘要不读它。新增“按对话的设置”照这个路子：列 + PATCH + 随消息可带
 - 模型调用：只经 llm.py（stream_turn/complete/embed），它负责记账（流式用 stream_options.include_usage，最后一包带用量）；新代码不要直接用 openai 客户端，否则花费漏记。单价 MODEL_PRICES（每百万 token，写入时算好存下，改价不改历史），MONTHLY_BUDGET 只提醒不拦截；中途停止的那次调用拿不到用量、不记。
 - 系统提醒（不是定时任务产出的）一律用 HomeCard kind=action + 去重表 alerts_sent（key 自带周期），不要在卡上记“发过没”——用户删卡后不应重发；要带客户端去处就填 target，并在两端的 cardTargets 表各加一行（去处要落到具体对象时 route 用占位，如 /me/tasks/{task} 由 cardRoute 换成卡上的 task_id）

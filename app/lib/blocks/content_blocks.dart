@@ -154,7 +154,7 @@ class ImagesBlockView extends StatelessWidget {
     final items = block.items;
     if (items.isEmpty) return const SizedBox.shrink();
     if (items.length == 1) {
-      return _Figure(item: items.first, child: AspectRatio(aspectRatio: 4 / 3, child: _NetImage(items.first)));
+      return _Figure(item: items.first, child: AspectRatio(aspectRatio: 4 / 3, child: NetImage(items.first.url)));
     }
     return SizedBox(
       height: Layout.imageStrip + Sp.x6,
@@ -166,7 +166,7 @@ class ImagesBlockView extends StatelessWidget {
           delay: Motion.stagger(i),
           child: SizedBox(
             width: Layout.imageTileWidth,
-            child: _Figure(item: items[i], child: SizedBox(height: Layout.imageStrip, child: _NetImage(items[i]))),
+            child: _Figure(item: items[i], child: SizedBox(height: Layout.imageStrip, child: NetImage(items[i].url))),
           ),
         ),
       ),
@@ -199,17 +199,17 @@ class _Figure extends StatelessWidget {
   );
 }
 
-/// 网络图：底下先铺一层占位底色，下好了淡入；打不开显示一个安静的坏图标。
-class _NetImage extends StatelessWidget {
-  const _NetImage(this.item, {this.fit = BoxFit.cover});
-  final ImageItem item;
+/// 网络图：底下先铺一层占位底色，下好了淡入；打不开显示一个安静的坏图标。图片卡、商品宫格、订单卡共用。
+class NetImage extends StatelessWidget {
+  const NetImage(this.url, {super.key, this.fit = BoxFit.cover});
+  final String url;
   final BoxFit fit;
 
   @override
   Widget build(BuildContext context) => ColoredBox(
     color: context.tileFill,
     child: Image.network(
-      item.url,
+      url,
       fit: fit,
       width: double.infinity,
       height: double.infinity,
@@ -231,7 +231,7 @@ Future<void> showImageViewer(BuildContext context, ImageItem item) => showAppDia
           borderRadius: BorderRadius.circular(Radii.md),
           child: AspectRatio(
             aspectRatio: 1,
-            child: InteractiveViewer(maxScale: 4, child: _NetImage(item, fit: BoxFit.contain)),
+            child: InteractiveViewer(maxScale: 4, child: NetImage(item.url, fit: BoxFit.contain)),
           ),
         ),
         if (item.caption != null && item.caption!.isNotEmpty)

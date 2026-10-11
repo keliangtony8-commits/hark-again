@@ -34,6 +34,11 @@ sealed class Block {
             for (final i in (j['items'] as List? ?? []))
               if (ImageItem.fromJson(i as Map<String, dynamic>) case final it when it.safe) it
           ]),
+        'products' => ProductsBlock(
+            title: j['title'] as String?,
+            pick: j['pick'] as String?,
+            items: [for (final i in (j['items'] as List? ?? [])) ProductItem.fromJson(i as Map<String, dynamic>)]),
+        'order' => OrderBlock.fromJson(j),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -160,6 +165,83 @@ class ImagesBlock extends Block {
   final List<ImageItem> items;
 }
 
+/// 只认 http(s) 地址（服务器已校验，客户端再守一道）；其它一律当没有。
+String? _http(Object? v) => v is String && (v.startsWith('https://') || v.startsWith('http://')) ? v : null;
+
+class ProductItem {
+  const ProductItem({required this.name, this.price, this.image, this.url, this.meta});
+  factory ProductItem.fromJson(Map<String, dynamic> j) => ProductItem(
+      name: j['name'] as String? ?? '',
+      price: j['price'] as String?,
+      image: _http(j['image']),
+      url: _http(j['url']),
+      meta: j['meta'] as String?);
+  final String name;
+  final String? price, image, url, meta;
+}
+
+/// 商品宫格：挑要买/要订、样子也算数的一组东西。一格 = 图 + 名字 + 价格 + 一行补充；pick = 一句推荐。
+class ProductsBlock extends Block {
+  const ProductsBlock({this.title, this.pick, required this.items});
+  final String? title, pick;
+  final List<ProductItem> items;
+}
+
+class OrderLine {
+  const OrderLine({required this.name, required this.price, this.qty = 1, this.note, this.image});
+  factory OrderLine.fromJson(Map<String, dynamic> j) => OrderLine(
+      name: j['name'] as String? ?? '',
+      price: j['price'] as String? ?? '',
+      qty: (j['qty'] as num?)?.toInt() ?? 1,
+      note: j['note'] as String?,
+      image: _http(j['image']));
+  final String name, price;
+  final int qty;
+  final String? note, image;
+}
+
+class OrderFee {
+  const OrderFee(this.label, this.amount);
+  final String label, amount;
+}
+
+/// 订单卡：付款前的确认（pending，按钮走审批 approval.reply）或下单后的回执（placed，带订单号）。
+/// 金额全部原样显示，客户端不算账。
+class OrderBlock extends Block {
+  const OrderBlock({
+    required this.id,
+    required this.merchant,
+    required this.items,
+    this.breakdown = const [],
+    required this.total,
+    this.payment,
+    this.destination,
+    this.orderNumber,
+    this.action = '确认下单',
+    this.state = 'pending',
+  });
+  factory OrderBlock.fromJson(Map<String, dynamic> j) => OrderBlock(
+      id: j['id'] as String? ?? '',
+      merchant: j['merchant'] as String? ?? '',
+      items: [for (final i in (j['items'] as List? ?? [])) OrderLine.fromJson(i as Map<String, dynamic>)],
+      breakdown: [
+        for (final f in (j['breakdown'] as List? ?? []))
+          OrderFee((f as Map)['label'] as String? ?? '', f['amount'] as String? ?? '')
+      ],
+      total: j['total'] as String? ?? '',
+      payment: j['payment'] as String?,
+      destination: j['destination'] as String?,
+      orderNumber: j['order_number'] as String?,
+      action: j['action'] as String? ?? '确认下单',
+      state: j['state'] as String? ?? 'pending');
+  final String id, merchant, total, action, state;
+  final List<OrderLine> items;
+  final List<OrderFee> breakdown;
+  final String? payment, destination, orderNumber;
+  bool get pending => state == 'pending';
+  bool get placed => state == 'placed';
+}
+
 class UnknownBlock extends Block {
   const UnknownBlock(this.type);
   final String type;
@@ -191,6 +273,11 @@ String copyText(List<Block> blocks) => [
           SummaryBlock(:final title, :final subtitle, :final markdown) =>
             ['**$title**', if (subtitle != null && subtitle.isNotEmpty) subtitle, markdown.trim()].join('\n\n'),
           ImagesBlock(:final items) => [for (final i in items) '- ${i.caption ?? '图片'} ${i.url}'].join('\n'),
+          ProductsBlock(:final title, :final pick, :final items) => [
+              if (title != null && title.isNotEmpty) '**$title**',
+              for (final i in items) '- ${[i.name, i.price, i.meta, i.url].where((x) => x != null && x.isNotEmpty).join(' ')}',
+              if (pick != null && pick.isNotEmpty) pick,
+            ].join('\n'),
           _ => '',
         },
     ].where((s) => s.isNotEmpty).join('\n\n');

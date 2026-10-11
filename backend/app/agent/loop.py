@@ -89,12 +89,12 @@ class MessageBuilder:
         self._text_open = False
 
     def partial(self) -> list[dict]:
-        """被打断时能落库的块：去掉空文字块，还在等的审批卡标为 expired（它再也等不到答复了）。"""
+        """被打断时能落库的块：去掉空文字块，还在等的审批卡（含订单卡）标为 expired（它再也等不到答复了）。"""
         out = []
         for b in self.blocks:
             if b["type"] == "text" and not b["text"].strip():
                 continue
-            out.append({**b, "state": "expired"} if b["type"] == "approval" and b.get("state") == "pending" else b)
+            out.append({**b, "state": "expired"} if b.get("state") == "pending" and "id" in b else b)
         return out
 
 
@@ -158,8 +158,13 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
         return
 
     if t.risk and (reason := t.risk(args)):
+        try:
+            card = t.card(args) if t.card else None
+        except (ValueError, TypeError) as e:  # 卡片画不出来 = 参数不对，先让模型改，不打扰用户
+            yield ToolResult(f"参数有误：{e}")
+            return
         approved = False
-        async for ev in _ask_approval(builder, ctx, reason, args):
+        async for ev in _ask_approval(builder, ctx, reason, args, card):
             if isinstance(ev, bool):
                 approved = ev
             else:
@@ -181,11 +186,13 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     yield ToolStatus(call.id, call.name, t.label, "done")
     yield ToolResult(result.content, images=result.images)
 
-async def _ask_approval(builder: MessageBuilder, ctx: ToolContext, reason: str, args: dict):
-    """插入审批卡 → 等用户决定 → 更新卡片状态。最后产出 bool。"""
+async def _ask_approval(builder: MessageBuilder, ctx: ToolContext, reason: str, args: dict, card: dict | None = None):
+    """插入审批卡（或工具自己的确认卡，如订单卡）→ 等用户决定 → 更新卡片状态。最后产出 bool。"""
     aid = uuid.uuid4().hex
     detail = args.get("command") or json.dumps(args, ensure_ascii=False)[:500]
-    yield builder.add({"type": "approval", "id": aid, "title": f"需要你批准：{reason}", "detail": detail, "state": "pending"})
+    block = {**card, "id": aid, "state": "pending"} if card else \
+        {"type": "approval", "id": aid, "title": f"需要你批准：{reason}", "detail": detail, "state": "pending"}
+    yield builder.add(block)
     index = len(builder.blocks) - 1
     approved = await ctx.approve(aid, reason, detail)
     yield builder.update(index, state="approved" if approved else "rejected")

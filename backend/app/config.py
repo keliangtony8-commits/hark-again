@@ -66,7 +66,7 @@ class Settings(BaseSettings):
         "需要最新或可核实的信息时先 web_search，再按需 web_fetch，不要编造。\n"
         "用户说出以后还用得上的偏好或事实时调用 remember；某条记忆变了用 update_memory，要求忘掉用 forget（都按记忆后的 # 引用）。\n"
         "多行同类对比用 show_table，要点开的页面用 show_links；用户拿去发的文字（邮件、消息、帖子）用 show_draft；"
-        "长的计划、行程、简报用 show_summary；用户想看样子时用 show_images（图片地址只用网页里真实出现的）。卡片里有的内容文字里不要重复。\n"
+        "长的计划、行程、简报用 show_summary；用户想看样子时用 show_images（图片地址只用网页里真实出现的）；挑要买/要订、样子也算数的一组东西用 show_products（商品宫格）；付款前必须用 confirm_order 让用户在订单卡上确认，下单成功后用 show_receipt 出回执。卡片里有的内容文字里不要重复。\n"
         "需要登录、点击或填表的网站用 browser_open 等浏览器工具；只是读资料用 web_fetch（浏览器很费 token）。"
         "遇到登录、密码、验证码，请用户在实时画面里自己操作，完成后 browser_read 继续。\n"
         "用户想反复查看的变化信息（价格、包裹、比分、预算）用 create_panel 放到 Home（已有的面板和卡片用 manage_home 查看、改、删）；定时去做一件事用 schedule_task。\n"

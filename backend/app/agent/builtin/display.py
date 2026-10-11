@@ -1,14 +1,16 @@
 """展示类工具：让模型输出结构化卡片，而不是把表格硬塞进文字里。
 卡片分工（和客户端 blocks/ 一一对应）：对比 → 表格；要点开的页面 → 链接；一眼要看的数 → 数字卡；
-用户拿去发的字 → 草稿卡；用户自己读的长文 → 摘要卡；想看样子 → 图片卡。"""
+用户拿去发的字 → 草稿卡；用户自己读的长文 → 摘要卡；想看样子 → 图片卡；挑要买/要订的、样子也算数 → 商品宫格。
+（订单确认卡与回执在 orders.py。）"""
 import asyncio
 
 import httpx
 
-from ...blocks import DraftBlock, ImagesBlock, LinksBlock, StatsBlock, SummaryBlock, TableBlock
+from ...blocks import DraftBlock, ImagesBlock, LinksBlock, ProductsBlock, StatsBlock, SummaryBlock, TableBlock
 from ..tools import ToolContext, ToolResult, tool
 
 MAX_IMAGES = 6
+MAX_PRODUCTS = 12
 IMAGE_PROBE_TIMEOUT = 6.0
 
 
@@ -101,3 +103,41 @@ async def show_images(ctx: ToolContext, items: list[dict]) -> ToolResult:
         return ToolResult("这些图片地址都打不开（或不是图片），没有展示。换搜索结果里的真实图片地址再试，或者直接给链接。")
     note = f"，另有 {bad} 张打不开已丢掉" if bad else ""
     return ToolResult(f"{len(good)} 张图片已展示给用户{note}。", [ImagesBlock(items=good).model_dump()])
+
+
+def _http(v) -> str | None:
+    v = str(v or "").strip()
+    return v if v.lower().startswith(("http://", "https://")) else None
+
+
+@tool("show_products", "正在整理商品",
+      "用户在挑要买/要订的东西、而且样子是挑选的一部分时（商品、二手、酒店、民宿、花、餐厅、体验），展示成商品宫格："
+      "一格 = 图 + 名字 + 价格 + 一行补充。图片只用该商品自己页面上的真实图片地址（打不开的会被去掉、留占位），"
+      "url 填读到这一项的页面；price 原样写、数在前单位在后（¥189 / 晚）。pick 写一句推荐和理由。"
+      "纯比数字的（航班、比分）用 show_table；文字里不要重复宫格内容。",
+      {"type": "object", "properties": {
+          "title": {"type": "string", "description": "这组是什么：三款降噪耳机"},
+          "pick": {"type": "string", "description": "一句推荐和理由，30 字内"},
+          "items": {"type": "array", "maxItems": MAX_PRODUCTS, "items": {"type": "object", "properties": {
+              "name": {"type": "string"}, "price": {"type": "string"}, "image": {"type": "string"},
+              "url": {"type": "string"}, "meta": {"type": "string", "description": "一行补充：4.8 分 · 京东自营"}},
+              "required": ["name"]}}},
+       "required": ["items"]})
+async def show_products(ctx: ToolContext, items: list[dict], title: str | None = None, pick: str | None = None) -> ToolResult:
+    rows = [{"name": str(i.get("name") or "").strip(), "price": str(i.get("price") or "").strip() or None,
+             "image": _http(i.get("image")), "url": _http(i.get("url")), "meta": str(i.get("meta") or "").strip() or None}
+            for i in items if str(i.get("name") or "").strip()][:MAX_PRODUCTS]
+    if not rows:
+        return ToolResult("没有可展示的商品（每项至少要有名字），没有展示。")
+    pics = [r for r in rows if r["image"]]
+    if pics:
+        async with httpx.AsyncClient(timeout=IMAGE_PROBE_TIMEOUT, follow_redirects=True,
+                                     headers={"User-Agent": "Mozilla/5.0 (assistant image check)"}) as client:
+            ok = await asyncio.gather(*(probe_image(client, r["image"]) for r in pics))
+        for r, y in zip(pics, ok):
+            if not y:
+                r["image"] = None
+    bad = sum(1 for y in (ok if pics else []) if not y)
+    block = ProductsBlock(title=(title or "").strip() or None, pick=(pick or "").strip() or None, items=rows)
+    note = f"，其中 {bad} 张图打不开、显示成占位" if bad else ""
+    return ToolResult(f"{len(rows)} 件商品已展示给用户{note}。推荐和差别已在卡片上，文字里别再列一遍。", [block.model_dump()])

@@ -2,7 +2,7 @@ import type { Block } from "./types";
 
 /**
  * “复制”一条回复得到的 Markdown（和 App 的 copyText、后端 blocks_to_text 同一套规则，表格转成 Markdown 表）。
- * 只复制内容：审批卡、浏览器画面这类过程卡片不进剪贴板。
+ * 只复制内容：审批卡、订单卡、浏览器画面这类过程卡片不进剪贴板。
  */
 export function copyText(blocks: Block[]): string {
   return blocks.map((b): string => {
@@ -23,6 +23,11 @@ export function copyText(blocks: Block[]): string {
       case "draft": return b.body.trim();
       case "summary": return [`**${b.title}**`, ...(b.subtitle ? [b.subtitle] : []), b.markdown.trim()].join("\n\n");
       case "images": return b.items.map((i) => `- ${i.caption ?? "图片"} ${i.url}`).join("\n");
+      case "products": return [
+        ...(b.title ? [`**${b.title}**`] : []),
+        ...b.items.map((i) => "- " + [i.name, i.price, i.meta, i.url].filter(Boolean).join(" ")),
+        ...(b.pick ? [b.pick] : []),
+      ].join("\n");
       default: return "";
     }
   }).filter(Boolean).join("\n\n");

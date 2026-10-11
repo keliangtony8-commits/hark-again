@@ -153,6 +153,31 @@ def block_html(b: dict) -> str:
             f'referrerpolicy="no-referrer">' + (f'<figcaption>{e(it["caption"])}</figcaption>' if it.get("caption") else "")
             + "</figure>" for it in b.get("items", []) if _SAFE_URL.match(it.get("url", "")))
         return f'<div class="images">{figs}</div>' if figs else ""
+    if t == "products":
+        cells = []
+        for it in b.get("items", []):
+            img = (f'<img src="{e(it["image"], quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer">'
+                   if _SAFE_URL.match(it.get("image") or "") else '<div class="ph"></div>')
+            name = e(it.get("name", ""))
+            if _SAFE_URL.match(it.get("url") or ""):
+                name = f'<a href="{e(it["url"], quote=True)}" rel="noopener nofollow" target="_blank">{name}</a>'
+            price = f'<div class="price">{e(it["price"])}</div>' if it.get("price") else ""
+            meta = f'<div class="cap">{e(it["meta"])}</div>' if it.get("meta") else ""
+            cells.append(f'<div class="product">{img}<div class="name">{name}</div>{price}{meta}</div>')
+        title = f'<div class="cap">{e(b["title"])}</div>' if b.get("title") else ""
+        pick = f'<div class="cap">{e(b["pick"])}</div>' if b.get("pick") else ""
+        return f'{title}<div class="products">{"".join(cells)}</div>{pick}'
+    if t == "order":
+        state = {"placed": "已下单", "approved": "已确认", "rejected": "没有下单", "expired": "已过期",
+                 "pending": "等待确认"}.get(b.get("state", ""), "")
+        rows = "".join(f'<tr><td>{e(i.get("name", ""))}' + (f' <span class="cap">{e(i["note"])}</span>' if i.get("note") else "")
+                       + f'</td><td>×{int(i.get("qty") or 1)}</td><td>{e(i.get("price", ""))}</td></tr>' for i in b.get("items", []))
+        rows += "".join(f'<tr class="fee"><td colspan="2">{e(f.get("label", ""))}</td><td>{e(f.get("amount", ""))}</td></tr>'
+                        for f in b.get("breakdown", []))
+        rows += f'<tr class="sum"><td colspan="2">合计</td><td>{e(b.get("total", ""))}</td></tr>'
+        no = f' · 订单号 {e(b["order_number"])}' if b.get("order_number") else ""
+        return (f'<div class="order"><div class="cap">{e(b.get("merchant", ""))} · {state}{no}</div>'
+                f'<table>{rows}</table></div>')
     return ""  # approval / browser / 未知：不公开
 
 
@@ -209,6 +234,12 @@ th{color:var(--text2);font-weight:500}
 .draft .cap{margin-bottom:6px}.draft-body{white-space:pre-wrap}
 .doc{border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin:0 0 12px}.doc h3{margin-top:0}
 .images{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:0 0 12px}
+.products{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:0 0 12px}
+.product img,.product .ph{width:100%;aspect-ratio:1;object-fit:cover;border-radius:14px;background:var(--tile);display:block}
+.product .name{margin-top:6px;line-height:1.4}.product .name a{color:inherit}.product .price{font-weight:600}
+.order{background:var(--tile);border-radius:14px;padding:12px 16px;margin:0 0 12px}.order table{width:100%;border-collapse:collapse}
+.order td{padding:4px 0}.order td:nth-child(n+2){text-align:right;white-space:nowrap;padding-left:12px}
+.order .fee td{color:var(--text2)}.order .sum td{border-top:1px solid var(--line);font-weight:600;padding-top:8px}
 .images figure{margin:0}.images img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;background:var(--tile)}
 figcaption{color:var(--text2);font-size:13px;margin-top:4px}
 footer{color:var(--text2);font-size:12px;text-align:center;margin-top:40px}

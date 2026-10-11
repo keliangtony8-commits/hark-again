@@ -50,6 +50,8 @@ class Tool:
     run: Callable[..., Awaitable[ToolResult]]
     scope: str = "always"  # always | project（只在项目对话里提供，如文件与沙盒）| conversation（需要知道当前对话）
     risk: Callable[[dict], str | None] | None = None  # 返回需要审批的理由；None = 直接执行
+    # 需要审批时的卡片：返回一个带 state 的块（如订单卡），内核补上 id；None = 通用审批卡。参数不对就抛 ValueError。
+    card: Callable[[dict], dict] | None = None
 
     def available(self, ctx: ToolContext) -> bool:
         if self.scope == "project":
@@ -63,9 +65,9 @@ REGISTRY: dict[str, Tool] = {}
 
 
 def tool(name: str, label: str, description: str, parameters: dict, scope: str = "always",
-         risk: Callable[[dict], str | None] | None = None):
+         risk: Callable[[dict], str | None] | None = None, card: Callable[[dict], dict] | None = None):
     def deco(fn):
-        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk)
+        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card)
         return fn
     return deco
 

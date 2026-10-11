@@ -19,8 +19,16 @@ export type DraftBlock = { type: "draft"; title: string; body: string };
 export type SummaryBlock = { type: "summary"; title: string; subtitle?: string | null; markdown: string };
 /** 图片卡：想看样子时的 1–6 张网络图片。 */
 export type ImagesBlock = { type: "images"; items: { url: string; caption?: string | null }[] };
+/** 商品宫格（v0.81）：挑要买/要订、样子也算数的一组东西；image/url 只认 http(s)，坏图服务器已置空。 */
+export type ProductsBlock = { type: "products"; title?: string | null; pick?: string | null;
+  items: { name: string; price?: string | null; image?: string | null; url?: string | null; meta?: string | null }[] };
+/** 订单卡（v0.81）：pending = 等用户确认（按钮走 approval.reply，id 即审批 id）；placed = 回执（带订单号）。金额原样显示。 */
+export type OrderBlock = { type: "order"; id: string; merchant: string;
+  items: { name: string; price: string; qty?: number; note?: string | null; image?: string | null }[];
+  breakdown?: { label: string; amount: string }[]; total: string; payment?: string | null; destination?: string | null;
+  order_number?: string | null; action?: string; state: "pending" | "approved" | "rejected" | "expired" | "placed" };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;
