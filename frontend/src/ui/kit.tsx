@@ -45,9 +45,13 @@ export function Page({ children, header, footer }: { children: ReactNode; header
   );
 }
 
-export function Section({ title, action, children }: { title?: string; action?: ReactNode; children: ReactNode }) {
+/** 错峰入场的序号（配 .enter：延迟 = --stagger × --i，封顶 10，= App Motion.stagger）。 */
+export const stagger = (i: number) => ({ "--i": Math.min(Math.max(i, 0), 10) }) as CSSProperties;
+
+/** 区块。enter = 错峰入场序号（不给就不做入场动画）。 */
+export function Section({ title, action, children, enter }: { title?: string; action?: ReactNode; children: ReactNode; enter?: number }) {
   return (
-    <section className="section">
+    <section className={enter === undefined ? "section" : "section enter"} style={enter === undefined ? undefined : stagger(enter)}>
       {title && <div className="section-title"><span>{title}</span>{action}</div>}
       {children}
     </section>

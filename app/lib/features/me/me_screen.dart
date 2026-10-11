@@ -121,20 +121,26 @@ class _MeBody extends ConsumerWidget {
         ]),
       ),
       gap,
-      GlassGroup(children: [
-        RowTile(icon: Icons.dns_outlined, title: '服务器', subtitle: server.isEmpty ? '未设置' : '$server · 退出后可在登录页更换'),
-      ]),
+      FadeSlideIn(
+        delay: Motion.stagger(5),
+        child: GlassGroup(children: [
+          RowTile(icon: Icons.dns_outlined, title: '服务器', subtitle: server.isEmpty ? '未设置' : '$server · 退出后可在登录页更换'),
+        ]),
+      ),
       gap,
-      GlassGroup(children: [
-        RowTile(
-          icon: Icons.logout_rounded,
-          title: '退出登录',
-          trailing: const SizedBox.shrink(),
-          onTap: () async {
-            if (await confirmDanger(context, title: '退出登录？', action: '退出')) await ref.read(sessionProvider.notifier).signOut();
-          },
-        ),
-      ]),
+      FadeSlideIn(
+        delay: Motion.stagger(6),
+        child: GlassGroup(children: [
+          RowTile(
+            icon: Icons.logout_rounded,
+            title: '退出登录',
+            trailing: const SizedBox.shrink(),
+            onTap: () async {
+              if (await confirmDanger(context, title: '退出登录？', action: '退出')) await ref.read(sessionProvider.notifier).signOut();
+            },
+          ),
+        ]),
+      ),
     ]);
   }
 }
@@ -157,7 +163,7 @@ class _UsageCard extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('本月花费', style: context.text.bodySmall),
-              Text(value, style: context.text.displaySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Semantics(label: '本月花费 $value', excludeSemantics: true, child: CountUp(value, style: context.text.displaySmall)),
               if (r?.budget != null) Text('预算 ${formatMoney(r!.budget!, r.currency)}', style: context.text.labelSmall),
             ]),
           ),

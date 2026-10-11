@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import BlockRenderer from "../../blocks/BlockRenderer";
 import { useInbox } from "../../hooks/useInbox";
@@ -12,7 +12,7 @@ import LaunchComposer, { useAskInNewChat } from "../../shell/LaunchComposer";
 import { ShellLead } from "../../shell/ShellLead";
 import { WidePill } from "../../ui/glass";
 import { IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconTrash } from "../../ui/icons";
-import { Menu, Page, Section, Skeleton } from "../../ui/kit";
+import { Menu, Page, Section, Skeleton, stagger } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
@@ -20,7 +20,7 @@ import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
 
 /** 错峰入场第 i 拍（.enter 读 --i；超过 10 拍不再加，= App Motion.stagger）。 */
-const nth = (i: number) => ({ "--i": Math.min(i, 10) }) as CSSProperties;
+const nth = stagger;
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 /** 收件箱一行预览：取结果里第一段文字，去掉 Markdown 符号。 */
 const preview = (c: HomeCard) => {

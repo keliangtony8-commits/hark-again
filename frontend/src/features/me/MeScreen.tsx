@@ -7,7 +7,8 @@ import { APPEARANCES, setAppearance, useAppearance } from "../../lib/theme";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, type UsageReport } from "../../lib/usage";
 import { Avatar } from "../../ui/glass";
 import { IconBack, IconBrain, IconChevron, IconClock, IconLayout, IconPlug, IconShield, IconSpark } from "../../ui/icons";
-import { Section, Segmented, Toggle } from "../../ui/kit";
+import { Section, Segmented, Toggle, stagger } from "../../ui/kit";
+import CountUp from "../../ui/CountUp";
 import AvatarColorPop from "./AvatarColorPop";
 import "./me.css";
 
@@ -32,10 +33,10 @@ function UsageSummary() {
   const money = !!r && r.priced.length > 0;
   const ratio = r ? budgetRatio(r) : null;
   return (
-    <div className="glass-card me-usage">
+    <div className="glass-card me-usage enter" style={stagger(1)}>
       <div className="tile-label">本月花费</div>
       <div className="me-usage-row">
-        <div className="tile-value">{!r ? "—" : money ? formatMoney(r.month.cost, r.currency) : `${formatTokens(r.month.tokens)} token`}</div>
+        <div className="tile-value"><CountUp value={!r ? "—" : money ? formatMoney(r.month.cost, r.currency) : `${formatTokens(r.month.tokens)} token`} /></div>
         {r?.budget != null && money && <div className="me-usage-budget">/ {formatMoney(r.budget, r.currency)}</div>}
       </div>
       {r && ratio !== null && (
@@ -72,8 +73,8 @@ export default function MeScreen() {
           <div className="me-server">{server.get() || location.origin}</div>
         </div>
         <UsageSummary />
-        {GROUPS.map((g) => (
-          <Section key={g.title} title={g.title}>
+        {GROUPS.map((g, i) => (
+          <Section key={g.title} title={g.title} enter={i + 2}>
             <div className="list">
               {g.items.map(({ to, icon: Icon, title, sub }) => (
                 <Link key={to} to={to} className="row">
@@ -85,7 +86,7 @@ export default function MeScreen() {
             </div>
           </Section>
         ))}
-        <Section title="外观与偏好">
+        <Section title="外观与偏好" enter={GROUPS.length + 2}>
           <div className="list">
             <div className="row me-appearance"><div className="row-body"><div className="row-title">外观</div></div>
               <Segmented label="外观" value={appearance} options={APPEARANCES} onChange={setAppearance} /></div>
@@ -93,7 +94,7 @@ export default function MeScreen() {
               <Toggle on={solid} onChange={setSolid} label="减少透明度" /></div>
           </div>
         </Section>
-        <Section>
+        <Section enter={GROUPS.length + 3}>
           <div className="list"><button className="row" onClick={logout}><div className="row-body"><div className="row-title danger-text">退出登录</div></div></button></div>
         </Section>
       </div>

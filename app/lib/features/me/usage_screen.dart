@@ -39,27 +39,49 @@ class UsageScreen extends ConsumerWidget {
     return SubPage(
       title: const Text('用量与花费'),
       actions: [_ExportButton(value.value)],
-      body: value.when(
-        skipLoadingOnReload: true,
-        loading: () => const PageBody(children: [SkeletonList(rows: 3)]),
-        error: (e, _) => PageBody(children: [
-          EmptyHint(
-            icon: Icons.cloud_off_rounded,
-            title: '加载失败',
-            text: '$e',
-            action: OutlinedButton(onPressed: () => ref.invalidate(usageProvider), child: const Text('重试')),
+      // 骨架 → 报表 / 失败 交叉淡化（FadeSwitcher 按 key 换态）；下拉刷新时保留旧报表，数字从旧值滚到新值（CountUp）
+      body: FadeSwitcher(
+        child: value.when(
+          skipLoadingOnReload: true,
+          loading: () => const PageBody(key: ValueKey('loading'), children: [_ReportSkeleton()]),
+          error: (e, _) => PageBody(key: const ValueKey('error'), children: [
+            EmptyHint(
+              icon: Icons.cloud_off_rounded,
+              title: '加载失败',
+              text: '$e',
+              action: OutlinedButton(onPressed: () => ref.invalidate(usageProvider), child: const Text('重试')),
+            ),
+          ]),
+          data: (r) => PullRefresh(
+            key: const ValueKey('data'),
+            onRefresh: () {
+              ref.invalidate(usageDayProvider); // 过去某天的明细也一起重取
+              return ref.refresh(usageProvider.future);
+            },
+            child: _Report(r),
           ),
-        ]),
-        data: (r) => PullRefresh(
-          onRefresh: () {
-            ref.invalidate(usageDayProvider); // 过去某天的明细也一起重取
-            return ref.refresh(usageProvider.future);
-          },
-          child: _Report(r),
         ),
       ),
     );
   }
+}
+
+/// 加载中的骨架：形状跟报表一致（月卡 → 两格统计 → 每日图），换成内容时不跳版。
+class _ReportSkeleton extends StatelessWidget {
+  const _ReportSkeleton();
+
+  @override
+  Widget build(BuildContext context) => const Column(children: [
+        Shimmer(height: Layout.skeletonHero, radius: Radii.card),
+        SizedBox(height: Sp.x3),
+        Row(children: [
+          Expanded(child: Shimmer(height: Layout.skeletonStat, radius: Radii.card)),
+          SizedBox(width: Sp.x3),
+          Expanded(child: Shimmer(height: Layout.skeletonStat, radius: Radii.card)),
+        ]),
+        SizedBox(height: Sp.x3),
+        Shimmer(height: Layout.skeletonChart, radius: Radii.card),
+      ]);
 }
 
 /// 导出本月 CSV。报表还没加载到（或加载失败）时置灰；分享面板锚在按钮上（iPad 要用）。
@@ -220,7 +242,7 @@ class _MonthCard extends StatelessWidget {
         Semantics(
           label: '本月已用 ${money ? formatMoney(r.month.cost, r.currency) : '${formatTokens(r.month.tokens)} token'}',
           excludeSemantics: true,
-          child: Text(money ? formatMoney(r.month.cost, r.currency) : formatTokens(r.month.tokens),
+          child: CountUp(money ? formatMoney(r.month.cost, r.currency) : formatTokens(r.month.tokens),
               style: context.text.headlineMedium?.copyWith(color: p.text)),
         ),
         if (r.lastMonth != null) ...[
@@ -302,12 +324,17 @@ class _Stat extends StatelessWidget {
   final String label, value, note;
 
   @override
-  Widget build(BuildContext context) => AppCard(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: context.text.labelSmall),
-          const SizedBox(height: Sp.x1),
-          Text(value, style: context.text.headlineMedium),
-          Text(note, style: context.text.bodySmall),
-        ]),
+  Widget build(BuildContext context) => Semantics(
+        container: true,
+        label: '$label，$value，$note',
+        excludeSemantics: true, // 滚动中的中间数不念，只念终值
+        child: AppCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: context.text.labelSmall),
+            const SizedBox(height: Sp.x1),
+            CountUp(value, style: context.text.headlineMedium),
+            Text(note, style: context.text.bodySmall),
+          ]),
+        ),
       );
 }

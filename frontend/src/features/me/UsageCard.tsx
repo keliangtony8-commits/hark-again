@@ -4,7 +4,8 @@ import { budgetLevel, budgetRatio, formatMoney, formatTokens, hasUnpriced, type 
 import { downloadText } from "../../lib/export";
 import { usageCsv, usageCsvFileName } from "../../lib/usageCsv";
 import { IconDownload } from "../../ui/icons";
-import { Skeleton } from "../../ui/kit";
+import { stagger } from "../../ui/kit";
+import CountUp from "../../ui/CountUp";
 import DailyChart from "./DailyChart";
 import DayBreakdown from "./DayBreakdown";
 import ModelUsageList from "./ModelUsageList";
@@ -22,20 +23,21 @@ export default function UsageCard() {
   useEffect(() => { load(); }, [load]);
 
   if (error) return <div className="list"><button className="row" onClick={load}><div className="row-body"><div className="row-title">用量加载失败</div><div className="row-sub">{error} · 点这里重试</div></div></button></div>;
-  if (!r) return <Skeleton rows={2} />;
+  // 骨架形状跟报表一致（月卡 / 两格 / 每日图，= App _ReportSkeleton），换成内容时整块淡入不跳版
+  if (!r) return <div className="usage usage-skeleton" aria-busy="true"><div className="skeleton sk-hero" /><div className="sk-stats"><div className="skeleton sk-stat" /><div className="skeleton sk-stat" /></div><div className="skeleton sk-chart" /></div>;
 
   const money = r.priced.length > 0;
   const ratio = budgetRatio(r);
   const level = budgetLevel(r);
   return (
-    <div className="usage">
-      <div className="usage-hero list">
+    <div className="usage fade-in">
+      <div className="usage-hero list enter" style={stagger(0)}>
         <div className="usage-head">
           <div className="usage-label">本月</div>
           <button className="icon-btn sm" title="下载本月 CSV" aria-label="下载本月 CSV"
             onClick={() => downloadText(usageCsvFileName(r), usageCsv(r), "text/csv")}><IconDownload /></button>
         </div>
-        <div className="usage-big">{money ? formatMoney(r.month.cost, r.currency) : `${formatTokens(r.month.tokens)} token`}</div>
+        <div className="usage-big"><CountUp value={money ? formatMoney(r.month.cost, r.currency) : `${formatTokens(r.month.tokens)} token`} /></div>
         <MonthCompare report={r} />
         {ratio !== null && r.budget !== null && <>
           <div className={`meter meter-${level}`} role="meter" aria-label="本月预算" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ratio * 100)}>
@@ -48,13 +50,13 @@ export default function UsageCard() {
           </div>
         </>}
         <div className="usage-stats">
-          <div><span>今天</span><b>{money ? formatMoney(r.today.cost, r.currency) : formatTokens(r.today.tokens)}</b><small>{r.today.calls} 次调用</small></div>
-          <div><span>本月 token</span><b>{formatTokens(r.month.tokens)}</b><small>{r.month.calls} 次调用</small></div>
+          <div><span>今天</span><b><CountUp value={money ? formatMoney(r.today.cost, r.currency) : formatTokens(r.today.tokens)} /></b><small>{r.today.calls} 次调用</small></div>
+          <div><span>本月 token</span><b><CountUp value={formatTokens(r.month.tokens)} /></b><small>{r.month.calls} 次调用</small></div>
         </div>
       </div>
-      {r.daily && r.daily.length > 0 && <DailyChart report={r} detail={(day, today) => <DayBreakdown report={r} day={day} today={today} />} />}
-      {r.conversations && r.conversations.length > 0 && <TopConversations report={r} />}
-      {r.month.models.length > 0 && <ModelUsageList models={r.month.models} priced={r.priced} currency={r.currency} />}
+      {r.daily && r.daily.length > 0 && <div className="enter" style={stagger(1)}><DailyChart report={r} detail={(day, today) => <DayBreakdown report={r} day={day} today={today} />} /></div>}
+      {r.conversations && r.conversations.length > 0 && <div className="enter" style={stagger(2)}><TopConversations report={r} /></div>}
+      {r.month.models.length > 0 && <div className="enter" style={stagger(3)}><ModelUsageList models={r.month.models} priced={r.priced} currency={r.currency} /></div>}
       {(!money || hasUnpriced(r)) && (
         <p className="usage-hint">
           {money ? "“未定价”的模型只统计 token。在服务器 .env 的 MODEL_PRICES 里补上单价即可算钱。"

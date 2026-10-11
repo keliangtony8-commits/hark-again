@@ -269,5 +269,6 @@ abstract final class Layout {
   static const sidePane = 320.0; // 双栏时历史栏宽度
   static const dialogMax = 400.0; // 居中对话框最宽多宽（平板上不拉满）
   static const chartHeight = 120.0; // 用量页逐日柱状图的绘图区高度
+  static const skeletonHero = 148.0, skeletonStat = 104.0, skeletonChart = 200.0; // 用量页骨架：月卡 / 统计格 / 每日图（与内容同高，换态不跳版）
   static const seekPagesMax = 60; // 定位消息时最多往上翻多少屏（防止死循环）
 }
