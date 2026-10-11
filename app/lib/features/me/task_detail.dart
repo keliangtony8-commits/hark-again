@@ -4,7 +4,8 @@
 // 哪次、手动还是定时、用了多久；报告任务的那次可以点开对话（openConversation），面板任务没有对话。
 // 数据流：任务本身读 tasksProvider（列表页同一份，开关/删除走它的 notifier）；记录是 taskRunsProvider(id)，
 // autoDispose，离开页面就丢。有运行在排队（run_requested）或进行中时每 Timing.taskRunPoll 刷新两者，
-// 都结束了就停——不在后台空转。Home 上的“任务失败”提醒卡（target=tasks）直达这一页。
+// 都结束了就停——不在后台空转。Home 上的“任务失败 / 连续失败已暂停”提醒卡（target=tasks）直达这一页；
+// 自动暂停时卡片里多一条说明（_PauseNote，文案 task_labels.dart autoPauseNote）。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
+import '../../ui/glass_mode.dart';
 import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
@@ -171,6 +173,17 @@ class _Header extends ConsumerWidget {
             onChanged: (v) => ref.read(tasksProvider.notifier).patch(task.id, {'active': v}),
           ),
         ]),
+        // 自动暂停的说明条：恢复（开关 / 试跑成功）后平滑收起
+        FadeSwitcher(
+          alignment: AlignmentDirectional.topStart,
+          child: autoPauseNote(task) == null
+              ? const SizedBox(width: double.infinity, key: ValueKey('no-note'))
+              : Padding(
+                  key: const ValueKey('paused-note'),
+                  padding: const EdgeInsets.only(top: Sp.x3),
+                  child: _PauseNote(text: autoPauseNote(task)!),
+                ),
+        ),
         const SizedBox(height: Sp.x3),
         Text(task.prompt, style: context.text.bodyMedium?.copyWith(color: p.text2)),
         const SizedBox(height: Sp.x3),
@@ -186,6 +199,24 @@ class _Header extends ConsumerWidget {
       ]),
     );
   }
+}
+
+/// 连续失败被自动暂停时的一条说明：小块底色 + 警示色图标，文字保持正文色（不让整块变黄）。
+class _PauseNote extends StatelessWidget {
+  const _PauseNote({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(Sp.x3),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.pause_circle_outline_rounded, size: Sp.x5, color: context.palette.warning),
+          const SizedBox(width: Sp.x2),
+          Expanded(child: Text(text, style: context.text.bodySmall?.copyWith(color: context.palette.text))),
+        ]),
+      );
 }
 
 /// 已点“立即运行”、worker 还没领走（≤15 秒）：一行占位，免得用户以为没点上。

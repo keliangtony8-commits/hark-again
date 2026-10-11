@@ -130,6 +130,8 @@ class ScheduledTask {
     required this.runRequested,
     this.lastRunAt,
     this.lastStatus,
+    this.failStreak = 0,
+    this.pausedReason,
     this.nextRunAt,
     this.runAt,
     this.done = false,
@@ -144,6 +146,8 @@ class ScheduledTask {
     runRequested: j['run_requested'] as bool? ?? false,
     lastRunAt: _date(j['last_run_at']),
     lastStatus: j['last_status'] as String?,
+    failStreak: (j['fail_streak'] as num?)?.toInt() ?? 0,
+    pausedReason: j['paused_reason'] as String?,
     nextRunAt: _date(j['next_run_at']),
     runAt: _date(j['run_at']),
     done: j['done'] as bool? ?? false,
@@ -154,6 +158,12 @@ class ScheduledTask {
 
   /// 上一次结束的运行：'ok' | 'error'；没跑过 = null。
   final String? lastStatus;
+
+  /// 连着失败了几次（成功归零）。服务端连续失败 3 次会把重复任务自动暂停（pausedReason = 'failures'）。
+  final int failStreak;
+
+  /// 'failures' = 连续失败被自动暂停；用户手动停的 = null。
+  final String? pausedReason;
 
   /// 服务端按 cron 算好的下次运行（与 worker 同一套计算，只读）；停用或 cron 无效 = null。
   final DateTime? nextRunAt;
@@ -166,6 +176,7 @@ class ScheduledTask {
   bool get isOnce => runAt != null;
   bool get isPanel => output == 'panel';
   bool get lastFailed => lastStatus == 'error';
+  bool get autoPaused => !active && pausedReason == 'failures';
 }
 
 /// 定时任务的一次运行（GET /api/tasks/{id}/runs，新的在前）。

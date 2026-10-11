@@ -4,10 +4,10 @@ import { useResource } from "../../hooks/useResource";
 import { useTaskRuns } from "../../hooks/useTaskRuns";
 import { http } from "../../lib/api";
 import { formatDuration, formatWhen } from "../../lib/format";
-import { nextRunLabel, scheduleLabel } from "../../lib/taskLabels";
+import { autoPauseNote, nextRunLabel, scheduleLabel } from "../../lib/taskLabels";
 import { TaskIcon } from "./SchedulePicker";
 import type { ScheduledTask, TaskRun } from "../../lib/types";
-import { IconCheck, IconChevron, IconClock, IconClose, IconEdit, IconHistory, IconPlay, IconTrash } from "../../ui/icons";
+import { IconCheck, IconChevron, IconClock, IconClose, IconEdit, IconHistory, IconPause, IconPlay, IconTrash } from "../../ui/icons";
 import { Hint, Page, PageHeader, Section, Skeleton, Toggle } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "./TaskSheet";
 import { confirmDialog } from "../../ui/dialog";
@@ -56,6 +56,9 @@ export default function TaskDetailScreen() {
           </div>
           <Toggle on={task.active} label={`启用「${task.name}」`} onChange={(v) => tasks.update(task.id, { active: v })} />
         </div>
+        {autoPauseNote(task) && (
+          <div className="task-pause-note" role="status"><IconPause /><span>{autoPauseNote(task)}</span></div>
+        )}
         <p className="task-prompt">{task.prompt}</p>
         <div className="task-head-actions">
           <button className="btn btn-primary btn-sm" disabled={busy} onClick={runNow}><IconPlay />{busy ? "运行中…" : "立即运行"}</button>

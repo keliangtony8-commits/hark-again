@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResource } from "../../hooks/useResource";
-import { scheduleLabel, taskStateLabel } from "../../lib/taskLabels";
+import { autoPaused, scheduleLabel, taskStateLabel } from "../../lib/taskLabels";
 import type { ScheduledTask } from "../../lib/types";
 import { IconChevron, IconPlus } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, Section, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
 import { TaskIcon } from "./SchedulePicker";
 import TaskSheet, { EMPTY_TASK, type TaskDraft } from "./TaskSheet";
-import { TASK_STARTERS, groupTasks, nextUp, taskSummary } from "./taskLibrary";
+import { TASK_STARTERS, groupTasks, nextUp, taskIdle, taskSummary } from "./taskLibrary";
 
 /** 定时任务列表（面板也是任务）。版式（v0.77，与 App tasks_screen.dart 同）：
  *  页头 = 摘要小标签 + “下一个：早间简报 · 明天 08:00”；分组 需要留意 / 在跑 / Home 面板 / 已停下（变淡）；
@@ -26,9 +26,10 @@ export default function TasksScreen() {
     <div className="list">
       {items.map((t) => {
         const failed = t.last_status === "error";
+        const paused = autoPaused(t); // 自动暂停 = 这一行的问题：只染问题那几个字（.row-problem），计划照常
         const sub = [scheduleLabel(t), taskStateLabel(t) || null].filter(Boolean).join(" · ");
         return (
-          <div key={t.id} className={`row enter ${!t.active || t.done ? "row-off" : ""}`} style={stagger(++n)}>
+          <div key={t.id} className={`row enter ${taskIdle(t) ? "row-off" : ""}`} style={stagger(++n)}>
             <button className="task-row" onClick={() => nav(`/me/tasks/${t.id}`)}>
               <span className={`row-icon dot-badge ${failed ? "on" : ""}`}>
                 <TaskIcon task={t} />
@@ -36,7 +37,9 @@ export default function TasksScreen() {
               </span>
               <span className="row-body">
                 <span className="row-title">{t.name}</span>
-                <span className={`row-sub ${failed && !t.run_requested ? "is-danger" : ""}`}>{sub}</span>
+                {paused
+                  ? <span className="row-sub"><span className="row-problem">{taskStateLabel(t)}</span> · {scheduleLabel(t)}</span>
+                  : <span className={`row-sub ${failed && !t.run_requested ? "is-danger" : ""}`}>{sub}</span>}
               </span>
               <IconChevron />
             </button>

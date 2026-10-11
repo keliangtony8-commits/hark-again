@@ -1,12 +1,15 @@
 // 定时任务页的纯逻辑：分组、页头摘要、“下一个”、起步模板。与 App features/me/task_library.dart 同规则同措辞。
 import { formatWhen } from "../../lib/format";
+import { autoPaused } from "../../lib/taskLabels";
 import type { ScheduledTask } from "../../lib/types";
 
-const failed = (t: ScheduledTask) => t.last_status === "error" && !t.run_requested;
-const idle = (t: ScheduledTask) => !t.active || !!t.done;
+const failed = (t: ScheduledTask) => autoPaused(t) || (t.last_status === "error" && !t.run_requested);
+/** 停下了、不需要用户做什么：手动暂停或一次性已完成（自动暂停的算“需要留意”，不变淡）。 */
+export const taskIdle = (t: ScheduledTask) => !autoPaused(t) && (!t.active || !!t.done);
+const idle = taskIdle;
 const isPanel = (t: ScheduledTask) => t.output === "panel";
 
-/** 分组：需要留意（启用且上次失败）/ 在跑 / Home 面板 / 已停下（暂停或一次性已完成）。前三组按下次运行先后。 */
+/** 分组：需要留意（启用且上次失败，或连续失败被自动暂停）/ 在跑 / Home 面板 / 已停下（暂停或一次性已完成）。前三组按下次运行先后。 */
 export function groupTasks(list: ScheduledTask[]) {
   const at = (t: ScheduledTask) => (t.next_run_at ? new Date(t.next_run_at).getTime() : Infinity);
   const pick = (f: (t: ScheduledTask) => boolean) => list.filter(f).sort((a, b) => at(a) - at(b)); // sort 稳定：同刻保持服务器顺序
@@ -18,13 +21,13 @@ export function groupTasks(list: ScheduledTask[]) {
   };
 }
 
-/** “6 个任务 · 4 个在跑 · 1 个上次失败”；空列表是一句引导。 */
+/** “6 个任务 · 4 个在跑 · 1 个需要留意”；空列表是一句引导。 */
 export function taskSummary(list: ScheduledTask[]) {
   if (!list.length) return "到点我自己去做的事";
   const g = groupTasks(list);
-  const live = list.length - g.idle.length;
+  const live = list.filter((t) => t.active && !t.done).length;
   return [`${list.length} 个任务`, live === list.length ? "全部在跑" : `${live} 个在跑`,
-    ...(g.attention.length ? [`${g.attention.length} 个上次失败`] : [])].join(" · ");
+    ...(g.attention.length ? [`${g.attention.length} 个需要留意`] : [])].join(" · ");
 }
 
 /** 下一个要跑的：[名称, “明天 08:00” | “马上”]；没有 = null。 */

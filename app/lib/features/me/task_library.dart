@@ -4,10 +4,10 @@ import '../../models/resources.dart';
 import '../../ui/format.dart';
 
 /// 分组（各组按下次运行先后；没有下次的排后面，保持服务器顺序）：
-/// - attention：上次失败、还在启用（停用的失败任务不打扰）；
+/// - attention：上次失败、还在启用；或连续失败被自动暂停（用户手动停的失败任务不打扰）；
 /// - running：在跑的普通任务；
 /// - panels：在刷新的 Home 面板；
-/// - idle：已暂停 / 一次性已完成。
+/// - idle：手动暂停 / 一次性已完成。
 ({List<ScheduledTask> attention, List<ScheduledTask> running, List<ScheduledTask> panels, List<ScheduledTask> idle})
     groupTasks(List<ScheduledTask> list) {
   final idx = {for (var i = 0; i < list.length; i++) list[i].id: i};
@@ -19,25 +19,29 @@ import '../../ui/format.dart';
     return idx[a.id]!.compareTo(idx[b.id]!);
   }
 
-  bool idle(ScheduledTask t) => !t.active || t.done;
+  bool idle(ScheduledTask t) => taskIdle(t);
+  bool failing(ScheduledTask t) => t.autoPaused || (t.lastFailed && !t.runRequested);
   List<ScheduledTask> pick(bool Function(ScheduledTask) f) => [for (final t in list) if (f(t)) t]..sort(byNext);
   return (
-    attention: pick((t) => !idle(t) && t.lastFailed && !t.runRequested),
-    running: pick((t) => !idle(t) && !(t.lastFailed && !t.runRequested) && !t.isPanel),
-    panels: pick((t) => !idle(t) && !(t.lastFailed && !t.runRequested) && t.isPanel),
+    attention: pick((t) => !idle(t) && failing(t)),
+    running: pick((t) => !idle(t) && !failing(t) && !t.isPanel),
+    panels: pick((t) => !idle(t) && !failing(t) && t.isPanel),
     idle: [for (final t in list) if (idle(t)) t],
   );
 }
 
-/// 页头小标签：“6 个任务 · 4 个在跑 · 1 个上次失败”；空列表是一句引导。
+/// 停下了、不需要用户做什么：手动暂停或一次性已完成（自动暂停的算“需要留意”，不变淡）。
+bool taskIdle(ScheduledTask t) => !t.autoPaused && (!t.active || t.done);
+
+/// 页头小标签：“6 个任务 · 4 个在跑 · 1 个需要留意”；空列表是一句引导。
 String taskSummary(List<ScheduledTask> list) {
   if (list.isEmpty) return '到点我自己去做的事';
   final g = groupTasks(list);
-  final live = list.length - g.idle.length;
+  final live = list.where((t) => t.active && !t.done).length;
   return [
     '${list.length} 个任务',
     live == list.length ? '全部在跑' : '$live 个在跑',
-    if (g.attention.isNotEmpty) '${g.attention.length} 个上次失败',
+    if (g.attention.isNotEmpty) '${g.attention.length} 个需要留意',
   ].join(' · ');
 }
 

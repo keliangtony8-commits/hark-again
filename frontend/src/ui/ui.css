@@ -239,6 +239,10 @@ button.day-row:hover { background: var(--tile); }
 /* 计划选择器（features/me/SchedulePicker.tsx）：重复/一次切换时下面的内容升起换上 */
 .plan-body { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); animation: rise var(--dur) var(--ease) both; }
 .plan-body .seg { margin-bottom: 0; }
+/* 连续失败被自动暂停的说明条（TaskDetailScreen）：小块底色 + 警示色图标，文字正文色；恢复后直接消失 */
+.task-pause-note { display: flex; gap: var(--sp-2); align-items: flex-start; margin-top: var(--sp-3); padding: var(--sp-3);
+  background: var(--tile); border-radius: var(--r-tile); font-size: var(--fs-sm); color: var(--text); animation: rise var(--dur) var(--ease) both; }
+.task-pause-note svg { flex: none; color: var(--warning); margin-top: 1px; }
 .task-prompt { margin: var(--sp-3) 0; color: var(--text-2); white-space: pre-wrap; }
 .task-head-actions { display: flex; justify-content: flex-end; }
 .run-row { align-items: flex-start; animation: rise var(--dur) var(--ease) both; }

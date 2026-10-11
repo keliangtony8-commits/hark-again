@@ -74,7 +74,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - vault.py       保险箱：加解密、按域名匹配（唯一解密点）
 - schedule.py    定时任务时刻计算（due_at/is_due/next_run_at，按用户时区）：worker 判断到点与接口的 next_run_at 共用，保证界面写的就是实际会跑的时间
 - worker.py      定时任务执行器（独立进程）；每次运行经 task_runs.py 记一行（start/finish）
-- task_runs.py   定时任务运行记录（task_runs 表，每任务留最近 KEEP=30 条）+ scheduled_tasks.last_status + 失败提醒：连续失败的第一次放 action 卡（task_id + target=tasks，alerts_sent key=task:任务:运行），之后成功自动收起；worker 启动 recover_stale() 把残留 running 标“中断”；GET /api/tasks/{id}/runs 读
+- task_runs.py   定时任务运行记录（task_runs 表，每任务留最近 KEEP=30 条）+ scheduled_tasks.last_status + 失败提醒：连续失败的第一次放 action 卡（task_id + target=tasks，alerts_sent key=task:任务:运行），之后成功自动收起；fail_streak 记连续失败，重复任务连败 PAUSE_AFTER=3 次自动暂停（paused_reason=failures，“已暂停”卡顶替首次失败卡，once=paused），task_store.after_patch 重新启用 → task_runs.resumed() 归零收卡，手动试跑成功也自动恢复（迁移 0024）；worker 启动 recover_stale() 把残留 running 标“中断”；GET /api/tasks/{id}/runs 读
 - agent/runner.py 一轮对话的完整流程，聊天和定时任务共用
 - agent/approvals.py 审批挂起/答复
 - connectors/    OAuth 服务声明（providers.py）、授权与刷新（oauth.py）、MCP 客户端（mcp.py）

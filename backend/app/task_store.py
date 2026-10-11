@@ -48,7 +48,9 @@ def check_patch(task: ScheduledTask, changes: dict) -> None:
 
 
 async def after_patch(db, task: ScheduledTask, changes: dict) -> None:
-    """改完字段后的派生同步（不 commit）：面板改名 → 卡片标题跟着改。"""
+    """改完字段后的派生同步（不 commit）：面板改名 → 卡片标题跟着改；重新启用自动暂停的任务 → 归零、收起提醒。"""
+    if changes.get("active") is True and task.paused_reason:
+        await task_runs.resumed(db, task)
     if "name" in changes and task.output == "panel":
         await db.execute(sql_update(HomeCard).where(HomeCard.task_id == task.id, HomeCard.kind == "panel")
                          .values(title=task.name))

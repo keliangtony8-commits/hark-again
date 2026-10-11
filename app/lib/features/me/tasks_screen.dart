@@ -1,6 +1,6 @@
 // 定时任务列表（面板也是任务，这里统一管理）。版式（v0.77，与技能页同一套）：
 // 页头 = 摘要小标签（数字变化时换一下）+ “下一个：早间简报 · 明天 08:00”；
-// 分组：需要留意（上次失败）/ 在跑 / Home 面板 / 已停下（暂停或一次性已完成，变淡）；分组规则在 task_library.dart；
+// 分组：需要留意（上次失败 / 连续失败被自动暂停）/ 在跑 / Home 面板 / 已停下（暂停或一次性已完成，变淡）；分组规则在 task_library.dart；
 // 行错峰入场，左滑删除（先确认），行尾开关；空列表给起步模板（点了带内容打开新建表单）。
 // 点一行进详情（task_detail.dart：运行记录、立即运行、编辑、删除）。
 import 'package:flutter/material.dart';
@@ -95,7 +95,7 @@ class _TaskRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = taskStateLabel(task);
     final parts = [scheduleLabel(task), if (state.isNotEmpty) state];
-    final idle = !task.active || task.done;
+    final idle = taskIdle(task);
     return SwipeToDelete(
       id: task.id,
       // 与详情页删除同一句（运行记录、Home 卡片由服务端 task_store.remove 连带删除）
@@ -108,7 +108,9 @@ class _TaskRow extends ConsumerWidget {
           child: RowTile(
             leading: _TaskBadge(task: task),
             title: task.name,
-            subtitle: parts.join(' · '),
+            // 自动暂停 = 这一行的问题：只把问题那几个字染警示色（RowTile.problem），计划照常
+            problem: task.autoPaused ? state : null,
+            subtitle: task.autoPaused ? scheduleLabel(task) : parts.join(' · '),
             onTap: () => context.push('/me/tasks/${task.id}'),
             trailing: Semantics(
               label: '启用「${task.name}」',

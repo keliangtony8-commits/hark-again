@@ -113,6 +113,8 @@ class ScheduledTask(Base):
     run_requested: Mapped[bool] = mapped_column(default=False)  # “立即运行”，由 worker 领取
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_status: Mapped[str | None] = mapped_column(String(16), nullable=True)  # 上一次结束的运行：ok | error；没跑过 = null
+    fail_streak: Mapped[int] = mapped_column(default=0, server_default="0")  # 连续失败次数（成功归零；见 app/task_runs.py）
+    paused_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)  # failures = 连续失败自动暂停；用户手动停 = null
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

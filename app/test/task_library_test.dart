@@ -75,7 +75,7 @@ void main() {
   test('taskSummary / nextUp', () {
     expect(taskSummary(const []), '到点我自己去做的事');
     expect(taskSummary([t('a'), t('b')]), '2 个任务 · 全部在跑');
-    expect(taskSummary([t('a', last: 'error'), t('b', active: false)]), '2 个任务 · 1 个在跑 · 1 个上次失败');
+    expect(taskSummary([t('a', last: 'error'), t('b', active: false)]), '2 个任务 · 1 个在跑 · 1 个需要留意');
     expect(nextUp(const [], now: now), isNull);
     final list = [
       t('later', next: DateTime(2026, 10, 12, 8, 0)),
@@ -93,7 +93,7 @@ void main() {
       j('天气', output: 'panel'),
       j('旧提醒', active: false),
     ]);
-    for (final s in ['需要留意', '在跑', 'Home 面板', '已停下', '4 个任务 · 3 个在跑 · 1 个上次失败']) {
+    for (final s in ['需要留意', '在跑', 'Home 面板', '已停下', '4 个任务 · 3 个在跑 · 1 个需要留意']) {
       expect(find.text(s), findsOneWidget, reason: s);
     }
     expect(find.textContaining('下一个：早间简报'), findsOneWidget);

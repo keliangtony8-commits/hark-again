@@ -25,7 +25,14 @@ def _plan(t: ScheduledTask) -> str:
 
 
 def _line(t: ScheduledTask) -> str:
-    state = "已暂停" if not t.active else ("" if schedule.is_done(t) else f"下次 {_local(schedule.next_run_at(t))}")
+    if t.paused_reason == "failures":
+        state = f"连续失败 {t.fail_streak} 次已自动暂停（修好后 update active=true 恢复）"
+    elif not t.active:
+        state = "已暂停"
+    else:
+        state = "" if schedule.is_done(t) else f"下次 {_local(schedule.next_run_at(t))}"
+        if t.last_status == "error":
+            state += f" · 已连续失败 {t.fail_streak} 次" if t.fail_streak > 1 else " · 上次失败"
     kind = "面板" if t.output == "panel" else "报告"
     return f"- id={t.id}「{t.name}」{kind} · {_plan(t)}" + (f" · {state}" if state else "")
 

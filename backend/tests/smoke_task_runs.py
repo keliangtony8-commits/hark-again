@@ -93,14 +93,16 @@ r3 = runs(rep)[0]
 assert r3["status"] == "error" and "RuntimeError" in r3["error"] and "工具炸了" in r3["error"], r3
 assert [x["id"] for x in alerts(rep)] == [a["id"]]
 
-run(rep, "empty")
-assert runs(rep)[0]["error"] == task_runs.NO_OUTPUT and len(alerts(rep)) == 1
+run(rep, "empty")                                    # 第 3 次连败：自动暂停，“已暂停”卡顶替首次失败卡（详见 smoke_task_autopause）
+assert runs(rep)[0]["error"] == task_runs.NO_OUTPUT and len(alerts(rep)) == 1 and "已暂停" in alerts(rep)[0]["title"]
+assert not task(rep)["active"]
 
-run(rep)                                             # 恢复：失败卡收起
-assert task(rep)["last_status"] == "ok" and alerts(rep) == [] and len(alerts(rep, live=False)) == 1
+run(rep)                                             # 恢复：失败卡收起，任务自动恢复
+assert task(rep)["last_status"] == "ok" and alerts(rep) == [] and len(alerts(rep, live=False)) == 2
+assert task(rep)["active"]
 
 run(rep, "model_error")                              # 新一轮连续失败：再提醒一次
-assert len(alerts(rep)) == 1 and len(alerts(rep, live=False)) == 2
+assert len(alerts(rep)) == 1 and len(alerts(rep, live=False)) == 3
 
 hist = runs(rep)                                     # 新的在前、limit
 assert [h["status"] for h in hist] == ["error", "ok", "error", "error", "error", "ok"], hist
