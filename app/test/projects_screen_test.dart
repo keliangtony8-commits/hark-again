@@ -35,6 +35,14 @@ class _Api implements Api {
     {'id': 'c3', 'title': '择校', 'pinned': true, 'updated_at': now.subtract(const Duration(days: 9)).toIso8601String()},
     {'id': 'c4', 'title': '政治大纲', 'updated_at': now.subtract(const Duration(days: 4)).toIso8601String()},
   ];
+  int sec(Duration d) => now.subtract(d).millisecondsSinceEpoch ~/ 1000;
+  late var files = <Map<String, dynamic>>[
+    {'path': 'notes/大纲.md', 'name': '大纲.md', 'size': 2048, 'mime': 'text/markdown', 'modified': sec(const Duration(hours: 2))},
+    {'path': '真题 2024.pdf', 'name': '真题 2024.pdf', 'size': 3 << 20, 'mime': 'application/pdf', 'modified': sec(const Duration(minutes: 10))},
+    {'path': '旧计划.txt', 'name': '旧计划.txt', 'size': 100, 'mime': 'text/plain', 'modified': sec(const Duration(days: 30))},
+    {'path': '词表.csv', 'name': '词表.csv', 'size': 900, 'mime': 'text/csv', 'modified': sec(const Duration(days: 1))},
+    {'path': '照片.png', 'name': '照片.png', 'size': 5000, 'mime': 'image/png', 'modified': sec(const Duration(days: 20))},
+  ];
   final calls = <String>[];
   final bodies = <Object?>[];
 
@@ -43,6 +51,7 @@ class _Api implements Api {
     if (path == '/api/inbox') return {'unread': 0, 'latest': null};
     if (path == '/api/projects') return [...projects];
     if (path == '/api/conversations?project_id=p1') return [...convs];
+    if (path == '/api/projects/p1/files') return [...files];
     if (path.startsWith('/api/conversations/')) {
       final id = path.split('/').last;
       return {'id': id, 'title': id, 'messages': [{'id': 'm-$id', 'role': 'user', 'blocks': [{'type': 'text', 'text': '续聊 $id'}]}]};
@@ -85,12 +94,13 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-Future<_Api> _pump(WidgetTester tester, {String at = '/projects'}) async {
+Future<_Api> _pump(WidgetTester tester, {String at = '/projects', List<Map<String, dynamic>>? files}) async {
   tester.view.physicalSize = const Size(400, 860);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues({});
   final api = _Api();
+  if (files != null) api.files = files;
   final container = ProviderContainer(overrides: [
     sessionProvider.overrideWith(_SignedIn.new),
     apiProvider.overrideWithValue(api),
@@ -216,6 +226,8 @@ void main() {
     final ys = [for (final t in ['择校', '单词计划', '真题第一轮']) tester.getTopLeft(find.text(t)).dy];
     expect(ys, orderedEquals([...ys]..sort()));
     expect(find.text('政治大纲'), findsNothing);
+    await tester.drag(find.byType(ProjectHome), const Offset(0, -400));
+    await _settle(tester);
     expect(find.text('或者新开一段'), findsOneWidget);
     expect(find.text('总结一下这个项目现在的进度'), findsOneWidget);
   });
@@ -244,5 +256,41 @@ void main() {
     expect(api.calls, ['DELETE /api/projects/p1']);
     expect(find.byType(ProjectHome), findsNothing);
     expect(find.text('1 个项目 · 最近 5 分钟前'), findsOneWidget);
+  });
+
+  test('projectRecentFiles：按修改时间新→旧，没时间排后；projectFileLine 带文件夹', () {
+    ProjectFile f(String p, int? t) => ProjectFile.fromJson({'path': p, 'name': p.split('/').last, 'size': 2048, 'mime': 'text/plain', 'modified': t});
+    final list = [f('a', 100), f('b', null), f('c', 300), f('d', 200), f('e', 50)];
+    expect(projectRecentFiles(list).map((x) => x.path), ['c', 'd', 'a']);
+    expect(projectRecentFiles([f('b', null), f('x', null)], max: 5).map((x) => x.path), ['b', 'x']);
+    expect(projectFileLine(f('notes/sub/大纲.md', 1)), 'notes/sub · 2 KB');
+    expect(projectFileLine(f('大纲.md', 1)), '2 KB');
+    expect(ProjectFile.fromJson({'path': 'a', 'modified': 1.5}).modified, DateTime.fromMillisecondsSinceEpoch(1500));
+  });
+
+  testWidgets('项目首屏“文件”：最近改过的 3 个，全部 5 个 → 文件抽屉', (tester) async {
+    await _pump(tester, at: '/projects/p1');
+    await tester.drag(find.byType(ProjectHome), const Offset(0, -300));
+    await _settle(tester);
+    expect(find.text('文件'), findsOneWidget);
+    final ys = [for (final t in ['真题 2024.pdf', '大纲.md', '词表.csv']) tester.getTopLeft(find.text(t)).dy];
+    expect(ys, orderedEquals([...ys]..sort()));
+    expect(find.text('旧计划.txt'), findsNothing);
+    expect(find.text('notes · 2 KB'), findsOneWidget);
+    await tester.tap(find.text('全部 5 个'));
+    await _settle(tester);
+    expect(find.text('项目文件'), findsOneWidget);
+    expect(find.text('旧计划.txt'), findsOneWidget);
+  });
+
+  testWidgets('项目首屏“文件”：空文件夹给一行上传入口', (tester) async {
+    await _pump(tester, at: '/projects/p1', files: []);
+    await tester.drag(find.byType(ProjectHome), const Offset(0, -300));
+    await _settle(tester);
+    expect(find.text('放点资料进来'), findsOneWidget);
+    expect(find.text('管理'), findsNothing);
+    await tester.tap(find.text('放点资料进来'));
+    await _settle(tester);
+    expect(find.text('文件夹是空的'), findsOneWidget);
   });
 }

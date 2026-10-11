@@ -336,6 +336,15 @@ class _Api implements Api {
         {'id': 'p3', 'name': '国庆旅行', 'emoji': '🏔️', 'rules': '预算 3000 以内', 'conversation_count': 0, 'last_active_at': _ago(const Duration(days: 9))},
       ];
     }
+    if (path == '/api/projects/p1/files') {
+      final t = DateTime.now().millisecondsSinceEpoch / 1000;
+      return [
+        {'path': '真题/2024 数一.pdf', 'name': '2024 数一.pdf', 'size': 3 << 20, 'mime': 'application/pdf', 'modified': t - 600},
+        {'path': '单词表.csv', 'name': '单词表.csv', 'size': 48000, 'mime': 'text/csv', 'modified': t - 7200},
+        {'path': '错题本.md', 'name': '错题本.md', 'size': 9000, 'mime': 'text/markdown', 'modified': t - 86400},
+        {'path': '旧计划.txt', 'name': '旧计划.txt', 'size': 300, 'mime': 'text/plain', 'modified': t - 86400 * 20},
+      ];
+    }
     if (path == '/api/auth/me') return {'username': 'keliang'};
     if (path == '/api/pages') {
       final t = DateTime.now().millisecondsSinceEpoch / 1000;

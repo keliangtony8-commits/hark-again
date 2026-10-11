@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../lib/api";
-import type { Project } from "../../lib/types";
+import type { Project, ProjectFile } from "../../lib/types";
 import { IconBack, IconDoc, IconEdit, IconFile, IconMore, IconTrash } from "../../ui/icons";
 import { Menu, Sheet } from "../../ui/kit";
 import ChatScreen from "../chat/ChatScreen";
@@ -22,6 +22,9 @@ export default function ProjectScreen() {
   const [editing, setEditing] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
+  const [files, setFiles] = useState<ProjectFile[] | null>(null); // 首屏“文件”一节；关掉文件面板后重读
+  const loadFiles = useCallback(() => { http.get<ProjectFile[]>(`/api/projects/${pid}/files`).then(setFiles).catch(() => setFiles(null)); }, [pid]);
+  useEffect(loadFiles, [loadFiles]);
 
   useEffect(() => { http.get<Project>(`/api/projects/${pid}`).then(setProject).catch(() => nav("/projects")); }, [pid, nav]);
   if (!project) return null;
@@ -39,7 +42,8 @@ export default function ProjectScreen() {
         listTitle={`${project.emoji} ${project.name}`}
         headerTitle={project.name}
         empty={(c) => <ProjectHome project={project} conversations={c.conversations} suggestions={SUGGESTIONS}
-          onSend={c.send} onOpen={c.open} onShowAll={c.showAll} onBrief={() => setShowBrief(true)} />}
+          onSend={c.send} onOpen={c.open} onShowAll={c.showAll} onBrief={() => setShowBrief(true)}
+          files={files} onFiles={() => setShowFiles(true)} />}
         leading={<button className="icon-btn" onClick={() => nav("/projects")} aria-label="返回"><IconBack /></button>}
         trailing={<Menu label="项目菜单" trigger={<IconMore />} items={[
           { label: "项目文件", icon: <IconFile />, onSelect: () => setShowFiles(true) },
@@ -48,7 +52,7 @@ export default function ProjectScreen() {
           { label: "删除项目", icon: <IconTrash />, danger: true, onSelect: () => { void remove(); } },
         ]} />}
       />
-      {showFiles && <ProjectFiles projectId={pid} onClose={() => setShowFiles(false)} />}
+      {showFiles && <ProjectFiles projectId={pid} onClose={() => { setShowFiles(false); loadFiles(); }} />}
       {showBrief && <ProjectBrief project={project} onSaved={setProject} onClose={() => setShowBrief(false)} />}
       {editing && (
         <Sheet title="项目设置" onClose={() => setEditing(false)}>

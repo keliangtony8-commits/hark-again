@@ -454,9 +454,20 @@ class ConversationShare {
 }
 
 class ProjectFile {
-  const ProjectFile({required this.path, required this.name, required this.size, required this.mime});
-  factory ProjectFile.fromJson(Map<String, dynamic> j) =>
-      ProjectFile(path: j['path'] as String, name: j['name'] as String? ?? '', size: j['size'] as int? ?? 0, mime: j['mime'] as String? ?? '');
+  const ProjectFile({required this.path, required this.name, required this.size, required this.mime, this.modified});
+  factory ProjectFile.fromJson(Map<String, dynamic> j) => ProjectFile(
+    path: j['path'] as String,
+    name: j['name'] as String? ?? '',
+    size: j['size'] as int? ?? 0,
+    mime: j['mime'] as String? ?? '',
+    modified: switch (j['modified']) {
+      final num t => DateTime.fromMillisecondsSinceEpoch((t * 1000).round()),
+      _ => null,
+    },
+  );
   final String path, name, mime;
   final int size;
+
+  /// 最后修改时间（后端给 Unix 秒；老服务端没有 → null）。
+  final DateTime? modified;
 }

@@ -6,12 +6,28 @@ import '../../core/api.dart';
 import '../../core/links.dart';
 import '../../core/media.dart';
 import '../../core/resource.dart';
+import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+
+/// 文件图标（按 mime 大类）——项目首屏和文件抽屉共用。
+IconData projectFileIcon(String mime) => switch (mime.split('/').first) {
+  'image' => Icons.image_outlined,
+  'audio' => Icons.audiotrack_outlined,
+  'video' => Icons.movie_outlined,
+  'text' => Icons.description_outlined,
+  _ => mime.contains('pdf') ? Icons.picture_as_pdf_outlined : Icons.insert_drive_file_outlined,
+};
+
+/// 打开项目文件（带 token 的下载地址，交给系统）——唯一入口。
+Future<void> openProjectFile(WidgetRef ref, String projectId, ProjectFile f) {
+  final path = f.path.split('/').map(Uri.encodeComponent).join('/');
+  return openUrl(ref.read(apiProvider).fileUrl('/api/projects/$projectId/files/$path'));
+}
 
 Future<void> showProjectFiles(BuildContext context, String projectId) => showAppScrollSheet<void>(
   context,
@@ -53,7 +69,6 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
   Widget build(BuildContext context) {
     final provider = projectFilesProvider(widget.projectId);
     final files = ref.watch(provider);
-    final api = ref.read(apiProvider);
     return Column(
       children: [
         Padding(
@@ -107,11 +122,11 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
                         child: FadeSlideIn(
                           delay: Motion.stagger(i),
                           child: RowTile(
-                            icon: _iconFor(f.mime),
+                            icon: projectFileIcon(f.mime),
                             title: f.path,
                             subtitle: formatSize(f.size),
                             trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-                            onTap: () => openUrl(api.fileUrl('/api/projects/${widget.projectId}/files/${f.path}')),
+                            onTap: () => openProjectFile(ref, widget.projectId, f),
                           ),
                         ),
                       ),
@@ -126,12 +141,4 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
       ],
     );
   }
-
-  static IconData _iconFor(String mime) => switch (mime.split('/').first) {
-    'image' => Icons.image_outlined,
-    'audio' => Icons.audiotrack_outlined,
-    'video' => Icons.movie_outlined,
-    'text' => Icons.description_outlined,
-    _ => mime.contains('pdf') ? Icons.picture_as_pdf_outlined : Icons.insert_drive_file_outlined,
-  };
 }

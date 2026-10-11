@@ -2,6 +2,8 @@
 // 一个项目是长期的事，进来先看到“这是哪件事、上次聊到哪”：
 //   项目字标 + 衬线名字 → 规则（或档案第一行）一行，点开规则与档案
 //   → “最近的对话”最多 3 条（点开续聊；更多 → 打开项目对话抽屉）——双栏时历史已常驻左侧，不重复画
+//   → “文件”（v1.11）：最近改过的 3 个项目文件（我和沙箱共用的文件夹），点开就看；全部/管理 → 文件抽屉；
+//     空文件夹给一行“放点资料进来”——双栏也显示（文件不像历史那样常驻）
 //   → 起步建议（新开一段）。
 // 版式靠左、从让位线下往下排（不居中漂浮），和主页/项目列表同一套层级；入场 FadeSlideIn 错峰。
 // 规则（取哪几条、副标题）是纯函数 projectRecent / projectLine，测试直接测。
@@ -9,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/resource.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -18,6 +21,7 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../chat/chat_controller.dart';
+import 'project_files_sheet.dart';
 
 /// 首屏最多列几条最近对话。
 const projectRecentMax = 3;
@@ -32,6 +36,26 @@ List<ConversationSummary> projectRecent(List<ConversationSummary> list, {int max
       return t != 0 ? t : a.$1.compareTo(b.$1);
     });
   return [for (final e in indexed.take(max)) e.$2];
+}
+
+/// 首屏最多列几个文件。
+const projectFilesMax = 3;
+
+/// 最近的文件：按修改时间新→旧（没有时间的排后，顺序稳定），取前 [max] 个。
+List<ProjectFile> projectRecentFiles(List<ProjectFile> list, {int max = projectFilesMax}) {
+  final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+  final indexed = list.indexed.toList()
+    ..sort((a, b) {
+      final t = (b.$2.modified ?? epoch).compareTo(a.$2.modified ?? epoch);
+      return t != 0 ? t : a.$1.compareTo(b.$1);
+    });
+  return [for (final e in indexed.take(max)) e.$2];
+}
+
+/// 文件行副标题：在子文件夹里就带上文件夹，再接大小。
+String projectFileLine(ProjectFile f) {
+  final slash = f.path.lastIndexOf('/');
+  return [if (slash > 0) f.path.substring(0, slash), formatSize(f.size)].join(' · ');
 }
 
 /// 名字下面那一行：规则第一行，没有就档案第一行，都没有给一句引导。
@@ -57,6 +81,7 @@ class ProjectHome extends ConsumerWidget {
     final all = chat.conversations;
     final recent = twoPane ? const <ConversationSummary>[] : projectRecent(all);
     final pr = project;
+    final files = ref.watch(projectFilesProvider(projectId)).value; // 加载中/失败 → 不画这一节
     var i = 0; // 错峰序号
     Widget enter(Widget child) => FadeSlideIn(delay: Motion.stagger(i++), child: child);
 
@@ -121,6 +146,37 @@ class ProjectHome extends ConsumerWidget {
                     trailing: c.updatedAt == null ? null : RowHint(formatAgo(c.updatedAt)),
                     onTap: () => ref.read(chatProvider(projectId).notifier).open(c.id),
                   ),
+              ])),
+            ],
+            if (files != null) ...[
+              const SizedBox(height: Sp.x3),
+              enter(SectionTitle('文件',
+                  trailing: files.isEmpty
+                      ? null
+                      : TextButton(
+                          onPressed: () => showProjectFiles(context, projectId),
+                          child: Text(files.length > projectFilesMax ? '全部 ${files.length} 个' : '管理'),
+                        ))),
+              const SizedBox(height: Sp.x2),
+              enter(GlassGroup(children: [
+                if (files.isEmpty)
+                  RowTile(
+                    key: const ValueKey('files-empty'),
+                    icon: Icons.upload_file_rounded,
+                    title: '放点资料进来',
+                    subtitle: '上传后，在这个项目里聊天我都能直接读',
+                    onTap: () => showProjectFiles(context, projectId),
+                  )
+                else
+                  for (final f in projectRecentFiles(files))
+                    RowTile(
+                      key: ValueKey('file-${f.path}'),
+                      icon: projectFileIcon(f.mime),
+                      title: f.name,
+                      subtitle: projectFileLine(f),
+                      trailing: f.modified == null ? null : RowHint(formatAgo(f.modified)),
+                      onTap: () => openProjectFile(ref, projectId, f),
+                    ),
               ])),
             ],
             if (suggestions.isNotEmpty) ...[

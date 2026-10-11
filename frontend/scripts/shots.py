@@ -127,6 +127,10 @@ FIXTURES = {
              "total": "¥229.00", "payment": "招商银行 储蓄卡 8841", "destination": "学校南门菜鸟驿站",
              "action": "确认下单", "state": "pending"}]},
     ]},
+    "/api/projects/pr1/files": [
+        {"path": "真题/2024 数一.pdf", "name": "2024 数一.pdf", "size": 3145728, "mime": "application/pdf", "modified": 1792125600},
+        {"path": "错题本.md", "name": "错题本.md", "size": 9000, "mime": "text/markdown", "modified": 1792040000},
+    ],
     "/api/projects/pr1": {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW},
     "/api/conversations/c1/usage": {"currency": "CNY", "priced": ["fast"], "total": {"calls": 4, "tokens": 5200, "cost": 0.012, "models": []}},
     "/api/usage": {"currency": "CNY", "budget": 30, "priced": ["fast"],
