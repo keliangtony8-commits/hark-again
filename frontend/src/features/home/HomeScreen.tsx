@@ -10,13 +10,13 @@ import { formatDate } from "../../lib/format";
 import LaunchComposer, { useAskInNewChat } from "../../shell/LaunchComposer";
 import { ShellLead } from "../../shell/ShellLead";
 import { WidePill } from "../../ui/glass";
-import { IconChat, IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconTrash } from "../../ui/icons";
+import { IconChat, IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconSun, IconTrash } from "../../ui/icons";
 import { Menu, Page, Section, Skeleton, stagger } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
 import { OfferImage, OfferSource } from "./OfferMedia";
-import { agendaDetail, agendaHint, agendaProblem, agendaSummary, todayAgenda } from "./todayAgenda";
+import { agendaDetail, agendaHint, agendaProblem, agendaSummary, PREP_DAY_LABEL, PREP_DAY_PROMPT, todayAgenda } from "./todayAgenda";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
 
@@ -231,6 +231,8 @@ export default function HomeScreen() {
             })}
           </div>
         )}
+        {!tasks.loading && <div className="enter" style={nth(today.length + 1)}>
+          <WidePill label={PREP_DAY_LABEL} icon={<IconSun size={18} />} onClick={() => ask(PREP_DAY_PROMPT)} /></div>}
       </Section>
       </aside>
       </div>

@@ -150,7 +150,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ]),
               ),
             ],
-            TodaySection(tasks: tasks, loading: ref.watch(tasksProvider).isLoading),
+            TodaySection(tasks: tasks, loading: ref.watch(tasksProvider).isLoading, onPrep: () => _send(prepDayPrompt)),
           ]),
           ),
         ),
@@ -166,10 +166,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 /// “今天”：今天排着的任务按钟点一行一件（today_agenda.dart 定规则）。行首等宽钟点列，下一个用正文色加粗、
 /// 跑完的整行变淡（失败不淡）；失败/暂停只把那两个字染警示色；点行进任务详情。没有任务时一行引导去定时任务页。
+/// 段末一颗宽胶囊“帮我准备今天”（onPrep）：与“创建一个新面板”同一种入口，交给助手出当日简报卡。
 class TodaySection extends StatelessWidget {
-  const TodaySection({super.key, required this.tasks, required this.loading});
+  const TodaySection({super.key, required this.tasks, required this.loading, this.onPrep});
   final List<ScheduledTask> tasks;
   final bool loading;
+  final VoidCallback? onPrep;
 
   @override
   Widget build(BuildContext context) {
@@ -193,6 +195,13 @@ class TodaySection extends StatelessWidget {
                       FadeSlideIn(delay: Motion.stagger(i, from: 1), child: _AgendaRow(item: items[i])),
                   ]),
       ),
+      if (onPrep != null && !loading) ...[
+        const SizedBox(height: Layout.cardGap),
+        FadeSlideIn(
+          delay: Motion.stagger(items.length, from: 1),
+          child: WidePill(icon: Icons.wb_twilight_outlined, label: prepDayLabel, onTap: onPrep!),
+        ),
+      ],
     ]);
   }
 }

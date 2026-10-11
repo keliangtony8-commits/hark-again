@@ -75,10 +75,13 @@ void main() {
     expect(todayAgenda([task('q', '0 20 * * *', requested: true)], now).single.state, AgendaState.running);
   });
 
-  Future<List<String>> pumpToday(WidgetTester tester, List<ScheduledTask> tasks) async {
+  Future<List<String>> pumpToday(WidgetTester tester, List<ScheduledTask> tasks, {VoidCallback? onPrep, bool loading = false}) async {
     final pushed = <String>[];
     final router = GoRouter(initialLocation: '/home', routes: [
-      GoRoute(path: '/home', builder: (_, _) => Scaffold(body: SingleChildScrollView(child: TodaySection(tasks: tasks, loading: false)))),
+      GoRoute(
+          path: '/home',
+          builder: (_, _) =>
+              Scaffold(body: SingleChildScrollView(child: TodaySection(tasks: tasks, loading: loading, onPrep: onPrep)))),
       GoRoute(path: '/me/tasks', builder: (_, _) { pushed.add('/me/tasks'); return const Text('TASKS'); }, routes: [
         GoRoute(path: ':id', builder: (_, s) { pushed.add('/me/tasks/${s.pathParameters['id']}'); return const Text('DETAIL'); }),
       ]),
@@ -87,7 +90,7 @@ void main() {
       overrides: [apiProvider.overrideWith((_) => throw UnimplementedError())],
       child: MaterialApp.router(theme: buildTheme(Brightness.light), routerConfig: router),
     ));
-    await tester.pumpAndSettle();
+    loading ? await tester.pump(const Duration(seconds: 1)) : await tester.pumpAndSettle(); // 骨架微光一直在动
     return pushed;
   }
 
@@ -97,6 +100,20 @@ void main() {
     await tester.tap(find.text('每天的简报、提醒放进定时任务，会排在这里'));
     await tester.pumpAndSettle();
     expect(pushed, ['/me/tasks']);
+  });
+
+  testWidgets('段末“帮我准备今天”：点了交给助手；没给回调或加载中不出', (tester) async {
+    var asked = 0;
+    await pumpToday(tester, const [], onPrep: () => asked++);
+    expect(find.bySemanticsLabel(prepDayLabel), findsOneWidget);
+    await tester.tap(find.text(prepDayLabel));
+    await tester.pumpAndSettle();
+    expect(asked, 1);
+    expect(prepDayPrompt, contains('准备今天'));
+    await pumpToday(tester, const []);
+    expect(find.text(prepDayLabel), findsNothing);
+    await pumpToday(tester, const [], onPrep: () {}, loading: true);
+    expect(find.text(prepDayLabel), findsNothing);
   });
 
   test('只有跑完的变淡，失败的不淡（警示字要看得见）', () {

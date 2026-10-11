@@ -3,6 +3,10 @@
 import '../../core/cron.dart';
 import '../../models/resources.dart';
 
+/// Home“今天”段末的胶囊：开一段新对话让助手准备今天（后端 day_overview + 技能 prep-my-day 出简报卡）。
+const prepDayLabel = '帮我准备今天';
+const prepDayPrompt = '帮我准备今天';
+
 /// 已完成 / 失败 / 进行中（到点了或排队中）/ 下一个 / 稍后 / 已暂停（连续失败被自动停了，今天本该跑）。
 enum AgendaState { done, failed, running, next, later, paused }
 
