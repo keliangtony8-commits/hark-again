@@ -26,7 +26,8 @@ export default function TasksScreen() {
     <div className="list">
       {items.map((t) => {
         const failed = t.last_status === "error";
-        const paused = autoPaused(t); // 自动暂停 = 这一行的问题：只染问题那几个字（.row-problem），计划照常
+        // 失败 / 自动暂停 = 这一行的问题：问题那几个字放前面染警示色（.row-problem），计划原色（App RowTile.problem 同义，v1.06）
+        const problem = autoPaused(t) || (failed && !t.run_requested);
         const sub = [scheduleLabel(t), taskStateLabel(t) || null].filter(Boolean).join(" · ");
         return (
           <div key={t.id} className={`row enter ${taskIdle(t) ? "row-off" : ""}`} style={stagger(++n)}>
@@ -37,9 +38,9 @@ export default function TasksScreen() {
               </span>
               <span className="row-body">
                 <span className="row-title">{t.name}</span>
-                {paused
+                {problem
                   ? <span className="row-sub"><span className="row-problem">{taskStateLabel(t)}</span> · {scheduleLabel(t)}</span>
-                  : <span className={`row-sub ${failed && !t.run_requested ? "is-danger" : ""}`}>{sub}</span>}
+                  : <span className="row-sub">{sub}</span>}
               </span>
               <IconChevron />
             </button>

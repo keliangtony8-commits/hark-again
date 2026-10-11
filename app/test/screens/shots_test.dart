@@ -331,7 +331,23 @@ class _Api implements Api {
     if (path.startsWith('/api/usage')) return _usage();
     if (path == '/api/memories') {
       return [
-        {'id': 'mem12345', 'content': '图书馆习惯坐四楼靠窗', 'category': 'preference', 'updated_at': _ago(Duration.zero)}
+        {'id': 'mem12345', 'content': '图书馆习惯坐四楼靠窗', 'category': 'travel', 'updated_at': _ago(Duration.zero)},
+        // v1.06 记忆页：几个分类各一两条（少于 7 条 → 没有搜索框）
+        {'id': 'mem2', 'content': '叫我柯良就行，回答用中文、先给结论', 'category': 'profile', 'updated_at': _ago(const Duration(days: 2))},
+        {'id': 'mem3', 'content': '在读研究生，方向是计算机视觉', 'category': 'profile', 'updated_at': _ago(const Duration(days: 9))},
+        {'id': 'mem4', 'content': '不吃香菜，少辣', 'category': 'food', 'updated_at': _ago(const Duration(days: 4))},
+        {'id': 'mem5', 'content': '周三下午有组会，别排别的事', 'category': 'work', 'updated_at': _ago(const Duration(days: 1))},
+      ];
+    }
+    if (path == '/api/memory-digest') {
+      return {'text': '你是一名预算有限的研究生，在自己搭个人 AI 助手；喜欢先看结论，常问价格对比，图书馆爱坐四楼靠窗。',
+              'generated_at': _ago(const Duration(hours: 3)), 'count': 5, 'memories': 5, 'stale': false};
+    }
+    if (path == '/api/vault') {
+      return [
+        {'id': 'v1', 'kind': 'login', 'name': '图书馆座位预约', 'username': '2023110086', 'hosts': ['seat.lib.example.edu'], 'preview': ''},
+        {'id': 'v2', 'kind': 'api_key', 'name': 'StepFun', 'hosts': ['api.stepfun.ai'], 'preview': 'x9Qe'},
+        {'id': 'v3', 'kind': 'api_key', 'name': '和风天气', 'hosts': ['devapi.qweather.com'], 'preview': '7c21'},
       ];
     }
     if (path == '/api/conversations/c2') return _shopChat;
@@ -509,6 +525,12 @@ void main() {
       router.pop();
       router.push('/me/tasks'); // 定时任务：自动暂停的进“需要留意”（v1.00）
       await _shot(tester, '$mode-tasks');
+      router.pop();
+      router.push('/me/memory'); // 记忆：摘要卡 + 分类 + 分组（v1.06）
+      await _shot(tester, '$mode-memory');
+      router.pop();
+      router.push('/me/vault'); // 保险箱：网站登录 / API Key 两组（v1.06）
+      await _shot(tester, '$mode-vault');
       router.pop();
       router.push('/me/usage'); // 子页面（SubPage 玻璃标题栏）
       await _shot(tester, '$mode-usage');

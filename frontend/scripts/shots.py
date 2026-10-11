@@ -80,6 +80,7 @@ FIXTURES = {
         {"id": "c2", "title": "周末去杭州的安排", "pinned": False, "updated_at": "2026-10-10T18:00:00+08:00"},
         {"id": "c3", "title": "论文摘要润色", "pinned": False, "updated_at": "2026-10-08T09:00:00+08:00"},
         {"id": "c4", "title": "寄快递", "pinned": False, "updated_at": "Thu 2026-10-08 8:00 AM CST (UTC+08:00)"},
+        {"id": "c5", "title": "帮我准备今天", "pinned": False, "updated_at": "Wed 2026-10-07 8:00 AM CST (UTC+08:00)"},
     ],
     # v0.87：助手缺信息时的信息表单（候选、选填、多行）
     "/api/conversations/c4": {"model": None, "messages": [
@@ -93,6 +94,15 @@ FIXTURES = {
                         {"name": "q4", "label": "快递", "kind": "text", "options": ["顺丰", "京东", "中通"]},
                         {"name": "q5", "label": "备注", "kind": "text", "optional": True}],
              "remember": True, "action": "告诉助手", "state": "pending"}]},
+    ]},
+    # v1.03：“帮我准备今天”→ 当日简报卡（show_summary）+ 一句话；和 App shots_test c5 同一份
+    "/api/conversations/c5": {"model": None, "messages": [
+        {"id": "d1", "role": "user", "blocks": [TEXT("帮我准备今天")], "created_at": NOW},
+        {"id": "d2", "role": "assistant", "created_at": NOW, "blocks": [
+            {"type": "summary", "title": "今天 · 10月11日 周日", "subtitle": "3 件排定的事 · 1 张卡等你 · 2 条未读",
+             "markdown": "## 时间线\n- **08:00** 早间简报 — 已完成\n- **09:00** 背单词提醒 — 失败了，等你看一眼\n- **11:30** 图书馆抢座 — 待运行\n\n"
+                         "## 要留意\n- 周三前寄回那箱书（快递信息还差地址）\n- 图书馆四楼靠窗位今天 14:00 开放预约\n\n## 天气\n晴，18–25°C，下午有风。"},
+            TEXT("上午最要紧的是把背单词那条修好，我已经在主页放了张卡，点一下我就去查。")]},
     ]},
     "/api/conversations/c1": {"model": None, "messages": [
         {"id": "m1", "role": "user", "blocks": [TEXT("帮我比较一下 DeepSeek 和 GPT 的 API 价格")], "created_at": "2026-10-10T21:00:00+08:00"},
@@ -225,6 +235,10 @@ def main():
                         page.evaluate("document.querySelector('.page').scrollTo(0, 1e6)")
                         page.wait_for_timeout(400)
                         page.screenshot(path=str(OUT / f"{name}-{theme}-home-end.png"))
+                        # v1.06：“今天”段（现在线 + 帮我准备今天 + 每天早上自动准备）
+                        page.evaluate("document.querySelector('.today-now')?.scrollIntoView({block: 'center'})")
+                        page.wait_for_timeout(400)
+                        page.screenshot(path=str(OUT / f"{name}-{theme}-home-today.png"))
                 page.goto(base + "/#/chat")
                 page.wait_for_timeout(500)
                 if name == "desktop":
@@ -242,6 +256,12 @@ def main():
                 page.get_by_text("寄快递").first.click()
                 page.wait_for_timeout(800)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-chat-ask.png"))
+                if name == "phone":
+                    page.get_by_role("button", name="历史", exact=True).click()
+                    page.wait_for_timeout(400)
+                page.get_by_text("帮我准备今天").first.click()  # v1.06：简报卡（衬线标题、标题分层）
+                page.wait_for_timeout(800)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-chat-day.png"))
                 subs = [("memory", "/#/me/memory"), ("tasks", "/#/me/tasks"), ("task", "/#/me/tasks/t2"), ("skills", "/#/me/skills"),
                         ("connectors", "/#/me/connectors"), ("vault", "/#/me/vault"), ("pages", "/#/me/pages")]
                 for shot, url in subs:

@@ -130,6 +130,19 @@ ThemeData buildTheme(Brightness brightness) {
         animationDuration: Motion.base,
       ),
     ),
+    // 选择胶囊（记忆分类、表单候选、重复规则）：和分段按钮同一语言——选中墨色、未选 tile，无描边、胶囊形（v1.06；
+    // 之前是 Material 默认的描边圆角方块 + 浅色强调底，和全站胶囊不一致）。
+    chipTheme: ChipThemeData(
+      color: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.ink : p.tile),
+      // 未选 / 选中分两条普通 TextStyle（chipTheme 里的 WidgetStateTextStyle 不会被解析，字色会丢）
+      labelStyle: t(Fs.sm, Weights.title, p.text2).copyWith(height: 1.2),
+      secondaryLabelStyle: t(Fs.sm, Weights.title, p.onInk).copyWith(height: 1.2),
+      side: const BorderSide(color: Colors.transparent),
+      shape: const StadiumBorder(),
+      showCheckmark: false,
+      checkmarkColor: p.onInk,
+      padding: const EdgeInsets.symmetric(horizontal: Sp.x1),
+    ),
     // 自己的对话框全走 ui/sheets.dart 的 showAppDialog（玻璃框）；这里只兜底系统偶尔弹的 Material 对话框。
     // 弹出菜单（PopupMenuButton/showMenu）不用：选项一律走 showActionSheet，架构守卫禁止它们出现。
     dialogTheme: DialogThemeData(

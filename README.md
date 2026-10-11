@@ -142,7 +142,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - 新卡片：blocks.py 加类 → blocks/ 加组件 → registry 登记
 - 新简单资源：models.py 加表 → resources.py 加一行
 - 新页面：features/ 下加组件 → App.tsx 加一行路由
-- 新一级栏目：shell/AppShell.tsx 的 TABS 加一项
+- 新一级栏目：shell/AppShell.tsx 的 TABS 加一项（一级页面的 .page 由 shell.css 在浮动顶栏下缓入淡出，页面自己别再写顶部遮罩；v1.06）
 - 无障碍：没有可见文字的按钮/链接必须 aria-label（Toggle 的 label 是必填参数）；焦点环、减少动态、跳到主要内容都在 styles/base.css 末尾统一处理，组件里不要 outline:none
 
 ## 消息协议（WebSocket /ws）

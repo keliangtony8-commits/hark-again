@@ -101,6 +101,8 @@
 .blk-summary-title { margin: 0; font-family: var(--font-serif); font-size: calc(var(--fs-xl) - 4px); font-weight: var(--fw-title);
   line-height: 1.2; letter-spacing: var(--display-tracking); }
 .blk-summary-body { margin-top: var(--sp-2); padding-right: var(--sp-3); }
+/* 正文以小标题开头时，和副标题之间多留一拍（App：标题→正文 Sp.x1 + 首个小标题上距 Sp.x3） */
+.blk-summary-body .blk-text > :is(h1, h2, h3):first-child { margin-top: var(--sp-3); }
 .blk-summary-body.folded { max-height: 280px; overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent); mask-image: linear-gradient(to bottom, #000 70%, transparent); }
 .blk-summary-toggle { display: inline-flex; align-items: center; gap: var(--sp-1); min-height: 40px; padding: 0 var(--sp-2) 0 0;
