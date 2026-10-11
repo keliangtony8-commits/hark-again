@@ -97,8 +97,8 @@ export default function HomeScreen() {
       <ShellLead>
         <button className="glass-btn glass" onClick={() => setNewPanel(true)} aria-label="新面板" title="新面板"><IconPlus /></button>
       </ShellLead>
-      <div className="home-hero">
-        <div className="home-date">{date}</div>
+      <div className="page-hero">
+        <span className="page-hero-label">{date}</span>
         <h1>{greet}</h1>
       </div>
 

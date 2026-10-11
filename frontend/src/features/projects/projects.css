@@ -1,11 +1,17 @@
-/* 项目网格：矮玻璃卡（App 同款 mainAxisExtent 112），宽了自动多列 */
+/* 项目网格：矮玻璃卡（App 同款 _ProjectTile.height 112），宽了自动多列；骨架与卡片同高同圆角，换成内容不跳版 */
 .project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--card-gap); }
-.project-card { display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-1); min-height: 112px; padding: calc(var(--sp-4) + 4px);
-  background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card); color: var(--text);
-  animation: rise var(--dur) var(--ease) both; transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.project-skel { height: 112px; margin: 0 !important; border-radius: var(--r-card); }
+.project-card { position: relative; min-height: 112px;
+  background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card);
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
 .project-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
+.project-card:active { transform: scale(.98); transition-duration: var(--dur-fast); }
+.project-card-link { display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-1); height: 100%; min-height: 112px;
+  padding: calc(var(--sp-4) + 4px); padding-right: calc(var(--sp-4) + 36px); color: var(--text); border-radius: inherit; }
+.project-card > .menu { position: absolute; top: var(--sp-3); right: var(--sp-3); }
+.project-card:has(.menu.open) { z-index: 3; } /* 入场动画让每张卡自成层叠上下文：菜单打开时抬高本卡，弹出层才盖得住下一张 */
 .project-card-head { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
-.project-card-head .row-icon { width: 24px; height: 24px; }
+.project-emoji { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-tile); background: var(--tile); font-size: 20px; }
 .project-name { font-weight: var(--fw-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-rules { font-size: var(--fs-sm); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-meta { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }

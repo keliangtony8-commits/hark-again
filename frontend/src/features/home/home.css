@@ -1,7 +1,4 @@
 /* 主页（设计 v2）：衬线问候 + 一列玻璃卡。节奏只用令牌：左右 --gutter，卡片间 --card-gap */
-.home-hero { padding: var(--sp-5) var(--sp-1) var(--sp-5); animation: rise var(--dur) var(--ease) both; }
-.home-date { font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
-.home-hero h1 { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-2) 0 0; }
 
 .action-card-head { display: flex; align-items: flex-start; gap: var(--sp-3); }
 .action-card-title { flex: 1; font-weight: var(--fw-title); line-height: 1.45; }

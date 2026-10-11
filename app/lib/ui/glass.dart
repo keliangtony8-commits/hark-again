@@ -140,15 +140,18 @@ class GlassSurface extends StatelessWidget {
 
 /// 列表里的大玻璃卡片（不模糊、不投影：靠发丝边和壁纸分层）。onTap 不为空时带按压回弹。
 class GlassCard extends StatelessWidget {
-  const GlassCard({super.key, required this.child, this.onTap, this.padding = const EdgeInsets.all(Layout.cardPad)});
+  const GlassCard({super.key, required this.child, this.onTap, this.onLongPress, this.semanticLabel, this.padding = const EdgeInsets.all(Layout.cardPad)});
   final Widget child;
-  final VoidCallback? onTap;
+  final VoidCallback? onTap, onLongPress;
+  final String? semanticLabel;
   final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final card = GlassSurface(shadow: false, padding: padding, child: child);
-    return onTap == null ? card : Pressable(onTap: onTap, child: card);
+    return onTap == null && onLongPress == null
+        ? card
+        : Pressable(onTap: onTap, onLongPress: onLongPress, semanticLabel: semanticLabel, child: card);
   }
 }
 

@@ -13,7 +13,10 @@
 .page-head h1 { flex: 1; margin: 0; font-size: var(--fs-md); font-weight: var(--fw-strong); }
 .page-head h1 { padding-left: var(--sp-1); }
 /* 一级页面的大标题（顶栏下方，衬线点缀） */
-.page-title { font-family: var(--font-serif); font-size: var(--fs-xl); font-weight: var(--fw-title); letter-spacing: var(--display-tracking); margin: 0 var(--sp-1) var(--sp-4); }
+/* 一级页面页头（主页、项目）：小标签一行 + 衬线大标题，= App 的 _Hero / _Header（Layout.headTop 节奏） */
+.page-hero { padding: var(--sp-5) var(--sp-1) var(--sp-5); animation: rise var(--dur) var(--ease) both; }
+.page-hero-label { display: block; min-height: 1.5em; font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+.page-hero h1 { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-2) 0 0; }
 .page-head .spacer { width: 40px; }
 
 .section { margin-top: var(--section-gap); }
