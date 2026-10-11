@@ -25,12 +25,24 @@ Caddy (HTTPS, 静态前端, 反代)
 - `VOICE_PROVIDER=stepfun`（默认）：语音输入用 stepaudio-2.5-asr（App 的 m4a、网页的 webm 由后端 ffmpeg 转 wav），朗读用 stepaudio-2.5-tts（`POST /api/voice/speak`，音色 `STEP_TTS_VOICE`）。`gateway`：识别走网关 `stt` 别名，朗读用设备自带语音。逻辑全在 `backend/app/voice.py`。
 - 记忆向量检索：填 `SILICONFLOW_API_KEY`（硅基流动 bge-m3，免费额度）；不填记忆退回“最近 N 条”。
 
-## 启动
-1. `cp .env.example .env`，填 STEP_API_KEY、OWNER_PASSWORD、JWT_SECRET、DOMAIN
+## 启动（一键部署，推荐）
+VPS 装好 Debian 12（或 Ubuntu 22.04+），≥2 核 4GB。把代码放上去（`git clone` 私有仓库，或上传 zip 解压到 `/opt/assistant`），然后：
+```bash
+cd /opt/assistant && sudo bash deploy/install.sh
+```
+脚本会问域名（没有直接回车，用 http://IP）、阶跃 key、登录账号，其余全自动：
+- 内存 <6GB = 小内存档：建 2GB swap（swappiness 10）、**直连模式**（不跑 LiteLLM 容器，省约 500MB）、云浏览器同时只开 1 个会话（超出时关掉最久没用的，登录状态保存）、项目沙盒 512MB/空闲 10 分钟停。没有 Redis。
+- 装 Docker、生成 `.env`（随机 JWT/数据库密码/沙盒与浏览器 token/VAULT_KEY，已有值绝不覆盖，可重复运行）、建数据目录、构建沙盒镜像、启动、等后端健康后打印地址和密码。
+- 档位开关全是 `.env` 变量（`COMPOSE_PROFILES`、`BROWSER_MAX_SESSIONS`、`BROWSER_MEM`、`SANDBOX_MEM`、`PG_SHARED_BUFFERS`…），`docker-compose.yml` 只有一份。
+- 更新：`sudo bash deploy/update.sh`；备份数据库和 .env：`sudo bash deploy/backup.sh`（可放 crontab）。
+- 无人值守：`ASSUME_YES=1 DOMAIN=a.com STEP_API_KEY=... sudo -E bash deploy/install.sh`。脚本离线测试：`bash deploy/tests/test_install.sh`；浏览器会话上限：`python browser/test_sessions.py`。
+
+## 手动部署
+1. `cp .env.example .env`，填 STEP_API_KEY、OWNER_PASSWORD、JWT_SECRET、DOMAIN（`COMPOSE_PROFILES=gateway` 才启动 LiteLLM）
 2. `docker compose up -d --build`
 3. 浏览器打开 https://你的域名 （没有域名先用 DOMAIN=:80，访问 http://IP）
 
-## 第一次部署前（沙盒）
+### 第一次部署前（沙盒）
 ```bash
 mkdir -p /opt/assistant/data && sudo chown -R 1000:1000 /opt/assistant/data   # 与 .env 的 HOST_DATA_DIR 一致
 docker compose --profile build-only build sandbox-image                      # 构建项目沙盒镜像

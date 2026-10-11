@@ -5,14 +5,18 @@ services:
       POSTGRES_USER: assistant
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: assistant
+    # 小内存调参：默认值按 4GB VPS 设，大机器可在 .env 调大
+    command: ["postgres", "-c", "shared_buffers=${PG_SHARED_BUFFERS:-128MB}", "-c", "max_connections=${PG_MAX_CONNECTIONS:-40}", "-c", "work_mem=4MB", "-c", "effective_cache_size=${PG_CACHE_SIZE:-512MB}"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U assistant"]
       interval: 5s
     restart: unless-stopped
 
+  # 模型网关（约 500MB 内存）：只在 COMPOSE_PROFILES 含 gateway 时启动；小 VPS 用直连模式不跑它
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
+    profiles: [gateway]
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
       STEP_API_KEY: ${STEP_API_KEY:-}
@@ -39,6 +43,8 @@ services:
     environment:
       SANDBOX_TOKEN: ${SANDBOX_TOKEN}
       HOST_PROJECTS_DIR: ${HOST_DATA_DIR}/projects
+      SANDBOX_MEM: ${SANDBOX_MEM:-1g}
+      SANDBOX_IDLE_MINUTES: ${SANDBOX_IDLE_MINUTES:-30}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOST_DATA_DIR}/projects:/projects
@@ -49,10 +55,11 @@ services:
     build: ./browser
     environment:
       BROWSER_TOKEN: ${BROWSER_TOKEN}
+      BROWSER_MAX_SESSIONS: ${BROWSER_MAX_SESSIONS:-3}
     volumes:
       - ${HOST_DATA_DIR}/browser:/state
-    shm_size: 1gb
-    mem_limit: 1500m
+    shm_size: ${BROWSER_SHM:-1gb}
+    mem_limit: ${BROWSER_MEM:-1500m}
     restart: unless-stopped
 
   backend:
@@ -73,7 +80,6 @@ services:
       browser: {condition: service_started}
       searxng: {condition: service_started}
       postgres: {condition: service_healthy}
-      litellm: {condition: service_started}
     restart: unless-stopped
 
   # 定时任务执行器：与 backend 同一镜像，不跑迁移、不对外

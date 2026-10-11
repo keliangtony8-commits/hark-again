@@ -24,6 +24,8 @@ STATE = "/state"
 IDLE = 15 * 60
 VIEW = {"width": 1280, "height": 800}
 MAX_TEXT = 6000
+# 同时开着的会话上限（小 VPS 设 1）：超出时把最久没用的会话存好登录状态后关掉
+MAX_SESSIONS = max(1, int(os.environ.get("BROWSER_MAX_SESSIONS", "3")))
 
 app = FastAPI()
 _pw = None
@@ -74,6 +76,8 @@ async def _session(name: str) -> Page:
             _pw = await async_playwright().start()
             _browser = await _pw.chromium.launch(args=["--disable-dev-shm-usage"])
         if name not in _sessions:
+            while len(_sessions) >= MAX_SESSIONS:
+                await _evict(min(_sessions, key=lambda n: _used.get(n, 0)))
             path = f"{STATE}/{name}.json"
             ctx = await _browser.new_context(viewport=VIEW, locale="zh-CN", timezone_id="Asia/Shanghai",
                                              storage_state=path if os.path.exists(path) else None)
@@ -82,6 +86,17 @@ async def _session(name: str) -> Page:
             _sessions[name] = (ctx, page)
     _used[name] = time.time()
     return _sessions[name][1]
+
+
+async def _evict(name: str) -> None:
+    """存好登录状态再关：下次用到同名会话会自动恢复登录。"""
+    try:
+        await _save(name)
+    except Exception:
+        pass
+    ctx, _ = _sessions.pop(name)
+    _used.pop(name, None)
+    await ctx.close()
 
 
 async def _save(name: str) -> None:
@@ -248,6 +263,7 @@ async def keyboard(name: str, body: KeysIn):
 
 @app.delete("/sessions/{name}", dependencies=[Depends(auth)])
 async def close(name: str):
+    _used.pop(name, None)
     if s := _sessions.pop(name, None):
         await s[0].close()
     return {"ok": True}
@@ -258,10 +274,9 @@ async def _reaper():
         await asyncio.sleep(60)
         for name, t in list(_used.items()):
             if time.time() - t > IDLE and name in _sessions:
-                await _save(name)
-                ctx, _ = _sessions.pop(name)
-                await ctx.close()
-                _used.pop(name, None)
+                async with _lock:
+                    if name in _sessions:
+                        await _evict(name)
 
 
 @app.on_event("startup")
