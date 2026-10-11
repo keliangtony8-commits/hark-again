@@ -186,6 +186,18 @@ class ProductsBlock extends Block {
   const ProductsBlock({this.title, this.pick, required this.items});
   final String? title, pick;
   final List<ProductItem> items;
+
+  /// 有任何一件带图才排宫格；一张图都没有就排成清单（v0.86：整屏空白方块没信息量）。
+  bool get hasPictures => items.any((i) => i.image != null);
+}
+
+/// 没图时占位用的“字标”：名字的第一个字（跳过空白和标点），大写。网页 lib/monogram.ts 同规则。
+String monogramOf(String name) {
+  for (final r in name.runes) {
+    final c = String.fromCharCode(r);
+    if (RegExp(r'[\p{L}\p{N}]', unicode: true).hasMatch(c)) return c.toUpperCase();
+  }
+  return '·';
 }
 
 class OrderLine {

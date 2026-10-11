@@ -51,6 +51,7 @@ export const IconChevronDown = (p: P) => <S {...p} d="M6 9l6 6 6-6" />;
 export const IconShare = (p: P) => <S {...p} d="M12 15V4M8 8l4-4 4 4M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6" />;
 export const IconImageOff = (p: P) => <S {...p} d="M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15 9.5h.01" />;
 export const IconBag = (p: P) => <S {...p} d="M5 8h14l-1 12H6zM9 8V6.5a3 3 0 0 1 6 0V8" />;
+export const IconArrowUpRight = (p: P) => <S {...p} d="M7 17 17 7M9 7h8v8" />;
 export const IconReceipt = (p: P) => <S {...p} d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21zM9 8h6M9 12h6M9 16h3" />;
 export const IconPlace = (p: P) => <S {...p} d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" />;
 export const IconLock = (p: P) => <S {...p} d="M6.5 10.5h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19v-7a1.5 1.5 0 0 1 1.5-1.5zM8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" />;

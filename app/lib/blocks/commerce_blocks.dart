@@ -1,6 +1,7 @@
 // 购物类的块：商品宫格（挑东西）、订单卡（付款前确认 / 下单后回执）。
 // 和后端 agent/builtin/display.py 的 show_products、orders.py 的 confirm_order / show_receipt 一一对应。
 //   宫格：一张卡里按宽度排 2–4 列，一格 = 方图 + 名字（两行）+ 价格 + 一行补充；点格子打开商品页；底部一句推荐。
+//         缺图的格子用字标（名字首字，衬线）占位；一件都没有图时不排宫格，改排清单（字标 + 名字/补充 + 右侧价格）。
 //   订单：一张“小票”：商家 + 状态，每行商品（小图、规格、数量、价格），费用明细，合计用衬线大字；
 //         等确认时边框换成提醒色、底部两颗胶囊“不买了 / 确认下单”（走审批 approval.reply）；回执显示订单号可复制。
 import 'dart:math' as math;
@@ -42,21 +43,27 @@ class ProductsBlockView extends StatelessWidget {
             Text(b.title!, style: context.text.titleMedium),
             const SizedBox(height: Sp.x3),
           ],
-          LayoutBuilder(builder: (context, c) {
-            final cols = columns(c.maxWidth, b.items.length);
-            final w = (c.maxWidth - Sp.x3 * (cols - 1)) / cols;
-            return Wrap(
-              spacing: Sp.x3,
-              runSpacing: Sp.x4,
-              children: [
-                for (var i = 0; i < b.items.length; i++)
-                  FadeSlideIn(
-                    delay: Motion.stagger(i),
-                    child: SizedBox(width: w, child: _ProductTile(b.items[i], wide: cols == 1)),
-                  ),
-              ],
-            );
-          }),
+          if (b.hasPictures)
+            LayoutBuilder(builder: (context, c) {
+              final cols = columns(c.maxWidth, b.items.length);
+              final w = (c.maxWidth - Sp.x3 * (cols - 1)) / cols;
+              return Wrap(
+                spacing: Sp.x3,
+                runSpacing: Sp.x4,
+                children: [
+                  for (var i = 0; i < b.items.length; i++)
+                    FadeSlideIn(
+                      delay: Motion.stagger(i),
+                      child: SizedBox(width: w, child: _ProductTile(b.items[i], wide: cols == 1)),
+                    ),
+                ],
+              );
+            })
+          else
+            for (var i = 0; i < b.items.length; i++) ...[
+              if (i > 0) Divider(height: Sp.x3 * 2, thickness: 1, color: context.hairline, indent: Layout.orderThumb + Sp.x3),
+              FadeSlideIn(delay: Motion.stagger(i), child: _ProductRow(b.items[i])),
+            ],
           if (b.pick != null && b.pick!.isNotEmpty) ...[
             const SizedBox(height: Sp.x4),
             Row(
@@ -84,17 +91,13 @@ class _ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     final picture = ClipRRect(
       borderRadius: BorderRadius.circular(Radii.md),
       child: AspectRatio(
         aspectRatio: wide ? 4 / 3 : 1,
         child: item.image != null
             ? NetImage(item.image!)
-            : ColoredBox(
-                color: context.tileFill,
-                child: Center(child: Icon(Icons.shopping_bag_outlined, color: p.text3, size: Layout.rowIcon)),
-              ),
+            : _Monogram(item.name, size: context.text.displaySmall),
       ),
     );
     final body = Column(
@@ -110,12 +113,78 @@ class _ProductTile extends StatelessWidget {
           Text(item.meta!, style: context.text.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
       ],
     );
+    return _Openable(item, child: body);
+  }
+}
+
+/// 清单里的一行：字标 + 名字（两行）/补充 + 右侧价格；有商品页时末尾一个小箭头。
+class _ProductRow extends StatelessWidget {
+  const _ProductRow(this.item);
+  final ProductItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(Radii.sm),
+          child: SizedBox.square(dimension: Layout.orderThumb, child: _Monogram(item.name, size: context.text.titleMedium)),
+        ),
+        const SizedBox(width: Sp.x3),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(item.name, style: context.text.bodyMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
+            if (item.meta != null && item.meta!.isNotEmpty)
+              Text(item.meta!, style: context.text.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+        if (item.price != null && item.price!.isNotEmpty) ...[
+          const SizedBox(width: Sp.x3),
+          Text(item.price!, style: context.text.titleMedium?.copyWith(fontWeight: Weights.strong)),
+        ],
+        if (item.url != null) ...[
+          const SizedBox(width: Sp.x2),
+          Icon(Icons.north_east_rounded, size: QuietAction.iconSize, color: p.text3),
+        ],
+      ],
+    );
+    return _Openable(item, child: row);
+  }
+}
+
+/// 没图时的占位：tileFill 底 + 名字首字（衬线、text3）。宫格大格和清单小格共用，字号由调用方给。
+class _Monogram extends StatelessWidget {
+  const _Monogram(this.name, {this.size});
+  final String name;
+  final TextStyle? size;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+        child: ColoredBox(
+          color: context.tileFill,
+          child: Center(
+            child: Text(monogramOf(name), style: (size ?? context.text.titleMedium)?.serif.copyWith(color: context.palette.text3)),
+          ),
+        ),
+      );
+}
+
+/// 有商品页就可点（按压回弹 + 读屏念全）；没有就只是一个读屏容器。宫格格子与清单行共用。
+class _Openable extends StatelessWidget {
+  const _Openable(this.item, {required this.child});
+  final ProductItem item;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
     final url = item.url;
-    if (url == null) return Semantics(container: true, child: body);
+    if (url == null) return Semantics(container: true, child: child);
     return Pressable(
       onTap: () => openUrl(url),
       semanticLabel: [item.name, item.price, item.meta, '打开商品页'].whereType<String>().where((s) => s.isNotEmpty).join('，'),
-      child: body,
+      child: child,
     );
   }
 }

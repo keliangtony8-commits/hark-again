@@ -71,7 +71,39 @@ void main() {
     expect(ProductsBlockView.columns(2000, 3), 3);
   });
 
-  testWidgets('宫格：名字、价格、补充、推荐', (tester) async {
+  test('字标 + 是否排宫格', () {
+    expect(monogramOf('QCY HT08'), 'Q');
+    expect(monogramOf('  「漫步者」Lolli'), '漫');
+    expect(monogramOf('iPhone'), 'I');
+    expect(monogramOf('…'), '·');
+    final grid = blocksFrom([
+      {'type': 'products', 'items': [{'name': 'A', 'image': 'https://img.example/a.jpg'}, {'name': 'B'}]}
+    ]).first as ProductsBlock;
+    expect(grid.hasPictures, isTrue);
+    final list = blocksFrom([
+      {'type': 'products', 'items': [{'name': 'A', 'image': 'ftp://x'}]}
+    ]).first as ProductsBlock;
+    expect(list.hasPictures, isFalse);
+  });
+
+  testWidgets('宫格：缺图的格子用字标占位', (tester) async {
+    await pump(
+        tester,
+        blocksFrom([
+          {
+            'type': 'products',
+            'items': [
+              {'name': 'A 耳机', 'image': 'https://img.example/a.jpg'},
+              {'name': 'B 耳机'},
+            ]
+          }
+        ]).first);
+    expect(find.byType(AspectRatio), findsNWidgets(2));
+    expect(find.text('B'), findsOneWidget);
+    expect(find.byIcon(Icons.north_east_rounded), findsNothing);
+  });
+
+  testWidgets('清单（一张图都没有）：名字、价格、补充、推荐', (tester) async {
     await pump(
         tester,
         blocksFrom([
@@ -89,7 +121,9 @@ void main() {
     expect(find.text('¥899'), findsOneWidget);
     expect(find.text('4.8 分'), findsOneWidget);
     expect(find.text('选 A：降噪最好'), findsOneWidget);
-    expect(find.byIcon(Icons.shopping_bag_outlined), findsNWidgets(2)); // 没图 → 占位
+    expect(find.byType(AspectRatio), findsNothing); // 没图 → 不排空白方块
+    expect(find.text('A'), findsOneWidget); // 字标
+    expect(find.byIcon(Icons.north_east_rounded), findsOneWidget); // 只有 A 有商品页
     expect(find.bySemanticsLabel(RegExp('A 耳机，¥899，4.8 分，打开商品页')), findsOneWidget);
   });
 

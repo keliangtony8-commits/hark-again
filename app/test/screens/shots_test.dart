@@ -141,6 +141,18 @@ class _Api implements Api {
           'unread': true,
         },
         {
+          'id': 'k3',
+          'kind': 'action',
+          'origin': 'agent',
+          'action_label': '帮我订座',
+          'action_prompt': '帮我约明早 8 点图书馆四楼靠窗的座位',
+          'title': '明早图书馆四楼靠窗还有空位',
+          'blocks': [
+            {'type': 'text', 'text': '8:00 开放预约，靠窗那排还剩 6 个。'}
+          ],
+          'unread': true,
+        },
+        {
           'id': 'k2',
           'kind': 'panel',
           'title': '今天的天气',

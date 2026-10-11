@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { OrderBlock as O, ProductsBlock as P } from "../lib/types";
 import CopyButton from "../ui/CopyButton";
-import { IconBag, IconCard, IconImageOff, IconPlace, IconReceipt, IconSpark } from "../ui/icons";
+import { monogramOf } from "../lib/monogram";
+import { IconArrowUpRight, IconCard, IconImageOff, IconPlace, IconReceipt, IconSpark } from "../ui/icons";
 import { useBlockActions } from "./actions";
 
 // 购物类的卡（= App blocks/commerce_blocks.dart）：商品宫格（挑东西）、订单卡（付款前确认 / 下单后回执）。
@@ -17,28 +18,44 @@ function NetImg({ url }: { url: string }) {
         onLoad={() => setState("ok")} onError={() => setState("bad")} />;
 }
 
-/** 商品宫格：自适应列（每格 ≥148px，最多 4 列），一格 = 方图 + 名字 + 价格 + 一行补充；底部一句推荐。 */
+/** 没图时的占位：tile 底 + 名字首字（衬线）。宫格大格与清单小格共用。 */
+const Monogram = ({ name }: { name: string }) => <span className="blk-monogram" aria-hidden="true">{monogramOf(name)}</span>;
+
+/** 商品宫格：自适应列（每格 ≥148px，最多 4 列），一格 = 方图 + 名字 + 价格 + 一行补充；底部一句推荐。
+ *  缺图的格子用字标占位；一件都没有图时改排清单（字标 + 名字/补充 + 右侧价格），不铺整屏空白方块。 */
 export function ProductsBlock({ block }: { block: P }) {
   const items = block.items.filter((i) => i.name);
   if (!items.length) return null;
+  const grid = items.some((i) => http(i.image));
   return (
     <section className="card blk-products">
       {block.title && <h3 className="blk-products-title">{block.title}</h3>}
-      <div className={"blk-products-grid" + (items.length === 1 ? " single" : "")}>
+      <div className={grid ? "blk-products-grid" + (items.length === 1 ? " single" : "") : "blk-products-list"}>
         {items.map((it, i) => {
           const url = http(it.url), img = http(it.image);
-          const inner = (
+          const inner = grid ? (
             <>
-              <span className="blk-product-pic">{img ? <NetImg url={img} /> : <span className="blk-img-bad"><IconBag /></span>}</span>
+              <span className="blk-product-pic">{img ? <NetImg url={img} /> : <Monogram name={it.name} />}</span>
               <span className="blk-product-name">{it.name}</span>
               {it.price && <span className="blk-product-price">{it.price}</span>}
               {it.meta && <span className="blk-product-meta">{it.meta}</span>}
             </>
+          ) : (
+            <>
+              <span className="blk-product-thumb"><Monogram name={it.name} /></span>
+              <span className="blk-product-text">
+                <span className="blk-product-name">{it.name}</span>
+                {it.meta && <span className="blk-product-meta">{it.meta}</span>}
+              </span>
+              {it.price && <span className="blk-product-price">{it.price}</span>}
+              {url && <span className="blk-product-go"><IconArrowUpRight size={16} /></span>}
+            </>
           );
+          const cls = (grid ? "blk-product" : "blk-product-row") + " enter";
           return url
-            ? <a key={i} className="blk-product enter" style={{ ["--i" as string]: i }} href={url} target="_blank" rel="noopener noreferrer"
+            ? <a key={i} className={cls} style={{ ["--i" as string]: i }} href={url} target="_blank" rel="noopener noreferrer"
                 aria-label={[it.name, it.price, it.meta, "打开商品页"].filter(Boolean).join("，")}>{inner}</a>
-            : <div key={i} className="blk-product enter" style={{ ["--i" as string]: i }}>{inner}</div>;
+            : <div key={i} className={cls} style={{ ["--i" as string]: i }}>{inner}</div>;
         })}
       </div>
       {block.pick && <p className="blk-products-pick"><IconSpark size={16} />{block.pick}</p>}
