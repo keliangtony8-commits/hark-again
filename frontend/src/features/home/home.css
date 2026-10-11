@@ -24,3 +24,20 @@
 .report-row.unread .row-icon::after { content: ""; position: absolute; top: -2px; right: -2px; width: 10px; height: 10px;
   border-radius: var(--r-full); background: var(--accent); box-shadow: 0 0 0 2px var(--glass); animation: pop var(--dur) var(--ease); }
 .report-row.unread .row-title { font-weight: var(--fw-title); }
+
+/* 稍后提醒：建议卡标题右边的小钮 + “为你准备”底部一行（展开列出，可现在放回） */
+.action-card-head .menu { margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-2)) 0 0; }
+.action-card-head .menu-trigger { color: var(--text-3); }
+.snoozed { margin-top: calc(-1 * var(--sp-1)); }
+.snoozed-head { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-1);
+  color: var(--text-2); font-size: var(--fs-sm); border-radius: var(--r-tile); transition: background var(--dur-fast) var(--ease); }
+.snoozed-head:hover { background: var(--tile); }
+.snoozed-head span { flex: 1; text-align: left; }
+.snoozed-head svg { color: var(--text-3); flex: none; }
+.snoozed-head svg:last-child { transition: transform var(--dur) var(--ease); }
+.snoozed.open .snoozed-head svg:last-child { transform: rotate(90deg); }
+.snoozed-list { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-1) 0 var(--sp-2) calc(var(--sp-1) + 16px + var(--sp-2));
+  animation: rise var(--dur) var(--ease) both; }
+.snoozed-item { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); }
+.snoozed-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snoozed-time { color: var(--text-3); }

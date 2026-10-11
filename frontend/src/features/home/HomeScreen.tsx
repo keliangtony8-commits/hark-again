@@ -15,6 +15,7 @@ import { IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, Ico
 import { Menu, Page, Section, Skeleton } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
 import NewPanelSheet from "./NewPanelSheet";
+import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
 
@@ -26,7 +27,7 @@ const preview = (c: HomeCard) => {
 };
 
 /** Home：今天要紧的事一屏看完（设计 v2）。从上到下按“要我处理 → 一眼看 → 结果 → 安排”排：
- *  问候、为你准备（主动建议 / 没有时是连接引导卡）、面板（+ 创建一个新面板）、收件箱、今天。
+ *  问候、为你准备（主动建议 + 稍后提醒一行 / 都没有时是连接引导卡）、面板（+ 创建一个新面板）、收件箱、今天。
  *  输入在底部的浮动胶囊（LaunchComposer），顶栏左侧的 + = 新面板。 */
 export default function HomeScreen() {
   const nav = useNavigate();
@@ -50,6 +51,8 @@ export default function HomeScreen() {
     nav(cardRoute(t, c));
   };
   const dismiss = async (c: HomeCard) => { await cards.update(c.id, { dismissed: true }); inbox.refresh(); };
+  // 稍后提醒：推迟会清未读（服务端），所以同样刷新角标
+  const snooze: Snooze = async (c, at) => { await cards.update(c.id, { snoozed_until: at ? at.toISOString() : null }); inbox.refresh(); };
 
   const now = new Date();
   const hour = now.getHours();
@@ -57,9 +60,11 @@ export default function HomeScreen() {
   const date = formatDate(now);
 
   const ask = (text: string) => text.trim() && askNew(text.trim());
-  const actions = cards.items.filter((c) => c.kind === "action" && !c.dismissed);
-  const panels = cards.items.filter((c) => c.kind === "panel" && !c.dismissed);
-  const reports = cards.items.filter((c) => c.kind === "report" && !c.dismissed).slice(0, 5);
+  const live = cards.items.filter((c) => !c.dismissed && !c.snoozed_until);
+  const snoozed = cards.items.filter((c) => c.kind === "action" && !c.dismissed && !!c.snoozed_until);
+  const actions = live.filter((c) => c.kind === "action");
+  const panels = live.filter((c) => c.kind === "panel");
+  const reports = live.filter((c) => c.kind === "report").slice(0, 5);
   const refreshing = new Set(tasks.items.filter((t) => t.run_requested).map((t) => t.id));
 
   // 有面板在刷新时每 5 秒拉一次，刷完自动停
@@ -96,7 +101,7 @@ export default function HomeScreen() {
       </div>
 
       <Section title="为你准备">
-        {cards.loading ? <Skeleton rows={2} /> : actions.length === 0 ? (
+        {cards.loading ? <Skeleton rows={2} /> : actions.length === 0 && snoozed.length === 0 ? (
           <div className="glass-card onboarding">
             <h3 className="glass-title">连接邮箱和日历，我会主动提醒你</h3>
             <p className="glass-sub">要回的邮件、快到的截止日期、明天的课，都会出现在这里。</p>
@@ -110,6 +115,7 @@ export default function HomeScreen() {
               <div className="action-card-head">
                 <span className="row-icon"><Icon /></span>
                 <div className="action-card-title">{c.title}</div>
+                <SnoozeMenu card={c} onSnooze={snooze} />
               </div>
               {c.blocks.length > 0 && <BlockRenderer blocks={c.blocks} />}
               {/* 等宽胶囊，最后一颗是主操作（实心） */}
@@ -121,6 +127,7 @@ export default function HomeScreen() {
             </div>
           );
         })}
+        {!cards.loading && <SnoozedRow cards={snoozed} onSnooze={snooze} />}
       </Section>
 
       <Section title="面板">

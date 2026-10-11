@@ -6,9 +6,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/cron.dart';
 import '../../models/resources.dart';
+import '../../models/time_shortcuts.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
 import '../../ui/motion.dart';
+
+export '../../models/time_shortcuts.dart' show onceShortcuts;
 
 /// 一个计划：runAt 非空 = 一次性，否则按 cron 重复。
 @immutable
@@ -23,19 +26,6 @@ class TaskPlan {
 
   /// 发给服务端的字段：两个都带，切换模式时另一个被清掉。
   Map<String, dynamic> toJson() => {'cron': cron, 'run_at': runAt?.toUtc().toIso8601String()};
-}
-
-/// 一次性的快捷时刻：1 小时后（取整到 5 分）/ 今晚 20:00（已过就不给）/ 明早 08:00 / 明晚 20:00。
-List<(String, DateTime)> onceShortcuts(DateTime now) {
-  final inHour = now.add(const Duration(hours: 1));
-  final tonight = DateTime(now.year, now.month, now.day, 20);
-  final tomorrow = DateTime(now.year, now.month, now.day + 1);
-  return [
-    ('1 小时后', DateTime(inHour.year, inHour.month, inHour.day, inHour.hour, (inHour.minute ~/ 5 + 1) * 5)),
-    if (tonight.isAfter(now.add(const Duration(minutes: 10)))) ('今晚 20:00', tonight),
-    ('明早 08:00', tomorrow.add(const Duration(hours: 8))),
-    ('明晚 20:00', tomorrow.add(const Duration(hours: 20))),
-  ];
 }
 
 /// 计划选择器。状态放在 [controller] 里，表单提交时读 controller.value。

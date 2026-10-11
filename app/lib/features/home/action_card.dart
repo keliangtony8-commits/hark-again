@@ -1,6 +1,7 @@
 // “为你准备”里的一张主动建议卡：标题 + 内容块 + 一排等宽胶囊（忽略 / [去处] / 去做，最后一个是主按钮）。
 // 去处（HomeCard.target）是服务端说“这件事在客户端的哪一页看”，比如预算提醒 → 用量页。
 // route 里的 {task} 换成卡上的 task_id（任务失败提醒 → 那个任务的详情；卡上没有 task_id 就退到列表）。
+// 标题右边一个“稍后提醒”小钮（features/home/card_snooze.dart）：先收起，到点再放回。
 // 映射只在 cardTargets 一处；不认识的值当没有（老 App 遇到新服务端不出错）。网页版 lib/cardTargets.ts 同一张表。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/glass.dart';
 import '../../ui/kit.dart';
+import 'card_snooze.dart';
 import 'inbox.dart';
 
 typedef CardTarget = ({String label, IconData icon, String route});
@@ -58,6 +60,7 @@ class ActionCard extends ConsumerWidget {
       if (target != null) PillButton(label: target.label, icon: target.icon, primary: card.actionPrompt == null, onTap: () => open(target)),
       if (card.actionPrompt != null) PillButton(label: '去做', primary: true, onTap: () => onDo(card.actionPrompt!)),
     ];
+    // 稍后钮是小图标，可点区域仍 ≥ A11y.minTap；用负边距把它的空白吃进卡片内边距，标题行不被撑高
     return Padding(
       padding: const EdgeInsets.only(bottom: Layout.cardGap),
       child: GlassCard(
@@ -66,6 +69,14 @@ class ActionCard extends ConsumerWidget {
             IconBadge(target?.icon ?? Icons.auto_awesome_rounded),
             const SizedBox(width: Sp.x3),
             Expanded(child: Text(card.title, style: context.text.titleMedium)),
+            Transform.translate(
+              offset: const Offset(Sp.x3, 0),
+              child: IconButton(
+                onPressed: () => showSnoozeSheet(context, ref, card),
+                tooltip: '稍后提醒',
+                icon: Icon(Icons.snooze_rounded, size: Fs.lg, color: context.palette.text3),
+              ),
+            ),
           ]),
           if (card.blocks.isNotEmpty) ...[const SizedBox(height: Sp.x3), BlockList(card.blocks)],
           const SizedBox(height: Sp.x4),

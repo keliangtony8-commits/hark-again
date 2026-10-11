@@ -45,7 +45,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - agent/         内核：loop（想→用工具→说）、context（模型看到什么：系统提示 + 预算内原文 + 滚动摘要）、tools（注册表）
 - routes/        只做收发：ws、conversations、crud 工厂 + resources、catalog（技能/连接器）
 - skills/        内置技能，一个 .md 一个（用户技能在 data/skills/）
-- schedule.py 计划校验与时刻（check() = cron/run_at 二选一的唯一校验，接口与工具共用；is_done/due_at/next_run_at）；task_store.py 任务（含面板）增删改唯一入口（删任务连带删 Home 卡与运行记录；面板改名同步卡片标题 after_patch，接口经 crud_router 的 after_update 钩子、工具经 update()；create_panel 也在这里）；智能体工具 manage_home（agent/builtin/home.py：list/refresh/update/dismiss，“把天气面板改到 7 点”“删掉比分面板”“收件箱那条不用管了”）；智能体工具 schedule_task（agent/builtin/tasks.py：create/list/update/cancel，一次性提醒“明早 8 点提醒我…”）
+- schedule.py 计划校验与时刻（check() = cron/run_at 二选一的唯一校验，接口与工具共用；is_done/due_at/next_run_at）；task_store.py 任务（含面板）增删改唯一入口（删任务连带删 Home 卡与运行记录；面板改名同步卡片标题 after_patch，接口经 crud_router 的 after_update 钩子、工具经 update()；create_panel 也在这里）；智能体工具 manage_home（agent/builtin/home.py：list/refresh/update/dismiss/snooze/unsnooze，“把天气面板改到 7 点”“这条明早再提醒我”“删掉比分面板”“收件箱那条不用管了”）；智能体工具 schedule_task（agent/builtin/tasks.py：create/list/update/cancel，一次性提醒“明早 8 点提醒我…”）
 - project_brief.py 项目档案（活文档）唯一入口：PATCH 钩子盖“谁改的”戳、工具的 edit/write 规则、注入系统提示（超 6000 字截断）
 - storage.py     文件系统唯一入口（项目工作区、附件、技能），路径防越界
 - skills_store.py 技能读写：用户目录里与内置同 id 的文件 = 自定义版（就地顶替内置，customized=true，reset 删掉即恢复）；新建 id 永远唯一，绝不覆盖或顶替；内置不能删、不能直接 PUT；停用开关存 data/skills/_disabled.json（按 id，损坏当全启用），系统提示只列 enabled_skills()，use_skill 拒绝停用的
@@ -60,6 +60,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - credentials.py 按 URL 解析凭证：OAuth 连接优先，其次保险箱
 - browser_client.py 调云浏览器服务
 - pages_store.py 可分享网页（/p/<slug>/，带沙盒 CSP）；meta.source 记来源，find_by_source / wire
+- card_snooze.py Home 卡片“稍后提醒”唯一入口（check/snooze/on_patch 是 /api/cards PATCH 的 on_update 钩子；wake_due 由 worker 每轮叫醒到点的卡：清空 + 重新未读 + 顶到最前；wire 让 snoozed_until 总带时区；manage_home 的 snooze/unsnooze 也走它）
 - conversation_share.py 分享对话唯一入口（render 服务端渲染只读快照：Markdown 子集先转义再加标签、无脚本；share/unshare/state；source="conversation:<id>"，同一对话链接不变）
 - memory_digest.py “我对你的了解”：全部记忆 → 一段第二人称概括（单行表 memory_digest，id=me）。GET /api/memory-digest 零模型调用，只比指纹（每条记忆 id+updated_at 的哈希）报 stale；POST 才调一次 SUMMARY_MODEL（kind=digest，输入按 INPUT_CHARS 截断、profile 优先）；从不自动生成
 - usage.py       用量与花费：llm.py 每次调用后 record() 一行（自己的短会话，失败吞掉）；runner 用 scope(对话id) 归属；report() 出今天/本月（用户时区）+ 本月逐日 daily + 本月最花钱的对话 conversations（_top_conversations：外连接一次查标题，前 TOP_CONVERSATIONS=5，删了的对话 title=null）供 GET /api/usage，conversation_report() 出单个对话累计供 GET /api/conversations/{id}/usage（两者共用 _aggregate 形状）；check_budget() 记账后检查本月花费是否跨过 MONTHLY_BUDGET×BUDGET_ALERTS 的某档 → Home action 卡（target=usage），去重表 alerts_sent（key=budget:年月:档:预算），新档收起旧预算卡

@@ -3,7 +3,10 @@
 面板本质是 output=panel 的定时任务，增删改都走 app/task_store.py（与接口、客户端同一套规则：改名卡片跟着改、删除连卡带记录）。"""
 from sqlalchemy import select
 
-from ... import task_store
+from zoneinfo import ZoneInfo
+
+from ... import card_snooze, schedule, task_store
+from ...config import settings
 from ...models import HomeCard, ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
 
@@ -32,6 +35,9 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
     if card.kind == "panel" and task is not None:
         s += f" · cron {task.cron}" + ("" if task.active else " · 已暂停") + (" · 刷新中" if task.run_requested else "")
         s += f" · 刷新指令：{task.prompt[:80]}"
+    elif card.snoozed_until is not None:
+        at = card_snooze._aware(card.snoozed_until).astimezone(ZoneInfo(settings.timezone))
+        s += f" · 稍后提醒于 {at:%m-%d %H:%M}"
     elif card.unread:
         s += " · 未读"
     return s
@@ -40,17 +46,19 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
 @tool("manage_home", "正在整理主页",
       "查看和管理 Home 上的卡片。action=list 列出建议、面板、收件箱（带 id）；"
       "refresh 让面板立即刷新；update 改面板的 title/prompt/cron（cron 同 create_panel）；"
-      "dismiss 拿掉一张卡：建议/收件箱只是隐藏，面板会连同它的定时刷新一起删除（不可恢复，用户没明确要删就先问）。"
+      "dismiss 拿掉一张卡：建议/收件箱只是隐藏，面板会连同它的定时刷新一起删除（不可恢复，用户没明确要删就先问）；"
+      "snooze 把建议/收件箱先收起，到 until 再放回来并提醒（“明早再提醒我”）；unsnooze 现在就放回来。"
       "id 先用 list 拿到。",
       {"type": "object", "properties": {
-          "action": {"type": "string", "enum": ["list", "refresh", "update", "dismiss"]},
+          "action": {"type": "string", "enum": ["list", "refresh", "update", "dismiss", "snooze", "unsnooze"]},
           "id": {"type": "string", "description": "卡片 id"},
           "title": {"type": "string"},
           "prompt": {"type": "string"},
-          "cron": {"type": "string"}},
+          "cron": {"type": "string"},
+          "until": {"type": "string", "description": "snooze 用：用户时区的 YYYY-MM-DD HH:MM，最多 30 天内"}},
        "required": ["action"]})
 async def manage_home(ctx: ToolContext, action: str, id: str | None = None, title: str | None = None,
-                      prompt: str | None = None, cron: str | None = None) -> ToolResult:
+                      prompt: str | None = None, cron: str | None = None, until: str | None = None) -> ToolResult:
     db = ctx.db
     if action == "list":
         cards = (await db.scalars(select(HomeCard).where(HomeCard.dismissed.is_(False))
@@ -74,8 +82,26 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
             return ToolResult(f"已删除面板「{card.title}」，它不会再刷新。")
         card.dismissed = True
         card.unread = False
+        card.snoozed_until = None
         await db.commit()
         return ToolResult(f"已从 Home 拿掉「{card.title}」。")
+    if action == "snooze":
+        try:
+            at = schedule.parse_local(until or "")
+        except ValueError:
+            return ToolResult("snooze 要给 until，格式 YYYY-MM-DD HH:MM（用户时区）。")
+        try:
+            card_snooze.snooze(card, at)
+        except ValueError as e:
+            return ToolResult(str(e))
+        await db.commit()
+        return ToolResult(f"「{card.title}」先收起来了，{until} 再放回 Home 提醒。")
+    if action == "unsnooze":
+        if card.snoozed_until is None:
+            return ToolResult(f"「{card.title}」本来就在 Home 上。")
+        card.snoozed_until = None
+        await db.commit()
+        return ToolResult(f"「{card.title}」已放回 Home。")
 
     if card.kind != "panel" or task is None:
         return ToolResult(f"「{card.title}」不是面板，只能 dismiss。")

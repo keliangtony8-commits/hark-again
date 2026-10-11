@@ -3,6 +3,7 @@
 每 POLL 秒检查一次：到点的或被点了“立即运行”的任务 → 新建一段对话执行 → 按 task.output 投递：
 - report：作为卡片放进 Home 收件箱（同一任务只保留最新一张），对话保留，点开可追问
 - panel：原地更新面板卡的内容，执行用的对话随即删除（面板每小时刷新，不能把聊天列表刷满）
+顺带叫醒“稍后提醒”到点的 Home 卡片（app/card_snooze.py）。
 每次运行都记在 task_runs（成功/失败原因/耗时，首次失败在 Home 放提醒卡），见 app/task_runs.py。
 无人值守，所以高风险操作一律拒绝（deny_all）。
 单用户场景用 Postgres 当队列足够；需要多 worker 时再引入 Redis。
@@ -18,7 +19,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import task_runs
+from . import card_snooze, task_runs
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -96,6 +97,8 @@ async def run_task(task_id: str) -> None:
 async def tick() -> None:
     now = datetime.now(timezone.utc)
     async with SessionLocal() as db:
+        if n := await card_snooze.wake_due(db, now):  # 稍后提醒到点的卡放回 Home
+            log.info("woke %d snoozed cards", n)
         tasks = (await db.scalars(select(ScheduledTask).where(
             or_(ScheduledTask.active.is_(True), ScheduledTask.run_requested.is_(True))))).all()
         due = [t.id for t in tasks if is_due(t, now)]

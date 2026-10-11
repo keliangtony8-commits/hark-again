@@ -2,6 +2,7 @@
 // 与 App features/me/schedule_picker.dart 同结构同规则：cron 与 run_at 二选一（docs/protocol.md 定时任务）。
 import { useMemo, useState } from "react";
 import { CRON_PRESETS, describeCron } from "../../lib/cron";
+import { onceShortcuts } from "../../lib/timeShortcuts";
 import { formatWhen } from "../../lib/format";
 import type { ScheduledTask } from "../../lib/types";
 import { IconAlarm, IconClock, IconLayout } from "../../ui/icons";
@@ -15,18 +16,7 @@ export function TaskIcon({ task }: { task: ScheduledTask }) {
   return task.output === "panel" ? <IconLayout /> : task.run_at ? <IconAlarm /> : <IconClock />;
 }
 
-/** 一次性的快捷时刻：1 小时后（取整到 5 分）/ 今晚 20:00（已过就不给）/ 明早 08:00 / 明晚 20:00。 */
-export function onceShortcuts(now = new Date()): { label: string; at: Date }[] {
-  const h = new Date(now.getTime() + 3_600_000);
-  const at = (dayOffset: number, hour: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, hour);
-  const tonight = at(0, 20);
-  return [
-    { label: "1 小时后", at: new Date(h.getFullYear(), h.getMonth(), h.getDate(), h.getHours(), (Math.floor(h.getMinutes() / 5) + 1) * 5) },
-    ...(tonight.getTime() > now.getTime() + 600_000 ? [{ label: "今晚 20:00", at: tonight }] : []),
-    { label: "明早 08:00", at: at(1, 8) },
-    { label: "明晚 20:00", at: at(1, 20) },
-  ];
-}
+export { onceShortcuts };
 
 const two = (n: number) => String(n).padStart(2, "0");
 /** Date → <input type="datetime-local"> 的本地值 */

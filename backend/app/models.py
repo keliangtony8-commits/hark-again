@@ -146,6 +146,8 @@ class HomeCard(Base):
     dismissed: Mapped[bool] = mapped_column(default=False)
     # 未读：新报告/新建议为 True；用户打开对应对话（或点“全部已读”）后清掉。面板刷新不算新消息。
     unread: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # 稍后提醒：非空 = 先收起，到点由 worker 叫醒（清空 + 重新未读 + 顶到最前），见 app/card_snooze.py
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 

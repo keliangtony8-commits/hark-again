@@ -46,7 +46,9 @@ export type ScheduledTask = { id: string; name: string; prompt: string; cron: st
   run_at?: string | null; done?: boolean };
 /** 定时任务的一次运行（GET /api/tasks/{id}/runs，新的在前）；conversation_id：报告那次的对话，面板任务或对话已删为 null。 */
 export type TaskRun = { id: string; trigger: "schedule" | "manual"; status: "running" | "ok" | "error"; error: string | null; conversation_id: string | null; started_at: string; finished_at: string | null; duration_ms: number | null };
-export type HomeCard = { id: string; kind: "action" | "panel" | "report"; conversation_id: string | null; task_id: string | null; title: string; blocks: Block[]; action_prompt: string | null; target: string | null; dismissed: boolean; unread: boolean; updated_at: string };
+export type HomeCard = { id: string; kind: "action" | "panel" | "report"; conversation_id: string | null; task_id: string | null; title: string; blocks: Block[]; action_prompt: string | null; target: string | null; dismissed: boolean; unread: boolean; updated_at: string;
+  /** 稍后提醒到这个时刻：非空就先不显示，到点服务端放回（清空 + 重新未读）。旧服务器没有这个字段。 */
+  snoozed_until?: string | null };
 export type InboxItem = { id: string; kind: HomeCard["kind"]; title: string; conversation_id: string | null; created_at: string };
 export type InboxSummary = { unread: number; latest: InboxItem | null };
 /** builtin = 内置原样（只读）；customized = 内置的自定义版（同 id 顶替内置，可改、可恢复默认）；都 false = 自己写的。

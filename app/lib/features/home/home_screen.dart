@@ -1,4 +1,4 @@
-// Home：一屏看完今天要紧的事。从上到下：问候 → 为你准备 → 面板（+ 创建一个新面板）→ 收件箱。输入在底部全局胶囊。
+// Home：一屏看完今天要紧的事。从上到下：问候 → 为你准备（+ 稍后提醒一行）→ 面板（+ 创建一个新面板）→ 收件箱。输入在底部全局胶囊。
 // 全部是玻璃卡（ui/glass.dart），卡间距 Layout.cardGap，左右留白 Layout.gutter。
 // 与网页版 HomeScreen 同一套信息架构。
 import 'dart:async';
@@ -23,6 +23,7 @@ import '../../ui/format.dart';
 import '../../shell/launch_composer.dart';
 import '../chat/open_conversation.dart';
 import 'action_card.dart';
+import 'card_snooze.dart';
 import 'inbox.dart';
 import '../me/task_form.dart';
 import 'new_panel.dart';
@@ -77,7 +78,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final refreshing = {for (final t in tasks) if (t.runRequested) t.id};
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncPolling(refreshing.isNotEmpty));
 
-    final items = (cards.value ?? const <HomeCard>[]).where((c) => !c.dismissed).toList();
+    final all = (cards.value ?? const <HomeCard>[]).where((c) => !c.dismissed);
+    final snoozed = all.where((c) => c.snoozed && c.kind == 'action').toList(); // 稍后提醒中：只显示一行入口
+    final items = all.where((c) => !c.snoozed).toList();
     final actions = items.where((c) => c.kind == 'action').toList();
     final panels = items.where((c) => c.kind == 'panel').toList();
     final reports = items.where((c) => c.kind == 'report').take(5).toList();
@@ -96,11 +99,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SectionTitle('为你准备'),
             if (cards.isLoading)
               const SkeletonList(rows: 2)
-            else if (actions.isEmpty)
+            else if (actions.isEmpty && snoozed.isEmpty)
               const _Onboarding()
             else
               for (var i = 0; i < actions.length; i++)
                 FadeSlideIn(delay: Motion.stagger(i), child: ActionCard(card: actions[i], onDo: _send)),
+            SnoozedCards(cards: snoozed),
             const SectionTitle('面板'),
             for (var i = 0; i < panels.length; i++)
               FadeSlideIn(

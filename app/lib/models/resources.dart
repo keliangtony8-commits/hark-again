@@ -215,6 +215,7 @@ class HomeCard {
     required this.dismissed,
     this.unread = false,
     this.updatedAt,
+    this.snoozedUntil,
   });
   factory HomeCard.fromJson(Map<String, dynamic> j) => HomeCard(
     id: j['id'] as String,
@@ -228,6 +229,7 @@ class HomeCard {
     dismissed: j['dismissed'] as bool? ?? false,
     unread: j['unread'] as bool? ?? false,
     updatedAt: _date(j['updated_at']),
+    snoozedUntil: _date(j['snoozed_until']),
   );
   final String id, kind, title;
   final List<Block> blocks;
@@ -237,6 +239,10 @@ class HomeCard {
   final String? target;
   final bool dismissed, unread;
   final DateTime? updatedAt;
+
+  /// 稍后提醒到这个时刻（本地时间）。非空就先不显示；到点由服务端放回（清空 + 重新未读），客户端不比本机时钟。
+  final DateTime? snoozedUntil;
+  bool get snoozed => snoozedUntil != null;
 }
 
 /// GET /api/inbox：未读数 + 最新一条未读（轮询用的轻量摘要）。

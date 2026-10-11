@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, func, select
 
 from ..models import Conversation, HomeCard, Memory, Project, ScheduledTask
-from .. import project_brief, sandbox_client, schedule, task_store
+from .. import card_snooze, project_brief, sandbox_client, schedule, task_store
 from ..storage import PROJECTS
 from .crud import crud_router
 
@@ -82,6 +82,14 @@ class CardPatch(BaseModel):
     blocks: list | None = None
     dismissed: bool | None = None
     unread: bool | None = None
+    snoozed_until: datetime | None = None  # 稍后提醒到这个时刻；null = 现在就放回来。规则见 app/card_snooze.py
+
+
+def _check_card_patch(card: HomeCard, changes: dict) -> None:
+    try:
+        card_snooze.on_patch(card, changes)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 async def _delete_project_conversations(db, project: Project) -> None:
@@ -112,5 +120,6 @@ routers = [
     crud_router("/api/tasks", ScheduledTask, TaskIn, TaskPatch, order_by=ScheduledTask.created_at.desc(),
                 on_delete=task_store.delete_cascade, extra=schedule.wire, on_update=_check_task_patch,
                 after_update=task_store.after_patch),
-    crud_router("/api/cards", HomeCard, CardIn, CardPatch, order_by=HomeCard.updated_at.desc()),
+    crud_router("/api/cards", HomeCard, CardIn, CardPatch, order_by=HomeCard.updated_at.desc(),
+                extra=card_snooze.wire, on_update=_check_card_patch),
 ]
