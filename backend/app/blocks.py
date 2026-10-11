@@ -178,24 +178,34 @@ class OrderBlock(BaseModel):
 
 
 class FormField(BaseModel):
-    name: str = Field(pattern=r"^[a-z_]{1,24}$")
+    name: str = Field(pattern=r"^[a-z_][a-z0-9_]{0,23}$")
     label: str
-    kind: Literal["text", "email", "password", "code"] = "text"  # password 遮住；code 数字键盘 + 短信验证码自动填充
+    kind: Literal["text", "email", "password", "code", "phone", "multiline"] = "text"  # password 遮住；code 数字键盘 + 短信验证码自动填充；phone 电话键盘；multiline 多行（地址、备注）
     value: str | None = None  # 预填（只放不敏感的，如用户名）
+    options: list[str] | None = Field(default=None, max_length=6)  # 可点选的候选（点了填进框里，仍可改写）
+    optional: bool = False  # 选填：空着也能提交
+
+
+class FormAnswer(BaseModel):
+    label: str
+    value: str
 
 
 class FormBlock(BaseModel):
-    """表单卡：任务进行中向用户要东西（网站登录、验证码）。和审批卡一样挂起等答复（form.reply，id 即表单 id）。
-    pending → submitted / cancelled / expired。用户填的值不写进卡片：只交给发起的工具，不落库、不给模型看。"""
+    """表单卡：任务进行中向用户要东西（网站登录、验证码、助手缺的信息）。和审批卡一样挂起等答复（form.reply，id 即表单 id）。
+    pending → submitted / cancelled / expired。login / code 的值不写进卡片：只交给发起的工具，不落库、不给模型看；
+    info（ask_user）是用户有意告诉助手的，提交后写进 answers（卡片上回显、进历史，下一轮模型也记得）。"""
     type: Literal["form"] = "form"
     id: str
     purpose: Literal["login", "code", "info"] = "info"
     title: str
     site: str | None = None  # 网站域名，卡片上显示“在 xxx 上”
     fields: list[FormField] = Field(min_length=1, max_length=6)
-    remember: bool = False  # 是否提供“记住到保险箱”
+    remember: bool = False  # 是否提供“记住”（login → 保险箱；info → 长期记忆）
     action: str = "提交"
     state: Literal["pending", "submitted", "cancelled", "expired"] = "pending"
+    note: str | None = None  # 为什么要问（info 卡标题下一行小字）
+    answers: list[FormAnswer] | None = None  # 只有 info 卡提交后才有；选填没填的不列
 
 
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
@@ -230,7 +240,8 @@ def blocks_to_text(blocks: list[dict]) -> str:
         elif t == "form":
             state = {"pending": "等用户填写", "submitted": "用户已填写", "cancelled": "用户取消了", "expired": "已过期"}.get(b.get("state"), "")
             site = f"（{b['site']}）" if b.get("site") else ""
-            parts.append(f"[表单：{b['title']}{site}——{state}]")
+            answers = "".join(f"\n{a['label']}：{a['value']}" for a in b.get("answers") or [])
+            parts.append(f"[表单：{b['title']}{site}——{state}]{answers}")
         elif t == "memory":
             verb = {"saved": "已记住", "updated": "已修改记忆", "forgotten": "已忘掉"}.get(b["action"], "记忆")
             parts.append(f"[{verb}：" + "；".join(i["content"] for i in b["items"]) + "]")

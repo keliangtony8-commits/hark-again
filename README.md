@@ -170,3 +170,9 @@ postgres ~200M、litellm ~300M、searxng ~150M、backend+worker ~300M、browser 
 - 用户填的值只在内存里交给工具：不写进卡片、不落库、不进给模型的工具结果。
 - 现有使用者：`browser_login`（保险箱有该站登录就直接代填、不弹卡；没有 → 登录卡，用户可勾“记住到保险箱”）、`browser_code`（短信/邮箱验证码卡，填进指定输入框并回车）。图形验证码、扫码仍走实时画面接管。
 - 冒烟：`python tests/smoke_signin_form.py`。
+
+## 助手问你要信息：ask_user（v0.87）
+- `agent/builtin/ask.py` 的 `ask_user` 复用同一条表单卡通道，purpose=info：缺只有用户知道的细节（地址、电话、人数、几选一）时一张卡问齐。`ask_card(args)` 把模型参数整理成卡：字段名服务器编（q1..q6）、去掉空 label、不收 password/code（降成 text）、候选 `options` ≤6、`optional` 选填、按钮 ≤8 字、`note` 说为什么问。
+- 和 login/code 相反：info 的值是用户有意告诉助手的 → 交给模型，`loop.form_answers` 把非空答案写进卡片 `answers`（回显、落库、`blocks_to_text` 带上，下一轮模型也记得）。勾“记进记忆” → 每个答案 `label：value` 经 `memory_store.save`（profile 类）存下并附记忆卡。
+- 无人值守（`ctx.ask is nobody`）不弹卡，告诉模型按已知信息做、必要时 `offer_on_home`。
+- 冒烟：`python tests/smoke_ask_user.py`。

@@ -197,4 +197,16 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-form-remember { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); cursor: pointer; }
 .blk-form-remember > span { flex: 1; }
 .blk-form-note { display: flex; align-items: center; gap: var(--sp-1); margin: 0; font-size: var(--fs-xs); color: var(--text-3); }
+.blk-form-title small.blk-form-why { white-space: normal; }
+.blk-form-field > label > span em { font-style: normal; color: var(--text-3); font-weight: var(--fw-body); }
+.blk-form-input textarea { min-height: 64px; }
+.blk-form-options { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.blk-form-option { height: 32px; padding: 0 var(--sp-3); font-size: var(--fs-sm); cursor: pointer; border: 0;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--spring); }
+.blk-form-option:hover:not(.on) { color: var(--text); }
+.blk-form-option:active { transform: scale(.96); }
+@media (prefers-reduced-motion: reduce) { .blk-form-option { transition: none; } .blk-form-option:active { transform: none; } }
+.blk-form-answers { display: flex; flex-direction: column; gap: var(--sp-2); margin: 0; }
+.blk-form-answers dt { font-size: var(--fs-xs); color: var(--text-3); }
+.blk-form-answers dd { margin: 0; color: var(--text); white-space: pre-wrap; user-select: text; }
 .blk-form-actions { display: grid; grid-template-columns: 1fr 2fr; gap: var(--sp-2); margin-top: var(--sp-1); }

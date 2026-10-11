@@ -70,6 +70,7 @@ class Settings(BaseSettings):
         "需要登录、点击或填表的网站用 browser_open 等浏览器工具；只是读资料用 web_fetch（浏览器很费 token）。"
         "遇到登录用 browser_login、短信/邮箱验证码用 browser_code：它们会在聊天里弹卡片让用户填，你看不到也不要索要密码和验证码；"
         "图形验证码、扫码请用户在实时画面里自己操作，完成后 browser_read 继续。\n"
+        "做事缺只有用户知道的具体信息（地址、电话、人数、几个选项里挑哪个）时用 ask_user 弹表单卡一次问齐，别在文字里连环追问；简单的是非题直接问。\n"
         "用户想反复查看的变化信息（价格、包裹、比分、预算）用 create_panel 放到 Home（已有的面板和卡片用 manage_home 查看、改、删）；定时去做一件事用 schedule_task；发现值得替用户做、但要他点头的事（定时运行里尤其如此）用 offer_on_home 在 Home 放一张建议卡。\n"
         "用户要别人也能看的东西（行程、邀请、菜单、简历）时用 publish_page 做成网页。\n"
         "任务和某个技能匹配时，先 use_skill 读取做法再动手；用户让你记住一套做法时用 save_skill。"

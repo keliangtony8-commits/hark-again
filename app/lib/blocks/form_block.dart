@@ -1,6 +1,8 @@
-// 表单卡：浏览器任务进行中向你要登录信息或验证码（对标 Hark 浏览器任务里“在它自己的表单上问你”）。
+// 表单卡：任务进行中向你要登录信息、验证码，或助手缺的信息（对标 Hark 任务里“在它自己的表单上问你”）。
 // - 等填写（pending）：输入框 + 取消 / 提交；登录卡放进 AutofillGroup，安卓/iOS 的密码管理器能直接填。
-// - 提交后：输入框收起、清空，只剩一行状态（已填写 / 已取消 / 已过期）；值从不进卡片和本地缓存。
+//   info 卡（ask_user）：标题下一行说为什么问；有候选的输入框下面是可点选的小块（点了填进框里，仍可改）；选填可空着。
+// - 提交后：输入框收起、清空，只剩一行状态（已填写 / 已取消 / 已过期）；login / code 的值从不进卡片和本地缓存，
+//   info 卡由服务器把 answers 写回卡片，这里展示成一问一答。
 // - 断线没发出去（onForm 返回 false）：保留输入，用户连上再点。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -52,7 +54,7 @@ class _FormBlockViewState extends State<FormBlockView> {
     super.dispose();
   }
 
-  bool get _complete => _ctl.values.every((c) => c.text.trim().isNotEmpty);
+  bool get _complete => widget.block.completeWith({for (final e in _ctl.entries) e.key: e.value.text});
 
   void _reply(bool submit) {
     final onForm = BlockActions.of(context)?.onForm;
@@ -88,13 +90,15 @@ class _FormBlockViewState extends State<FormBlockView> {
               Text(b.title, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
               if (b.site != null && b.site!.isNotEmpty)
                 Text(b.site!, style: context.text.bodySmall?.copyWith(color: p.text2), maxLines: 1, overflow: TextOverflow.ellipsis),
+              if (b.note != null && b.note!.isNotEmpty)
+                Text(b.note!, style: context.text.bodySmall?.copyWith(color: p.text2), maxLines: 2, overflow: TextOverflow.ellipsis),
             ]),
           ),
           SwapSwitcher(
             child: Text(label, key: ValueKey(b.state), style: context.text.labelSmall?.copyWith(color: color, fontWeight: Weights.title)),
           ),
         ]),
-        RiseSwitcher(child: open ? _body(context, b) : null),
+        RiseSwitcher(child: open ? _body(context, b) : (b.answers.isEmpty ? null : _Answers(b.answers))),
       ]),
     );
   }
@@ -116,7 +120,7 @@ class _FormBlockViewState extends State<FormBlockView> {
           padding: const EdgeInsets.only(top: Sp.x2),
           child: MergeSemantics(
             child: Row(children: [
-              Expanded(child: Text('记住到保险箱，下次自动登录', style: context.text.bodySmall)),
+              Expanded(child: Text(b.purpose == 'info' ? '记进记忆，下次不用再问' : '记住到保险箱，下次自动登录', style: context.text.bodySmall)),
               Switch(value: _remember, onChanged: (v) => setState(() => _remember = v)),
             ]),
           ),
@@ -124,9 +128,12 @@ class _FormBlockViewState extends State<FormBlockView> {
       Padding(
         padding: const EdgeInsets.only(top: Sp.x2),
         child: Row(children: [
-          Icon(Icons.visibility_off_outlined, size: Fs.sm, color: p.text3),
+          Icon(b.purpose == 'info' ? Icons.forum_outlined : Icons.visibility_off_outlined, size: Fs.sm, color: p.text3),
           const SizedBox(width: Sp.x1),
-          Expanded(child: Text('只交给浏览器填写，助手看不到', style: context.text.bodySmall?.copyWith(color: p.text3))),
+          Expanded(
+            child: Text(b.purpose == 'info' ? '你填的内容会交给助手，用来接着办这件事' : '只交给浏览器填写，助手看不到',
+                style: context.text.bodySmall?.copyWith(color: p.text3)),
+          ),
         ]),
       ),
       Padding(
@@ -144,28 +151,56 @@ class _FormBlockViewState extends State<FormBlockView> {
   }
 
   Widget _field(FormInput f, {required bool isLast}) {
+    final input = _input(f, isLast: isLast);
+    if (f.options.isEmpty) return input;
+    final ctl = _ctl[f.name]!;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      input,
+      const SizedBox(height: Sp.x2),
+      ListenableBuilder(
+        listenable: ctl,
+        builder: (context, _) => Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [
+          for (final o in f.options)
+            ChoiceChip(
+              label: Text(o),
+              selected: ctl.text.trim() == o,
+              showCheckmark: false,
+              onSelected: (_) => ctl.value = TextEditingValue(text: o, selection: TextSelection.collapsed(offset: o.length)),
+            ),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _input(FormInput f, {required bool isLast}) {
     final secret = f.kind == 'password';
+    final multiline = f.kind == 'multiline';
     final shown = _revealed.contains(f.name);
     return TextField(
       controller: _ctl[f.name],
+      minLines: multiline ? 2 : 1,
+      maxLines: multiline ? 4 : 1,
       obscureText: secret && !shown,
       enableSuggestions: !secret,
       autocorrect: false,
       keyboardType: switch (f.kind) {
         'code' => TextInputType.number,
         'email' => TextInputType.emailAddress,
+        'phone' => TextInputType.phone,
+        'multiline' => TextInputType.multiline,
         _ => TextInputType.text,
       },
       autofillHints: switch (f.kind) {
         'password' => const [AutofillHints.password],
         'code' => const [AutofillHints.oneTimeCode],
         'email' => const [AutofillHints.email],
+        'phone' => const [AutofillHints.telephoneNumber],
         _ => widget.block.purpose == 'login' ? const [AutofillHints.username] : null,
       },
-      textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
-      onSubmitted: isLast ? (_) => _reply(true) : null,
+      textInputAction: multiline ? TextInputAction.newline : (isLast ? TextInputAction.done : TextInputAction.next),
+      onSubmitted: isLast && !multiline ? (_) => _reply(true) : null,
       decoration: InputDecoration(
-        labelText: f.label,
+        labelText: f.optional ? '${f.label}（选填）' : f.label,
         suffixIcon: secret
             ? IconButton(
                 tooltip: shown ? '隐藏密码' : '显示密码',
@@ -174,6 +209,34 @@ class _FormBlockViewState extends State<FormBlockView> {
               )
             : null,
       ),
+    );
+  }
+}
+
+/// info 卡提交后的一问一答：小标签 + 可选中复制的答案，逐行轻轻浮入。
+class _Answers extends StatelessWidget {
+  const _Answers(this.answers);
+  final List<FormAnswer> answers;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      key: const ValueKey('answers'),
+      padding: const EdgeInsets.only(top: Sp.x3),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        for (final (i, a) in answers.indexed)
+          FadeSlideIn(
+            delay: Motion.stagger(i),
+            child: Padding(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : Sp.x2),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(a.label, style: context.text.labelSmall?.copyWith(color: p.text3)),
+                SelectableText(a.value, style: context.text.bodyMedium),
+              ]),
+            ),
+          ),
+      ]),
     );
   }
 }

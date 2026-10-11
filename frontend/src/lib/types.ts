@@ -28,9 +28,13 @@ export type OrderBlock = { type: "order"; id: string; merchant: string;
   breakdown?: { label: string; amount: string }[]; total: string; payment?: string | null; destination?: string | null;
   order_number?: string | null; action?: string; state: "pending" | "approved" | "rejected" | "expired" | "placed" };
 /** 表单卡（浏览器任务里的登录 / 验证码）：答复走 form.reply；用户填的值不写进卡片。 */
-export type FormInput = { name: string; label: string; kind?: "text" | "email" | "password" | "code"; value?: string | null };
+/** options = 可点选的候选（点了填进框，仍可改）；optional = 选填。 */
+export type FormInput = { name: string; label: string; kind?: "text" | "email" | "password" | "code" | "phone" | "multiline"; value?: string | null;
+  options?: string[] | null; optional?: boolean };
+/** note = 为什么问（info 卡）；answers 只有 info 卡提交后才有（用户有意告诉助手的，login/code 的值从不进卡片）。 */
 export type FormBlock = { type: "form"; id: string; purpose?: "login" | "code" | "info"; title: string; site?: string | null;
-  fields: FormInput[]; remember?: boolean; action?: string; state: "pending" | "submitted" | "cancelled" | "expired" };
+  fields: FormInput[]; remember?: boolean; action?: string; state: "pending" | "submitted" | "cancelled" | "expired";
+  note?: string | null; answers?: { label: string; value: string }[] | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
   | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的

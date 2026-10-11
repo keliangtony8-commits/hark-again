@@ -207,7 +207,7 @@ class Asked:
 
 async def _ask_form(builder: MessageBuilder, ctx: ToolContext, t, args: dict):
     """需要时插入表单卡 → 等用户填 → 卡片标 submitted / cancelled。最后产出 Asked；不用问就什么都不产出。
-    卡片上只留字段的说明，用户填的值不进卡片。"""
+    login / code 卡上只留字段的说明，用户填的值不进卡片；info 卡提交后附上 answers（form_answers）。"""
     spec = await t.form(ctx, args)
     if not spec:
         return
@@ -215,8 +215,16 @@ async def _ask_form(builder: MessageBuilder, ctx: ToolContext, t, args: dict):
     yield builder.add({**spec, "id": fid, "state": "pending"})
     index = len(builder.blocks) - 1
     reply = await ctx.ask(fid, builder.blocks[index])
-    yield builder.update(index, state="submitted" if reply is not None else "cancelled")
+    extra = {"answers": form_answers(spec, reply.values)} if reply is not None and spec.get("purpose") == "info" else {}
+    yield builder.update(index, state="submitted" if reply is not None else "cancelled", **extra)
     yield Asked(reply)
+
+
+def form_answers(spec: dict, values: dict[str, str]) -> list[dict]:
+    """info 卡（用户有意告诉助手的）提交后回显在卡片上的问答，按卡上字段顺序；空着的选填不列。
+    login / code 卡从不调用它：那些值不能进卡片。"""
+    return [{"label": f["label"], "value": values[f["name"]].strip()}
+            for f in spec["fields"] if values.get(f["name"], "").strip()]
 
 
 async def _ask_approval(builder: MessageBuilder, ctx: ToolContext, reason: str, args: dict, card: dict | None = None):

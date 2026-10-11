@@ -298,17 +298,31 @@ List<Block> blocksFrom(dynamic list) => [for (final b in (list as List? ?? [])) 
 
 String plainText(List<Block> blocks) => blocks.whereType<TextBlock>().map((b) => b.text).join('\n').trim();
 
-/// 表单卡里的一个输入框。kind：text / email / password（遮住）/ code（数字键盘 + 短信验证码自动填充）。
+/// 表单卡里的一个输入框。kind：text / email / password（遮住）/ code（数字键盘 + 短信验证码自动填充）
+/// / phone（电话键盘）/ multiline（多行：地址、备注）。options = 可点选的候选（点了填进框里，仍可改）；optional = 选填。
 class FormInput {
-  const FormInput({required this.name, required this.label, this.kind = 'text', this.value});
+  const FormInput({required this.name, required this.label, this.kind = 'text', this.value, this.options = const [], this.optional = false});
   factory FormInput.fromJson(Map<String, dynamic> j) => FormInput(
-      name: j['name'] as String? ?? '', label: j['label'] as String? ?? '', kind: j['kind'] as String? ?? 'text', value: j['value'] as String?);
+      name: j['name'] as String? ?? '',
+      label: j['label'] as String? ?? '',
+      kind: j['kind'] as String? ?? 'text',
+      value: j['value'] as String?,
+      options: [for (final o in (j['options'] as List? ?? [])) if (o is String && o.isNotEmpty) o],
+      optional: j['optional'] as bool? ?? false);
   final String name, label, kind;
-  final String? value; // 服务器预填的（只有不敏感的，如用户名）
+  final String? value; // 服务器预填的（只有不敏感的，如用户名、已知的默认值）
+  final List<String> options;
+  final bool optional;
 }
 
-/// 表单卡：任务进行中向用户要东西（网站登录、验证码），答复走 form.reply。
-/// 用户填的值只发给服务器交给浏览器，不写进卡片：卡片落库后只有 submitted / cancelled / expired。
+/// info 卡提交后回显的一问一答（只有 purpose=info 才有：那是用户有意告诉助手的）。
+class FormAnswer {
+  const FormAnswer(this.label, this.value);
+  final String label, value;
+}
+
+/// 表单卡：任务进行中向用户要东西（网站登录、验证码、助手缺的信息），答复走 form.reply。
+/// login / code 的值只发给服务器交给浏览器，不写进卡片；info（ask_user）提交后服务器把 answers 写回卡片。
 class FormBlock extends Block {
   const FormBlock({
     required this.id,
@@ -319,6 +333,8 @@ class FormBlock extends Block {
     this.remember = false,
     this.action = '提交',
     this.state = 'pending',
+    this.note,
+    this.answers = const [],
   });
   factory FormBlock.fromJson(Map<String, dynamic> j) => FormBlock(
       id: j['id'] as String? ?? '',
@@ -328,12 +344,22 @@ class FormBlock extends Block {
       fields: [for (final f in (j['fields'] as List? ?? [])) FormInput.fromJson(f as Map<String, dynamic>)],
       remember: j['remember'] as bool? ?? false,
       action: j['action'] as String? ?? '提交',
-      state: j['state'] as String? ?? 'pending');
+      state: j['state'] as String? ?? 'pending',
+      note: j['note'] as String?,
+      answers: [
+        for (final a in (j['answers'] as List? ?? []))
+          if (a is Map) FormAnswer(a['label'] as String? ?? '', a['value'] as String? ?? ''),
+      ]);
   final String id, purpose, title, action, state;
-  final String? site;
+  final String? site, note;
   final List<FormInput> fields;
-  final bool remember; // 是否提供“记住到保险箱”
+  final List<FormAnswer> answers;
+  final bool remember; // 是否提供“记住”（login → 保险箱；info → 长期记忆）
   bool get pending => state == 'pending';
+
+  /// 填好了没有：必填的都不是空白（选填可以空着）。
+  bool completeWith(Map<String, String> values) =>
+      fields.every((f) => f.optional || (values[f.name] ?? '').trim().isNotEmpty);
 }
 
 /// “复制”一条回复得到的 Markdown（和后端 blocks.py 的 blocks_to_text 同一套规则，表格转成 Markdown 表）。
