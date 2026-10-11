@@ -2,20 +2,23 @@
 // 去处（HomeCard.target）是服务端说“这件事在客户端的哪一页看”，比如预算提醒 → 用量页。
 // route 里的 {task} 换成卡上的 task_id（任务失败提醒 → 那个任务的详情；卡上没有 task_id 就退到列表）。
 // 标题右边一个“稍后提醒”小钮（features/home/card_snooze.dart）：先收起，到点再放回。
-// 助手提议的卡（card.offered）：标题上方一行“可以替你做”，主按钮用卡上的字（actionText），点了发指令进新对话并把卡收起；
-// 系统提醒点“去做”不收起（恢复后服务端自己收起）。
+// 助手提议的卡（card.offered）：标题上方一行“可以替你做”，主按钮用卡上的字（actionText）。点了走 startOffer：
+// 服务端开新对话并记在卡上，App 打开它并发指令；卡留在主页变成“已交给助手”（card.started），主按钮“查看对话”回到那段，
+// 次按钮“收起”。系统提醒点“去做”直接把指令发进新对话（onDo），不收起（恢复后服务端自己收起）。
 // 映射只在 cardTargets 一处；不认识的值当没有（老 App 遇到新服务端不出错）。网页版 lib/cardTargets.ts 同一张表。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../blocks/block_view.dart';
+import '../../core/api.dart';
 import '../../core/resource.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/glass.dart';
 import '../../ui/kit.dart';
+import '../../ui/motion.dart';
 import 'card_snooze.dart';
 import 'inbox.dart';
 
@@ -28,6 +31,24 @@ const cardTargets = <String, CardTarget>{
 
 CardTarget? cardTarget(String? id) => id == null ? null : cardTargets[id];
 
+/// 打开某段对话，send 非空就在打开后发出去（主页传 openConversation）。
+typedef OpenConversation = void Function(String conversationId, String? send);
+
+/// 点助手建议卡的主按钮（开始做 / 查看对话）的唯一入口。服务端说 started 才发指令，所以重复点不会重发。
+/// 卡已经不在（404 等）→ 只刷新列表。先拿到 notifier 再跳走：跳转后这张卡的 context 可能失效。
+Future<void> startOffer(WidgetRef ref, HomeCard card, OpenConversation open) async {
+  final api = ref.read(apiProvider), cards = ref.read(cardsProvider.notifier), inbox = ref.read(inboxProvider.notifier);
+  try {
+    final j = await api.post('/api/cards/${card.id}/start') as Map<String, dynamic>;
+    open(j['conversation_id'] as String, j['started'] == true ? j['prompt'] as String? : null);
+  } catch (_) {
+    await cards.reload();
+    return;
+  }
+  await cards.reload();
+  await inbox.refresh();
+}
+
 String cardRoute(CardTarget t, HomeCard card) {
   const slot = '/{task}';
   if (!t.route.contains(slot)) return t.route;
@@ -36,9 +57,10 @@ String cardRoute(CardTarget t, HomeCard card) {
 }
 
 class ActionCard extends ConsumerWidget {
-  const ActionCard({super.key, required this.card, required this.onDo});
+  const ActionCard({super.key, required this.card, required this.onDo, required this.onOpen});
   final HomeCard card;
   final void Function(String) onDo;
+  final OpenConversation onOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -56,24 +78,19 @@ class ActionCard extends ConsumerWidget {
       route.startsWith('/me') ? context.push(route) : context.go(route);
     }
 
-    Future<void> doIt() async {
-      final prompt = card.actionPrompt!;
-      if (card.offered) {
-        // 先拿到 notifier 再跳走：onDo 会切到聊天，这张卡的 context 可能随即失效
-        final cards = ref.read(cardsProvider.notifier), inbox = ref.read(inboxProvider.notifier);
-        onDo(prompt);
-        await cards.patch(card.id, {'dismissed': true});
-        await inbox.refresh();
-      } else {
-        onDo(prompt);
-      }
-    }
+    void doIt() => card.offered ? startOffer(ref, card, onOpen) : onDo(card.actionPrompt!);
 
-    // 按钮一排等宽：忽略永远是次按钮；有“去做”时它是主按钮，否则去处是主按钮
+    // 按钮一排等宽：忽略（开始后叫“收起”）永远是次按钮；有“去做”时它是主按钮，否则去处是主按钮
+    final started = card.started;
     final buttons = <Widget>[
-      PillButton(label: '忽略', onTap: dismiss),
+      PillButton(label: started ? '收起' : '忽略', onTap: dismiss),
       if (target != null) PillButton(label: target.label, icon: target.icon, primary: card.actionPrompt == null, onTap: () => open(target)),
-      if (card.actionPrompt != null) PillButton(label: card.actionText, primary: true, onTap: doIt),
+      if (card.actionPrompt != null)
+        PillButton(
+            label: started ? '查看对话' : card.actionText,
+            icon: started ? Icons.forum_rounded : null,
+            primary: true,
+            onTap: doIt),
     ];
     // 稍后钮是小图标，可点区域仍 ≥ A11y.minTap；用负边距把它的空白吃进卡片内边距，标题行不被撑高
     return Padding(
@@ -81,11 +98,17 @@ class ActionCard extends ConsumerWidget {
       child: GlassCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            IconBadge(target?.icon ?? Icons.auto_awesome_rounded),
+            PopSwitcher(
+              child: IconBadge(key: ValueKey(started), target?.icon ?? (started ? Icons.forum_rounded : Icons.auto_awesome_rounded)),
+            ),
             const SizedBox(width: Sp.x3),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                if (card.offered) Text('可以替你做', style: context.text.labelSmall?.copyWith(color: context.palette.text3)),
+                if (card.offered)
+                  SwapSwitcher(
+                    child: Text(started ? '已交给助手 · 看看进展' : '可以替你做',
+                        key: ValueKey(started), style: context.text.labelSmall?.copyWith(color: context.palette.text3)),
+                  ),
                 Text(card.title, style: context.text.titleMedium),
               ]),
             ),

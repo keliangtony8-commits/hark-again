@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 
 from .agent.tools import load_builtin
-from .routes import auth, browser, catalog, connectors, conversations, files, inbox, memory_digest, pages, resources, tasks, usage, vault, voice, ws
+from .routes import auth, browser, catalog, connectors, conversations, files, home, inbox, memory_digest, pages, resources, tasks, usage, vault, voice, ws
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.include_router(pages.router)
 app.include_router(pages.public)
 app.include_router(voice.router)
 app.include_router(inbox.router)
+app.include_router(home.router)
 app.include_router(usage.router)
 app.include_router(memory_digest.router)
 for r in resources.routers:

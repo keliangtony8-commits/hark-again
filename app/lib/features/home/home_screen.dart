@@ -49,6 +49,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// 建议卡上的“去做”：开一段新对话发出去，然后切到聊天。
   void _send(String text) => askInNewChat(context, ref, text);
 
+  void _openOffer(String id, String? send) => openConversation(context, ref, id, send: send);
+
   void _openReport(HomeCard c) {
     if (c.conversationId != null) openInboxItem(context, ref, conversationId: c.conversationId);
   }
@@ -105,7 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ? const _Onboarding(key: ValueKey('empty'))
                       : Column(key: const ValueKey('list'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                           for (var i = 0; i < actions.length; i++)
-                            FadeSlideIn(delay: Motion.stagger(i), child: ActionCard(card: actions[i], onDo: _send)),
+                            FadeSlideIn(delay: Motion.stagger(i), child: ActionCard(card: actions[i], onDo: _send, onOpen: _openOffer)),
                         ]),
             ),
             SnoozedCards(cards: snoozed),

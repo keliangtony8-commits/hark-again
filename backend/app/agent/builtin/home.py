@@ -59,6 +59,8 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
         s += f" · 刷新指令：{task.prompt[:80]}"
     elif card.kind == "action" and card.origin == home_offers.ORIGIN:
         s += f" · 你提议的 · 按钮“{card.action_label or '去做'}”" + (" · 未读" if card.unread else "")
+        if card.conversation_id:
+            s += " · 用户已点按钮开始做"
         if card.snoozed_until is not None:
             s += " · 稍后提醒中"
     elif card.snoozed_until is not None:

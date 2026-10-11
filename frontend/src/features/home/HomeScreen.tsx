@@ -11,7 +11,7 @@ import { formatDate } from "../../lib/format";
 import LaunchComposer, { useAskInNewChat } from "../../shell/LaunchComposer";
 import { ShellLead } from "../../shell/ShellLead";
 import { WidePill } from "../../ui/glass";
-import { IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconTrash } from "../../ui/icons";
+import { IconChat, IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconTrash } from "../../ui/icons";
 import { Menu, Page, Section, Skeleton, stagger } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
@@ -52,10 +52,17 @@ export default function HomeScreen() {
     if (c.unread) inbox.markRead([c.id]);
     nav(cardRoute(t, c));
   };
-  // 主按钮：发指令进新对话；助手提议的卡点了就收起（系统提醒恢复后服务端自己收起，不动）
-  const doIt = (c: HomeCard) => {
-    ask(c.action_prompt!);
-    if (c.origin === "agent") dismiss(c);
+  // 主按钮。系统提醒：发指令进新对话（恢复后服务端自己收起）。助手提议的卡：服务端开对话并记在卡上，
+  // started 才把指令带过去发（重复点只回到那段）；卡留在主页变成“已交给助手”。和 App startOffer 同义。
+  const doIt = async (c: HomeCard) => {
+    if (c.origin !== "agent") return ask(c.action_prompt!);
+    try {
+      const r = await http.post<{ conversation_id: string; prompt: string; started: boolean }>(`/api/cards/${c.id}/start`, {});
+      nav("/chat", { state: { open: r.conversation_id, draft: r.started ? r.prompt : undefined } });
+    } finally {
+      cards.reload();
+      inbox.refresh();
+    }
   };
   const dismiss = async (c: HomeCard) => { await cards.update(c.id, { dismissed: true }); inbox.refresh(); };
   // 稍后提醒：推迟会清未读（服务端），所以同样刷新角标
@@ -116,13 +123,14 @@ export default function HomeScreen() {
           </div>
         ) : actions.map((c, i) => {
           const target = cardTarget(c.target);
-          const Icon = target?.Icon ?? IconSpark;
+          const started = c.origin === "agent" && !!c.conversation_id;
+          const Icon = target?.Icon ?? (started ? IconChat : IconSpark);
           return (
             <div key={c.id} className="glass-card action-card enter" style={nth(i)}>
               <div className="action-card-head">
-                <span className="row-icon"><Icon /></span>
+                <span className="row-icon icon-pop" key={String(started)}><Icon /></span>
                 <div className="action-card-title">
-                  {c.origin === "agent" && <span className="action-card-eyebrow">可以替你做</span>}
+                  {c.origin === "agent" && <span className="action-card-eyebrow fade-in" key={String(started)}>{started ? "已交给助手 · 看看进展" : "可以替你做"}</span>}
                   {c.title}
                 </div>
                 <SnoozeMenu card={c} onSnooze={snooze} />
@@ -130,9 +138,13 @@ export default function HomeScreen() {
               {c.blocks.length > 0 && <BlockRenderer blocks={c.blocks} />}
               {/* 等宽胶囊，最后一颗是主操作（实心） */}
               <div className="pills">
-                <button className="pill" onClick={() => dismiss(c)}>忽略</button>
+                <button className="pill" onClick={() => dismiss(c)}>{started ? "收起" : "忽略"}</button>
                 {target && <button className={`pill ${c.action_prompt ? "" : "primary"}`} onClick={() => openTarget(c, target)}><target.Icon size={16} />{target.label}</button>}
-                {c.action_prompt && <button className="pill primary" onClick={() => doIt(c)}>{c.action_label?.trim() || "去做"}</button>}
+                {c.action_prompt && (
+                  <button className="pill primary" onClick={() => doIt(c)}>
+                    {started ? <><IconChat size={16} />查看对话</> : c.action_label?.trim() || "去做"}
+                  </button>
+                )}
               </div>
             </div>
           );

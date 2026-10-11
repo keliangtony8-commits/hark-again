@@ -7,10 +7,12 @@ import 'package:go_router/go_router.dart';
 import '../../models/block.dart';
 import 'chat_controller.dart';
 
-Future<void> openConversation(BuildContext context, WidgetRef ref, String id, {String? focus}) async {
+/// [send]：打开后再发一句（主页建议卡“开始做”：服务端刚开的空对话 + 卡上的指令）。
+Future<void> openConversation(BuildContext context, WidgetRef ref, String id, {String? focus, String? send}) async {
   final chat = ref.read(chatProvider('').notifier);
   context.go('/chat');
   await chat.open(id, focus: focus);
+  if (send != null && send.trim().isNotEmpty) chat.send(send);
 }
 
 /// 从别的页面“问一句”：开一段新对话发出去，然后切到聊天（主页/项目的输入胶囊、新建面板都走这里）。

@@ -64,7 +64,7 @@ void main() {
   });
 
   testWidgets('稍后提醒 → pick shortcut → PATCH utc + inbox refresh', (tester) async {
-    final api = await pump(tester, ActionCard(card: HomeCard.fromJson(cardJson()), onDo: (_) {}));
+    final api = await pump(tester, ActionCard(card: HomeCard.fromJson(cardJson()), onDo: (_) {}, onOpen: (_, _) {}));
     await tester.tap(find.byTooltip('稍后提醒'));
     await tester.pumpAndSettle();
     expect(find.text('明早 08:00'), findsOneWidget);

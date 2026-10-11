@@ -24,17 +24,21 @@ Map<String, dynamic> cardJson({String? target = 'usage', bool unread = true}) =>
 class FakeApi implements Api {
   final calls = <String>[];
   Object? readBody;
+  /// POST /api/cards/{id}/start 的回复（建议卡开始做）；cards 列表 GET 回的卡
+  Map<String, dynamic> startReply = {'conversation_id': 'c9', 'prompt': '去续费校园网一个月', 'started': true};
+  Map<String, dynamic>? listed;
 
   @override
   Future<dynamic> get(String path) async {
     calls.add('GET $path');
     if (path == '/api/inbox') return {'unread': 0, 'latest': null};
-    return <dynamic>[cardJson()];
+    return <dynamic>[listed ?? cardJson()];
   }
 
   @override
   Future<dynamic> post(String path, [Object? body]) async {
     calls.add('POST $path');
+    if (path.endsWith('/start')) return startReply;
     readBody = body;
     return {'unread': 0, 'latest': null};
   }
@@ -49,13 +53,15 @@ class FakeApi implements Api {
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError();
 }
 
-Future<FakeApi> pump(WidgetTester tester, Map<String, dynamic> json, {List<String>? sent}) async {
-  final api = FakeApi();
+Future<FakeApi> pump(WidgetTester tester, Map<String, dynamic> json,
+    {List<String>? sent, List<(String, String?)>? opened, FakeApi? fake}) async {
+  final api = fake ?? FakeApi();
   final router = GoRouter(initialLocation: '/home', routes: [
     GoRoute(
         path: '/home',
         builder: (_, _) => Scaffold(
-            body: SingleChildScrollView(child: ActionCard(card: HomeCard.fromJson(json), onDo: (t) => sent?.add(t))))),
+            body: SingleChildScrollView(child: ActionCard(
+                card: HomeCard.fromJson(json), onDo: (t) => sent?.add(t), onOpen: (id, s) => opened?.add((id, s)))))),
     GoRoute(path: '/me/usage', builder: (_, _) => const Scaffold(body: Text('USAGE PAGE'))),
   ]);
   await tester.pumpWidget(ProviderScope(

@@ -112,7 +112,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final card = HomeCard.fromJson({'id': 'k', 'kind': 'action', 'title': '预算', 'blocks': [], 'action_prompt': 'x', 'target': 'usage', 'dismissed': false, 'unread': false});
-    await tester.pumpWidget(ProviderScope(child: _wrap(SingleChildScrollView(child: ActionCard(card: card, onDo: (_) {})))));
+    await tester.pumpWidget(ProviderScope(child: _wrap(SingleChildScrollView(child: ActionCard(card: card, onDo: (_) {}, onOpen: (_, _) {})))));
     await tester.pumpAndSettle();
     final pills = tester.widgetList<PillButton>(find.byType(PillButton)).toList();
     expect(pills.map((b) => b.label), ['忽略', '查看用量', '去做']);

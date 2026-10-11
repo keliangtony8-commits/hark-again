@@ -248,6 +248,9 @@ class HomeCard {
   /// 谁放的卡：'agent' = 助手提议替你做的事（点主按钮后收起，见 backend app/home_offers.py）；空 = 系统提醒。
   final String? origin;
   bool get offered => origin == 'agent';
+
+  /// 助手提议的卡已被点过：服务端开了对话并记在卡上（POST /api/cards/{id}/start），卡变成“已交给助手 · 查看对话”。
+  bool get started => offered && conversationId != null;
   String get actionText => (actionLabel ?? '').trim().isEmpty ? '去做' : actionLabel!.trim();
   final bool dismissed, unread;
   final DateTime? updatedAt;

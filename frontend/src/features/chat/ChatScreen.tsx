@@ -30,12 +30,13 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   const nav = useNavigate();
   const consumed = useRef(false);
 
-  // 从 Home 跳过来：带一句话就直接发出；带对话 id 就打开那段对话。用完清掉路由状态防止重复
+  // 从 Home 跳过来：带一句话就直接发出（新对话）；带对话 id 就打开那段，同时带话 = 打开后再发（建议卡“开始做”）。
+  // 用完清掉路由状态防止重复
   useEffect(() => {
     const st = location.state as { draft?: string; files?: Upload[]; open?: string } | null;
     if (!st || consumed.current) return;
     consumed.current = true;
-    if (st.open) chat.open(st.open);
+    if (st.open) chat.open(st.open).then(() => { if (st.draft?.trim()) chat.send(st.draft); });
     else if (st.draft || st.files?.length) chat.send(st.draft ?? "", st.files);
     nav(location.pathname, { replace: true, state: null });
   }, [location, chat, nav]);

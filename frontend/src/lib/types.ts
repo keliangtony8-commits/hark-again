@@ -78,7 +78,8 @@ export type ScheduledTask = { id: string; name: string; prompt: string; cron: st
 /** 定时任务的一次运行（GET /api/tasks/{id}/runs，新的在前）；conversation_id：报告那次的对话，面板任务或对话已删为 null。 */
 export type TaskRun = { id: string; trigger: "schedule" | "manual"; status: "running" | "ok" | "error"; error: string | null; conversation_id: string | null; started_at: string; finished_at: string | null; duration_ms: number | null };
 export type HomeCard = { id: string; kind: "action" | "panel" | "report"; conversation_id: string | null; task_id: string | null; title: string; blocks: Block[]; action_prompt: string | null; target: string | null;
-  /** 主按钮上的字，空 = “去做”；origin "agent" = 助手提议的卡（点主按钮后收起），见 backend app/home_offers.py */
+  /** 主按钮上的字，空 = “去做”；origin "agent" = 助手提议的卡：点主按钮 POST /api/cards/{id}/start，
+   *  之后 conversation_id 指向开出来的对话（卡变成“已交给助手 · 查看对话”），见 backend app/home_offers.py */
   action_label?: string | null; origin?: string | null; dismissed: boolean; unread: boolean; updated_at: string;
   /** 稍后提醒到这个时刻：非空就先不显示，到点服务端放回（清空 + 重新未读）。旧服务器没有这个字段。 */
   snoozed_until?: string | null };
