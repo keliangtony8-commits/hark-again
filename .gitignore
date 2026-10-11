@@ -1,0 +1,15 @@
+.env
+node_modules
+dist
+__pycache__
+build/
+.dart_tool/
+*.pyc
+.venv/
+venv/
+*.zip
+.flutter-plugins
+.flutter-plugins-dependencies
+*.log
+.DS_Store
+.idea/

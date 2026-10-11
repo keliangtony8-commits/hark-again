@@ -1,0 +1,553 @@
+// 共用动效组件。页面只组合这些，不自己写 AnimationController。
+// 无障碍：系统开了“移除动画”（MediaQuery.disableAnimations）时，这里的每个组件都直接给出终态、
+// 循环动画停住；页面里需要时长的地方用 context.motion(Motion.x)，同样会被归零。
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import 'glass_mode.dart';
+
+extension MotionContext on BuildContext {
+  /// 用户在系统里关掉了动画
+  bool get reduceMotion => MediaQuery.maybeDisableAnimationsOf(this) ?? false;
+
+  /// 动画时长：减少动态时为 0（布局变化仍然发生，只是不再过渡）
+  Duration motion(Duration d) => reduceMotion ? Duration.zero : d;
+}
+
+/// 循环动画（闪光、跳点、脉冲）共用：减少动态时停在静止帧，恢复时继续转。
+mixin _LoopMotion<T extends StatefulWidget> on State<T>, SingleTickerProviderStateMixin<T> {
+  AnimationController get loop;
+  void startLoop() => loop.repeat();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (context.reduceMotion) {
+      loop
+        ..stop()
+        ..value = 0.5;
+    } else if (!loop.isAnimating) {
+      startLoop();
+    }
+  }
+
+  @override
+  void dispose() {
+    loop.dispose();
+    super.dispose();
+  }
+}
+
+/// 出现时轻轻上浮淡入（新消息、列表项、卡片）。delay 用于列表错峰。
+class FadeSlideIn extends StatelessWidget {
+  const FadeSlideIn({super.key, required this.child, this.delay = Duration.zero, this.offset = Motion.rise});
+  final Widget child;
+  final Duration delay;
+  final double offset;
+
+  @override
+  Widget build(BuildContext context) {
+    if (context.reduceMotion) return child;
+    final total = Motion.base + delay;
+    final start = delay.inMilliseconds / total.inMilliseconds;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: total,
+      curve: Interval(start, 1, curve: Motion.ease),
+      child: child,
+      builder: (_, v, c) => Opacity(
+        opacity: v,
+        child: Transform.translate(offset: Offset(0, (1 - v) * offset), child: c),
+      ),
+    );
+  }
+}
+
+/// 停用/下线的内容变淡（还在、还能点，只是退到背景里）；开关切换时平滑过渡。
+class Dimmed extends StatelessWidget {
+  const Dimmed({super.key, required this.dimmed, required this.child});
+  final bool dimmed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedOpacity(
+        opacity: dimmed ? Op.dimmed : 1,
+        duration: context.motion(Motion.base),
+        curve: Motion.ease,
+        child: child,
+      );
+}
+
+/// 按下时微缩、松开回弹：所有可点的卡片和按钮用它，手感统一。
+/// 读屏里它是一个“按钮”：子树里的文字并进来当名字；纯图标按钮必须给 semanticLabel。
+class Pressable extends StatefulWidget {
+  const Pressable({super.key, required this.child, this.onTap, this.onLongPress, this.scale = 0.97, this.semanticLabel});
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final double scale;
+  final String? semanticLabel;
+
+  @override
+  State<Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<Pressable> {
+  bool _down = false;
+  void _set(bool v) => setState(() => _down = v);
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null || widget.onLongPress != null;
+    final pressed = _down && !context.reduceMotion;
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: widget.semanticLabel,
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        child: _gesture(enabled, pressed),
+      ),
+    );
+  }
+
+  Widget _gesture(bool enabled, bool pressed) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
+      onTapDown: enabled ? (_) => _set(true) : null,
+      onTapUp: enabled ? (_) => _set(false) : null,
+      onTapCancel: enabled ? () => _set(false) : null,
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      child: AnimatedScale(scale: pressed ? widget.scale : 1, duration: Motion.fast, curve: pressed ? Motion.ease : Motion.spring, child: widget.child),
+    );
+  }
+}
+
+/// 骨架屏闪光：加载时代替转圈，布局不跳。
+class Shimmer extends StatefulWidget {
+  const Shimmer({super.key, this.height = 56, this.radius = Radii.md});
+  final double height;
+  final double radius;
+
+  @override
+  State<Shimmer> createState() => _ShimmerState();
+}
+
+class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin, _LoopMotion {
+  late final _c = AnimationController(vsync: this, duration: Motion.shimmer);
+  @override
+  AnimationController get loop => _c;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, _) => Container(
+        height: widget.height,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.radius),
+          gradient: LinearGradient(
+            begin: Alignment(-1 + _c.value * 3, 0),
+            end: Alignment(_c.value * 3, 0),
+            colors: [context.tileFill, context.hairline, context.tileFill],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 三个跳动的点：模型在思考。
+class TypingDots extends StatefulWidget {
+  const TypingDots({super.key});
+
+  @override
+  State<TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<TypingDots> with SingleTickerProviderStateMixin, _LoopMotion {
+  late final _c = AnimationController(vsync: this, duration: Motion.typing);
+  @override
+  AnimationController get loop => _c;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = context.palette.text3;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, _) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) {
+          final t = ((_c.value - i * 0.15) % 1.0);
+          final lift = t < 0.4 ? Curves.easeOut.transform(t / 0.4) : 1 - Curves.easeIn.transform(((t - 0.4) / 0.6).clamp(0, 1));
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2.5),
+            child: Transform.translate(
+              offset: Offset(0, -4 * lift),
+              child: Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.5 + 0.5 * lift),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+/// 闪烁的小圆点（录音中、实时画面）。
+class PulseDot extends StatefulWidget {
+  const PulseDot({super.key, required this.color, this.size = 8});
+  final Color color;
+  final double size;
+
+  @override
+  State<PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin, _LoopMotion {
+  late final _c = AnimationController(vsync: this, duration: Motion.pulse);
+  @override
+  AnimationController get loop => _c;
+  @override
+  void startLoop() => _c.repeat(reverse: true);
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: Tween(begin: 0.3, end: 1.0).animate(_c),
+    child: Container(
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+    ),
+  );
+}
+
+/// 从顶部滑入/滑出的切换（端内横幅）。child 换成 null 就收起。
+class SlideDownSwitcher extends StatelessWidget {
+  const SlideDownSwitcher({super.key, this.child});
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: context.motion(Motion.slow),
+    reverseDuration: context.motion(Motion.base),
+    switchInCurve: Motion.spring,
+    switchOutCurve: Motion.ease,
+    transitionBuilder: (c, a) => FadeTransition(
+      opacity: a,
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0, -0.6), end: Offset.zero).animate(a),
+        child: c,
+      ),
+    ),
+    child: child ?? const SizedBox.shrink(key: ValueKey('none')),
+  );
+}
+
+/// 从下方升起/落下的切换（输入胶囊上方的建议条、聚焦时出现的“收起”钮）：淡入 + 上浮 + 占位尺寸一起长出来，
+/// 所以旁边/下面的东西是被平滑推开的。child 换成 null 就收起。axis 决定尺寸沿哪个方向长（竖排用 vertical、横排用 horizontal）。
+class RiseSwitcher extends StatelessWidget {
+  const RiseSwitcher({super.key, this.child, this.axis = Axis.vertical});
+  final Widget? child;
+  final Axis axis;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: context.motion(Motion.base),
+    switchInCurve: Motion.ease,
+    switchOutCurve: Motion.ease,
+    transitionBuilder: (c, a) => SizeTransition(
+      sizeFactor: a,
+      axis: axis,
+      alignment: axis == Axis.vertical ? Alignment.bottomCenter : Alignment.centerRight,
+      child: FadeTransition(
+        opacity: a,
+        child: SlideTransition(position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(a), child: c),
+      ),
+    ),
+    child: child ?? const SizedBox.shrink(key: ValueKey('none')),
+  );
+}
+
+/// 小块内容换值（模型钮的标签）：旧的往上淡出、新的从下方淡入；给 child 一个随值变化的 key。
+/// 尺寸跟着内容平滑变化，按钮不跳。
+class SwapSwitcher extends StatelessWidget {
+  const SwapSwitcher({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSize(
+    duration: context.motion(Motion.base),
+    curve: Motion.ease,
+    child: AnimatedSwitcher(
+      duration: context.motion(Motion.base),
+      switchInCurve: Motion.ease,
+      switchOutCurve: Motion.ease,
+      layoutBuilder: (current, previous) => Stack(alignment: Alignment.center, children: [...previous, ?current]),
+      transitionBuilder: (c, a) {
+        final incoming = c.key == child.key;
+        return FadeTransition(
+          opacity: a,
+          child: SlideTransition(
+            position: Tween(begin: Offset(0, incoming ? 0.5 : -0.5), end: Offset.zero).animate(a),
+            child: c,
+          ),
+        );
+      },
+      child: child,
+    ),
+  );
+}
+
+/// 侧栏出现/收起：横向展开 + 淡入（平板双栏里的历史栏）。child 换成 null 就收起。
+/// animate: false 时直接到位——窗口尺寸变化（转屏、展开折叠屏）引起的切换不做过渡，否则窄屏上会先挤压对话区。
+class SidePaneSwitcher extends StatelessWidget {
+  const SidePaneSwitcher({super.key, this.child, this.animate = true});
+  final Widget? child;
+  final bool animate;
+
+  @override
+  Widget build(BuildContext context) => !animate
+      ? child ?? const SizedBox.shrink()
+      : AnimatedSwitcher(
+          duration: context.motion(Motion.slow),
+          reverseDuration: context.motion(Motion.base),
+          switchInCurve: Motion.ease,
+          switchOutCurve: Motion.ease,
+          transitionBuilder: (c, a) => FadeTransition(
+            opacity: a,
+            child: SizeTransition(sizeFactor: a, axis: Axis.horizontal, alignment: AlignmentDirectional.centerStart, child: c),
+          ),
+          child: child ?? const SizedBox.shrink(key: ValueKey('none')),
+        );
+}
+
+/// 一次性高亮：play 变成新的正数就在 child 背后铺一层强调色，停一会儿再淡出（搜索命中跳到的消息）。
+/// 底色向外多出一圈（不占布局，不挤动消息）。减少动态时：底色直接出现、到点直接消失。
+class FlashHighlight extends StatefulWidget {
+  const FlashHighlight({super.key, required this.child, this.play = 0});
+  final Widget child;
+
+  /// 0 = 不闪；每换一个新的正数闪一次。
+  final int play;
+
+  @override
+  State<FlashHighlight> createState() => _FlashHighlightState();
+}
+
+class _FlashHighlightState extends State<FlashHighlight> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: Motion.flash, value: 1);
+  Timer? _hold;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.play > 0) WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+  }
+
+  @override
+  void didUpdateWidget(FlashHighlight old) {
+    super.didUpdateWidget(old);
+    if (widget.play != old.play && widget.play > 0) _start();
+  }
+
+  void _start() {
+    if (!mounted) return;
+    _hold?.cancel();
+    if (context.reduceMotion) {
+      _c.value = 0;
+      _hold = Timer(Motion.flash, () => _c.value = 1);
+    } else {
+      _c.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _hold?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = context.palette.accentSoft;
+    final fade = CurvedAnimation(parent: _c, curve: const Interval(0.4, 1, curve: Motion.ease));
+    // passthrough：把父级约束原样交给 child，避免宽度被放松后
+    // 依赖拉伸的布局（例如用户消息靠右的 Column）缩成一团靠左。
+    return Stack(clipBehavior: Clip.none, fit: StackFit.passthrough, children: [
+      Positioned.fill(
+        left: -Sp.x2,
+        right: -Sp.x2,
+        top: -Sp.x2,
+        bottom: -Sp.x2,
+        child: IgnorePointer(
+          child: AnimatedBuilder(
+            animation: fade,
+            builder: (_, _) => fade.value >= 1
+                ? const SizedBox.shrink()
+                : DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: tint.withValues(alpha: tint.a * (1 - fade.value)),
+                      borderRadius: BorderRadius.circular(Radii.md),
+                    ),
+                  ),
+          ),
+        ),
+      ),
+      widget.child,
+    ]);
+  }
+}
+
+/// 入场进度：第一次出现时 t 从 0 平滑走到 1，交给 builder 去画（用量图的柱子一起长出来）。
+/// 只在首次挂载时播放；数据变了不重播（想重播就换 key）。减少动态时 t 直接是 1。
+class GrowIn extends StatelessWidget {
+  const GrowIn({super.key, required this.builder});
+  final Widget Function(BuildContext context, double t) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (context.reduceMotion) return builder(context, 1);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Motion.slow,
+      curve: Motion.ease,
+      builder: (c, t, _) => builder(c, t),
+    );
+  }
+}
+
+/// 进度条：从 0 长到 value（0~1，超出按满格画），value 变化时平滑过渡（用量页的预算条）。
+class MeterBar extends StatelessWidget {
+  const MeterBar({super.key, required this.value, required this.color, this.height = Sp.x2});
+  final double value;
+  final Color color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final track = context.tileFill; // 坐在玻璃卡上：减少透明度时 GlassFills 自动换实色
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(Radii.full),
+      child: SizedBox(
+        height: height,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: value.clamp(0, 1).toDouble()),
+          duration: context.motion(Motion.slow),
+          curve: Motion.ease,
+          builder: (_, v, _) => Stack(fit: StackFit.expand, children: [
+            ColoredBox(color: track),
+            FractionallySizedBox(alignment: AlignmentDirectional.centerStart, widthFactor: v, child: ColoredBox(color: color)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// 图标右上角的小圆点（未读、失败…）：出现时轻弹放大，消失时缩没；减少动态时直接出现/消失。
+/// [label] 给读屏（点在时才读）。
+class DotBadge extends StatelessWidget {
+  const DotBadge({super.key, required this.child, required this.visible, required this.color, this.label, this.size = Sp.x3, this.right = -Sp.x1 / 2, this.top = -Sp.x1 / 2});
+  final Widget child;
+  final bool visible;
+  final Color color;
+  final String? label;
+
+  /// 点的直径和它离 child 右上角的距离（负数 = 探出去一点）。分段导航里点放在胶囊角上、不压字。
+  final double size, right, top;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: visible ? label : null,
+        child: Stack(clipBehavior: Clip.none, children: [
+          child,
+          Positioned(
+            right: right,
+            top: top,
+            child: AnimatedScale(
+              scale: visible ? 1 : 0,
+              duration: context.motion(Motion.base),
+              curve: Motion.spring,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: context.palette.surface, width: size / 6)),
+              ),
+            ),
+          ),
+        ]),
+      );
+}
+
+/// 分段控件里选中的那颗“滑块”：等分成 count 段，index 一变就滑过去（顶部分段导航）。
+/// 只负责位置动画，滑块长什么样由 thumb 决定；放在 Stack 里、文字层之下。
+class SlidingThumb extends StatelessWidget {
+  const SlidingThumb({super.key, required this.index, required this.count, required this.thumb});
+  final int index;
+  final int count;
+  final Widget thumb;
+
+  @override
+  Widget build(BuildContext context) => AnimatedAlign(
+        alignment: Alignment(count <= 1 ? 0 : -1 + 2 * index / (count - 1), 0),
+        duration: context.motion(Motion.slow),
+        curve: Motion.ease,
+        child: FractionallySizedBox(widthFactor: 1 / count, heightFactor: 1, child: thumb),
+      );
+}
+
+/// 浮层的出现/隐藏：淡出时同时往上收一点、并且不再挡点击（进入子页面时藏起顶栏）。
+class FloatAway extends StatelessWidget {
+  const FloatAway({super.key, required this.visible, required this.child});
+  final bool visible;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        ignoring: !visible,
+        child: AnimatedSlide(
+          offset: visible ? Offset.zero : const Offset(0, -0.3),
+          duration: context.motion(Motion.base),
+          curve: Motion.ease,
+          child: AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration: context.motion(Motion.base),
+            curve: Motion.ease,
+            child: ExcludeSemantics(excluding: !visible, child: child),
+          ),
+        ),
+      );
+}
+
+/// 对话框的出现/消失：淡入 + 从 0.94 轻轻放大到 1（收起时反过来）。由路由的 [animation] 驱动，
+/// 时长交给路由（ui/sheets.dart 的 showAppDialog 用 context.motion(Motion.base)，减少动态时直接到位）。
+class PopTransition extends StatelessWidget {
+  const PopTransition({super.key, required this.animation, required this.child});
+  final Animation<double> animation;
+  final Widget child;
+
+  static const _from = 0.94;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = CurvedAnimation(parent: animation, curve: Motion.ease, reverseCurve: Motion.ease.flipped);
+    return FadeTransition(
+      opacity: a,
+      child: ScaleTransition(scale: Tween(begin: _from, end: 1.0).animate(a), child: child),
+    );
+  }
+}

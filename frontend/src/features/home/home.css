@@ -1,0 +1,26 @@
+/* 主页（设计 v2）：衬线问候 + 一列玻璃卡。节奏只用令牌：左右 --gutter，卡片间 --card-gap */
+.home-hero { padding: var(--sp-5) var(--sp-1) var(--sp-5); animation: rise var(--dur) var(--ease) both; }
+.home-date { font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+.home-hero h1 { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-2) 0 0; }
+
+.action-card-head { display: flex; align-items: flex-start; gap: var(--sp-3); }
+.action-card-title { flex: 1; font-weight: var(--fw-title); line-height: 1.45; }
+.onboarding .pills { max-width: 240px; }
+
+.panel { min-height: 120px; }
+.panel-head { display: flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); font-weight: var(--fw-title); margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-2)) 0 0; }
+.panel-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-head .icon-btn { color: var(--text-3); }
+.panel.busy .panel-head .icon-btn:first-of-type svg { animation: spin var(--dur-spin) linear infinite; }
+.panel-body { display: flex; flex-direction: column; gap: var(--sp-3); transition: opacity var(--dur) var(--ease); }
+.panel.busy .panel-body { opacity: var(--op-dimmed); }
+.panel-time { font-size: var(--fs-xs); color: var(--text-3); }
+
+.today-row { display: flex; gap: var(--sp-3); align-items: center; }
+.today-time { font-size: var(--fs-sm); color: var(--text-3); width: 52px; flex: none; }
+
+/* 未读报告：图标右上角强调色小点 */
+.report-row .row-icon { position: relative; }
+.report-row.unread .row-icon::after { content: ""; position: absolute; top: -2px; right: -2px; width: 10px; height: 10px;
+  border-radius: var(--r-full); background: var(--accent); box-shadow: 0 0 0 2px var(--glass); animation: pop var(--dur) var(--ease); }
+.report-row.unread .row-title { font-weight: var(--fw-title); }

@@ -1,0 +1,78 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { http } from "../lib/api";
+import { conversationMarkdown, downloadText, exportFileName } from "../lib/export";
+import { SEARCH_DEBOUNCE_MS } from "../lib/history";
+import type { ConversationSummary, Message } from "../lib/types";
+import { noticeDialog } from "../ui/dialog";
+
+/**
+ * 对话列表的唯一归属地：加载、搜索（防抖 + 丢弃过期响应）、置顶、改名、删除。
+ * useChat 组合它，界面只读 items / query。
+ */
+export function useConversations(projectId?: string) {
+  const [items, setItems] = useState<ConversationSummary[]>([]);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const seq = useRef(0);
+  const queryRef = useRef(query);
+  queryRef.current = query;
+
+  const load = useCallback(async (q: string) => {
+    const mine = ++seq.current;
+    const params = new URLSearchParams();
+    if (projectId) params.set("project_id", projectId);
+    if (q.trim()) params.set("q", q.trim());
+    const qs = params.toString();
+    setSearching(!!q.trim());
+    try {
+      const list = await http.get<ConversationSummary[]>(`/api/conversations${qs ? `?${qs}` : ""}`);
+      if (mine === seq.current) setItems(list);   // 慢的旧请求不覆盖新结果
+    } finally {
+      if (mine === seq.current) setSearching(false);
+    }
+  }, [projectId]);
+
+  const refresh = useCallback(() => load(queryRef.current), [load]);
+
+  // 输入停顿后再搜；清空立即恢复完整列表
+  useEffect(() => {
+    if (!query.trim()) { load(""); return; }
+    const t = setTimeout(() => load(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [query, load]);
+
+  /** 乐观更新后同步服务端；失败就以服务端为准重新拉。 */
+  const patch = useCallback(async (id: string, body: { title?: string; pinned?: boolean; model?: string | null }) => {
+    setItems((xs) => xs.map((c) => (c.id === id ? { ...c, ...body } : c)));
+    try { await http.patch(`/api/conversations/${id}`, body); }
+    finally { refresh(); }
+  }, [refresh]);
+
+  const rename = useCallback((id: string, title: string) => {
+    const t = title.trim();
+    return t ? patch(id, { title: t }) : Promise.resolve();
+  }, [patch]);
+  const setPinned = useCallback((id: string, pinned: boolean) => patch(id, { pinned }), [patch]);
+  /** 换对话的模型；null = 回默认（发 ""）。失败会抛出，useChat 据此把选择留到下一条消息带上。 */
+  const setModel = useCallback((id: string, choice: string | null) => patch(id, { model: choice ?? "" }), [patch]);
+
+  const remove = useCallback(async (id: string) => {
+    setItems((xs) => xs.filter((c) => c.id !== id));
+    await http.del(`/api/conversations/${id}`);
+    refresh();
+  }, [refresh]);
+
+  /** 导出整段对话为 Markdown 文件（以服务器为准，正在打开的对话也重新拉）。 */
+  const exportMarkdown = useCallback(async (c: ConversationSummary) => {
+    try {
+      const { messages } = await http.get<{ messages: Message[] }>(`/api/conversations/${c.id}`);
+      downloadText(exportFileName(c.title), conversationMarkdown(c.title, messages));
+    } catch (e) {
+      void noticeDialog("导出失败", e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  return { items, query, setQuery, searching, refresh, rename, setPinned, setModel, remove, exportMarkdown };
+}
+
+export type Conversations = ReturnType<typeof useConversations>;

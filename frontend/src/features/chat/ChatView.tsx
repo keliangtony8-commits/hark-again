@@ -1,0 +1,101 @@
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import type { LinkStatus } from "../../lib/socket";
+import { formatDay, startsNewDay } from "../../lib/format";
+import type { Message, Upload } from "../../lib/types";
+import { FloatingFooter } from "../../ui/kit";
+import Composer, { type EditDraft } from "./Composer";
+import EmptyState from "./EmptyState";
+import MessageView, { type OutboxActions } from "./MessageView";
+
+type Props = OutboxActions & {
+  messages: Message[]; busy: boolean; error: string | null; link: LinkStatus;
+  canRegenerate: boolean; onRegenerate: () => void;
+  /** 可编辑的最后一条用户消息；onEdit 改写它并重答。 */
+  editableId: string | null; onEdit: (text: string) => void;
+  /** 生成中；onStop 为空 = 已请求停止，停止键置灰。 */
+  streaming: boolean; onStop?: () => void;
+  /** 待定位的消息（搜索命中）；处理完调 onFocused 取走。 */
+  focus: string | null; onFocused: () => void;
+  /** 输入框主按钮左边的插槽（模型钮）。 */
+  accessory?: ReactNode;
+  onSend: (t: string, files?: Upload[]) => void; onReconnect: () => void; greeting?: string;
+};
+
+/** 长连接断开时的提示条（输入胶囊上方的一颗玻璃胶囊）：待发送的消息会在连上后自动发出，“重试”跳过退避立刻重连。 */
+function LinkBar({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="link-bar glass" role="status">
+      <span className="link-dot" aria-hidden />
+      <span className="link-text">连接已断开 · 正在重连</span>
+      <button className="btn btn-ghost btn-sm" onClick={onRetry}>重试</button>
+    </div>
+  );
+}
+
+/** 编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
+ *  编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。 */
+export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, focus, onFocused, accessory, onSend, onReconnect, onResend, onDiscard, greeting }: Props) {
+  const last = messages[messages.length - 1];
+  const [draft, setDraft] = useState<EditDraft | null>(null);
+  const editing = draft && draft.id === editableId ? draft : null;
+  const startEdit = () => {
+    const m = messages.find((x) => x.id === editableId);
+    if (!m) return;
+    setDraft({
+      id: m.id, text: m.blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim(),
+      hasFiles: m.blocks.some((b) => b.type === "file"),
+    });
+  };
+  const end = useRef<HTMLDivElement>(null);
+  const thread = useRef<HTMLDivElement>(null);
+  // 平时贴底；有定位请求时滚到那条消息的中间并闪一下（.flash 动画，结束自己摘掉，重复定位能再闪）
+  useEffect(() => {
+    const el = focus ? thread.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(focus)}"]`) : null;
+    if (!el) { end.current?.scrollIntoView({ block: "end" }); return; }
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+    el.classList.remove("flash");
+    void el.offsetWidth;   // 重新触发动画
+    el.classList.add("flash");
+    el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
+    onFocused();
+  }, [messages, focus, onFocused]);
+
+  // 输入胶囊浮在底部（FloatingFooter 量它的实际高度），消息从它下面滚过去
+  const [footerH, setFooterH] = useState(0);
+  const pad = { ["--footer-h" as string]: `${footerH}px` } as CSSProperties;
+  return (
+    <>
+      <div className="thread" ref={thread} style={pad}>
+        {messages.length === 0 ? (
+          <EmptyState onPick={(t) => onSend(t)} subtitle={greeting} />
+        ) : (
+          <div className="thread-inner">
+            {messages.map((m, i) => (
+              <div key={m.id} className="msg-slot">
+                {startsNewDay(messages, i) && <div className="day-sep">{formatDay(m.created_at!)}</div>}
+                <MessageView message={m} last={m === last} onResend={onResend} onDiscard={onDiscard}
+                  onRegenerate={m === last && m.role === "assistant" && canRegenerate ? onRegenerate : undefined}
+                  onEdit={m.id === editableId ? startEdit : undefined} editing={m.id === editing?.id} />
+              </div>
+            ))}
+            {error && (
+              <div className="error-banner">
+                <span>{error}</span>
+                {/* 上一轮失败、最后一条是没等到回复的用户消息：就地重试 */}
+                {canRegenerate && last?.role === "user" && <button className="btn btn-ghost btn-sm" onClick={onRegenerate}>重试</button>}
+              </div>
+            )}
+            <div ref={end} />
+          </div>
+        )}
+      </div>
+      <FloatingFooter onHeight={setFooterH}>
+        {link === "down" && <LinkBar onRetry={onReconnect} />}
+        <Composer disabled={busy} streaming={streaming} onStop={onStop} accessory={accessory}
+          editing={editing} onCancelEdit={() => setDraft(null)} onEditLast={editableId ? startEdit : undefined}
+          onSend={(t, files) => { if (editing) { onEdit(t); setDraft(null); } else onSend(t, files); }} />
+      </FloatingFooter>
+    </>
+  );
+}

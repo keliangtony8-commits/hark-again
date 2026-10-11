@@ -1,0 +1,11 @@
+# 自托管搜索：免费、无 API Key。只给后端内网用，不对外暴露端口。
+use_default_settings: true
+server:
+  secret_key: "replace-with-random-string"
+  limiter: false
+  image_proxy: false
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json

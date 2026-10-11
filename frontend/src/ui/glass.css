@@ -1,0 +1,68 @@
+/* 设计 v2 材质零件（与 App ui/glass.dart 一一对应）。页面只拼这些类，不自己写 backdrop-filter。
+ * .glass        真玻璃：模糊 + 着色 + 发丝边，只给浮层（顶栏、输入胶囊、弹层、抽屉）用——backdrop-filter 很贵
+ * .glass.raised 盖在内容上的真玻璃（弹层、横幅），投影更明显
+ * .glass-drawer 抽屉：宽屏假玻璃卡，窄屏浮起变真玻璃
+ * .glass-card   假玻璃卡：半透明着色 + 发丝边，不模糊（列表里的卡片）
+ * .tile         玻璃卡里再嵌一层的小块（标签 + 大数字）
+ * .pill / .pill.primary   等宽胶囊按钮（卡片底部的操作）
+ * .wide-pill    整行宽的玻璃胶囊入口（“＋ 创建一个新面板”）
+ * .avatar       圆形头像，颜色来自 --avatar（lib/look.ts） */
+.glass {
+  background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--elev-float);
+  -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost);
+}
+/* 盖在内容上的真玻璃（弹层、横幅）：更明显的一层投影把它和下面分开 */
+.glass.raised { background: var(--glass-sheet); box-shadow: var(--elev-raised); } /* 更实一点：盖住的内容只透出颜色，不透出字和线 */
+/* 抽屉：宽屏是贴边的假玻璃卡，窄屏滑出来盖在内容上时才变真玻璃 */
+.glass-drawer { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card); }
+@media (max-width: 860px) {
+  .glass-drawer { background: var(--glass-sheet); box-shadow: var(--elev-raised); -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); }
+}
+.glass-card {
+  background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card);
+  box-shadow: var(--elev-card); /* v2.1：没有外投影，顶边一条内高光 */
+  padding: calc(var(--sp-4) + 4px); display: flex; flex-direction: column; gap: var(--sp-3);
+  animation: rise var(--dur) var(--ease) both;
+}
+.glass-card + .glass-card { margin-top: var(--card-gap); }
+.glass-title { font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: var(--fw-title); line-height: 1.35; margin: 0; letter-spacing: 0; }
+.glass-sub { font-size: var(--fs-sm); color: var(--text-2); margin: 0; }
+
+.tile { padding: var(--sp-3) var(--sp-4); border-radius: var(--r-tile); background: var(--tile); min-width: 0; }
+.tile-label { font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+.tile-value { font-family: var(--font-serif); font-size: var(--fs-xl); font-weight: var(--fw-title); line-height: 1.25; letter-spacing: var(--display-tracking); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-note { font-size: var(--fs-xs); color: var(--text-3); }
+
+.pills { display: flex; gap: var(--sp-2); }
+.pill { flex: 1 1 0; min-width: 0; height: 40px; padding: 0 var(--sp-3); border-radius: var(--r-full); background: var(--tile); color: var(--text);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); font-size: var(--fs-sm); font-weight: var(--fw-title); white-space: nowrap;
+  transition: transform var(--dur-fast) var(--ease), background var(--dur) var(--ease); }
+.pill:hover { background: color-mix(in srgb, var(--tile) 100%, var(--text) 6%); }
+.pill:active { transform: scale(0.97); }
+.pill.primary { background: var(--pill-on); color: var(--on-pill-on); }
+.pill.primary:hover { background: color-mix(in srgb, var(--pill-on) 88%, var(--glass)); }
+
+.wide-pill { width: 100%; height: 52px; margin-top: var(--card-gap); border-radius: var(--r-full); display: flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--elev-card); color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-title);
+  transition: color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.wide-pill:hover { color: var(--text); }
+.wide-pill:active { transform: scale(0.99); }
+
+.avatar { width: 40px; height: 40px; border-radius: var(--r-full); flex: none; display: grid; place-items: center; font-family: var(--font-serif); font-weight: var(--fw-title);
+  background: var(--avatar); color: var(--on-avatar); box-shadow: 0 0 0 1px var(--glass-border);
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease); }
+button.avatar:active { transform: scale(0.94); }
+.avatar.lg { width: 76px; height: 76px; }
+
+/* 圆形玻璃按钮（顶栏左侧上下文按钮、子页面返回） */
+.glass-btn { width: 40px; height: 40px; border-radius: var(--r-full); display: inline-grid; place-items: center; flex: none; color: var(--text);
+  transition: transform var(--dur) var(--ease), background var(--dur) var(--ease); }
+.glass-btn:active { transform: scale(0.94); }
+
+/* 聚焦输入胶囊时盖住页面：模糊 + 着色，渐入 */
+.frost-scrim { position: fixed; inset: 0; z-index: 15; background: var(--glass-scrim);
+  -webkit-backdrop-filter: blur(var(--blur-scrim)); backdrop-filter: blur(var(--blur-scrim)); animation: fade calc(var(--dur) * 1.5) var(--ease) both; }
+
+/* 日期分隔：居中小灰字 */
+.day-sep { align-self: center; font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); padding: var(--sp-1) 0; }

@@ -1,0 +1,31 @@
+# 模型网关：业务代码只认别名 fast / smart，换供应商只改这里
+model_list:
+  - model_name: fast
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+  - model_name: smart
+    litellm_params:
+      model: deepseek/deepseek-reasoner
+      api_key: os.environ/DEEPSEEK_API_KEY
+  # 语音识别：硅基流动 SenseVoice，中文好、便宜（没填 key 时语音按钮会提示未配置）
+  - model_name: stt
+    litellm_params:
+      model: openai/FunAudioLLM/SenseVoiceSmall
+      api_base: https://api.siliconflow.cn/v1
+      api_key: os.environ/SILICONFLOW_API_KEY
+    model_info:
+      mode: audio_transcription
+  # 记忆检索用的向量模型：硅基流动 bge-m3（免费），同一个 key
+  - model_name: embed
+    litellm_params:
+      model: openai/BAAI/bge-m3
+      api_base: https://api.siliconflow.cn/v1
+      api_key: os.environ/SILICONFLOW_API_KEY
+    model_info:
+      mode: embedding
+
+litellm_settings:
+  # 全局花费上限（美元）与周期，超了直接拒绝，防止烧穿
+  max_budget: 10
+  budget_duration: 30d

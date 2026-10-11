@@ -1,0 +1,46 @@
+// 全应用唯一的 Markdown 排版：聊天文字块、项目档案等都用它，字号/颜色只从主题和 tokens 取。
+import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+
+import '../core/links.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import 'glass.dart';
+
+class AppMarkdown extends StatelessWidget {
+  const AppMarkdown(this.data, {super.key, this.selectable = true});
+  final String data;
+  final bool selectable;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final base = context.text.bodyLarge!;
+    return MarkdownBody(
+      data: data,
+      selectable: selectable,
+      onTapLink: (_, href, _) => href != null ? openUrl(href) : null,
+      styleSheet: MarkdownStyleSheet(
+        p: base,
+        a: base.copyWith(color: p.accent, decoration: TextDecoration.underline, decorationColor: p.accent.withValues(alpha: 0.4)),
+        h1: context.text.titleLarge,
+        h2: context.text.titleLarge?.copyWith(fontSize: Fs.lg - 2),
+        h3: context.text.titleMedium,
+        strong: base.copyWith(fontWeight: Weights.strong),
+        listBullet: base.copyWith(color: p.text2),
+        blockquote: base.copyWith(color: p.text2),
+        blockquoteDecoration: BoxDecoration(
+          border: Border(left: BorderSide(color: context.hairline, width: 3)),
+        ),
+        code: TextStyle(fontFamily: 'monospace', fontSize: Fs.sm, backgroundColor: context.tileFill, color: p.text),
+        codeblockDecoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+        tableBorder: TableBorder.all(color: context.hairline),
+        tableHead: base.copyWith(fontWeight: FontWeight.w600),
+        tableBody: context.text.bodyMedium,
+        horizontalRuleDecoration: BoxDecoration(
+          border: Border(top: BorderSide(color: p.border)),
+        ),
+      ),
+    );
+  }
+}

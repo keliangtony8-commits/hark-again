@@ -1,0 +1,111 @@
+import { useCallback, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useResource } from "../../hooks/useResource";
+import { useTaskRuns } from "../../hooks/useTaskRuns";
+import { http } from "../../lib/api";
+import { formatDuration, formatWhen } from "../../lib/format";
+import { nextRunLabel, scheduleLabel } from "../../lib/taskLabels";
+import { TaskIcon } from "./SchedulePicker";
+import type { ScheduledTask, TaskRun } from "../../lib/types";
+import { IconCheck, IconChevron, IconClock, IconClose, IconEdit, IconHistory, IconPlay, IconTrash } from "../../ui/icons";
+import { Hint, Page, PageHeader, Section, Skeleton, Toggle } from "../../ui/kit";
+import TaskSheet, { changesOf, draftOf } from "./TaskSheet";
+import { confirmDialog } from "../../ui/dialog";
+
+/** 定时任务详情（/me/tasks/:id）：任务本身（时间、去向、提示词、开关、立即运行、编辑、删除）+ 最近运行记录。
+ *  有运行在排队或进行时每 4 秒刷新，结束就停（useTaskRuns）。报告那次可点开对话（/chat + state.open）。
+ *  与 App task_detail.dart 同版面同文案；Home 的“任务失败”提醒卡（target=tasks）直达这里。 */
+export default function TaskDetailScreen() {
+  const { id = "" } = useParams();
+  const nav = useNavigate();
+  const tasks = useResource<ScheduledTask>("/api/tasks");
+  const task = tasks.items.find((t) => t.id === id);
+  const refreshTasks = tasks.reload;
+  const onTick = useCallback(() => { refreshTasks(); }, [refreshTasks]);
+  const { runs, error, reload, busy } = useTaskRuns(id, !!task?.run_requested, onTick);
+  const [editing, setEditing] = useState(false);
+
+  if (!task) {
+    return (
+      <Page header={<PageHeader title="定时任务" back />}>
+        {tasks.loading ? <Skeleton /> : <Hint icon={<IconClock size={26} />} title="这个任务已经不在了" text="可能已在别的设备上删除。" />}
+      </Page>
+    );
+  }
+
+  const runNow = async () => { await http.post(`/api/tasks/${task.id}/run`, {}); await Promise.all([refreshTasks(), reload()]); };
+  const remove = async () => {
+    if (!(await confirmDialog({ title: `删除「${task.name}」？`, text: "运行记录和它在 Home 上的卡片会一起删除。" }))) return;
+    await tasks.remove(task.id);
+    nav("/me/tasks");
+  };
+  const queued = task.run_requested && !(runs ?? []).some((r) => r.status === "running");
+
+  return (
+    <Page header={<PageHeader title={task.name} back action={<>
+      <button className="icon-btn" aria-label="编辑任务" onClick={() => setEditing(true)}><IconEdit /></button>
+      <button className="icon-btn" aria-label="删除任务" onClick={remove}><IconTrash /></button>
+    </>} />}>
+      <div className="task-head">
+        <div className="task-head-top">
+          <span className="row-icon"><TaskIcon task={task} /></span>
+          <div className="row-body">
+            <div className="row-title">{scheduleLabel(task)}</div>
+            <div className="row-sub">{task.output === "panel" ? "刷新 Home 上的面板" : "结果放进 Home 收件箱"}</div>
+            {nextRunLabel(task) && <div className="row-sub task-next" key={nextRunLabel(task)}>{nextRunLabel(task)}</div>}
+          </div>
+          <Toggle on={task.active} label={`启用「${task.name}」`} onChange={(v) => tasks.update(task.id, { active: v })} />
+        </div>
+        <p className="task-prompt">{task.prompt}</p>
+        <div className="task-head-actions">
+          <button className="btn btn-primary btn-sm" disabled={busy} onClick={runNow}><IconPlay />{busy ? "运行中…" : "立即运行"}</button>
+        </div>
+      </div>
+
+      <Section title="运行记录">
+        {error ? (
+          <Hint icon={<IconHistory size={26} />} title="运行记录加载失败" text={error}
+            action={<button className="btn btn-soft" onClick={reload}>重试</button>} />
+        ) : runs === null ? <Skeleton /> : runs.length === 0 && !task.run_requested ? (
+          <Hint icon={<IconHistory size={26} />} title="还没运行过" text="到点会自动运行，也可以点上面的“立即运行”试一次。" />
+        ) : (
+          <div className="list task-runs">
+            {queued && (
+              <div className="row run-row" aria-label="排队中，马上开始">
+                <span className="run-status"><span className="run-pulse muted" /></span>
+                <div className="row-body"><div className="row-title">排队中</div><div className="row-sub">马上开始</div></div>
+              </div>
+            )}
+            {runs.map((r, i) => <RunRow key={r.id} run={r} index={i} onOpen={(cid) => nav("/chat", { state: { open: cid } })} />)}
+          </div>
+        )}
+      </Section>
+
+      {editing && <TaskSheet title={task.output === "panel" ? "编辑面板" : "编辑任务"} panel={task.output === "panel"}
+        initial={draftOf(task)} onClose={() => setEditing(false)}
+        onSave={async (d) => { const c = changesOf(draftOf(task), d); if (Object.keys(c).length) await tasks.update(task.id, c); }} />}
+    </Page>
+  );
+}
+
+function RunRow({ run: r, index, onOpen }: { run: TaskRun; index: number; onOpen: (conversationId: string) => void }) {
+  const running = r.status === "running", failed = r.status === "error";
+  const label = running ? "正在运行" : failed ? "失败" : "成功";
+  const when = formatWhen(r.started_at);
+  const sub = [r.trigger === "manual" ? "手动" : "定时", running ? "进行中" : r.duration_ms === null ? null : `用时 ${formatDuration(r.duration_ms)}`]
+    .filter(Boolean).join(" · ");
+  const body = <>
+    <span className={`run-status ${r.status}`} aria-hidden>{running ? <span className="run-pulse" /> : failed ? <IconClose size={14} /> : <IconCheck size={14} />}</span>
+    <span className="row-body">
+      <span className="row-title">{when}</span>
+      <span className="row-sub">{sub}</span>
+      {failed && r.error && <span className="run-error">{r.error}</span>}
+    </span>
+    {r.conversation_id && <IconChevron />}
+  </>;
+  const aria = `${label}，${when}，${sub}${failed && r.error ? `，原因：${r.error}` : ""}`;
+  const style = { animationDelay: `calc(var(--stagger) * ${Math.min(index, 10)})` };
+  return r.conversation_id
+    ? <button className="row run-row" style={style} aria-label={`${aria}，打开报告`} onClick={() => onOpen(r.conversation_id!)}>{body}</button>
+    : <div className="row run-row" style={style} aria-label={aria} role="group">{body}</div>;
+}

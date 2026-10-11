@@ -1,0 +1,135 @@
+// 云浏览器实时画面：可见时每 1.2 秒刷新截图；点“接管”后点画面 = 点网页，底部输入框 = 键盘。
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/api.dart';
+import '../models/block.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import '../ui/motion.dart';
+import '../ui/glass.dart';
+
+class BrowserBlockView extends ConsumerStatefulWidget {
+  const BrowserBlockView(this.block, {super.key});
+  final BrowserBlock block;
+
+  @override
+  ConsumerState<BrowserBlockView> createState() => _BrowserBlockViewState();
+}
+
+class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
+  static const _interval = Duration(milliseconds: 1200);
+  static const _aspect = 1280 / 800;
+  Timer? _timer;
+  int _tick = 0;
+  bool _control = false, _broken = false;
+  final _keys = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(_interval, (_) {
+      if (mounted && !_broken && TickerMode.valuesOf(context).enabled) setState(() => _tick++);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _keys.dispose();
+    super.dispose();
+  }
+
+  Api get _api => ref.read(apiProvider);
+
+  void _tap(TapUpDetails d, BoxConstraints c) {
+    if (!_control) return;
+    _api.post('/api/browser/mouse', {'x': d.localPosition.dx / c.maxWidth, 'y': d.localPosition.dy / (c.maxWidth / _aspect)});
+  }
+
+  Future<void> _sendKeys() async {
+    final text = _keys.text;
+    _keys.clear();
+    await _api.post('/api/browser/keyboard', text.isEmpty ? {'key': 'Enter'} : {'text': text, 'key': 'Enter'});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: context.cardFill,
+        borderRadius: BorderRadius.circular(Radii.md),
+        border: Border.all(color: _control ? p.accent : context.hairline, width: _control ? 1.5 : 1),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x1, Sp.x2, Sp.x1),
+          child: Row(children: [
+            Icon(Icons.public_rounded, size: 18, color: p.text2),
+            const SizedBox(width: Sp.x2),
+            Text('云浏览器', style: context.text.labelLarge),
+            const SizedBox(width: Sp.x2),
+            if (!_broken) PulseDot(color: p.danger, size: 7),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => setState(() => _control = !_control),
+              icon: Icon(_control ? Icons.pan_tool_rounded : Icons.pan_tool_outlined, size: 16),
+              label: Text(_control ? '交还给我' : '接管'),
+            ),
+          ]),
+        ),
+        LayoutBuilder(
+          builder: (_, c) => GestureDetector(
+            onTapUp: (d) => _tap(d, c),
+            excludeFromSemantics: true,
+            child: AspectRatio(
+              aspectRatio: _aspect,
+              child: _broken
+                  ? InkWell(
+                      onTap: () => setState(() => _broken = false),
+                      child: Container(
+                        color: context.tileFill,
+                        alignment: Alignment.center,
+                        child: Text('浏览器没打开或已休眠，点此重试', style: context.text.bodySmall),
+                      ),
+                    )
+                  : Image.network(
+                      '${_api.fileUrl('/api/browser/screen')}&t=$_tick',
+                      semanticLabel: _control ? '浏览器实时画面，已接管，点哪里就点网页哪里' : '浏览器实时画面',
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true, // 刷新时不闪白
+                      errorBuilder: (_, _, _) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? setState(() => _broken = true) : null);
+                        return Container(color: context.tileFill);
+                      },
+                    ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: Motion.base,
+          curve: Motion.ease,
+          child: _control
+              ? Padding(
+                  padding: const EdgeInsets.all(Sp.x2),
+                  child: Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _keys,
+                        decoration: const InputDecoration(hintText: '先点画面里的输入框，再在这里打字', isDense: true),
+                        onSubmitted: (_) => _sendKeys(),
+                      ),
+                    ),
+                    IconButton.filled(onPressed: _sendKeys, tooltip: '发送按键', icon: const Icon(Icons.keyboard_return_rounded)),
+                  ]),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ]),
+    );
+  }
+}

@@ -1,0 +1,29 @@
+/* 我的（设计 v2）：没有标题栏，左上一个圆形玻璃返回；大头像 + 衬线“我的”；卡片节奏同主页 */
+.me .page-inner { padding-top: calc(var(--topbar-top) + env(safe-area-inset-top)); }
+.me-top { height: var(--topbar-h); display: flex; align-items: center; }
+.me-top .glass-btn { width: var(--topbar-h); height: var(--topbar-h); }
+.me-hero { position: relative; z-index: 2; /* 弹层要压在后面的卡片上（卡片的入场动画会各自起层叠上下文） */ display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2) 0 var(--section-gap); animation: rise var(--dur) var(--ease) both; }
+.me-hero h1 { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-3) 0 0; }
+.me-server { font-size: var(--fs-sm); color: var(--text-3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.me-usage { gap: var(--sp-2); }
+.me-usage-row { display: flex; align-items: baseline; gap: var(--sp-2); }
+.me-usage-budget { color: var(--text-3); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.me-usage .pills { margin-top: var(--sp-2); max-width: 200px; }
+.meter.thin { height: 4px; background: var(--tile); }
+.me-appearance .segmented { flex: 0 1 300px; }
+
+/* 头像色弹层：头像下方弹出的一小块玻璃 */
+.avatar-pop { position: absolute; z-index: 10; top: calc(100% - var(--sp-3)); left: 50%; translate: -50% 0; width: 280px; /* 5 个 40px 色块 + 4 个 12px 间距 + 两侧 16px */ padding: var(--sp-4);
+  border-radius: var(--r-card); display: grid; justify-items: center; gap: var(--sp-3); transform-origin: top center; animation: pop var(--dur) var(--ease) both; }
+.avatar-pop-title { font-size: var(--fs-sm); font-weight: var(--fw-title); justify-self: start; }
+.avatar-swatches { display: flex; gap: var(--sp-3); }
+.swatch { width: 40px; height: 40px; border-radius: var(--r-full); display: grid; place-items: center; color: var(--on-avatar);
+  box-shadow: 0 0 0 1px var(--glass-border); transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.swatch.neutral { background: var(--avatar-neutral); color: var(--text); }
+.swatch.on { box-shadow: 0 0 0 2px var(--glass), 0 0 0 4px var(--text); }
+.swatch:active { transform: scale(0.92); }
+.hue-wheel { position: relative; width: 168px; height: 168px; border-radius: var(--r-full); cursor: crosshair; touch-action: none; }
+.hue-hole { position: absolute; inset: 30px; border-radius: var(--r-full); box-shadow: 0 0 0 4px var(--glass); transition: background var(--dur) var(--ease); }
+.hue-knob { position: absolute; inset: 0; pointer-events: none; transition: transform var(--dur) var(--ease); }
+.hue-knob i { position: absolute; top: 3px; left: 50%; width: 24px; height: 24px; margin-left: -12px; border-radius: var(--r-full); box-shadow: 0 0 0 3px var(--knob), var(--elev-knob); }

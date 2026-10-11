@@ -1,0 +1,18 @@
+{$DOMAIN} {
+	encode gzip
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	# 可分享的 Pages（公开访问，后端加了沙盒 CSP）
+	handle /p/* {
+		reverse_proxy backend:8000
+	}
+	handle /ws {
+		reverse_proxy backend:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

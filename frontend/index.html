@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#faf9f7" />
+    <script>
+      // 首帧前定好浅/深色（逻辑同 src/lib/theme.ts，键名 appearance），避免闪烁
+      (function () {
+        var a = localStorage.getItem("appearance");
+        var dark = a === "dark" || (a !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        // 减少透明度（逻辑同 src/lib/look.ts，键名 look.solid）
+        if (localStorage.getItem("look.solid") === "1") document.documentElement.dataset.solid = "";
+      })();
+    </script>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Assistant</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

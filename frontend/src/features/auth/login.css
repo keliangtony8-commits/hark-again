@@ -1,0 +1,9 @@
+.login { min-height: 100dvh; display: grid; place-items: center; padding: var(--sp-4); }
+/* 登录卡 = 真玻璃（.glass 给材质），坐在 body 的渐变底上；和 App login 的 GlassSurface 同义 */
+.login-card { width: 100%; max-width: 360px; border-radius: var(--r-card); padding: var(--sp-6); animation: pop var(--dur) var(--ease) both; }
+.login-card h1 { font-size: var(--fs-lg); margin: var(--sp-4) 0 var(--sp-1); }
+.login-card p { color: var(--text-2); font-size: var(--fs-sm); margin: 0 0 var(--sp-5); }
+.login-card .form-field { margin-bottom: var(--sp-3); }
+.login-card .btn-block { margin-top: var(--sp-2); }
+.login-error { color: var(--danger); font-size: var(--fs-sm); margin-top: var(--sp-3); }
+.login-link { display: block; margin: var(--sp-4) auto 0; font-size: var(--fs-sm); color: var(--text-3); }

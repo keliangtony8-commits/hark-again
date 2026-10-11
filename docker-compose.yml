@@ -1,0 +1,109 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: assistant
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: assistant
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assistant"]
+      interval: 5s
+    restart: unless-stopped
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+    volumes: [./deploy/litellm/config.yaml:/app/config.yaml:ro]
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    volumes: [./deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro]
+    restart: unless-stopped
+
+  # 沙盒基础镜像：只构建不运行（docker compose build sandbox-image）
+  sandbox-image:
+    build: ./sandbox/image
+    image: assistant-sandbox:latest
+    profiles: [build-only]
+
+  # 唯一持有 Docker 权限的服务；不对外暴露端口
+  sandbox:
+    build: ./sandbox
+    environment:
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN}
+      HOST_PROJECTS_DIR: ${HOST_DATA_DIR}/projects
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOST_DATA_DIR}/projects:/projects
+    restart: unless-stopped
+
+  # 云浏览器：唯一运行 Chromium 的服务，不对外；登录状态存在 data/browser
+  browser:
+    build: ./browser
+    environment:
+      BROWSER_TOKEN: ${BROWSER_TOKEN}
+    volumes:
+      - ${HOST_DATA_DIR}/browser:/state
+    shm_size: 1gb
+    mem_limit: 1500m
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://assistant:${POSTGRES_PASSWORD}@postgres:5432/assistant
+      LLM_BASE_URL: http://litellm:4000
+      SEARXNG_URL: http://searxng:8080
+      SANDBOX_URL: http://sandbox:9000
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN}
+      BROWSER_URL: http://browser:9100
+      BROWSER_TOKEN: ${BROWSER_TOKEN}
+    volumes:
+      - ${HOST_DATA_DIR}:/data
+    depends_on:
+      sandbox: {condition: service_started}
+      browser: {condition: service_started}
+      searxng: {condition: service_started}
+      postgres: {condition: service_healthy}
+      litellm: {condition: service_started}
+    restart: unless-stopped
+
+  # 定时任务执行器：与 backend 同一镜像，不跑迁移、不对外
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://assistant:${POSTGRES_PASSWORD}@postgres:5432/assistant
+      LLM_BASE_URL: http://litellm:4000
+      SEARXNG_URL: http://searxng:8080
+      SANDBOX_URL: http://sandbox:9000
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN}
+      BROWSER_URL: http://browser:9100
+      BROWSER_TOKEN: ${BROWSER_TOKEN}
+    volumes:
+      - ${HOST_DATA_DIR}:/data
+    depends_on: [backend]
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [backend]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:

@@ -1,0 +1,47 @@
+/* 外壳：页面铺满，顶栏浮在上面（设计 v2） */
+.shell { position: relative; height: 100dvh; display: flex; flex-direction: column; }
+.shell.has-bar { --inset-top: var(--shell-top); }
+.shell-main { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; position: relative; }
+
+.topbar { position: fixed; z-index: 20; top: calc(var(--topbar-top) + env(safe-area-inset-top)); left: var(--gutter); right: var(--gutter);
+  height: var(--topbar-h); display: grid; grid-template-columns: 1fr minmax(0, var(--segments-w)) 1fr; align-items: center; gap: var(--sp-3);
+  pointer-events: none; animation: float-in var(--dur) var(--ease) both; }
+.topbar > * { pointer-events: auto; }
+.topbar-lead { justify-self: start; display: flex; gap: var(--sp-2); }
+.topbar-lead:empty { pointer-events: none; }
+.topbar-trail { justify-self: end; }
+.topbar .glass-btn { width: var(--topbar-h); height: var(--topbar-h); border-radius: var(--r-full); }
+.topbar .avatar { width: var(--topbar-h); height: var(--topbar-h); }
+
+/* 分段导航：选中项是一颗实心胶囊，--i 决定位置，滑过去 */
+.segments { position: relative; height: 100%; width: 100%; display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 4px; border-radius: var(--r-full); }
+.segments-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: var(--r-full);
+  background: var(--pill-on); transform: translateX(calc(var(--i) * 100%)); transition: transform var(--dur-slow) var(--spring); }
+.segment { position: relative; display: grid; place-items: center; color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-title); border-radius: var(--r-full);
+  transition: color var(--dur) var(--ease); }
+.segment:hover { color: var(--text); }
+.segment.on { color: var(--on-pill-on); }
+.segment-label { position: relative; }
+/* 未读：文字右上角外侧的小点，不压字 */
+.segment-dot { position: absolute; top: -1px; right: -9px; width: 7px; height: 7px; border-radius: var(--r-full); background: var(--accent); animation: pop var(--dur) var(--ease) both; }
+
+/* 收件箱横幅：顶部居中滑入（玻璃） */
+.inbox-banner { position: fixed; z-index: 50; top: calc(var(--sp-3) + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  width: min(420px, calc(100vw - 2 * var(--sp-3))); display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3);
+  border-radius: var(--r-card); /* 材质 = .glass.raised */
+  color: var(--text-3); text-align: left; animation: drop calc(var(--dur) * 2) var(--ease); }
+.inbox-banner:active { transform: translateX(-50%) scale(.98); }
+.inbox-banner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.inbox-banner-kind { font-size: var(--fs-xs); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); color: var(--text-3); }
+.inbox-banner-title { font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 520px) { .topbar { --topbar-h: 48px; gap: var(--sp-2); } }
+
+/* 浮动输入胶囊（聊天页、主页、项目页同一位置）：贴在底部，内容从下面滚过 */
+.floating-footer { position: absolute; z-index: 16; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.floating-footer > * { pointer-events: auto; }
+.launch-chips { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; max-width: var(--content-w); margin: 0 auto var(--sp-3); padding: 0 var(--gutter); }
+.launch-chips button { height: 34px; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); color: var(--text); animation: float-up var(--dur) var(--ease) both; }
+.launch-chips button:nth-child(2) { animation-delay: var(--stagger); }
+.launch-chips button:nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+.launch { position: relative; z-index: 16; } /* 压在自己的磨砂遮罩上面 */

@@ -1,0 +1,21 @@
+/* 项目网格：矮玻璃卡（App 同款 mainAxisExtent 112），宽了自动多列 */
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--card-gap); }
+.project-card { display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-1); min-height: 112px; padding: calc(var(--sp-4) + 4px);
+  background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card); color: var(--text);
+  animation: rise var(--dur) var(--ease) both; transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.project-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
+.project-card-head { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.project-card-head .row-icon { width: 24px; height: 24px; }
+.project-name { font-weight: var(--fw-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-rules { font-size: var(--fs-sm); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-meta { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.project-new { flex: none; padding: 0 var(--sp-5); }
+
+/* 项目档案（ProjectBrief）：查看 = 一张浅底卡里排 Markdown；编辑 = 等宽大输入框；查看/编辑切换时整块 rise 一下 */
+.brief-stamp { display: inline-block; margin-bottom: var(--sp-3); padding: 2px var(--sp-3); border-radius: var(--r-full); background: var(--tile); color: var(--text-2); font-size: var(--fs-xs); }
+.brief-stamp.ai { background: var(--tile); color: var(--text); }
+.brief-body { animation: rise var(--dur) var(--ease) both; }
+.brief-view { padding: var(--sp-4); border-radius: var(--r-tile); background: var(--tile); max-height: 56dvh; overflow-y: auto; }
+.brief-editor { min-height: 320px !important; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.form-field small.danger, .brief-error { color: var(--danger); }
+.brief-note { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--text-3); }

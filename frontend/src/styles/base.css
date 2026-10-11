@@ -1,0 +1,78 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  /* 设计 v2：整个应用底下一张低饱和渐变“壁纸”，所有卡片/栏都是压在上面的玻璃 */
+  background: var(--backdrop-2) linear-gradient(160deg, var(--backdrop-1), var(--backdrop-2) 52%, var(--backdrop-3)) fixed;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  line-height: var(--lh);
+  font-variant-numeric: tabular-nums; /* v2.1：所有数字等宽（= App FontFeature.tabularFigures） */
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+input, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+::selection { background: var(--accent-soft); }
+
+.icon-btn {
+  width: 40px; height: 40px;
+  display: inline-grid; place-items: center;
+  border-radius: var(--r-full);
+  color: var(--text-2);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.icon-btn:hover { background: var(--tile); color: var(--text); }
+.icon-btn:disabled { opacity: 0.35; cursor: default; }
+/* 只在窄屏出现（!important：别的类会给它设 display） */
+@media (min-width: 861px) { .mobile-only { display: none !important; } }
+.brand { font-weight: var(--fw-strong); letter-spacing: -0.01em; display: flex; align-items: center; gap: var(--sp-2); }
+.brand-dot { width: 10px; height: 10px; border-radius: var(--r-full); background: var(--accent); }
+.send-btn { width: 40px; height: 40px; border-radius: var(--r-full); background: var(--ink); color: var(--on-ink); display: grid; place-items: center; flex: none; transition: transform var(--dur-fast) var(--ease), opacity var(--dur); }
+.send-btn:disabled { opacity: 0.3; cursor: default; }
+.send-btn:not(:disabled):active { transform: scale(0.92); }
+
+/* 全局动效：所有组件共用 */
+@keyframes fade { from { opacity: 0; } }
+@keyframes slideup { from { transform: translateY(40px); opacity: 0; } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(var(--rise)); } to { opacity: 1; transform: none; } }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .5; } 40% { transform: translateY(-5px); opacity: 1; } }
+@keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes drop { from { opacity: 0; transform: translate(-50%, -16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes flash { 0%, 40% { opacity: 1; } to { opacity: 0; } }
+@keyframes meter-grow { from { transform: scaleX(0); } }
+@keyframes bar-grow { from { transform: scaleY(0); } }
+@keyframes float-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }  /* 顶栏回来 */
+@keyframes float-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }   /* 输入胶囊回来 */
+.send-btn.ghost { background: var(--tile); color: var(--text-2); }
+.icon-btn.sm { width: 30px; height: 30px; }
+
+/* 浅/深色切换：lib/theme.ts 只在切换的 400ms 内挂这个类，颜色整体渐变，平时不影响其它动效 */
+html.theme-switching, html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    fill var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease) !important;
+}
+
+/* ---- 无障碍底线（与 App 的 test/a11y_test.dart 同一套要求） ---- */
+/* 键盘操作时才出现的焦点环；鼠标点击不显示 */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+:focus:not(:focus-visible) { outline: none; }
+.skip-link {
+  position: fixed; left: var(--sp-3); top: var(--sp-3); z-index: 100;
+  padding: var(--sp-2) var(--sp-4); border-radius: var(--r-full);
+  background: var(--accent); color: var(--on-accent); font-weight: var(--fw-title);
+  transform: translateY(-200%); transition: transform var(--dur) var(--ease);
+}
+.skip-link:focus-visible { transform: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* 系统“减少动态”：所有动画/过渡瞬间完成（终态照样到位），循环动画只跑一次 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important; scroll-behavior: auto !important;
+  }
+}

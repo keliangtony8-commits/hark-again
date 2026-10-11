@@ -1,0 +1,49 @@
+// 统一的线性图标：24 网格、1.8 描边、跟随 currentColor
+const S = ({ d, size = 20 }: { d: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
+);
+type P = { size?: number };
+export const IconHome = (p: P) => <S {...p} d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" />;
+export const IconChat = (p: P) => <S {...p} d="M5 18.5 3.5 21V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v10.5a2 2 0 0 1-2 2z" />;
+export const IconFolder = (p: P) => <S {...p} d="M3.5 7a2 2 0 0 1 2-2H10l2 2.5h6.5a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />;
+export const IconUser = (p: P) => <S {...p} d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5c1.2-3.5 4-5 7.5-5s6.3 1.5 7.5 5" />;
+export const IconMenu = (p: P) => <S {...p} d="M4 7h16M4 12h16M4 17h10" />;
+export const IconPlus = (p: P) => <S {...p} d="M12 5v14M5 12h14" />;
+export const IconSend = (p: P) => <S {...p} d="M12 19V5M5 12l7-7 7 7" />;
+export const IconTrash = (p: P) => <S size={16} {...p} d="M5 7h14M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />;
+export const IconClose = (p: P) => <S {...p} d="M6 6l12 12M18 6L6 18" />;
+export const IconBack = (p: P) => <S {...p} d="M15 5l-7 7 7 7" />;
+export const IconChevron = (p: P) => <S size={16} {...p} d="M9 6l6 6-6 6" />;
+export const IconHistory = (p: P) => <S {...p} d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4M12 8v4l3 2" />;
+export const IconBrain = (p: P) => <S {...p} d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 0V4.5A2.5 2.5 0 0 0 9 4zm6 0a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 0" />;
+export const IconClock = (p: P) => <S {...p} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2" />;
+export const IconAlarm = (p: P) => <S {...p} d="M12 21a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM12 10v3.5l2.5 1.5M4 5.5 7 3M20 5.5 17 3" />;
+export const IconPlug = (p: P) => <S {...p} d="M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4" />;
+export const IconSpark = (p: P) => <S {...p} d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z" />;
+export const IconSettings = (p: P) => <S {...p} d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />;
+export const IconShield = (p: P) => <S {...p} d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z" />;
+export const IconClip = (p: P) => <S {...p} d="M20 11.5l-8.3 8.3a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" />;
+export const IconDoc = (p: P) => <S {...p} d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4" />;
+export const IconFile = (p: P) => <S {...p} d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5" />;
+export const IconDownload = (p: P) => <S size={16} {...p} d="M12 4v11M7 10l5 5 5-5M5 20h14" />;
+export const IconUpload = (p: P) => <S {...p} d="M12 20V9M7 14l5-5 5 5M5 4h14" />;
+export const IconInbox = (p: P) => <S {...p} d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5M5.5 5h13l2 8.5V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-4.5z" />;
+export const IconPlay = (p: P) => <S size={16} {...p} d="M7 5l12 7-12 7z" />;
+export const IconGlobe = (p: P) => <S {...p} d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z" />;
+export const IconHand = (p: P) => <S size={16} {...p} d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1V4.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15.5a1.5 1.5 0 0 1 2.5-1.7L8 16" />;
+export const IconLayout = (p: P) => <S {...p} d="M4 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9h16M10 9v11" />;
+export const IconCopy = (p: P) => <S size={16} {...p} d="M9 9h10v10H9zM5 15V5h10" />;
+export const IconExternal = (p: P) => <S size={16} {...p} d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />;
+export const IconMic = (p: P) => <S {...p} d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3" />;
+export const IconCheck = (p: P) => <S {...p} d="M5 12.5l4.5 4.5L19 7.5" />;
+export const IconSpeaker = (p: P) => <S size={16} {...p} d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />;
+export const IconStop = (p: P) => <S size={16} {...p} d="M7 7h10v10H7z" />;
+export const IconRefresh = (p: P) => <S size={16} {...p} d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4" />;
+export const IconSearch = (p: P) => <S size={16} {...p} d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4" />;
+export const IconPin = (p: P) => <S size={16} {...p} d="M9 4h6l-1 5 3 3v2H7v-2l3-3zM12 14v6" />;
+export const IconEdit = (p: P) => <S size={16} {...p} d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />;
+export const IconMore = (p: P) => <S size={16} {...p} d="M6 12h.01M12 12h.01M18 12h.01" />;
+export const IconBolt = (p: P) => <S size={14} {...p} d="M13 3 5 13.5h6L10 21l8-10.5h-6z" />;
+export const IconGauge = (p: P) => <S {...p} d="M4 17a8 8 0 1 1 16 0M12 17l3.5-5M7 17h-.01M17 17h-.01" />;
+export const IconChevronDown = (p: P) => <S {...p} d="M6 9l6 6 6-6" />;
