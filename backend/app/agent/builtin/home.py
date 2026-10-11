@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from zoneinfo import ZoneInfo
 
-from ... import card_snooze, schedule, task_store
+from ... import card_snooze, home_offers, schedule, task_store
 from ...config import settings
 from ...models import HomeCard, ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
@@ -30,11 +30,37 @@ async def create_panel(ctx: ToolContext, title: str, prompt: str, cron: str) -> 
     return ToolResult(f"面板「{title}」已放到 Home，半分钟内出第一份数据，之后按 {cron} 刷新。")
 
 
+@tool("offer_on_home", "正在放到主页",
+      "在 Home 的“为你准备”里放一张建议卡，提议替用户做一件具体的事（用户点按钮才会做）。"
+      "适合：定时任务/简报里发现值得做的事（要回的邮件、快到期的续费、降价了的东西），或聊天中用户说“回头再弄”的事。"
+      "一张卡只提一件事；同标题会原地更新不重复；用户没要求的购买/发送也只是提议，不会自动执行。"
+      "已经在对话里直接做完的事不要再放。",
+      {"type": "object", "properties": {
+          "title": {"type": "string", "description": "要做的事，几个字到一句，如“续费校园网”"},
+          "reason": {"type": "string", "description": "为什么现在做，一两句具体事实，如“周五到期，今天续还有 9 折”"},
+          "prompt": {"type": "string", "description": "用户点按钮后发给助手的完整指令，独立可执行（看不到当前对话），写明对象、网站、数量、价格上限等"},
+          "label": {"type": "string", "description": "按钮上的字，12 字以内，说清点了会做什么：帮我续费 / 起草回复 / 查航班；不给就是“去做”"}},
+       "required": ["title", "prompt"]})
+async def offer_on_home(ctx: ToolContext, title: str, prompt: str, reason: str = "", label: str | None = None) -> ToolResult:
+    try:
+        card, status, retired = await home_offers.offer(ctx.db, title, reason, prompt, label)
+    except ValueError as e:
+        return ToolResult(str(e))
+    out = f"已{'更新' if status == 'updated' else '放到'} Home：「{card.title}」（id={card.id}），按钮“{card.action_label or '去做'}”。"
+    if retired:
+        out += " 建议太多，收起了较旧的：" + "、".join(f"「{c.title}」" for c in retired) + "。"
+    return ToolResult(out)
+
+
 def _line(card: HomeCard, task: ScheduledTask | None) -> str:
     s = f"- id={card.id} [{_KIND.get(card.kind, card.kind)}]「{card.title}」"
     if card.kind == "panel" and task is not None:
         s += f" · cron {task.cron}" + ("" if task.active else " · 已暂停") + (" · 刷新中" if task.run_requested else "")
         s += f" · 刷新指令：{task.prompt[:80]}"
+    elif card.kind == "action" and card.origin == home_offers.ORIGIN:
+        s += f" · 你提议的 · 按钮“{card.action_label or '去做'}”" + (" · 未读" if card.unread else "")
+        if card.snoozed_until is not None:
+            s += " · 稍后提醒中"
     elif card.snoozed_until is not None:
         at = card_snooze._aware(card.snoozed_until).astimezone(ZoneInfo(settings.timezone))
         s += f" · 稍后提醒于 {at:%m-%d %H:%M}"

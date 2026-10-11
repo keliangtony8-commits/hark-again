@@ -2,6 +2,7 @@
 
 .action-card-head { display: flex; align-items: flex-start; gap: var(--sp-3); }
 .action-card-title { flex: 1; font-weight: var(--fw-title); line-height: 1.45; }
+.action-card-eyebrow { display: block; font-size: var(--fs-xs); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); color: var(--text-3); line-height: 1.4; }
 .onboarding .pills { max-width: 240px; }
 
 .panel { min-height: 120px; }

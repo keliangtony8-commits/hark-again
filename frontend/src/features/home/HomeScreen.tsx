@@ -52,6 +52,11 @@ export default function HomeScreen() {
     if (c.unread) inbox.markRead([c.id]);
     nav(cardRoute(t, c));
   };
+  // 主按钮：发指令进新对话；助手提议的卡点了就收起（系统提醒恢复后服务端自己收起，不动）
+  const doIt = (c: HomeCard) => {
+    ask(c.action_prompt!);
+    if (c.origin === "agent") dismiss(c);
+  };
   const dismiss = async (c: HomeCard) => { await cards.update(c.id, { dismissed: true }); inbox.refresh(); };
   // 稍后提醒：推迟会清未读（服务端），所以同样刷新角标
   const snooze: Snooze = async (c, at) => { await cards.update(c.id, { snoozed_until: at ? at.toISOString() : null }); inbox.refresh(); };
@@ -116,7 +121,10 @@ export default function HomeScreen() {
             <div key={c.id} className="glass-card action-card enter" style={nth(i)}>
               <div className="action-card-head">
                 <span className="row-icon"><Icon /></span>
-                <div className="action-card-title">{c.title}</div>
+                <div className="action-card-title">
+                  {c.origin === "agent" && <span className="action-card-eyebrow">可以替你做</span>}
+                  {c.title}
+                </div>
                 <SnoozeMenu card={c} onSnooze={snooze} />
               </div>
               {c.blocks.length > 0 && <BlockRenderer blocks={c.blocks} />}
@@ -124,7 +132,7 @@ export default function HomeScreen() {
               <div className="pills">
                 <button className="pill" onClick={() => dismiss(c)}>忽略</button>
                 {target && <button className={`pill ${c.action_prompt ? "" : "primary"}`} onClick={() => openTarget(c, target)}><target.Icon size={16} />{target.label}</button>}
-                {c.action_prompt && <button className="pill primary" onClick={() => ask(c.action_prompt!)}>去做</button>}
+                {c.action_prompt && <button className="pill primary" onClick={() => doIt(c)}>{c.action_label?.trim() || "去做"}</button>}
               </div>
             </div>
           );

@@ -143,6 +143,9 @@ class HomeCard(Base):
     task_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     # 客户端里的固定去处（"usage" = 用量页）；客户端各自把它映射成按钮，不认识的值忽略
     target: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # 主按钮上的字（空 = “去做”）；origin=agent 表示智能体提议的卡（规则见 app/home_offers.py），空 = 系统提醒/接口建的
+    action_label: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    origin: Mapped[str | None] = mapped_column(String(16), nullable=True)
     dismissed: Mapped[bool] = mapped_column(default=False)
     # 未读：新报告/新建议为 True；用户打开对应对话（或点“全部已读”）后清掉。面板刷新不算新消息。
     unread: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

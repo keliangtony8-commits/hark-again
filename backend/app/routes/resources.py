@@ -74,6 +74,7 @@ class CardIn(BaseModel):
     blocks: list = []
     action_prompt: str | None = None
     target: str | None = None  # 客户端固定去处，如 "usage"
+    action_label: str | None = Field(None, max_length=24)  # 主按钮上的字，空 = “去做”
     unread: bool = True  # 经接口新建的卡（主动建议）默认未读
 
 

@@ -212,6 +212,8 @@ class HomeCard {
     this.conversationId,
     this.taskId,
     this.target,
+    this.actionLabel,
+    this.origin,
     required this.dismissed,
     this.unread = false,
     this.updatedAt,
@@ -226,6 +228,8 @@ class HomeCard {
     conversationId: j['conversation_id'] as String?,
     taskId: j['task_id'] as String?,
     target: j['target'] as String?,
+    actionLabel: j['action_label'] as String?,
+    origin: j['origin'] as String?,
     dismissed: j['dismissed'] as bool? ?? false,
     unread: j['unread'] as bool? ?? false,
     updatedAt: _date(j['updated_at']),
@@ -237,6 +241,14 @@ class HomeCard {
 
   /// 客户端里的固定去处（如 'usage' = 用量页），见 features/home/action_card.dart 的 cardTargets。
   final String? target;
+
+  /// 主按钮上的字（服务端空 = “去做”），用 [actionText]。
+  final String? actionLabel;
+
+  /// 谁放的卡：'agent' = 助手提议替你做的事（点主按钮后收起，见 backend app/home_offers.py）；空 = 系统提醒。
+  final String? origin;
+  bool get offered => origin == 'agent';
+  String get actionText => (actionLabel ?? '').trim().isEmpty ? '去做' : actionLabel!.trim();
   final bool dismissed, unread;
   final DateTime? updatedAt;
 
