@@ -47,7 +47,7 @@ export default function ProjectsScreen() {
   };
 
   return (
-    <Page footer={<LaunchComposer />}>
+    <Page wide footer={<LaunchComposer />}>
       <ShellLead>
         <button className="glass-btn glass" onClick={() => setCreating(true)} aria-label="新建项目" title="新建项目"><IconPlus /></button>
       </ShellLead>

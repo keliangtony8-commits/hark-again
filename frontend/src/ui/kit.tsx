@@ -34,7 +34,7 @@ export function FloatingFooter({ children, onHeight }: { children: ReactNode; on
 }
 
 /** 页面骨架：可滚动内容 + 可选的子页面标题栏 + 可选的底部浮层（一级页面的输入胶囊）。 */
-/** 页面骨架。wide = 宽屏放宽到 --content-wide（主页的主列 + 右栏），窄屏不变。 */
+/** 页面骨架。wide = 宽屏放宽到 --content-wide（主页的主列 + 右栏、项目网格三列），窄屏不变。 */
 export function Page({ children, header, footer, wide }: { children: ReactNode; header?: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const [h, setH] = useState(0);
   const style = footer ? ({ ["--footer-h" as string]: `${h}px` } as CSSProperties) : undefined;

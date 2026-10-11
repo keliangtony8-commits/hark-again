@@ -8,6 +8,13 @@
 .chat-caption { top: calc(var(--shell-top) - 8px); display: flex; justify-content: center; pointer-events: none; padding: 0 var(--gutter); }
 .chat-caption .chat-top-title { pointer-events: auto; align-items: center; text-align: center; max-width: min(100%, 420px); }
 .chat-caption .chat-top-name { font-size: var(--fs-xs); color: var(--text-2); font-weight: var(--fw-title); }
+/* 电脑宽屏（有左侧历史面板）：聊天列不在窗口正中，标题若居中会像挂偏的导航副标题 → 改成聊天列的列头，左缘对齐消息 */
+@media (min-width: 861px) {
+  .chat.floating { --thread-top: calc(var(--shell-top) + var(--topbar-h) + var(--sp-2)); }
+  .chat-caption { top: var(--shell-top); height: var(--topbar-h); align-items: center; } /* 与历史面板的标题行同高同中线 */
+  .chat-caption .chat-top-title { width: min(100%, var(--content-w)); max-width: none; align-items: flex-start; text-align: left; padding: 0 var(--gutter); }
+  .chat-caption .chat-top-name { font-size: var(--fs-sm); color: var(--text); }
+}
 /* 项目对话：没有外壳顶栏，同一位置换成本页的玻璃标题栏 */
 .chat-bar { top: calc(var(--topbar-top) + env(safe-area-inset-top)); left: var(--gutter); right: var(--gutter); height: var(--topbar-h); border-radius: var(--r-full);
   display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; align-items: center; padding: 0 var(--sp-1); animation: float-in var(--dur) var(--ease) both; }
