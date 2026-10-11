@@ -245,7 +245,7 @@ class HomeCard {
   final List<Block> blocks;
   final String? actionPrompt, conversationId, taskId;
 
-  /// 客户端里的固定去处（如 'usage' = 用量页），见 features/home/action_card.dart 的 cardTargets。
+  /// 客户端里的去处（'usage' = 用量页，`project:<id>` = 某个项目…），见 features/home/action_card.dart 的 cardTargets。
   final String? target;
 
   /// 主按钮上的字（服务端空 = “去做”），用 [actionText]。

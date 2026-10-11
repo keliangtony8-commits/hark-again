@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from zoneinfo import ZoneInfo
 
-from ... import card_snooze, home_offers, schedule, task_store
+from ... import card_snooze, card_targets, home_offers, schedule, task_store
 from ...config import settings
 from ...models import HomeCard, ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
@@ -43,11 +43,18 @@ async def create_panel(ctx: ToolContext, title: str, prompt: str, cron: str) -> 
           "prompt": {"type": "string", "description": "用户点按钮后发给助手的完整指令，独立可执行（看不到当前对话），写明对象、网站、数量、价格上限等"},
           "label": {"type": "string", "description": "按钮上的字，12 字以内，说清点了会做什么：帮我续费 / 起草回复 / 查航班；不给就是“去做”"},
           "image": {"type": "string", "description": "可选：卡顶配图，只用这件事本身页面上的真实图片地址（商品图、活动海报），不能自己拼；打不开会被去掉"},
-          "url": {"type": "string", "description": "可选：这件事的原页（商品页、邮件网页版、活动页），卡上显示“来源 · 域名”"}},
-       "required": ["title", "prompt"]})
-async def offer_on_home(ctx: ToolContext, title: str, prompt: str, reason: str = "", label: str | None = None,
-                        image: str | None = None, url: str | None = None) -> ToolResult:
+          "url": {"type": "string", "description": "可选：这件事的原页（商品页、邮件网页版、活动页），卡上显示“来源 · 域名”"},
+          "open": {"type": "string", "description": "可选：卡上加一颗直达 App 某一页的按钮。" + " / ".join(card_targets.PAGES)
+                   + "，或 task:<任务 id>（那个任务的详情）、project:<项目 id>（打开项目，点“去做”开的对话也放进这个项目）。"
+                   "只有用户本人能做的事（重新连接账号、存密码）给 open 不给 prompt"}},
+       "required": ["title"]})
+async def offer_on_home(ctx: ToolContext, title: str, prompt: str = "", reason: str = "", label: str | None = None,
+                        image: str | None = None, url: str | None = None, open: str | None = None) -> ToolResult:
     note = ""
+    try:
+        target, task_id = await card_targets.resolve(ctx.db, open)
+    except ValueError as e:
+        return ToolResult(str(e))
     try:
         image = home_offers.clean_url(image, "配图")
     except ValueError:
@@ -58,10 +65,14 @@ async def offer_on_home(ctx: ToolContext, title: str, prompt: str, reason: str =
             if not await probe_image(client, image):
                 image, note = None, " 配图打不开（或不是图片），没放图。"
     try:
-        card, status, retired = await home_offers.offer(ctx.db, title, reason, prompt, label, image=image, url=url)
+        card, status, retired = await home_offers.offer(ctx.db, title, reason, prompt, label, image=image, url=url,
+                                                        target=target, task_id=task_id)
     except ValueError as e:
         return ToolResult(str(e))
-    out = f"已{'更新' if status == 'updated' else '放到'} Home：「{card.title}」（id={card.id}），按钮“{card.action_label or '去做'}”。" + note
+    button = f"按钮“{card.action_label or '去做'}”" if card.action_prompt else "没有“去做”按钮，用户自己去那页处理"
+    out = f"已{'更新' if status == 'updated' else '放到'} Home：「{card.title}」（id={card.id}），{button}。" + note
+    if target:
+        out += f" 直达：{card_targets.describe(target, task_id)}。"
     if retired:
         out += " 建议太多，收起了较旧的：" + "、".join(f"「{c.title}」" for c in retired) + "。"
     return ToolResult(out)
@@ -73,7 +84,8 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
         s += f" · cron {task.cron}" + ("" if task.active else " · 已暂停") + (" · 刷新中" if task.run_requested else "")
         s += f" · 刷新指令：{task.prompt[:80]}"
     elif card.kind == "action" and card.origin == home_offers.ORIGIN:
-        s += f" · 你提议的 · 按钮“{card.action_label or '去做'}”" + (" · 未读" if card.unread else "")
+        s += " · 你提议的" + (f" · 按钮“{card.action_label or '去做'}”" if card.action_prompt else "")
+        s += (f" · 直达 {card_targets.describe(card.target, card.task_id)}" if card.target else "") + (" · 未读" if card.unread else "")
         s += (" · 有配图" if card.image_url else "") + (f" · 原页 {card.link_url[:80]}" if card.link_url else "")
         if card.conversation_id:
             s += " · 用户已点按钮开始做"

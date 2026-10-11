@@ -1,6 +1,8 @@
 // “为你准备”里的一张主动建议卡：标题 + 内容块 + 一排等宽胶囊（忽略 / [去处] / 去做，最后一个是主按钮）。
-// 去处（HomeCard.target）是服务端说“这件事在客户端的哪一页看”，比如预算提醒 → 用量页。
-// route 里的 {task} 换成卡上的 task_id（任务失败提醒 → 那个任务的详情；卡上没有 task_id 就退到列表）。
+// 去处（HomeCard.target）是服务端说“这件事在客户端的哪一页看”，比如预算提醒 → 用量页。值 = 名字 或 名字:id
+// （规则见后端 app/card_targets.py）。route 里的 {task} 换成卡上的 task_id（任务失败提醒 → 那个任务的详情），
+// {id} 换成值里冒号后的 id（project:<id> → 那个项目）；缺了就退到列表页。
+// 助手提议的卡可以只有去处没有指令（重新连接账号这类只能本人做的事）：眉题“需要你亲自处理”，去处按钮是主按钮。
 // 标题右边一个“稍后提醒”小钮（features/home/card_snooze.dart）：先收起，到点再放回。
 // 助手提议的卡（card.offered）：标题上方一行“可以替你做”，主按钮用卡上的字（actionText）。点了走 startOffer：
 // 服务端开新对话并记在卡上，App 打开它并发指令；卡留在主页变成“已交给助手”（card.started），主按钮“查看对话”回到那段，
@@ -27,12 +29,27 @@ import 'inbox.dart';
 
 typedef CardTarget = ({String label, IconData icon, String route});
 
+// 图标与“我的”页各入口一致，用户认得出要去哪儿
 const cardTargets = <String, CardTarget>{
   'usage': (label: '查看用量', icon: Icons.data_usage_rounded, route: '/me/usage'),
   'tasks': (label: '查看任务', icon: Icons.event_repeat_rounded, route: '/me/tasks/{task}'),
+  'memory': (label: '打开记忆', icon: Icons.psychology_outlined, route: '/me/memory'),
+  'skills': (label: '打开技能', icon: Icons.auto_awesome_outlined, route: '/me/skills'),
+  'connectors': (label: '去连接器', icon: Icons.hub_outlined, route: '/me/connectors'),
+  'vault': (label: '打开保险箱', icon: Icons.lock_outline_rounded, route: '/me/vault'),
+  'pages': (label: '查看网页', icon: Icons.web_rounded, route: '/me/pages'),
+  'project': (label: '打开项目', icon: Icons.folder_outlined, route: '/projects/{id}'),
 };
 
-CardTarget? cardTarget(String? id) => id == null ? null : cardTargets[id];
+/// 'project:abc' → ('project', 'abc')；'usage' → ('usage', null)。
+(String, String?) splitTarget(String value) {
+  final i = value.indexOf(':');
+  if (i < 0) return (value, null);
+  final arg = value.substring(i + 1).trim();
+  return (value.substring(0, i), arg.isEmpty ? null : arg);
+}
+
+CardTarget? cardTarget(String? id) => id == null ? null : cardTargets[splitTarget(id).$1];
 
 /// 打开某段对话，send 非空就在打开后发出去（主页传 openConversation）。
 typedef OpenConversation = void Function(String conversationId, String? send);
@@ -52,11 +69,14 @@ Future<void> startOffer(WidgetRef ref, HomeCard card, OpenConversation open) asy
   await inbox.refresh();
 }
 
+/// 去处的真实路由：{task} ← card.taskId，{id} ← target 里冒号后的 id；缺哪个就连同前面的 / 一起去掉（退到列表）。
 String cardRoute(CardTarget t, HomeCard card) {
-  const slot = '/{task}';
-  if (!t.route.contains(slot)) return t.route;
-  final id = card.taskId;
-  return id == null ? t.route.replaceAll(slot, '') : t.route.replaceAll('{task}', id);
+  final slots = {'task': card.taskId, 'id': card.target == null ? null : splitTarget(card.target!).$2};
+  var route = t.route;
+  slots.forEach((name, v) {
+    route = v == null ? route.replaceAll('/{$name}', '') : route.replaceAll('{$name}', Uri.encodeComponent(v));
+  });
+  return route;
 }
 
 class ActionCard extends ConsumerWidget {
@@ -110,7 +130,7 @@ class ActionCard extends ConsumerWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 if (card.offered)
                   SwapSwitcher(
-                    child: Text(started ? '已交给助手 · 看看进展' : '可以替你做',
+                    child: Text(started ? '已交给助手 · 看看进展' : (card.actionPrompt == null ? '需要你亲自处理' : '可以替你做'),
                         key: ValueKey(started), style: context.text.labelSmall?.copyWith(color: context.palette.text3)),
                   ),
                 Text(card.title, style: context.text.titleMedium),

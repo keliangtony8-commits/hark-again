@@ -132,7 +132,7 @@ export default function HomeScreen() {
               <div className="action-card-head">
                 <span className="row-icon icon-pop" key={String(started)}><Icon /></span>
                 <div className="action-card-title">
-                  {c.origin === "agent" && <span className="action-card-eyebrow fade-in" key={String(started)}>{started ? "已交给助手 · 看看进展" : "可以替你做"}</span>}
+                  {c.origin === "agent" && <span className="action-card-eyebrow fade-in" key={String(started)}>{started ? "已交给助手 · 看看进展" : c.action_prompt ? "可以替你做" : "需要你亲自处理"}</span>}
                   {c.title}
                 </div>
                 <SnoozeMenu card={c} onSnooze={snooze} />

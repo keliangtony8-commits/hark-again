@@ -1,20 +1,39 @@
-// Home 卡片的固定去处（HomeCard.target）→ 按钮。和 App 的 features/home/action_card.dart cardTargets 同一张表。
-// route 里的 {task} 换成卡上的 task_id（任务失败提醒 → 那个任务的详情；没有 task_id 就退到列表），用 cardRoute。
-// 新增去处只在这里加一行；不认识的值返回 undefined（老网页遇到新服务端不出错）。
+// Home 卡片的去处（HomeCard.target）→ 按钮。和 App 的 features/home/action_card.dart cardTargets 同一张表（规则见后端 app/card_targets.py）。
+// 值 = 名字 或 名字:id。route 里的 {task} 换成卡上的 task_id（任务失败提醒 → 那个任务的详情），{id} 换成冒号后的 id
+// （project:<id> → 那个项目）；缺了就连同前面的 / 去掉，退到列表页。图标与“我的”页入口一致。
+// 新增去处只在这里加一行；不认识的名字返回 undefined（老网页遇到新服务端不出错）。
 import type { ComponentType } from "react";
 import type { HomeCard } from "./types";
-import { IconClock, IconGauge } from "../ui/icons";
+import { IconBrain, IconClock, IconFolder, IconGauge, IconLayout, IconPlug, IconShield, IconSpark } from "../ui/icons";
 
 export type CardTarget = { label: string; route: string; Icon: ComponentType<{ size?: number }> };
 
 const TARGETS: Record<string, CardTarget> = {
   usage: { label: "查看用量", route: "/me/usage", Icon: IconGauge },
   tasks: { label: "查看任务", route: "/me/tasks/{task}", Icon: IconClock },
+  memory: { label: "打开记忆", route: "/me/memory", Icon: IconBrain },
+  skills: { label: "打开技能", route: "/me/skills", Icon: IconSpark },
+  connectors: { label: "去连接器", route: "/me/connectors", Icon: IconPlug },
+  vault: { label: "打开保险箱", route: "/me/vault", Icon: IconShield },
+  pages: { label: "查看网页", route: "/me/pages", Icon: IconLayout },
+  project: { label: "打开项目", route: "/projects/{id}", Icon: IconFolder },
 };
 
-export const cardTarget = (id: string | null | undefined): CardTarget | undefined => (id ? TARGETS[id] : undefined);
+/** "project:abc" → ["project", "abc"]；"usage" → ["usage", null]。 */
+export function splitTarget(value: string): [string, string | null] {
+  const i = value.indexOf(":");
+  if (i < 0) return [value, null];
+  const arg = value.slice(i + 1).trim();
+  return [value.slice(0, i), arg || null];
+}
 
-export function cardRoute(t: CardTarget, card: Pick<HomeCard, "task_id">): string {
-  if (!t.route.includes("/{task}")) return t.route;
-  return card.task_id ? t.route.replace("{task}", card.task_id) : t.route.replace("/{task}", "");
+export const cardTarget = (id: string | null | undefined): CardTarget | undefined => (id ? TARGETS[splitTarget(id)[0]] : undefined);
+
+export function cardRoute(t: CardTarget, card: Pick<HomeCard, "task_id" | "target">): string {
+  const slots: Record<string, string | null> = { task: card.task_id, id: card.target ? splitTarget(card.target)[1] : null };
+  let route = t.route;
+  for (const [name, v] of Object.entries(slots)) {
+    route = v == null ? route.replace(`/{${name}}`, "") : route.replace(`{${name}}`, encodeURIComponent(v));
+  }
+  return route;
 }

@@ -15,15 +15,19 @@
 - 同标题重新提议 = 新的一件事：清掉旧的对话链接，按钮回到“可以替你做”。
 - 配图 image / 原页 url 可选，只收 http(s) 且 ≤ URL_MAX；不合格抛 ValueError。配图能不能打开由调用方（工具）先探测，
   这里不联网。同标题重新提议时没给就清掉（新的一件事）。
-- 按钮字 ≤ LABEL_MAX；标题 ≤ TITLE_MAX；指令必须写（点了要能独立执行，看不到当前对话）。
+- 按钮字 ≤ LABEL_MAX；标题 ≤ TITLE_MAX；指令（点了要能独立执行，看不到当前对话）和去处至少有一个。
+- 去处 target / task_id（v0.93，解析与校验在 app/card_targets.py）：卡上多一颗直达按钮（“去连接器”“打开项目”）；
+  只有去处没有指令 = 让用户自己去那页处理（重新连账号这类只能本人做的事），去处按钮就是主按钮。
+  去处是项目时，点“去做”开的对话放进那个项目（用项目的规则、档案和文件）。同标题重新提议没给就清掉。
 """
 from datetime import datetime, timezone
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from . import card_targets
 from .blocks import text_to_blocks
-from .models import Conversation, HomeCard
+from .models import Conversation, HomeCard, Project
 
 ORIGIN = "agent"
 MAX_LIVE = 5
@@ -42,20 +46,20 @@ def clean_url(v: str | None, what: str) -> str | None:
     return v
 
 
-def _clean(title: str, reason: str, prompt: str, label: str | None) -> tuple[str, str, str, str | None]:
+def _clean(title: str, reason: str, prompt: str, label: str | None, target: str | None = None) -> tuple[str, str, str | None, str | None]:
     title, reason, prompt = (title or "").strip(), (reason or "").strip(), (prompt or "").strip()
     label = (label or "").strip() or None
     if not title:
         raise ValueError("建议要有标题。")
     if len(title) > TITLE_MAX:
         raise ValueError(f"标题太长了，{TITLE_MAX} 字以内。")
-    if not prompt:
-        raise ValueError("要写 prompt：用户点按钮后发给助手的完整指令。")
+    if not prompt and not target:
+        raise ValueError("要写 prompt（用户点按钮后发给助手的完整指令），或给 open（直达的那一页）。")
     if label and len(label) > LABEL_MAX:
         raise ValueError(f"按钮上的字太长了，{LABEL_MAX} 字以内，比如“帮我订”“起草回复”。")
     if label == "去做":
         label = None
-    return title, reason[:REASON_MAX], prompt, label
+    return title, reason[:REASON_MAX], prompt or None, label
 
 
 async def live(db: AsyncSession) -> list[HomeCard]:
@@ -66,9 +70,11 @@ async def live(db: AsyncSession) -> list[HomeCard]:
 
 
 async def offer(db: AsyncSession, title: str, reason: str, prompt: str, label: str | None = None,
-                now: datetime | None = None, image: str | None = None, url: str | None = None) -> tuple[HomeCard, str, list[HomeCard]]:
-    """放一张建议卡；返回 (卡, "created"|"updated", 被挤下去的旧卡)。不合格抛 ValueError（中文，给模型看）。自己 commit。"""
-    title, reason, prompt, label = _clean(title, reason, prompt, label)
+                now: datetime | None = None, image: str | None = None, url: str | None = None,
+                target: str | None = None, task_id: str | None = None) -> tuple[HomeCard, str, list[HomeCard]]:
+    """放一张建议卡；返回 (卡, "created"|"updated", 被挤下去的旧卡)。不合格抛 ValueError（中文，给模型看）。自己 commit。
+    target / task_id 是 card_targets.resolve 解析好的值（这里不再查库）。"""
+    title, reason, prompt, label = _clean(title, reason, prompt, label, target)
     image, url = clean_url(image, "配图"), clean_url(url, "原页链接")
     now = now or datetime.now(timezone.utc)
     cards = await live(db)
@@ -80,6 +86,7 @@ async def offer(db: AsyncSession, title: str, reason: str, prompt: str, label: s
     card.blocks = text_to_blocks(reason) if reason else []
     card.action_prompt, card.action_label = prompt, label
     card.image_url, card.link_url = image, url
+    card.target, card.task_id = target, task_id
     card.unread, card.snoozed_until, card.updated_at = True, None, now
     card.conversation_id = None
     retired = []
@@ -99,7 +106,10 @@ async def start(db: AsyncSession, card_id: str) -> tuple[HomeCard, bool]:
         raise LookupError(card_id)
     cid, started = card.conversation_id, False
     if not cid or await db.get(Conversation, cid) is None:
-        conv = Conversation(title=card.title[:200])
+        pid = card_targets.project_of(card.target)
+        if pid and await db.get(Project, pid) is None:
+            pid = None  # 项目删了：对话放回主聊天
+        conv = Conversation(title=card.title[:200], project_id=pid)
         db.add(conv)
         await db.flush()
         cid, started = conv.id, True

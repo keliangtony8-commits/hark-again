@@ -73,7 +73,7 @@ class CardIn(BaseModel):
     title: str
     blocks: list = []
     action_prompt: str | None = None
-    target: str | None = None  # 客户端固定去处，如 "usage"
+    target: str | None = Field(None, max_length=64)  # 客户端去处，如 "usage"、"project:<id>"（app/card_targets.py）
     action_label: str | None = Field(None, max_length=24)  # 主按钮上的字，空 = “去做”
     image_url: str | None = Field(None, max_length=1024, pattern=r"^https?://")  # 卡顶配图
     link_url: str | None = Field(None, max_length=1024, pattern=r"^https?://")  # 原页链接
