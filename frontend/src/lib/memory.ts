@@ -33,6 +33,23 @@ export function filterMemories(list: Memory[], query = "", category: string | nu
   return [...groups.keys()].sort(compareCategory).map((c) => [c, groups.get(c)!]);
 }
 
+/** 页头小标签：“记得 12 件事 · 4 个分类”。 */
+export function memorySummary(list: Memory[]): string {
+  if (!list.length) return "还没有记忆";
+  const n = categoryCounts(list).length;
+  return n > 1 ? `记得 ${list.length} 件事 · ${n} 个分类` : `记得 ${list.length} 件事`;
+}
+
+/** 到这么多条才显示搜索框（= App memorySearchFrom）。 */
+export const MEMORY_SEARCH_FROM = 7;
+
+/** 空记忆页起步按钮：带例句打开新增表单，用户确认才保存。 */
+export const MEMORY_STARTERS = [
+  { label: "怎么称呼你", content: "叫我", category: "profile" },
+  { label: "饮食忌口", content: "我不吃", category: "food" },
+  { label: "作息习惯", content: "早上 8 点前别打扰我", category: "general" },
+];
+
 /** GET/POST /api/memory-digest。text=null 表示还没生成过。 */
 export type MemoryDigest = { text: string | null; generated_at: string | null; count: number; memories: number; stale: boolean };
 

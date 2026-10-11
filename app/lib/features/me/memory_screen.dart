@@ -1,5 +1,5 @@
 // 记忆：看、找、改、删我记住的事。
-// 版式自上而下：“我对你的了解”概括卡 → 搜索框 → 分类筛选条 → 按分类分组的记忆。
+// 版式自上而下（与保险箱/技能页同一套）：页头摘要 + 说明 →（空时起步卡）→“我对你的了解”概括卡 → 搜索框（≥7 条）→ 分类筛选条 → 按分类分组（带数量）。
 // 筛选纯客户端（models/memory.dart），列表来自 memoriesProvider；左滑删除，点击编辑（内容 + 分类），右上角新增。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +10,7 @@ import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
+import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
@@ -48,58 +49,75 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen> {
       body: AsyncBody<MemoryItem>(
         value: ref.watch(memoriesProvider),
         onRetry: () => ref.invalidate(memoriesProvider),
-        empty: EmptyHint(
-          icon: Icons.psychology_outlined,
-          title: '还没有记忆',
-          text: '聊天时说“记住我不吃辣”，我就会记下来。',
-          action: OutlinedButton(onPressed: () => _add(context), child: const Text('手动添加')),
-        ),
         builder: (list) {
           final counts = categoryCounts(list);
           final category = counts.any((c) => c.$1 == _category) ? _category : null; // 选中的分类被删空了就回到全部
           final groups = filterMemories(list, query: _query.text, category: category);
-          final filtering = _query.text.trim().isNotEmpty || category != null;
-          return PageBody(children: [
-            const MemoryDigestCard(),
-            const SizedBox(height: Sp.x4),
-            SearchField(controller: _query, hint: '搜索记忆', onChanged: (_) => setState(() {}), onClear: () => setState(_query.clear)),
-            if (counts.length > 1) ...[
-              const SizedBox(height: Sp.x3),
-              _CategoryBar(counts: counts, total: list.length, selected: category, onSelect: (c) => setState(() => _category = c)),
-            ],
-            if (groups.isEmpty)
-              EmptyHint(
-                icon: Icons.search_off_rounded,
-                title: '没有匹配的记忆',
-                text: '换个词，或者看看全部分类。',
-                action: TextButton(onPressed: _clearFilters, child: const Text('清除筛选')),
-              ),
-            for (final (cat, items) in groups) ...[
-              SectionTitle(categoryLabel(cat), trailing: filtering ? Text('${items.length}', style: context.text.labelSmall) : null),
-              ListGroup(children: [
-                for (final (i, m) in items.indexed)
-                  SwipeToDelete(
-                    id: m.id,
-                    onDelete: () => ref.read(memoriesProvider.notifier).remove(m.id),
-                    child: FadeSlideIn(
-                      delay: Motion.staggerStep * (i < 8 ? i : 8),
-                      child: _MemoryRow(m: m, query: _query.text, onTap: () => _edit(context, m)),
-                    ),
+          final searchable = list.length >= memorySearchFrom || _query.text.isNotEmpty; // 搜着搜着删到门槛下也别把框收走
+          var i = 0; // 整页错峰序号（Motion.stagger 自己封顶，长列表不会越排越慢）
+          return PullRefresh(
+            onRefresh: () => ref.read(memoriesProvider.notifier).reload(),
+            child: PageBody(children: [
+              PageIntro(summary: memorySummary(list), line: '每次对话我都会参考这些。聊天时我会自己记，说错了就改，不想让我记的直接删。'),
+              if (list.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: Sp.x4),
+                  child: StarterCard(
+                    title: '还没有记忆',
+                    text: '聊天时说“记住我不吃辣”我就会记下来，也可以先告诉我几件事。',
+                    starters: [
+                      for (final s in memoryStarters)
+                        PillButton(label: s.label, icon: Icons.add_rounded, onTap: () => _add(context, content: s.content, category: s.category)),
+                    ],
                   ),
-              ]),
-            ],
-          ]);
+                )
+              else ...[
+                const SizedBox(height: Sp.x4),
+                const MemoryDigestCard(),
+                if (searchable) ...[
+                  const SizedBox(height: Sp.x4),
+                  SearchField(controller: _query, hint: '搜索记忆', onChanged: (_) => setState(() {}), onClear: () => setState(_query.clear)),
+                ],
+                if (counts.length > 1) ...[
+                  const SizedBox(height: Sp.x3),
+                  _CategoryBar(counts: counts, total: list.length, selected: category, onSelect: (c) => setState(() => _category = c)),
+                ],
+                if (groups.isEmpty)
+                  EmptyHint(
+                    icon: Icons.search_off_rounded,
+                    title: '没有匹配的记忆',
+                    text: '换个词，或者看看全部分类。',
+                    action: TextButton(onPressed: _clearFilters, child: const Text('清除筛选')),
+                  ),
+                for (final (cat, items) in groups) ...[
+                  SectionTitle(categoryLabel(cat), count: items.length),
+                  ListGroup(children: [
+                    for (final m in items)
+                      SwipeToDelete(
+                        id: m.id,
+                        onDelete: () => ref.read(memoriesProvider.notifier).remove(m.id),
+                        child: FadeSlideIn(
+                          delay: Motion.stagger(i++, from: 1),
+                          child: _MemoryRow(m: m, query: _query.text, onTap: () => _edit(context, m)),
+                        ),
+                      ),
+                  ]),
+                ],
+              ],
+            ]),
+          );
         },
       ),
     );
   }
 
-  Future<void> _add(BuildContext context) async {
-    final cat = ValueNotifier(_category ?? 'general');
+  /// 新增一条：页头 + 用当前分类；起步按钮带着例句和分类打开同一张表。
+  Future<void> _add(BuildContext context, {String? content, String? category}) async {
+    final cat = ValueNotifier(category ?? _category ?? 'general');
     final v = await showFormSheet(context,
         title: '新增记忆',
         subtitle: '一条一件事，比如“我对花生过敏”。',
-        fields: const [FieldSpec('content', '内容', lines: 3)],
+        fields: [FieldSpec('content', '内容', lines: 3, initial: content ?? '')],
         submit: '记住',
         extra: _CategoryPicker(value: cat));
     final text = v?['content'];

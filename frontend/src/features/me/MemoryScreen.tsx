@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { categoryCounts, categoryLabel, filterMemories, MEMORY_CATEGORIES } from "../../lib/memory";
+import { categoryCounts, categoryLabel, filterMemories, MEMORY_CATEGORIES, MEMORY_SEARCH_FROM, MEMORY_STARTERS, memorySummary } from "../../lib/memory";
 import { formatWhen } from "../../lib/format";
 import { useMemories } from "../../lib/memoryStore";
 import type { Memory } from "../../lib/types";
-import { IconBrain, IconPlus, IconSearch } from "../../ui/icons";
-import { Highlight, Hint, Page, PageHeader, SearchField, Sheet, Skeleton } from "../../ui/kit";
+import { IconPlus, IconSearch } from "../../ui/icons";
+import { Highlight, Hint, Page, PageHeader, PageIntro, SearchField, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
 import MemoryDigestCard from "./MemoryDigestCard";
 
-/** 记忆：概括卡 → 搜索 → 分类筛选 → 按分类分组。与 App MemoryScreen 同版式，筛选规则在 lib/memory.ts。 */
+/** 记忆：页头摘要 →（空时起步卡）→ 概括卡 → 搜索（≥7 条）→ 分类筛选 → 按分类分组带数量。与 App MemoryScreen 同版式，筛选规则在 lib/memory.ts。 */
 export default function MemoryScreen() {
   const mem = useMemories(); // 与聊天里的记忆卡共用一份列表（lib/memoryStore.ts）
   const [query, setQuery] = useState("");
@@ -17,7 +17,7 @@ export default function MemoryScreen() {
   const counts = categoryCounts(mem.items);
   const category = counts.some(([c]) => c === filter) ? filter : null; // 选中的分类删空了就回到全部
   const groups = filterMemories(mem.items, query, category);
-  const filtering = !!query.trim() || !!category;
+  let n = 0; // 整页错峰序号（封顶 10）
   const firstWord = query.trim().split(/\s+/)[0] ?? "";
 
   const save = async () => {
@@ -31,12 +31,17 @@ export default function MemoryScreen() {
   return (
     <Page header={<PageHeader title="记忆" back action={
       <button className="icon-btn" onClick={() => setEditing({ category: category ?? "general", content: "" })} aria-label="添加"><IconPlus /></button>} />}>
-      <p className="desc">每次对话我都会参考这些。说错了就改，不想让我记的直接删。</p>
-      <MemoryDigestCard version={mem.items} />
+      <PageIntro loading={!mem.loaded} summary={memorySummary(mem.items)}
+        line="每次对话我都会参考这些。聊天时我会自己记，说错了就改，不想让我记的直接删。" />
       {!mem.loaded ? <Skeleton /> : mem.items.length === 0 ? (
-        <Hint icon={<IconBrain size={26} />} title="还没有记忆" text="聊天时我会自动记下你的偏好，你也可以手动添加。" />
+        <StarterCard title="还没有记忆" text="聊天时说“记住我不吃辣”我就会记下来，也可以先告诉我几件事。">
+          {MEMORY_STARTERS.map((s) => (
+            <button key={s.label} className="btn btn-ghost" onClick={() => setEditing({ content: s.content, category: s.category })}><IconPlus size={16} />{s.label}</button>
+          ))}
+        </StarterCard>
       ) : (<>
-        <SearchField className="memory-search" value={query} onChange={setQuery} placeholder="搜索记忆" />
+        <MemoryDigestCard version={mem.items} />
+        {(mem.items.length >= MEMORY_SEARCH_FROM || query) && <SearchField className="memory-search" value={query} onChange={setQuery} placeholder="搜索记忆" />}
         {counts.length > 1 && (
           <div className="seg" role="group" aria-label="按分类筛选">
             <button className={`chip ${!category ? "on" : ""}`} aria-pressed={!category} onClick={() => setFilter(null)}>全部 {mem.items.length}</button>
@@ -50,11 +55,10 @@ export default function MemoryScreen() {
           <Hint icon={<IconSearch size={26} />} title="没有匹配的记忆" text="换个词，或者看看全部分类。"
             action={<button className="btn btn-ghost" onClick={() => { setQuery(""); setFilter(null); }}>清除筛选</button>} />
         ) : groups.map(([cat, items]) => (
-          <div key={cat} className="memory-group">
-            <div className="section-title">{categoryLabel(cat)}{filtering && <span>{items.length}</span>}</div>
+          <Section key={cat} title={`${categoryLabel(cat)} · ${items.length}`}>
             <div className="list">
-              {items.map((m, i) => (
-                <button key={m.id} className="row memory-row" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }} onClick={() => setEditing(m)}>
+              {items.map((m) => (
+                <button key={m.id} className="row memory-row enter" style={stagger(Math.min(++n, 10))} onClick={() => setEditing(m)}>
                   <div className="row-body">
                     <div className="row-title"><Highlight text={m.content} q={firstWord} /></div>
                     {m.updated_at && <div className="row-sub">{formatWhen(m.updated_at)}</div>}
@@ -62,7 +66,7 @@ export default function MemoryScreen() {
                 </button>
               ))}
             </div>
-          </div>
+          </Section>
         ))}
       </>)}
       {editing && (

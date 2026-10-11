@@ -126,9 +126,11 @@ void main() {
   });
 
   testWidgets('search and category filter', (tester) async {
-    final api = FakeApi([...sample]);
+    final more = [for (var k = 0; k < 3; k++) mem('x$k', '其他事 $k', 'general')];
+    final api = FakeApi([...sample, ...more]);
     await pump(tester, api);
-    expect(find.text('全部 4'), findsOneWidget);
+    expect(find.text('全部 7'), findsOneWidget);
+    expect(find.text('记得 7 件事 · 4 个分类'), findsOneWidget);
     await tester.tap(find.text('饮食 2'));
     await tester.pumpAndSettle();
     expect(find.text('周末喜欢爬山'), findsNothing);
@@ -141,6 +143,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('周末喜欢爬山'), findsOneWidget);
     expect(find.text('不吃辣'), findsOneWidget);
+  });
+
+  testWidgets('few memories: no search box, section counts', (tester) async {
+    final api = FakeApi([...sample]);
+    await pump(tester, api);
+    expect(find.byType(TextField), findsNothing); // 不到 memorySearchFrom 条不显示搜索
+    expect(find.text('记得 4 件事 · 3 个分类'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget); // 饮食分组的数量
+  });
+
+  testWidgets('empty: starter opens the add form prefilled', (tester) async {
+    final api = FakeApi([]);
+    await pump(tester, api);
+    expect(find.text('还没有记忆'), findsWidgets);
+    expect(find.text('我对你的了解'), findsNothing);
+    await tester.tap(find.text('饮食忌口'));
+    await tester.pumpAndSettle();
+    expect(find.text('新增记忆'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '我不吃'), findsOneWidget);
+    final food = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '饮食'));
+    expect(food.selected, true);
+  });
+
+  test('memorySummary', () {
+    expect(memorySummary([]), '还没有记忆');
+    expect(memorySummary([MemoryItem.fromJson(mem('a', 'x', 'food'))]), '记得 1 件事');
   });
 
   testWidgets('old server without digest endpoint hides the card', (tester) async {

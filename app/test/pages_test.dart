@@ -2,6 +2,7 @@
 // 行变“已下线”且菜单只剩重新发布/重命名；重新发布恢复；重命名 PATCH 标题；失败提示服务器的话、列表不变。
 import 'package:assistant/ui/glass.dart';
 import 'package:assistant/core/api.dart';
+import 'package:assistant/features/me/page_library.dart';
 import 'package:assistant/features/me/pages_screen.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -35,8 +36,8 @@ class FakeApi implements Api {
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError();
 }
 
-Map<String, dynamic> page(String id, String title, {bool? published}) => {
-      'id': id, 'slug': id, 'title': title, 'url': 'https://me.example/p/$id/', 'updated': 1760000000,
+Map<String, dynamic> page(String id, String title, {bool? published, num updated = 1760000000}) => {
+      'id': id, 'slug': id, 'title': title, 'url': 'https://me.example/p/$id/', 'updated': updated,
       'published': ?published,
     };
 
@@ -57,6 +58,35 @@ Future<void> menu(WidgetTester tester, String title) async {
 }
 
 void main() {
+  test('groupPages / pagesSummary', () {
+    final list = [
+      PageItem.fromJson(page('a', 'A', updated: 100)),
+      PageItem.fromJson(page('b', 'B', updated: 300, published: false)),
+      PageItem.fromJson(page('c', 'C', updated: 200)),
+      PageItem.fromJson({'id': 'd', 'title': 'D', 'url': 'u'}),
+    ];
+    final g = groupPages(list);
+    expect(g.live.map((p) => p.id), ['c', 'a', 'd']);
+    expect(g.off.map((p) => p.id), ['b']);
+    expect(pagesSummary(list), '3 个网页在线 · 1 个已下线');
+    expect(pagesSummary([]), '还没有网页');
+  });
+
+  testWidgets('empty shows starters; sections carry counts', (tester) async {
+    final api = FakeApi([]);
+    await pump(tester, api);
+    expect(find.text('做第一个网页'), findsOneWidget);
+    for (final s in pageStarters) {
+      expect(find.text(s.label), findsOneWidget);
+    }
+    final api2 = FakeApi([page('a', '东京五日'), page('b', '菜单', published: false)]);
+    await tester.pumpWidget(const SizedBox());
+    await pump(tester, api2);
+    expect(find.text('在线'), findsOneWidget);
+    expect(find.text('1 个网页在线 · 1 个已下线'), findsOneWidget);
+    expect(find.text('做第一个网页'), findsNothing);
+  });
+
   test('published defaults to true for old servers', () {
     expect(PageItem.fromJson(page('a', 'x')).published, true);
     expect(PageItem.fromJson(page('a', 'x', published: false)).published, false);

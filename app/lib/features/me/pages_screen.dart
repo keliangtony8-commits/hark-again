@@ -1,4 +1,5 @@
-// Pages：我为你生成并发布的网页。点一行打开操作菜单：打开、分享、复制链接、重命名、下线 / 重新发布；左滑删除。
+// Pages：我为你生成并发布的网页。版式与保险箱/技能页同一套：页头摘要 + 说明 → 空时起步卡 → 在线 / 已下线分组（带数量）。
+// 点一行打开操作菜单：打开、分享、复制链接、重命名、下线 / 重新发布；左滑删除。
 // 下线 ≠ 删除：文件留着、公开链接暂时 404，重新发布后同一个链接恢复（发出去的链接不用重发）。
 // 状态变化全走 pagesProvider.patch（PATCH /api/pages/{slug}），页面不自己维护副本。
 import 'package:flutter/material.dart';
@@ -9,14 +10,17 @@ import '../../core/api.dart';
 import '../../core/links.dart';
 import '../../core/resource.dart';
 import '../../core/share.dart';
+import '../chat/open_conversation.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
+import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import 'page_library.dart';
 
 class PagesScreen extends ConsumerWidget {
   const PagesScreen({super.key});
@@ -28,21 +32,48 @@ class PagesScreen extends ConsumerWidget {
       body: AsyncBody<PageItem>(
         value: ref.watch(pagesProvider),
         onRetry: () => ref.invalidate(pagesProvider),
-        empty: const EmptyHint(icon: Icons.web_rounded, title: '还没有发布过网页', text: '在聊天里说“把这个行程做成一个网页”，做好的页面会出现在这里。'),
-        builder: (list) => PageBody(children: [
-          ListGroup(children: [
-            for (final (i, pg) in list.indexed)
-              SwipeToDelete(
-                id: pg.id,
-                confirm: () => confirmDanger(context, title: '删除「${pg.title}」？', text: '分享出去的链接也会失效。只想暂时不让人看，可以用“下线”。'),
-                onDelete: () => ref.read(pagesProvider.notifier).remove(pg.id),
-                child: FadeSlideIn(delay: Motion.stagger(i), child: PageRow(pg)),
-              ),
-          ]),
-        ]),
+        builder: (list) {
+          final g = groupPages(list);
+          var i = 0; // 整页错峰序号
+          Widget rows(List<PageItem> items) => ListGroup(children: [
+                for (final pg in items)
+                  SwipeToDelete(
+                    id: pg.id,
+                    confirm: () => confirmDanger(context, title: '删除「${pg.title}」？', text: '分享出去的链接也会失效。只想暂时不让人看，可以用“下线”。'),
+                    onDelete: () => ref.read(pagesProvider.notifier).remove(pg.id),
+                    child: FadeSlideIn(delay: Motion.stagger(i++, from: 1), child: PageRow(pg)),
+                  ),
+              ]);
+          return PullRefresh(
+            onRefresh: () => ref.read(pagesProvider.notifier).reload(),
+            child: PageBody(children: [
+              PageIntro(summary: pagesSummary(list), line: '行程、邀请函、菜单这类要给别人看的东西，我会做成网页。链接带随机后缀不会被搜到；暂时不想让人看就下线，链接不变。'),
+              if (list.isEmpty) const _Starters(),
+              if (g.live.isNotEmpty) ...[SectionTitle('在线', count: g.live.length), rows(g.live)],
+              if (g.off.isNotEmpty) ...[SectionTitle('已下线', count: g.off.length), rows(g.off)],
+            ]),
+          );
+        },
       ),
     );
   }
+}
+
+/// 还没有网页：几个起步按钮，点了开新对话让我来做（不在这里建任何东西）。
+class _Starters extends ConsumerWidget {
+  const _Starters();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Padding(
+        padding: const EdgeInsets.only(top: Sp.x4),
+        child: StarterCard(
+          title: '做第一个网页',
+          text: '在聊天里说一句“把这个做成网页”就行，做好的页面都会出现在这里。',
+          starters: [
+            for (final s in pageStarters) PillButton(label: s.label, icon: Icons.auto_awesome_outlined, onTap: () => askInNewChat(context, ref, s.prompt)),
+          ],
+        ),
+      );
 }
 
 /// 一行：已下线的变淡并带“已下线”标签（标签换入换出走 SwapSwitcher）。
