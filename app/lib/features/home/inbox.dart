@@ -157,7 +157,7 @@ class InboxBanner extends StatelessWidget {
       onDismissed: (_) => onDismiss(),
       child: Pressable(
         onTap: onOpen,
-        semanticLabel: report ? '新报告' : '新建议',
+        semanticLabel: [report ? '新报告' : '新建议', item.title, ?item.glance].join('，'),
         // 浮在内容上的通知条 = 浮层：真模糊玻璃 + 统一的淡浮层投影（v2.1：不再手写重投影和实色底）
         child: GlassSurface(
           blur: true,
@@ -170,6 +170,9 @@ class InboxBanner extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 Text(report ? '新报告' : '新建议', style: context.text.labelSmall?.copyWith(color: p.text2)),
                 Text(item.title, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                // 报告的“一眼”（摘要标题 · 一句话）：不点开就知道要不要现在看
+                if (item.glance case final g?)
+                  Text(g, style: context.text.bodySmall?.copyWith(color: p.text2), maxLines: 2, overflow: TextOverflow.ellipsis),
               ]),
             ),
             Icon(Icons.chevron_right_rounded, color: p.text3),

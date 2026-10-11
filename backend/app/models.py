@@ -153,6 +153,9 @@ class HomeCard(Base):
     link_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     # 系统提醒的主体（"task:<id>"、"connector:github"、"mcp:<id>"…）：收起/顶替按它，规则见 app/system_alerts.py；其余卡为空
     alert_subject: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
+    # 报告卡的“一眼”：摘要卡标题 + 一句话，投递时由 app/report_gist.py 从块里取出；其余卡为空
+    headline: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    gist: Mapped[str | None] = mapped_column(String(240), nullable=True)
     dismissed: Mapped[bool] = mapped_column(default=False)
     # 未读：新报告/新建议为 True；用户打开对应对话（或点“全部已读”）后清掉。面板刷新不算新消息。
     unread: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

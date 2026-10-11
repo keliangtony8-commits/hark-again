@@ -215,6 +215,9 @@ class TaskRun {
 
 String? _webUrl(Object? v) => v is String && (v.startsWith('https://') || v.startsWith('http://')) ? v : null;
 
+/// 一行字段：去首尾空白，空串当没有。
+String? _line(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
+
 class HomeCard {
   const HomeCard({
     required this.id,
@@ -229,6 +232,8 @@ class HomeCard {
     this.origin,
     this.imageUrl,
     this.linkUrl,
+    this.headline,
+    this.gist,
     required this.dismissed,
     this.unread = false,
     this.updatedAt,
@@ -247,6 +252,8 @@ class HomeCard {
     origin: j['origin'] as String?,
     imageUrl: _webUrl(j['image_url']),
     linkUrl: _webUrl(j['link_url']),
+    headline: _line(j['headline']),
+    gist: _line(j['gist']),
     dismissed: j['dismissed'] as bool? ?? false,
     unread: j['unread'] as bool? ?? false,
     updatedAt: _date(j['updated_at']),
@@ -279,6 +286,17 @@ class HomeCard {
     return h.isEmpty ? null : (h.startsWith('www.') ? h.substring(4) : h);
   }
 
+  /// 报告卡的“一眼”：摘要卡标题 + 一句话（服务端 app/report_gist.py 投递时取出；老服务器没有）。用 [glance]。
+  final String? headline, gist;
+
+  /// 收件箱行的副标题：`headline · gist`；都没有（老服务器 / 老卡）就退回正文纯文本，去掉 Markdown 记号，截 80 字。
+  String get glance {
+    final parts = [?headline, ?gist];
+    if (parts.isNotEmpty) return parts.join(' · ');
+    final t = plainText(blocks).replaceAll(RegExp(r'[#*_`>|-]'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    return t.isEmpty ? '点开查看结果' : (t.length > 80 ? '${t.substring(0, 80)}…' : t);
+  }
+
   final bool dismissed, unread;
   final DateTime? updatedAt;
 
@@ -302,15 +320,24 @@ class InboxSummary {
 }
 
 class InboxItem {
-  const InboxItem({required this.id, required this.kind, required this.title, this.conversationId});
+  const InboxItem({required this.id, required this.kind, required this.title, this.conversationId, this.headline, this.gist});
   factory InboxItem.fromJson(Map<String, dynamic> j) => InboxItem(
     id: j['id'] as String,
     kind: j['kind'] as String? ?? 'report',
     title: j['title'] as String? ?? '',
     conversationId: j['conversation_id'] as String?,
+    headline: _line(j['headline']),
+    gist: _line(j['gist']),
   );
   final String id, kind, title;
   final String? conversationId;
+
+  /// 报告的“一眼”（见 [HomeCard.glance]）；横幅第二行 = [glance]，都没有为 null（横幅只显示标题）。
+  final String? headline, gist;
+  String? get glance {
+    final parts = [?headline, ?gist];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 }
 
 /// 技能。[builtin] 内置原样（只读）；[customized] 是内置的自定义版（同 id 顶替内置，可改、可恢复默认）；

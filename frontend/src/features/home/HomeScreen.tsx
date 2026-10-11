@@ -19,15 +19,11 @@ import { OfferImage, OfferSource } from "./OfferMedia";
 import { agendaDetail, agendaHint, agendaNowAt, clockOf, agendaProblem, agendaSummary, briefTaskOf, MORNING_BRIEF, PREP_DAY_LABEL, PREP_DAY_PROMPT, SCHEDULE_BRIEF_LABEL, todayAgenda } from "./todayAgenda";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
+import { cardGlance } from "../../lib/reportGlance";
 
 /** 错峰入场第 i 拍（.enter 读 --i；超过 10 拍不再加，= App Motion.stagger）。 */
 const nth = stagger;
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
-/** 收件箱一行预览：取结果里第一段文字，去掉 Markdown 符号。 */
-const preview = (c: HomeCard) => {
-  const t = c.blocks.find((b) => b.type === "text");
-  return t && t.type === "text" ? t.text.replace(/[#*_`>|-]/g, "").replace(/\s+/g, " ").trim().slice(0, 80) : "点开查看结果";
-};
 
 /** Home：今天要紧的事一屏看完（设计 v2）。从上到下按“要我处理 → 一眼看 → 结果 → 安排”排：
  *  问候、为你准备（主动建议 + 稍后提醒一行 / 都没有时是连接引导卡）、面板（+ 创建一个新面板）、收件箱、今天。
@@ -202,7 +198,7 @@ export default function HomeScreen() {
                 <span className="row-icon"><IconInbox /></span>
                 <div className="row-body">
                   <div className="row-title">{r.title}</div>
-                  <div className="row-sub">{preview(r)}</div>
+                  <div className="row-sub">{cardGlance(r)}</div>
                 </div>
                 <span className="row-trail">{timeOf(r.updated_at)}<IconChevron /></span>
               </button>

@@ -133,7 +133,8 @@ async def _cards(db: AsyncSession, today: date, tz: ZoneInfo,
     rows = (await db.scalars(q.order_by(HomeCard.updated_at.desc()))).all()
     actions = [l for c in rows if c.kind == "action" for l in [card_line(c, today, tz)] if l]
     unread = [c for c in rows if c.kind == "report" and c.unread]
-    reports = [f"- 「{c.title}」{_aware(c.updated_at).astimezone(tz):%m-%d %H:%M}" for c in unread[:MAX_REPORTS]]
+    reports = [f"- 「{c.title}」{_aware(c.updated_at).astimezone(tz):%m-%d %H:%M}" + (f"：{c.gist}" if c.gist else "")
+               for c in unread[:MAX_REPORTS]]
     return actions[:MAX_CARDS], reports, len(unread)
 
 

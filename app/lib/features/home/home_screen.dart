@@ -10,7 +10,6 @@ import 'package:go_router/go_router.dart';
 import '../../blocks/block_view.dart';
 import '../../core/api.dart';
 import '../../core/resource.dart';
-import '../../models/block.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -144,7 +143,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     RowTile(
                       leading: _UnreadBadge(unread: r.unread),
                       title: r.title,
-                      subtitle: _preview(r),
+                      subtitle: r.glance,
                       trailing: Text(hm(r.updatedAt), style: context.text.labelSmall),
                       onTap: () => _openReport(r),
                     ),
@@ -158,11 +157,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
     );
-  }
-
-  String _preview(HomeCard c) {
-    final t = plainText(c.blocks).replaceAll(RegExp(r'[#*_`>|-]'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
-    return t.isEmpty ? '点开查看结果' : (t.length > 80 ? '${t.substring(0, 80)}…' : t);
   }
 }
 

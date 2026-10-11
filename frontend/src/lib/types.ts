@@ -86,8 +86,11 @@ export type HomeCard = { id: string; kind: "action" | "panel" | "report"; conver
   /** 建议卡卡顶配图 / 原页链接（只认 http(s)，见 features/home/OfferMedia.tsx）。旧服务器没有。 */
   image_url?: string | null; link_url?: string | null; dismissed: boolean; unread: boolean; updated_at: string;
   /** 稍后提醒到这个时刻：非空就先不显示，到点服务端放回（清空 + 重新未读）。旧服务器没有这个字段。 */
-  snoozed_until?: string | null };
-export type InboxItem = { id: string; kind: HomeCard["kind"]; title: string; conversation_id: string | null; created_at: string };
+  snoozed_until?: string | null;
+  /** 报告卡的“一眼”：摘要卡标题 + 一句话（backend app/report_gist.py；拼法见 lib/reportGlance.ts）。旧服务器没有。 */
+  headline?: string | null; gist?: string | null };
+export type InboxItem = { id: string; kind: HomeCard["kind"]; title: string; conversation_id: string | null; created_at: string;
+  headline?: string | null; gist?: string | null };
 export type InboxSummary = { unread: number; latest: InboxItem | null };
 /** builtin = 内置原样（只读）；customized = 内置的自定义版（同 id 顶替内置，可改、可恢复默认）；都 false = 自己写的。
  * enabled = false：停用，留在库里但模型看不到（旧服务器没有这个字段 = 启用）。 */

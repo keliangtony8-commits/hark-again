@@ -46,6 +46,7 @@
 .inbox-banner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .inbox-banner-kind { font-size: var(--fs-xs); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); color: var(--text-3); }
 .inbox-banner-title { font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inbox-banner-glance { font-size: var(--fs-xs); color: var(--text-2); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 @media (max-width: 520px) { .topbar { --topbar-h: 48px; gap: var(--sp-2); } }
 

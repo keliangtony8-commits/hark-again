@@ -1,13 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useInbox } from "../hooks/useInbox";
 import { IconChevron, IconInbox, IconSpark } from "../ui/icons";
+import { itemGlance } from "../lib/reportGlance";
 
-/** 来了新报告/新建议时从顶部滑下的横幅。点开 = 读掉并打开它；4 秒后自动收起。 */
+/** 来了新报告/新建议时从顶部滑下的横幅；报告有“一眼”（摘要标题 · 一句话）时第二行显示它。点开 = 读掉并打开它；4 秒后自动收起。 */
 export default function InboxBanner() {
   const { banner, dismissBanner, markRead } = useInbox();
   const nav = useNavigate();
   if (!banner) return null;
   const report = banner.kind === "report";
+  const glance = itemGlance(banner);
   const open = () => {
     dismissBanner();
     markRead([banner.id]);
@@ -20,6 +22,7 @@ export default function InboxBanner() {
       <span className="inbox-banner-body">
         <span className="inbox-banner-kind">{report ? "新报告" : "新建议"}</span>
         <span className="inbox-banner-title">{banner.title}</span>
+        {glance && <span className="inbox-banner-glance">{glance}</span>}
       </span>
       <IconChevron />
     </button>

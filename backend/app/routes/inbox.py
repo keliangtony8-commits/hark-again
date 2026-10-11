@@ -34,6 +34,7 @@ async def summary(db: AsyncSession) -> dict:
         "unread": count,
         "latest": None if latest is None else {
             "id": latest.id, "kind": latest.kind, "title": latest.title,
+            "headline": latest.headline, "gist": latest.gist,
             "conversation_id": latest.conversation_id, "created_at": latest.created_at.isoformat(),
         },
     }

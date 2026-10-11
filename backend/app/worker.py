@@ -19,7 +19,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import card_snooze, task_runs
+from . import card_snooze, report_gist, task_runs
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -36,8 +36,10 @@ async def _deliver_report(db, task: ScheduledTask, conv: Conversation, blocks: l
     # 只收起旧报告；失败提醒卡（action）由 task_runs 管，不能被下一份报告顺手收掉
     await db.execute(update(HomeCard).where(HomeCard.task_id == task.id, HomeCard.kind == "report")
                      .values(dismissed=True))
+    blocks = blocks or text_to_blocks("这次没有跑成功，稍后会按计划再试。")
+    headline, line = report_gist.gist(blocks)  # 收件箱行和横幅上的“一眼”
     db.add(HomeCard(kind="report", title=task.name, conversation_id=conv.id, task_id=task.id, unread=True,
-                    blocks=blocks or text_to_blocks("这次没有跑成功，稍后会按计划再试。")))
+                    blocks=blocks, headline=headline, gist=line))
 
 
 async def _deliver_panel(db, task: ScheduledTask, conv: Conversation, blocks: list[dict]) -> None:
