@@ -87,6 +87,23 @@
 .thought { gap: var(--sp-2); width: 86%; animation: rise var(--dur) var(--ease) both; }
 .thought-head { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); letter-spacing: var(--label-tracking); }
 .thought-head .thinking { padding: 0; }
+.thought-time { margin-left: auto; color: var(--text-3); }
+/* 正文一来，思考卡收成回复上方的一行；左缘与卡内正文对齐 */
+.thought-sum { width: 86%; animation: rise var(--dur) var(--ease) both; }
+.thought-toggle { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 32px; padding: 0 var(--sp-4); border: 0; background: none;
+  color: var(--text-3); font-size: var(--fs-xs); letter-spacing: var(--label-tracking); cursor: pointer; border-radius: var(--r-full); transition: color var(--dur-fast) var(--ease); }
+.thought-toggle:hover { color: var(--text-2); }
+.thought-toggle svg:last-child { transition: transform var(--dur) var(--ease); }
+.thought-toggle.open svg:last-child { transform: rotate(90deg); }
+.thought-full { margin: 0 0 var(--sp-2); padding: var(--sp-3) var(--sp-4); background: var(--tile); border-radius: var(--r-tile); font-size: var(--fs-sm);
+  line-height: 1.6; color: var(--text-2); white-space: pre-wrap; animation: rise var(--dur) var(--ease) both; }
+.icon-pop { display: inline-flex; animation: icon-pop var(--dur) var(--spring) both; }
+/* 回复完成：操作键逐个错峰浮现 */
+.msg.assistant .msg-actions > * { animation: rise var(--dur) var(--ease) both; }
+.msg.assistant .msg-actions > :nth-child(2) { animation-delay: var(--stagger); }
+.msg.assistant .msg-actions > :nth-child(3) { animation-delay: calc(2 * var(--stagger)); }
+.msg.assistant .msg-actions > :nth-child(4) { animation-delay: calc(3 * var(--stagger)); }
+@media (prefers-reduced-motion: reduce) { .icon-pop, .thought-sum, .thought-full, .msg.assistant .msg-actions > * { animation: none; } .thought-toggle svg:last-child { transition: none; } }
 .thought-tail { height: calc(2 * 1.6 * var(--fs-sm)); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
   mask-image: linear-gradient(to bottom, transparent 0, #000 25%); -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 25%); }
 .thought-tail p { margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-3); }

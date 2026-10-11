@@ -10,7 +10,7 @@ type Thread = { id: string | null; messages: Message[] };
 
 const isUnsent = (m: Message) => !!m.outbox;
 /** 思考可能有几万字，界面只看最近的：只留尾部（与 App Message.thoughtKeep 相同）。 */
-const THOUGHT_KEEP = 2000;
+export const THOUGHT_KEEP = 2000;
 const keepTail = (t: string) => (t.length > THOUGHT_KEEP ? t.slice(-THOUGHT_KEEP) : t);
 const plainText = (blocks: Block[]) => blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
 
@@ -108,7 +108,7 @@ export function useChat(projectId?: string) {
         });
         break;
       case "thinking.delta":
-        patchPending((p) => ({ ...p, thought: keepTail((p.thought ?? "") + e.text) }));
+        patchPending((p) => { const now = Date.now(); return { ...p, thought: keepTail((p.thought ?? "") + e.text), thinkFrom: p.thinkFrom ?? now, thinkTo: now }; });
         break;
       case "tool.status": {
         const { type: _t, ...run } = e;
@@ -121,7 +121,12 @@ export function useChat(projectId?: string) {
       }
       case "message.done":
         regenerating.current = false;
-        setMessages((m) => [...m.filter((x) => !x.pending), e.message]);
+        // 本机才有的思考（内容 + 计时）接到正式消息上：回复上方能展开“已思考 N 秒”
+        setMessages((m) => {
+          const p = m.find((x) => x.pending);
+          const done = p?.thought ? { ...e.message, thought: p.thought, thinkFrom: p.thinkFrom, thinkTo: p.thinkTo } : e.message;
+          return [...m.filter((x) => !x.pending), done];
+        });
         setStreaming(false);   // flush effect 随后送出期间点了“重发”的那条
         list.refresh();
         break;

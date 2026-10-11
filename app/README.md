@@ -80,3 +80,5 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - 设计 v2.1「克制」（v0.55）：强调色一屏最多两处（未读点、进度条、链接）；主按钮/用户气泡/导航选中/发送键用 `p.ink`/`p.onInk`。字重只用 `Weights.body/title/strong`（页面禁写 w700，`test/design_test.dart` 守着）；页面主标题用 `displayMedium`、大数字 `displaySmall`/`headlineMedium`（主题里已是衬线 + 等宽数字，不再手动 `.serif`）。行首图标用 `IconBadge`（细线、无色块）；卡片不加外投影，顶边高光由 `GlassSurface`/`AppCard` 自带。
 - 实色守卫（`test/sheet_test.dart`）：`surface2` 只许出现在 `lib/theme/` 和 `ui/glass_mode.dart`，别处一律 `context.tileFill`；外投影只许在 `ui/glass.dart`（floatShadow），页面不写 boxShadow / elevation。
 - 强调色克制落地（v0.60）：`p.accent`/`accentSoft` 只做信号——未读点、进度/运行中、链接/搜索命中、唯一关键状态（浏览器接管）。数据条/图表/占比条用 `p.ink`，状态字、标签、成功勾用 `p.text2`；TextButton 前景是墨色。`test/design_test.dart`「强调色克制」按文件登记允许次数，新增用法先登记角色。
+
+- v0.67：features/chat/thought_view.dart 管“思考”的两种样子（生成中 ThinkingCard 带秒数；完成后 ThoughtSummary 可展开）；内容下方的小图标键一律用 ui/kit.dart 的 QuietAction / CopyAction（复制原地变对勾，不弹提示条），图标换状态用 motion.dart 的 PopSwitcher，箭头转向用 TurnIcon。

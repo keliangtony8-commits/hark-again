@@ -198,6 +198,8 @@ abstract final class Timing {
   static const bannerHold = Duration(seconds: 4); // 端内横幅停留多久
   static const taskRunPoll = Duration(seconds: 4); // 任务详情页有运行在排队/进行时多久刷新一次
   static const outboxGiveUp = Duration(seconds: 45); // 待发送的消息等多久没连上就标“发送失败”
+  static const copiedHold = Duration(milliseconds: 1500); // 复制键变成对勾停多久再变回去
+  static const clockTick = Duration(seconds: 1); // “思考中 · 8 秒”这类计时多久跳一次
 }
 
 /// 玻璃材质（ui/glass.dart 只读这里）。真模糊很贵：只给浮层（顶栏、输入胶囊、弹层），列表里的卡片用“假玻璃”。

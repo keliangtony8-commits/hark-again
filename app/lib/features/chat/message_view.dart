@@ -16,6 +16,7 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
   const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onEdit, this.last = false});
@@ -130,7 +131,7 @@ class MessageView extends StatelessWidget {
                 padding: EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
                 child: TypingDots(),
               )
-            : _Thought(key: const ValueKey('thought'), text: message.thought)
+            : ThinkingCard(key: const ValueKey('thought'), text: message.thought, since: message.thinkFrom)
         : GlassSurface(
             key: const ValueKey('card'),
             radius: Radii.lg,
@@ -141,15 +142,20 @@ class MessageView extends StatelessWidget {
               for (final t in running) Padding(padding: EdgeInsets.only(top: message.blocks.isEmpty ? 0 : Sp.x2), child: _ToolChip(t.label)),
             ]),
           );
+    // 思考卡收成回复上方的一行（正文开始流出时就收），用 RiseSwitcher 长出来，不是一跳
+    final summary = !thinking && message.thought.trim().isNotEmpty;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: AnimatedSize(
-          duration: context.motion(Motion.base),
-          curve: Motion.ease,
-          alignment: Alignment.topLeft,
-          child: AnimatedSwitcher(duration: context.motion(Motion.fast), child: body),
-        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          RiseSwitcher(child: summary ? ThoughtSummary(key: const ValueKey('summary'), message: message) : null),
+          AnimatedSize(
+            duration: context.motion(Motion.base),
+            curve: Motion.ease,
+            alignment: Alignment.topLeft,
+            child: AnimatedSwitcher(duration: context.motion(Motion.fast), child: body),
+          ),
+        ]),
       ),
       if (!message.pending && (last || message.stopped))
         _ReplyActions(id: message.id, text: copyText(message.blocks), spoken: speakableText(message.blocks), stopped: message.stopped, onRegenerate: onRegenerate),
@@ -200,7 +206,8 @@ class _OutboxStatus extends StatelessWidget {
   }
 }
 
-/// 回复下方的操作行：低调的小图标（不抢内容），“重新生成”随可用状态淡入淡出。
+/// 回复下方的操作行：低调的小图标（kit QuietAction，不抢内容）。回复完成时逐个错峰浮现；
+/// 复制 → 对勾、朗读 → 停止都是原地 PopSwitcher；“重新生成”随可用状态淡入淡出。
 class _ReplyActions extends StatelessWidget {
   const _ReplyActions({required this.id, required this.text, required this.spoken, this.stopped = false, this.onRegenerate});
   final String id;
@@ -212,35 +219,35 @@ class _ReplyActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    Widget action(IconData icon, String tip, VoidCallback onTap) => IconButton(
-          onPressed: onTap,
-          tooltip: tip,
-          iconSize: 18,
-          color: p.text3,
-          visualDensity: VisualDensity.compact,
-          icon: Icon(icon),
-        );
-    return Padding(
-      padding: const EdgeInsets.only(top: Sp.x1),
-      child: Row(children: [
-        if (text.isNotEmpty)
-          action(Icons.content_copy_rounded, '复制', () {
-            Clipboard.setData(ClipboardData(text: text));
-            showToast(context, '已复制');
-          }),
-        if (spoken.isNotEmpty) _SpeakButton(id: id, text: spoken),
-        AnimatedSwitcher(
-          duration: context.motion(Motion.fast),
-          child: onRegenerate == null
-              ? const SizedBox.shrink()
-              : KeyedSubtree(key: const ValueKey('regen'), child: action(Icons.refresh_rounded, '重新生成', onRegenerate!)),
+    final items = <Widget>[
+      if (text.isNotEmpty) CopyAction(text: text),
+      if (spoken.isNotEmpty) _SpeakButton(id: id, text: spoken),
+      AnimatedSwitcher(
+        duration: context.motion(Motion.fast),
+        child: onRegenerate == null
+            ? const SizedBox.shrink()
+            : QuietAction(
+                key: const ValueKey('regen'),
+                icon: const Icon(Icons.refresh_rounded),
+                tooltip: '重新生成',
+                onPressed: onRegenerate,
+              ),
+      ),
+      if (stopped)
+        Padding(
+          padding: const EdgeInsets.only(left: Sp.x1),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.stop_circle_outlined, size: 14, color: p.text3),
+            const SizedBox(width: Sp.x1),
+            Text('已停止', style: context.text.bodySmall?.copyWith(color: p.text3)),
+          ]),
         ),
-        if (stopped) ...[
-          const SizedBox(width: Sp.x1),
-          Icon(Icons.stop_circle_outlined, size: 14, color: p.text3),
-          const SizedBox(width: Sp.x1),
-          Text('已停止', style: context.text.bodySmall?.copyWith(color: p.text3)),
-        ],
+    ];
+    // 和卡片里的正文左缘对齐：图标键自带 8px 内边距，再补一点
+    return Padding(
+      padding: const EdgeInsets.only(top: Sp.x1, left: Sp.x1),
+      child: Row(children: [
+        for (var i = 0; i < items.length; i++) FadeSlideIn(delay: Motion.stagger(i, from: 1), child: items[i]),
       ]),
     );
   }
@@ -257,50 +264,18 @@ class _SpeakButton extends ConsumerWidget {
     final p = context.palette;
     final phase = ref.watch(speechProvider.select((s) => s.phaseOf(id)));
     final icon = switch (phase) {
-      SpeechPhase.idle => Icon(Icons.volume_up_rounded, key: const ValueKey('idle'), color: p.text3),
+      SpeechPhase.idle => const Icon(Icons.volume_up_rounded, key: ValueKey('idle')),
       SpeechPhase.loading => SizedBox.square(
-          key: const ValueKey('loading'), dimension: 18, child: Center(child: PulseDot(color: p.text2))),
+          key: const ValueKey('loading'), dimension: QuietAction.iconSize, child: Center(child: PulseDot(color: p.text2))),
       SpeechPhase.playing => Icon(Icons.stop_rounded, key: const ValueKey('playing'), color: p.ink),
     };
-    return IconButton(
+    return QuietAction(
       onPressed: () async {
         final err = await ref.read(speechProvider.notifier).toggle(id, text);
         if (err != null && context.mounted) showToast(context, err);
       },
       tooltip: phase == SpeechPhase.idle ? '朗读' : '停止朗读',
-      iconSize: 18,
-      visualDensity: VisualDensity.compact,
-      icon: AnimatedSwitcher(duration: context.motion(Motion.fast), child: icon),
-    );
-  }
-}
-
-/// 思考中的小卡：标题行（跳点 + “思考中”）+ 最新两行思考，换行压成空格，整体次要色。
-class _Thought extends StatelessWidget {
-  const _Thought({super.key, required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = context.text.bodySmall!.copyWith(color: context.palette.text3);
-    return Semantics(
-      liveRegion: true,
-      label: '正在思考',
-      excludeSemantics: true,
-      child: GlassSurface(
-        radius: Radii.lg,
-        shadow: false,
-        padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            const TypingDots(),
-            const SizedBox(width: Sp.x2),
-            Text('思考中', style: context.text.labelMedium?.copyWith(color: context.palette.text2)),
-          ]),
-          const SizedBox(height: Sp.x2),
-          TailText(text.replaceAll(RegExp(r'\s+'), ' ').trim(), style: style),
-        ]),
-      ),
+      icon: icon,
     );
   }
 }

@@ -3,6 +3,7 @@ import BlockRenderer from "../../blocks/BlockRenderer";
 import { copyText } from "../../lib/copy";
 import { speechSupported, stopIfSpeaking, toggleSpeech, useSpeechPhase } from "../../lib/speech";
 import type { Message } from "../../lib/types";
+import { ThinkingCard, ThoughtSummary } from "./Thought";
 import { IconCheck, IconClose, IconCopy, IconEdit, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
 
 export type OutboxActions = { onResend: (id: string) => void; onDiscard: (id: string) => void };
@@ -20,7 +21,7 @@ function MessageActions({ message, onRegenerate }: { message: Message; onRegener
         <button className={`icon-btn sm speak-btn ${phase}`} aria-label={phase === "idle" ? "朗读" : "停止朗读"}
           title={phase === "idle" ? "朗读" : "停止朗读"} onClick={() => toggleSpeech(message.id, spoken)}>
           {/* 准备中（向服务器要语音）= 闪烁的小点；在读 = 停止方块 */}
-          {phase === "loading" ? <span className="speak-dot" /> : phase === "playing" ? <IconStop /> : <IconSpeaker />}
+          <span key={phase} className="icon-pop">{phase === "loading" ? <span className="speak-dot" /> : phase === "playing" ? <IconStop /> : <IconSpeaker />}</span>
         </button>
       )}
       {onRegenerate && (
@@ -32,14 +33,14 @@ function MessageActions({ message, onRegenerate }: { message: Message; onRegener
   );
 }
 
-/** 复制键：点后 1.5 秒内显示对勾。 */
+/** 复制键：点后 1.5 秒内显示对勾（图标原地 pop 换，同 App CopyAction）。 */
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => { if (!copied) return; const t = setTimeout(() => setCopied(false), 1500); return () => clearTimeout(t); }, [copied]);
   return (
     <button className="icon-btn sm" aria-label={copied ? "已复制" : "复制"} title={copied ? "已复制" : "复制"}
       onClick={async () => { await navigator.clipboard.writeText(text); setCopied(true); }}>
-      {copied ? <IconCheck size={16} /> : <IconCopy />}
+      <span key={copied ? "y" : "n"} className="icon-pop">{copied ? <IconCheck size={16} /> : <IconCopy />}</span>
     </button>
   );
 }
@@ -92,11 +93,9 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
   // AI 回复 = 左侧一张玻璃卡（块都在卡里）；还没出字时只是一颗“思考中”小胶囊
   return (
     <div className={`msg assistant ${last ? "last" : ""}`} data-msg-id={message.id}>
+      {!empty && message.thought?.trim() && <ThoughtSummary message={message} />}
       {empty ? (message.thought?.trim()
-        ? <div className="thought ai-card" role="status" aria-label="正在思考">
-            <div className="thought-head"><span className="thinking"><span /><span /><span /></span>思考中</div>
-            <div className="thought-tail" aria-hidden><p>{message.thought.replace(/\s+/g, " ").trim()}</p></div>
-          </div>
+        ? <ThinkingCard message={message} />
         : <div className="thinking glass-chip"><span /><span /><span /></div>) : (
         <div className="ai-card">
           <BlockRenderer blocks={message.blocks} />

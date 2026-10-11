@@ -7,6 +7,7 @@ import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/chat_view.dart';
 import 'package:assistant/models/block.dart';
 import 'package:assistant/theme/app_theme.dart';
+import 'package:assistant/theme/tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -180,7 +181,11 @@ void main() {
     await tester.tap(find.byTooltip('复制'));
     await tester.pumpAndSettle();
     expect(copied, '回答二');
-    expect(find.text('已复制'), findsOneWidget);
+    expect(find.byTooltip('已复制'), findsOneWidget); // v0.67：复制键原地变对勾，不再弹提示条
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    await tester.pump(Timing.copiedHold);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('复制'), findsOneWidget);
 
     await tester.tap(find.byTooltip('重新生成'));
     await tester.pumpAndSettle();

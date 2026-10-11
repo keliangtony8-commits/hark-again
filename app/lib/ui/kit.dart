@@ -1,7 +1,10 @@
 // 基础界面零件：分组列表、行、卡片、空状态、分区标题。
 // 各页面只拼这些，间距/圆角/颜色全部来自令牌，保证整个 App 版式统一。
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/app_theme.dart';
@@ -416,4 +419,65 @@ class TailText extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 内容下方那排“安静的”小图标键（回复的复制 / 朗读 / 重新生成）：18px、text3，点按区仍是紧凑 IconButton。
+/// icon 换状态时用 PopSwitcher（给 icon 一个随状态变化的 key）。整排图标长相只在这里定。
+class QuietAction extends StatelessWidget {
+  const QuietAction({super.key, required this.icon, required this.tooltip, required this.onPressed});
+  final Widget icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  static const iconSize = 18.0;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        iconSize: iconSize,
+        color: context.palette.text3,
+        visualDensity: VisualDensity.compact,
+        icon: PopSwitcher(child: icon),
+      );
+}
+
+/// 复制键：点了把 [text] 放进剪贴板，图标变对勾停 Timing.copiedHold 再变回去（对勾本身就是确认，不再弹提示条）；
+/// 读屏会念“已复制”。
+class CopyAction extends StatefulWidget {
+  const CopyAction({super.key, required this.text, this.tooltip = '复制'});
+  final String text;
+  final String tooltip;
+
+  @override
+  State<CopyAction> createState() => _CopyActionState();
+}
+
+class _CopyActionState extends State<CopyAction> {
+  Timer? _reset;
+  bool get _done => _reset?.isActive ?? false;
+
+  void _copy() {
+    Clipboard.setData(ClipboardData(text: widget.text));
+    HapticFeedback.selectionClick();
+    SemanticsService.sendAnnouncement(View.of(context), '已复制', Directionality.of(context));
+    _reset?.cancel();
+    setState(() => _reset = Timer(Timing.copiedHold, () {
+          if (mounted) setState(() {});
+        }));
+  }
+
+  @override
+  void dispose() {
+    _reset?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => QuietAction(
+        tooltip: _done ? '已复制' : widget.tooltip,
+        onPressed: _copy,
+        icon: _done
+            ? Icon(Icons.check_rounded, key: const ValueKey('copied'), color: context.palette.text2)
+            : const Icon(Icons.content_copy_rounded, key: ValueKey('copy')),
+      );
 }

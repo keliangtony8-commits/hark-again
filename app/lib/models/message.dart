@@ -20,7 +20,9 @@ class Message {
       this.outbox = Outbox.sent,
       this.stopped = false,
       this.createdAt,
-      this.thought = ''});
+      this.thought = '',
+      this.thinkFrom,
+      this.thinkTo});
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
       id: j['id'] as String,
@@ -41,23 +43,37 @@ class Message {
   /// 本地时间；老服务器不给、正在生成的占位消息没有 → null（日期分隔把它算进上一条的那天）。
   final DateTime? createdAt;
 
-  /// 推理模型此刻的思考（WS thinking.delta 累积，只留尾部 [thoughtKeep] 字）。只在生成中给用户看进度，
-  /// 服务器不存、message.done 换上的正式消息里没有。
+  /// 推理模型的思考（WS thinking.delta 累积，只留尾部 [thoughtKeep] 字）。生成中给用户看进度，
+  /// 生成完由控制器接到正式消息上（[withThoughtOf]），回复上方可展开回看；服务器不存，重新打开对话就没了。
   final String thought;
   static const thoughtKeep = 2000;
 
+  /// 第一段 / 最近一段思考到达的本机时间：算“已思考 N 秒”。同样只活在本次会话里。
+  final DateTime? thinkFrom, thinkTo;
+
   bool get isUser => role == 'user';
 
-  /// 追加一段思考，超长只留尾部（思考可能有几万字，界面只看最近的）。
-  Message think(String delta) {
+  /// 追加一段思考，超长只留尾部（思考可能有几万字，界面只看最近的）。[at] = 到达时间（测试可注入）。
+  Message think(String delta, {DateTime? at}) {
     final t = thought + delta;
-    return copyWith(thought: t.length > thoughtKeep ? t.substring(t.length - thoughtKeep) : t);
+    final now = at ?? DateTime.now();
+    return copyWith(
+        thought: t.length > thoughtKeep ? t.substring(t.length - thoughtKeep) : t, thinkFrom: thinkFrom ?? now, thinkTo: now);
   }
+
+  /// 思考用了多久（第一段到最后一段）；没思考过 → null。
+  Duration? get thinkTime => thinkFrom == null ? null : thinkTo!.difference(thinkFrom!);
+
+  /// message.done 换上正式消息时，把本机才有的思考（内容 + 计时）接过去：回复下方能展开“已思考 N 秒”。
+  Message withThoughtOf(Message pending) =>
+      pending.thought.isEmpty ? this : copyWith(thought: pending.thought, thinkFrom: pending.thinkFrom, thinkTo: pending.thinkTo);
 
   /// 还在本机、没进服务器的消息（待发送或发送失败）。
   bool get unsent => outbox != Outbox.sent;
 
-  Message copyWith({List<Block>? blocks, List<ToolRun>? tools, bool? pending, Outbox? outbox, String? thought}) => Message(
+  Message copyWith(
+          {List<Block>? blocks, List<ToolRun>? tools, bool? pending, Outbox? outbox, String? thought, DateTime? thinkFrom, DateTime? thinkTo}) =>
+      Message(
       id: id,
       role: role,
       blocks: blocks ?? this.blocks,
@@ -66,7 +82,9 @@ class Message {
       outbox: outbox ?? this.outbox,
       stopped: stopped,
       createdAt: createdAt,
-      thought: thought ?? this.thought);
+      thought: thought ?? this.thought,
+      thinkFrom: thinkFrom ?? this.thinkFrom,
+      thinkTo: thinkTo ?? this.thinkTo);
 }
 
 /// 第 i 条消息前要不要画日期分隔：第一条有时间的消息、或与上一条有时间的消息不在同一个本地日。

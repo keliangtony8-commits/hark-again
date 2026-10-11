@@ -551,3 +551,40 @@ class PopTransition extends StatelessWidget {
     );
   }
 }
+
+/// 图标换状态（复制 → 对勾、喇叭 → 停止）：旧的缩小淡出、新的从 0.6 带一点回弹放大淡入，原地不挪位。
+/// 给 child 一个随状态变化的 key。减少动态时直接换。
+class PopSwitcher extends StatelessWidget {
+  const PopSwitcher({super.key, required this.child});
+  final Widget child;
+  static const _from = 0.6;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: context.motion(Motion.base),
+    switchInCurve: Motion.spring,
+    switchOutCurve: Motion.ease,
+    layoutBuilder: (current, previous) => Stack(alignment: Alignment.center, children: [...previous, ?current]),
+    transitionBuilder: (c, a) => FadeTransition(
+      opacity: a,
+      child: ScaleTransition(scale: Tween(begin: _from, end: 1.0).animate(a), child: c),
+    ),
+    child: child,
+  );
+}
+
+/// 箭头/展开指示的转向：open 时转 [turns] 圈（默认 1/4 = 向右的箭头转成向下），过渡走 Motion.base。
+class TurnIcon extends StatelessWidget {
+  const TurnIcon({super.key, required this.open, required this.child, this.turns = 0.25});
+  final bool open;
+  final Widget child;
+  final double turns;
+
+  @override
+  Widget build(BuildContext context) => AnimatedRotation(
+    turns: open ? turns : 0,
+    duration: context.motion(Motion.base),
+    curve: Motion.ease,
+    child: child,
+  );
+}

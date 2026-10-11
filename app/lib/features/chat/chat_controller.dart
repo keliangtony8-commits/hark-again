@@ -247,7 +247,9 @@ class ChatController extends Notifier<ChatState> {
           return m.copyWith(tools: i < 0 ? [...m.tools, run] : [for (final t in m.tools) t.id == run.id ? run : t]);
         });
       case 'message.done':
-        final done = Message.fromJson(e['message'] as Map<String, dynamic>);
+        final pending = state.messages.where((m) => m.pending).lastOrNull;
+        var done = Message.fromJson(e['message'] as Map<String, dynamic>);
+        if (pending != null) done = done.withThoughtOf(pending);
         state = state.copyWith(messages: [...state.messages.where((m) => !m.pending), done], streaming: false, offline: false);
         refreshList();
         final id = state.activeId;

@@ -5,6 +5,7 @@ import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/message_view.dart';
+import 'package:assistant/features/chat/thought_view.dart';
 import 'package:assistant/models/message.dart';
 import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/ui/kit.dart';
@@ -78,7 +79,49 @@ void main() {
     await _settle();
     last = c.read(chatProvider('')).messages.last;
     expect(last.pending, false);
-    expect(last.thought, '');
+    expect(last.id, 'a1');
+    expect(last.thought, '用户想要一个答案'); // v0.67：本次会话里接到正式消息上，回复上方可展开
+    expect(last.thinkTime, isNotNull);
+  });
+
+  test('thinkDuration / thinkTime', () {
+    expect(thinkDuration(const Duration(milliseconds: 300)), '1 秒');
+    expect(thinkDuration(const Duration(milliseconds: 8400)), '8 秒');
+    expect(thinkDuration(const Duration(seconds: 65)), '1 分 5 秒');
+    final t0 = DateTime(2026, 10, 11, 17);
+    final m = const Message(id: 'p', role: 'assistant', blocks: [], pending: true)
+        .think('a', at: t0)
+        .think('b', at: t0.add(const Duration(seconds: 12)));
+    expect(m.thinkTime, const Duration(seconds: 12));
+    const plain = Message(id: 'x', role: 'assistant', blocks: []);
+    expect(plain.withThoughtOf(const Message(id: 'p', role: 'assistant', blocks: [])).thought, '');
+    expect(plain.withThoughtOf(m).thinkFrom, t0);
+  });
+
+  testWidgets('回复上方“已思考 12 秒”：点开看全部思考，再点收起', (t) async {
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final t0 = DateTime(2026, 10, 11, 17);
+    final done = Message.fromJson({
+      'id': 'a1', 'role': 'assistant',
+      'blocks': [{'type': 'text', 'text': '答案'}]
+    }).withThoughtOf(const Message(id: 'p', role: 'assistant', blocks: [], pending: true)
+        .think('先查天气\n再回答', at: t0)
+        .think('。', at: t0.add(const Duration(seconds: 12))));
+    await t.pumpWidget(_host(done));
+    await t.pumpAndSettle();
+    expect(find.text('已思考 12 秒'), findsOneWidget);
+    expect(find.textContaining('先查天气'), findsNothing);
+    await t.tap(find.text('已思考 12 秒'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('先查天气'), findsOneWidget);
+    await t.tap(find.text('已思考 12 秒'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('先查天气'), findsNothing);
+    // 没思考过的回复没有这一行
+    await t.pumpWidget(_host(Message.fromJson({'id': 'a2', 'role': 'assistant', 'blocks': [{'type': 'text', 'text': '答'}]})));
+    await t.pumpAndSettle();
+    expect(find.textContaining('已思考'), findsNothing);
   });
 
   testWidgets('没有思考 = 三个点；有思考 = “思考中”小卡露出最新内容；出正文后换成回复卡', (t) async {
@@ -108,5 +151,6 @@ void main() {
     })));
     await t.pump(const Duration(milliseconds: 400));
     expect(find.text('思考中'), findsNothing);
+    await t.pumpWidget(const SizedBox()); // 卸掉计时器
   });
 }
