@@ -4,6 +4,9 @@ import 'package:assistant/features/me/connectors_screen.dart';
 import 'package:assistant/features/me/vault_screen.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
+import 'package:assistant/theme/tokens.dart';
+import 'package:assistant/ui/glass.dart';
+import 'package:assistant/ui/kit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,10 +65,14 @@ void main() {
       '/api/connectors': [
         {'id': 'github', 'name': 'GitHub', 'desc': '代码', 'configured': false},
         {'id': 'google', 'name': 'Google', 'desc': '邮件', 'configured': true, 'account': 'me@gmail.com'},
+        {'id': 'notion', 'name': 'Notion', 'desc': '笔记', 'configured': true},
       ],
     });
     expect(find.text('已连接 1 个账户'), findsOneWidget);
-    expect(find.text('已连接'), findsOneWidget);
+    // 状态是小字（不是胶囊），能连的才有“连接”按钮
+    expect(find.widgetWithText(RowHint, '已连接'), findsOneWidget);
+    expect(find.widgetWithText(PillButton, '连接'), findsOneWidget);
+    expect(tester.getSize(find.widgetWithText(PillButton, '连接')).height, greaterThanOrEqualTo(A11y.minTap));
     expect(find.text('接入任何 MCP 服务'), findsOneWidget);
     // 已连接的排在未配置的前面
     expect(tester.getTopLeft(find.text('Google')).dy, lessThan(tester.getTopLeft(find.text('GitHub')).dy));
@@ -80,13 +87,20 @@ void main() {
     expect(connectorSummary(const [], [m('down'), m(null)]), '2 个 MCP 服务器 · 1 个需要处理');
   });
 
+  test('sortServers：有问题的在前，其余保持顺序', () {
+    McpServerItem m(String id, [String? problem]) => McpServerItem.fromJson({'id': id, 'name': id, 'url': 'https://$id.dev', 'problem': ?problem});
+    expect(sortServers([m('a'), m('b', 'auth'), m('c'), m('d', 'down')]).map((s) => s.id), ['b', 'd', 'a', 'c']);
+  });
+
   testWidgets('连接器页：连不上的 MCP 服务器行先说问题，带警示图标', (tester) async {
     await pump(tester, '/me/connectors', const ConnectorsScreen(), {
       '/api/connectors/mcp': [
-        {'id': 'a', 'name': 'notes', 'url': 'https://notes.dev/mcp', 'has_token': true, 'problem': 'down'},
         {'id': 'b', 'name': 'calc', 'url': 'https://calc.dev/mcp', 'has_token': true},
+        {'id': 'a', 'name': 'notes', 'url': 'https://notes.dev/mcp', 'has_token': true, 'problem': 'down'},
       ],
     });
+    // 有问题的排最前
+    expect(tester.getTopLeft(find.text('notes')).dy, lessThan(tester.getTopLeft(find.text('calc')).dy));
     expect(find.text('连不上 · notes.dev'), findsOneWidget);
     expect(find.text('calc.dev'), findsOneWidget);
     expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);

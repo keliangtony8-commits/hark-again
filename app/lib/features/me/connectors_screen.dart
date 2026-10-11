@@ -111,7 +111,7 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
                       starters: [PillButton(label: '添加 MCP 服务器', icon: Icons.add_rounded, onTap: _addMcp)],
                     ),
                   AsyncData(:final value) =>
-                    ListGroup(key: const ValueKey('list'), children: [for (final s in value) _McpRow(s, delay: next())]),
+                    ListGroup(key: const ValueKey('list'), children: [for (final s in sortServers(value)) _McpRow(s, delay: next())]),
                   AsyncError(:final error) => AppCard(key: const ValueKey('error'), child: Text('$error')),
                   _ => const SkeletonList(key: ValueKey('loading'), rows: 1),
                 },
@@ -123,7 +123,7 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
                   child: RowTile(
                     icon: Icons.key_rounded,
                     title: 'API Key 与网站登录',
-                    subtitle: '没有现成连接器的服务，把钥匙存进保险箱就能用',
+                    subtitle: '没有现成连接器的服务，存进保险箱就能用',
                     onTap: () => context.push('/me/vault'),
                   ),
                 ),
@@ -167,10 +167,13 @@ class _AccountRow extends ConsumerWidget {
           icon: _icons[c.id] ?? Icons.link_rounded,
           title: c.name,
           subtitle: c.connected ? c.account : (c.configured ? c.desc : '服务器还没配置这个应用（见 .env.example）'),
+          // 状态是小字，动作才是按钮：已连接 = 安静的说明；能连 = 墨色小胶囊“连接”
           trailing: SwapSwitcher(
             child: c.connected
-                ? const Pill('已连接', strong: true, key: ValueKey('on'))
-                : (usable ? Text('连接', key: const ValueKey('off'), style: context.text.labelSmall) : const SizedBox.shrink(key: ValueKey('none'))),
+                ? const RowHint('已连接', key: ValueKey('on'))
+                : (usable
+                    ? PillButton(key: const ValueKey('off'), label: '连接', primary: true, dense: true, onTap: () => _connect(context, ref))
+                    : const SizedBox.shrink(key: ValueKey('none'))),
           ),
           onTap: !usable ? null : () => c.connected ? _manage(context, ref) : _connect(context, ref),
         ),
@@ -215,14 +218,14 @@ class _McpRow extends ConsumerWidget {
           child: RowTile(
             icon: Icons.extension_outlined,
             title: s.name,
-            // 连不上 / 令牌被拒：副标题先说问题（警示色），主页同时有一张“需要你亲自处理”的卡
-            subtitle: s.problemText == null ? hostOf(s.url) : '${s.problemText} · ${hostOf(s.url)}',
-            subtitleColor: s.problemText == null ? null : context.palette.warning,
+            // 连不上 / 令牌被拒：副标题最前面说问题（只那几个字警示色），主页同时有一张“需要你亲自处理”的卡
+            subtitle: hostOf(s.url),
+            problem: s.problemText,
             trailing: SwapSwitcher(
               child: s.problemText != null
                   ? Icon(Icons.error_outline_rounded, key: const ValueKey('problem'), size: 20, color: context.palette.warning,
                       semanticLabel: s.problemText)
-                  : (s.hasToken ? const Pill('带令牌', key: ValueKey('token')) : const SizedBox.shrink(key: ValueKey('none'))),
+                  : (s.hasToken ? const RowHint('带令牌', key: ValueKey('token')) : const SizedBox.shrink(key: ValueKey('none'))),
             ),
             onTap: () => _showTools(context, ref),
           ),

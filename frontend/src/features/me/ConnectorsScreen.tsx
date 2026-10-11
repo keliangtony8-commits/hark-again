@@ -5,7 +5,7 @@ import { http } from "../../lib/api";
 import type { Connector, McpServerInfo } from "../../lib/types";
 import { IconAlert, IconChevron, IconPlus, IconShield, IconSpark } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
-import { connectorSummary, mcpProblemText, sortAccounts } from "./connectorLibrary";
+import { connectorSummary, mcpProblemText, sortAccounts, sortServers } from "./connectorLibrary";
 import { confirmDialog } from "../../ui/dialog";
 
 const favicon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
@@ -92,12 +92,12 @@ export default function ConnectorsScreen() {
           </StarterCard>
         ) : (
           <div className="list">
-            {servers.items.map((s) => (
+            {sortServers(servers.items).map((s) => (
               <div key={s.id} className="row enter" style={stagger(++n)}>
                 <button className="task-row" onClick={() => void showTools(s)}>
                   <span className="row-icon"><IconSpark /></span>
                   <span className="row-body"><span className="row-title">{s.name}</span>
-                    <span className={mcpProblemText(s) ? "row-sub row-problem" : "row-sub"}>{mcpProblemText(s) ? `${mcpProblemText(s)} · ${hostOf(s.url)}` : hostOf(s.url)}</span></span>
+                    <span className="row-sub">{mcpProblemText(s) && <><span className="row-problem">{mcpProblemText(s)}</span> · </>}{hostOf(s.url)}</span></span>
                   {mcpProblemText(s)
                     ? <span className="row-problem-icon icon-pop" role="img" aria-label={mcpProblemText(s)!}><IconAlert /></span>
                     : s.has_token && <span className="row-hint">带令牌</span>}
@@ -113,7 +113,7 @@ export default function ConnectorsScreen() {
         <div className="list">
           <Link to="/me/vault" className="row enter" style={stagger(++n)}>
             <span className="row-icon"><IconShield /></span>
-            <div className="row-body"><div className="row-title">API Key 与网站登录</div><div className="row-sub">没有现成连接器的服务，把钥匙存进保险箱就能用</div></div>
+            <div className="row-body"><div className="row-title">API Key 与网站登录</div><div className="row-sub">没有现成连接器的服务，存进保险箱就能用</div></div>
             <span className="row-trail"><IconChevron /></span>
           </Link>
         </div>

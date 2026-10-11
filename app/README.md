@@ -95,7 +95,8 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v0.86：商品卡 blocks/commerce_blocks.dart 按 `ProductsBlock.hasPictures` 选版式：有图排宫格（缺图格子 `_Monogram` 字标占位），一张都没有排清单 `_ProductRow`（字标小格 + 名字/补充 + 价格 + 有链接时 north_east 小箭头）；字标规则 models/block.dart `monogramOf`（网页 lib/monogram.ts 同规则）。截图样例主页加了助手提议卡（origin=agent，要带 action_prompt 才有主按钮）。
 - v0.91：主页建议卡配图/原页在 features/home/action_card.dart 的 OfferImage（卡顶 AspectRatio Layout.offerImageRatio + NetImage，有原页点图打开）/ OfferSource（“来源 · 域名 ↗”，≥ A11y.minTap）；HomeCard.imageUrl/linkUrl 只认 http(s)，linkHost 去 www.。网页 features/home/OfferMedia.tsx 同义。
 - v0.93：Home 卡片去处表只在 features/home/action_card.dart `cardTargets`（值 = 名字 或 名字:id，`splitTarget`/`cardRoute` 填 {task}/{id}，缺了退列表页）；助手卡只有去处没有指令时眉题“需要你亲自处理”、去处按钮是主按钮。
-- v0.97：RowTile 有 `subtitleColor`（行上的问题用 palette.warning，不用强调色）；连接器页 MCP 行按 McpServerItem.problemText 显示“连不上 · host” + 警示图标（SwapSwitcher），关掉工具弹层后刷新列表（打开工具列表 = 后端体检）。
+- v0.98：行尾“状态”用 kit `RowHint`（小字），“动作”用 `PillButton(dense: true)`（看着 32 高，可点区仍 48）；RowTile 的问题用 `problem:`（只染那几个字，后接 · 副标题），MCP 列表经 `sortServers` 有问题的在前。截图新增 `-connectors`。
+- v0.97：连接器页 MCP 行按 McpServerItem.problemText 显示“连不上 · host” + 警示图标（SwapSwitcher），关掉工具弹层后刷新列表（打开工具列表 = 后端体检）。
 - v0.94：建议卡“来源”行自带 minTap 高度，前后只补 Sp.x1（不再叠 Sp.x4）。截图新增 `-home-end`（主页往下翻，含“需要你亲自处理”卡 k5）。
 - v0.92：卡片里的输入框用 theme/field_border.dart 的 `compactField(label:, suffix:)`（紧凑版，表单卡在用；弹层/整页仍用主题默认）；一级页面上沿渐隐 TopFade 是缓入曲线，到让位线下 `Layout.topFadeRamp` 才全显（ShellPage.fadeSolidOf），列表顶部留白别小于它。截图样例的图片走 shots_test `_seedImage`（塞图片缓存，测试里没网）。
 - v0.90：输入框外形只用 theme/field_border.dart 的 FieldBorder（填充式圆角块，isOutline=false，标签浮在块里；聚焦一圈细线）；别再用 OutlineInputBorder 配带标签的输入框。换对话时 chat_view 把列表跳回 0（最新一条）。截图新增 `-chat-ask`（信息表单），主页样例含“已交给助手”的建议卡。

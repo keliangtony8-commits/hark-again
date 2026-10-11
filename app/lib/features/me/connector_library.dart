@@ -9,6 +9,13 @@ List<Connector> sortAccounts(List<Connector> list) {
   return [for (final (_, c) in indexed) c];
 }
 
+/// MCP 服务器排序：有问题（连不上 / 令牌被拒）的排最前——要你处理的先看到；其余保持添加顺序。
+List<McpServerItem> sortServers(List<McpServerItem> list) {
+  int rank(McpServerItem s) => s.problemText == null ? 1 : 0;
+  final indexed = list.indexed.toList()..sort((a, b) => rank(a.$2) != rank(b.$2) ? rank(a.$2) - rank(b.$2) : a.$1 - b.$1);
+  return [for (final (_, s) in indexed) s];
+}
+
 /// 连接器页页头小标签：“已连接 2 个账户 · 1 个 MCP 服务器”；什么都没接时说清楚。
 /// [servers] 为 null = MCP 列表还在加载，这部分先不说。
 String connectorSummary(List<Connector> accounts, List<McpServerItem>? servers) {

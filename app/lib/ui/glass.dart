@@ -210,11 +210,14 @@ class ValueTile extends StatelessWidget {
 
 /// 卡片里的胶囊按钮。primary = 实心墨色（v2.1：不再用强调色）；danger = 实心危险色（删除确认）；否则是一层 tile 色。高度 = A11y.minTap。
 class PillButton extends StatelessWidget {
-  const PillButton({super.key, required this.label, required this.onTap, this.icon, this.primary = false, this.danger = false});
+  const PillButton({super.key, required this.label, required this.onTap, this.icon, this.primary = false, this.danger = false, this.dense = false});
   final String label;
   final VoidCallback? onTap;
   final IconData? icon;
   final bool primary, danger;
+
+  /// 列表行尾的小号（“连接”）：看起来 Sp.x6 高、字小一档，可点区域仍是 A11y.minTap。
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -227,15 +230,23 @@ class PillButton extends StatelessWidget {
       child: Pressable(
         onTap: onTap,
         scale: 0.96,
-        child: Container(
+        child: SizedBox(
           height: A11y.minTap,
-          padding: const EdgeInsets.symmetric(horizontal: Sp.x4),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: danger ? p.danger : (primary ? p.ink : context.tileFill), borderRadius: BorderRadius.circular(Radii.full)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (icon != null) ...[Icon(icon, size: Fs.lg - 2, color: fg), const SizedBox(width: Sp.x2)],
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelLarge?.copyWith(color: fg))),
-          ]),
+          child: Center(
+            widthFactor: 1,
+            child: Container(
+              height: dense ? Sp.x6 : A11y.minTap,
+              padding: EdgeInsets.symmetric(horizontal: dense ? Sp.x3 : Sp.x4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: danger ? p.danger : (primary ? p.ink : context.tileFill), borderRadius: BorderRadius.circular(Radii.full)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (icon != null) ...[Icon(icon, size: dense ? Fs.md : Fs.lg - 2, color: fg), SizedBox(width: dense ? Sp.x1 : Sp.x2)],
+                Flexible(
+                    child: Text(label,
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: (dense ? context.text.labelMedium : context.text.labelLarge)?.copyWith(color: fg))),
+              ]),
+            ),
+          ),
         ),
       ),
     );

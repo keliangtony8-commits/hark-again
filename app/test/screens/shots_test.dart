@@ -270,6 +270,20 @@ class _Api implements Api {
       ];
     }
     if (path == '/api/auth/me') return {'username': 'keliang'};
+    if (path == '/api/connectors') {
+      return [
+        {'id': 'github', 'name': 'GitHub', 'desc': '仓库、议题、代码', 'configured': true, 'account': 'keliang'},
+        {'id': 'google', 'name': 'Google', 'desc': '邮件、日历、云盘', 'configured': true},
+        {'id': 'notion', 'name': 'Notion', 'desc': '笔记和数据库', 'configured': false},
+      ];
+    }
+    if (path == '/api/connectors/mcp') {
+      return [
+        {'id': 'mc1', 'name': '课表', 'url': 'https://timetable.example.com/mcp', 'has_token': true},
+        {'id': 'mc2', 'name': '家里 NAS', 'url': 'http://nas.local:8080/mcp', 'has_token': false, 'problem': 'down'},
+        {'id': 'mc3', 'name': 'Linear', 'url': 'https://mcp.linear.app/sse', 'has_token': true, 'problem': 'auth'},
+      ];
+    }
     if (path.startsWith('/api/usage')) return _usage();
     if (path == '/api/memories') {
       return [
@@ -440,6 +454,9 @@ void main() {
       await tester.pumpAndSettle();
       router.push('/me');
       await _shot(tester, '$mode-me');
+      router.push('/me/connectors'); // 连接器：MCP 行上的问题（v0.97）
+      await _shot(tester, '$mode-connectors');
+      router.pop();
       router.push('/me/usage'); // 子页面（SubPage 玻璃标题栏）
       await _shot(tester, '$mode-usage');
       router.go('/projects/p1/brief');

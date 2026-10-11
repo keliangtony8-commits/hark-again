@@ -272,7 +272,7 @@ button.run-row:hover { background: var(--tile); }
 .row.row-off { opacity: var(--op-dimmed); }
 /* 行尾的脱敏说明（保险箱 ••••abcd、“已连接”）：小字 text3，和 App 的 labelSmall 尾巴一致 */
 /* 行上的问题（连不上 / 令牌被拒）：警示色，不用强调色——强调色只给信号（v2.1） */
-.row-problem { color: var(--warning); }
+.row-problem { color: var(--warning); font-weight: var(--fw-title); } /* 只染问题那几个字，后面的域名保持原色 */
 .row-problem-icon { flex: none; display: inline-flex; color: var(--warning); }
 .row-hint { flex: none; color: var(--text-3); font-size: var(--fs-xs); letter-spacing: var(--label-tracking); }
 /* 入场动画让每行自成层叠上下文：行内菜单打开时抬高本行，弹出层才盖得住下一行 */

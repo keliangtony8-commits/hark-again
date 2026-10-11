@@ -137,14 +137,15 @@ class PullRefresh extends StatelessWidget {
 }
 
 class RowTile extends StatelessWidget {
-  const RowTile({super.key, this.icon, required this.title, this.subtitle, this.subtitleColor, this.trailing, this.onTap, this.leading});
+  const RowTile({super.key, this.icon, required this.title, this.subtitle, this.problem, this.trailing, this.onTap, this.leading});
   final IconData? icon;
   final Widget? leading;
   final String title;
   final String? subtitle;
 
-  /// 副标题换色（如连不上 = palette.warning）；空 = bodySmall 默认色。
-  final Color? subtitleColor;
+  /// 这一行的问题（“连不上”）：只把这两三个字放在副标题最前面、用警示色，后面的说明保持原色——
+  /// 一眼看到问题，又不让整行变成一片黄。
+  final String? problem;
   final Widget? trailing;
   final VoidCallback? onTap;
 
@@ -163,8 +164,18 @@ class RowTile extends StatelessWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (subtitle != null)
-              Text(subtitle!, style: context.text.bodySmall?.copyWith(color: subtitleColor), maxLines: 2, overflow: TextOverflow.ellipsis),
+            if (problem != null)
+              Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: problem, style: TextStyle(color: p.warning, fontWeight: Weights.title)),
+                  if (subtitle != null) TextSpan(text: ' · $subtitle'),
+                ]),
+                style: context.text.bodySmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              )
+            else if (subtitle != null)
+              Text(subtitle!, style: context.text.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
           ]),
         ),
         if (trailing != null) trailing! else if (onTap != null) Icon(Icons.chevron_right_rounded, color: p.text3, size: Layout.rowIcon),
@@ -277,6 +288,15 @@ class SwipeToDelete extends StatelessWidget {
 }
 
 /// 小状态标签：已连接 / 内置 / 登录……[strong] 用强调色。
+/// 行尾的状态小字（“已连接”“带令牌”）：状态只是说明，不做成按钮的样子——能点的动作才用 PillButton(dense)。
+class RowHint extends StatelessWidget {
+  const RowHint(this.text, {super.key});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(text, style: context.text.labelSmall);
+}
+
 class Pill extends StatelessWidget {
   const Pill(this.text, {super.key, this.strong = false});
   final String text;

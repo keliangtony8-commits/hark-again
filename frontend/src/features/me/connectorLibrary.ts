@@ -7,6 +7,12 @@ export function sortAccounts(list: Connector[]): Connector[] {
   return list.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map((x) => x.c);
 }
 
+/** MCP 服务器：有问题的排最前（要你处理的先看到），其余保持添加顺序。 */
+export function sortServers(list: McpServerInfo[]): McpServerInfo[] {
+  const rank = (s: McpServerInfo) => (mcpProblemText(s) ? 0 : 1);
+  return list.map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map((x) => x.s);
+}
+
 /** 页头小标签；servers 为 null = MCP 还在加载，先不说这部分。 */
 export function connectorSummary(accounts: Connector[], servers: McpServerInfo[] | null): string {
   const n = accounts.filter((c) => c.account).length;
