@@ -102,7 +102,7 @@ docker compose --profile build-only build sandbox-image                      # �
                      ui/glass.css + glass.tsx 是材质零件（.glass 真玻璃只给浮层 / .glass-card 假玻璃卡 / .tile / .pill / .wide-pill / Avatar / ValueTile），与 App ui/glass.dart 一一对应，页面不自己写 backdrop-filter
 - shell/             骨架（设计 v2）：页面铺满 + 浮动顶栏 TopBar（左 = 页面通过 <ShellLead> 传进来的上下文按钮，中 = 主页/聊天/项目 分段胶囊，右 = 头像 → /me）；
                      只在 / /chat /projects 显示（isShellRoot），“我的”及子页面、项目对话自带标题栏。LaunchComposer = 主页/项目页底部的输入胶囊（发出 = 新对话，聚焦磨砂 + 收起 + 建议）
-- 截图回归：frontend/scripts/shots.py（假接口 + Playwright，浅/深 × 桌面/手机：一级页、7 个子页面、2 个弹层、登录页，输出 /tmp/shots/web；用法见文件头）
+- 截图回归：frontend/scripts/shots.py（假接口 + Playwright，浅/深 × 桌面/手机：一级页、聊天（含信息表单 chat-ask）、7 个子页面、2 个弹层、登录页，输出 /tmp/shots/web；用法见文件头）。网页聊天贴底跟随在 features/chat/ChatView.tsx（pinned + ResizeObserver，只有往上翻才取消）
 - 网页确认/提示：只用 ui/dialog.tsx 的 `await confirmDialog({title, text, action, danger})` / `noticeDialog(title, text)`（App 根挂一个 DialogHost；居中玻璃卡 .dialog，两颗等宽胶囊，危险动作实心 --danger，= App confirmDanger）。`npm run build` 先跑 scripts/check-arch.mjs：原生 confirm/alert/prompt、styles/base.css 以外的 @keyframes、blocks/ 与 features/chat/ CSS 里的 --surface-2/--bg 都会让构建失败
 - 网页玻璃规则：浮层用 .glass（模糊），列表卡 .glass-card / .list（不模糊），弹层 .sheet = --glass-sheet；坐在玻璃上的填充（输入框、分段、标签、进度条底、代码块）一律 --tile，不用 --surface-2 / --bg
 - 网页材质只在 styles/ 与 ui/：投影用 `var(--elev-card|float|raised|knob)`，模糊只靠 `.glass` / `.glass.raised`（弹层、横幅）/ `.glass-drawer`（窄屏抽屉）；页面 CSS 不写 --shadow-* / backdrop-filter / --surface-2（npm run build 里的 scripts/check-arch.mjs 会拦）。

@@ -28,6 +28,13 @@ FIXTURES = {
         {"id": "a1", "kind": "action", "conversation_id": None, "task_id": None, "title": "本月花费已到预算的 82%",
          "blocks": [TEXT("按现在的速度，月底会超出约 ¥6。")], "action_prompt": None, "target": "usage",
          "dismissed": False, "unread": True, "updated_at": NOW},
+        # v0.85/v0.89：助手提议的建议卡，一张待点、一张已交给助手
+        {"id": "k3", "kind": "action", "origin": "agent", "action_label": "帮我订座", "conversation_id": None, "task_id": None,
+         "title": "明早图书馆四楼靠窗还有空位", "blocks": [TEXT("8:00 开放预约，靠窗那排还剩 6 个。")],
+         "action_prompt": "帮我约明早 8 点图书馆四楼靠窗的座位", "target": None, "dismissed": False, "unread": True, "updated_at": NOW},
+        {"id": "k4", "kind": "action", "origin": "agent", "action_label": "整理笔记", "conversation_id": "c1", "task_id": None,
+         "title": "这周的高数笔记可以整理成提纲", "blocks": [TEXT("周五小测前过一遍，大约 10 分钟。")],
+         "action_prompt": "把这周的高数笔记整理成一页提纲", "target": None, "dismissed": False, "unread": False, "updated_at": NOW},
         {"id": "p1", "kind": "panel", "conversation_id": None, "task_id": "t1", "title": "今天的天气",
          "blocks": [{"type": "stats", "items": [{"label": "上海", "value": "24°C", "note": "多云"},
                                                 {"label": "日落", "value": "17:32"}]}],
@@ -54,7 +61,21 @@ FIXTURES = {
         {"id": "c1", "title": "DeepSeek 和 GPT 的价格对比", "pinned": True, "updated_at": NOW},
         {"id": "c2", "title": "周末去杭州的安排", "pinned": False, "updated_at": "2026-10-10T18:00:00+08:00"},
         {"id": "c3", "title": "论文摘要润色", "pinned": False, "updated_at": "2026-10-08T09:00:00+08:00"},
+        {"id": "c4", "title": "寄快递", "pinned": False, "updated_at": "Thu 2026-10-08 8:00 AM CST (UTC+08:00)"},
     ],
+    # v0.87：助手缺信息时的信息表单（候选、选填、多行）
+    "/api/conversations/c4": {"model": None, "messages": [
+        {"id": "h1", "role": "user", "blocks": [TEXT("帮我把这箱书寄回家，下周三前到就行")], "created_at": NOW},
+        {"id": "h2", "role": "assistant", "created_at": NOW, "blocks": [
+            TEXT("寄件还差几样信息，填好我就去下单。"),
+            {"type": "form", "id": "f2", "purpose": "info", "title": "寄件信息", "note": "填一次，我记进记忆，下次不用再问。",
+             "fields": [{"name": "q1", "label": "收件人", "kind": "text", "value": "柯妈妈"},
+                        {"name": "q2", "label": "电话", "kind": "phone"},
+                        {"name": "q3", "label": "收件地址", "kind": "multiline"},
+                        {"name": "q4", "label": "快递", "kind": "text", "options": ["顺丰", "京东", "中通"]},
+                        {"name": "q5", "label": "备注", "kind": "text", "optional": True}],
+             "remember": True, "action": "告诉助手", "state": "pending"}]},
+    ]},
     "/api/conversations/c1": {"model": None, "messages": [
         {"id": "m1", "role": "user", "blocks": [TEXT("帮我比较一下 DeepSeek 和 GPT 的 API 价格")], "created_at": "2026-10-10T21:00:00+08:00"},
         {"id": "m2", "role": "assistant", "created_at": "2026-10-10T21:00:05+08:00", "blocks": [
@@ -79,6 +100,7 @@ FIXTURES = {
                    "today": {"calls": 18, "tokens": 42000, "cost": 0.41, "models": []},
                    "month": {"calls": 520, "tokens": 1250000, "cost": 24.6, "models": []}},
     # 子页面（v0.52：桌面子页/弹层也要和一级页面同一套玻璃框架）
+    "/api/auth/me": {"username": "keliang"},
     "/api/memories": [
         {"id": "mm1", "category": "偏好", "content": "回答用中文，先给结论再给理由", "updated_at": NOW},
         {"id": "mm2", "category": "偏好", "content": "预算有限，优先推荐便宜的方案", "updated_at": NOW},
@@ -121,6 +143,8 @@ def serve() -> str:
 def api(route):
     path = route.request.url.split("://", 1)[1].split("/", 1)[1]
     path = "/" + path.split("?", 1)[0]
+    if path.startswith("/api/conversations/") and path.endswith("/usage"):
+        path = "/api/conversations/c1/usage"  # 每个对话的用量都用同一份（缺了标题栏用量会读空）
     body = FIXTURES.get(path, [] if route.request.method == "GET" else {})
     route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
@@ -155,6 +179,12 @@ def main():
                     page.get_by_text("DeepSeek 和 GPT 的价格对比").first.click()
                 page.wait_for_timeout(800)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-chat.png"))
+                if name == "phone":
+                    page.get_by_role("button", name="历史", exact=True).click()
+                    page.wait_for_timeout(400)
+                page.get_by_text("寄快递").first.click()
+                page.wait_for_timeout(800)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-chat-ask.png"))
                 subs = [("memory", "/#/me/memory"), ("tasks", "/#/me/tasks"), ("task", "/#/me/tasks/t2"), ("skills", "/#/me/skills"),
                         ("connectors", "/#/me/connectors"), ("vault", "/#/me/vault"), ("pages", "/#/me/pages")]
                 for shot, url in subs:

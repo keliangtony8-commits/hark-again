@@ -26,7 +26,7 @@ class _Api implements Api {
   List<dynamic> messages = [];
   @override
   Future<dynamic> get(String path) async {
-    if (path.startsWith('/api/conversations/')) return {'id': 'c1', 'messages': messages};
+    if (path.startsWith('/api/conversations/')) return {'id': path.split('/').last, 'messages': messages};
     if (path.startsWith('/api/conversations')) return <dynamic>[];
     return null;
   }
@@ -105,6 +105,29 @@ void main() {
       await tester.pump(const Duration(seconds: 2)); // 闪完（含减少动态的停留计时）
     });
   }
+
+  // 回归（v0.90）：上一个对话往回翻的位置被带进新对话，新对话最后一张卡压在输入胶囊下。
+  testWidgets('换对话回到最新一条', (tester) async {
+    final api = _Api()..messages = _long();
+    final c = _container(api);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: MediaQuery(
+        data: const MediaQueryData(size: Size(400, 800)),
+        child: MaterialApp(theme: buildTheme(Brightness.light), home: const Scaffold(body: ChatView())),
+      ),
+    ));
+    await c.read(chatProvider('').notifier).open('c1');
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, 1500)); // 往回翻
+    await tester.pumpAndSettle();
+    expect(find.textContaining('第 59 条消息'), findsNothing);
+
+    await c.read(chatProvider('').notifier).open('c2');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('第 59 条消息'), findsOneWidget);
+    expect(tester.widget<ListView>(find.byType(ListView)).controller!.offset, 0);
+  });
 
   // 回归（v0.25–v0.42）：FlashHighlight 的 Stack 放松了宽度约束，用户气泡缩到左边。
   testWidgets('布局：用户气泡贴右、回复贴左', (tester) async {

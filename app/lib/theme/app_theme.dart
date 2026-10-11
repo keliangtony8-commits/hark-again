@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'field_border.dart';
 import 'tokens.dart';
 
 class PaletteExt extends ThemeExtension<PaletteExt> {
@@ -102,9 +103,10 @@ ThemeData buildTheme(Brightness brightness) {
       labelStyle: t(Fs.md, Weights.body, p.text2),
       floatingLabelStyle: t(Fs.sm, Weights.body, p.text2), // 浮起的标签不用强调色（v2.1 克制）
       contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: const BorderSide(color: Colors.transparent)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: const BorderSide(color: Colors.transparent)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: BorderSide(color: p.text3, width: 1)),
+      // 填充式圆角块（标签浮在块里，见 field_border.dart）；聚焦 = 填充变亮 + 一圈细线
+      border: const FieldBorder(radius: Radii.md),
+      enabledBorder: const FieldBorder(radius: Radii.md),
+      focusedBorder: FieldBorder(radius: Radii.md, borderSide: BorderSide(color: p.text3, width: 1)),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(

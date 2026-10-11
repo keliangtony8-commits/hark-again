@@ -122,6 +122,35 @@ final _signInChat = {
   ],
 };
 
+// 助手缺信息时的信息表单（ask_user）：一张已回答 + 一张待填（候选、选填、多行）
+final _askChat = {
+  'id': 'c4',
+  'title': '寄快递',
+  'messages': [
+    _msg('h1', 'user', '帮我把这箱书寄回家，下周三前到就行'),
+    _cards('h2', [
+      {'type': 'text', 'text': '寄件还差几样信息，填好我就去下单。'},
+      {
+        'type': 'form',
+        'id': 'f2',
+        'purpose': 'info',
+        'title': '寄件信息',
+        'note': '填一次，我记进记忆，下次不用再问。',
+        'fields': [
+          {'name': 'q1', 'label': '收件人', 'kind': 'text', 'value': '柯妈妈'},
+          {'name': 'q2', 'label': '电话', 'kind': 'phone'},
+          {'name': 'q3', 'label': '收件地址', 'kind': 'multiline'},
+          {'name': 'q4', 'label': '快递', 'kind': 'text', 'options': ['顺丰', '京东', '中通']},
+          {'name': 'q5', 'label': '备注', 'kind': 'text', 'optional': true},
+        ],
+        'remember': true,
+        'action': '告诉助手',
+        'state': 'pending',
+      },
+    ]),
+  ],
+};
+
 /// 用量报表：本月 1 号到今天每天都有数（周末少），三个最花钱的对话（一个已删），两个模型，上月同期。
 Map<String, dynamic> _usage() {
   final now = DateTime.now();
@@ -190,6 +219,19 @@ class _Api implements Api {
           'unread': true,
         },
         {
+          'id': 'k4',
+          'kind': 'action',
+          'origin': 'agent',
+          'action_label': '整理笔记',
+          'action_prompt': '把这周的高数笔记整理成一页提纲',
+          'conversation_id': 'c1',
+          'title': '这周的高数笔记可以整理成提纲',
+          'blocks': [
+            {'type': 'text', 'text': '周五小测前过一遍，大约 10 分钟。'}
+          ],
+          'unread': false,
+        },
+        {
           'id': 'k2',
           'kind': 'panel',
           'title': '今天的天气',
@@ -223,6 +265,7 @@ class _Api implements Api {
     }
     if (path == '/api/conversations/c2') return _shopChat;
     if (path == '/api/conversations/c3') return _signInChat;
+    if (path == '/api/conversations/c4') return _askChat;
     if (path.startsWith('/api/conversations/')) {
       return {
         'id': 'c1',
@@ -251,6 +294,7 @@ class _Api implements Api {
         {'id': 'c1', 'title': '额度'},
         {'id': 'c2', 'title': '耳机'},
         {'id': 'c3', 'title': '图书馆座位'},
+        {'id': 'c4', 'title': '寄快递'},
       ];
     }
     return <dynamic>[];
@@ -325,6 +369,8 @@ void main() {
       await _shot(tester, '$mode-chat-shop-top');
       await tester.runAsync(() => container.read(chatProvider('').notifier).open('c3'));
       await _shot(tester, '$mode-chat-form');
+      await tester.runAsync(() => container.read(chatProvider('').notifier).open('c4'));
+      await _shot(tester, '$mode-chat-ask');
       router.go('/projects');
       await _shot(tester, '$mode-projects');
       // 弹层（GlassSheet）：表单盖在项目页上，看玻璃透出的内容和 tile 底的输入框

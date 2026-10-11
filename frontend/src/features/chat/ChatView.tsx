@@ -32,6 +32,9 @@ function LinkBar({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+/** 离底部多少像素以内算“在底部”（贴底跟随）。 */
+const PIN_SLACK = 32;
+
 /** 编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
  *  编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。 */
 export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, focus, onFocused, accessory, onSend, onReconnect, onResend, onDiscard, greeting }: Props) {
@@ -51,7 +54,8 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
   // 平时贴底；有定位请求时滚到那条消息的中间并闪一下（.flash 动画，结束自己摘掉，重复定位能再闪）
   useEffect(() => {
     const el = focus ? thread.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(focus)}"]`) : null;
-    if (!el) { end.current?.scrollIntoView({ block: "end" }); return; }
+    if (!el) { pinned.current = true; end.current?.scrollIntoView({ block: "end" }); return; }
+    pinned.current = false; // 定位到某条消息：别再被贴底拉走
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
     el.classList.remove("flash");
@@ -63,10 +67,33 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
 
   // 输入胶囊浮在底部（FloatingFooter 量它的实际高度），消息从它下面滚过去
   const [footerH, setFooterH] = useState(0);
+  // 贴底：用户在底部（差 PIN_SLACK 以内）时，内容或底部让位后来才变高（胶囊量出高度、图片加载、卡片展开）
+  // 也跟着贴回底部；往上翻了就不打扰。不然刚打开的对话，最后一张卡的按钮会压在输入胶囊下面。
+  // 只有“往上翻”才取消贴底：.thread 是平滑滚动，程序滚到底的半路也会触发 scroll，那时 scrollTop 只增不减。
+  const pinned = useRef(true);
+  const lastTop = useRef(0);
+  const onScroll = () => {
+    const el = thread.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < PIN_SLACK) pinned.current = true;
+    else if (el.scrollTop < lastTop.current - 1) pinned.current = false;
+    lastTop.current = el.scrollTop;
+  };
+  const empty = messages.length === 0;
+  useEffect(() => {
+    const el = thread.current;
+    const inner = el?.firstElementChild;
+    if (!el || !inner || empty) return;
+    const stick = () => { if (pinned.current) el.scrollTo({ top: el.scrollHeight, behavior: "instant" }); };
+    stick();
+    const ro = new ResizeObserver(stick);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [empty, footerH]);
   const pad = { ["--footer-h" as string]: `${footerH}px` } as CSSProperties;
   return (
     <>
-      <div className="thread" ref={thread} style={pad}>
+      <div className="thread" ref={thread} style={pad} onScroll={onScroll}>
         {messages.length === 0 ? (
           <EmptyState onPick={(t) => onSend(t)} subtitle={greeting} />
         ) : (

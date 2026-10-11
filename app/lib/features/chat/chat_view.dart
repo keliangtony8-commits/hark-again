@@ -91,7 +91,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
   Widget build(BuildContext context) {
     final chat = ref.watch(chatProvider(widget.projectId));
     final ctl = ref.read(chatProvider(widget.projectId).notifier);
-    ref.listen(chatProvider(widget.projectId).select((s) => s.activeId), (_, _) => _speech.stop()); // 换对话 = 停读
+    ref.listen(chatProvider(widget.projectId).select((s) => s.activeId), (_, _) {
+      _speech.stop(); // 换对话 = 停读
+      // 换对话 = 回到最新一条：不然上一个对话往回翻的位置会带过来，新对话的卡片按钮压在输入胶囊下面
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scroll.hasClients && _scroll.offset != 0) _scroll.jumpTo(0);
+      });
+    });
     final editing = _editing?.id == chat.editableId ? _editing : null;
     final inset = MediaQuery.paddingOf(context).top; // 有 AppBar 时为 0；主聊天里 = 状态栏 + 浮动顶栏
     _maybeSeek(chat);
