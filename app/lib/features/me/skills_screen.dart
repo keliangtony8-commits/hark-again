@@ -18,35 +18,108 @@ import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../../ui/markdown.dart';
+import 'skill_library.dart';
 
-class SkillsScreen extends ConsumerWidget {
+class SkillsScreen extends ConsumerStatefulWidget {
   const SkillsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SkillsScreen> createState() => _SkillsScreenState();
+}
+
+class _SkillsScreenState extends ConsumerState<SkillsScreen> {
+  final _query = TextEditingController();
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final skills = ref.watch(skillsProvider);
     return SubPage(
       title: const Text('技能'),
-      floatingActionButton: FloatingActionButton(onPressed: () => context.push('/me/skills/new'), tooltip: '新技能', child: const Icon(Icons.add_rounded)),
+      actions: [IconButton(icon: const Icon(Icons.add_rounded), tooltip: '新技能', onPressed: () => context.push('/me/skills/new'))],
       body: AsyncBody<Skill>(
         value: skills,
         onRetry: () => ref.invalidate(skillsProvider),
         builder: (list) {
-          final mine = [for (final s in list) if (!s.fromBuiltin) s];
-          final builtin = [for (final s in list) if (s.fromBuiltin) s];
-          return PageBody(children: [
-            const SectionTitle('我的技能'),
-            if (mine.isEmpty)
-              const AppCard(child: Text('还没有。可以在这里写，也可以在聊天里说“把刚才的做法存成技能”。'))
-            else
-              ListGroup(children: [for (final s in mine) _SkillRow(s)]),
-            const SectionTitle('内置'),
-            ListGroup(children: [for (final s in builtin) _SkillRow(s)]),
-          ]);
+          final q = _query.text;
+          final (:mine, :builtin) = filterSkills(list, q);
+          final searching = q.trim().isNotEmpty;
+          var i = 0; // 整页错峰序号：页头之后一行一行进
+          Widget rows(List<Skill> items) => ListGroup(children: [for (final s in items) _SkillRow(s, delay: Motion.stagger(i++, from: 1))]);
+          return PullRefresh(
+            onRefresh: () => ref.read(skillsProvider.notifier).reload(),
+            child: PageBody(children: [
+              _Intro(summary: skillSummary(list)),
+              if (list.length >= skillSearchFrom) ...[
+                const SizedBox(height: Sp.x4),
+                SearchField(controller: _query, hint: '搜索技能', onChanged: (_) => setState(() {}), onClear: () => setState(_query.clear)),
+              ],
+              if (searching && mine.isEmpty && builtin.isEmpty)
+                EmptyHint(
+                  icon: Icons.search_off_rounded,
+                  title: '没有匹配的技能',
+                  text: '换个词试试，名称、用途和步骤都会搜。',
+                  action: TextButton(onPressed: () => setState(_query.clear), child: const Text('清除搜索')),
+                ),
+              if (!searching || mine.isNotEmpty) ...[
+                SectionTitle('我的技能', trailing: mine.isEmpty ? null : Text('${mine.length}', style: context.text.labelSmall)),
+                if (mine.isEmpty) const FadeSlideIn(child: _Starters()) else rows(mine),
+              ],
+              if (builtin.isNotEmpty) ...[
+                SectionTitle('内置', trailing: Text('${builtin.length}', style: context.text.labelSmall)),
+                rows(builtin),
+              ],
+            ]),
+          );
         },
       ),
     );
   }
+}
+
+/// 页头：一行小标签摘要（数字变化时换一下）+ 一句说明。和“我的”、用量页同一层级，子页面里不再放大标题。
+class _Intro extends StatelessWidget {
+  const _Intro({required this.summary});
+  final String summary;
+
+  @override
+  Widget build(BuildContext context) => FadeSlideIn(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, 0),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SwapSwitcher(child: Text(summary, key: ValueKey(summary), style: context.text.labelSmall)),
+            const SizedBox(height: Sp.x2),
+            Text('技能是我做某类事的固定方法。我会在合适的时候按它做；停用的留在库里，我看不到。',
+                style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
+          ]),
+        ),
+      );
+}
+
+/// “我的技能”为空：一句引导 + 起步模板（点了带内容进新建页，没保存前什么都不会存）。
+class _Starters extends StatelessWidget {
+  const _Starters();
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('还没有自己写的', style: context.text.titleSmall),
+          const SizedBox(height: Sp.x1),
+          Text('在这里写，或在聊天里说“把刚才的做法存成技能”。也可以从一个开始改：',
+              style: context.text.bodySmall?.copyWith(color: context.palette.text2)),
+          const SizedBox(height: Sp.x3),
+          Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [
+            for (final st in skillStarters)
+              PillButton(label: st.name, icon: Icons.add_rounded, onTap: () => context.push('/me/skills/new', extra: st)),
+          ]),
+        ]),
+      );
 }
 
 /// 启用/停用一个技能：开关先动（乐观），服务器失败再拨回并提示。行和编辑页共用。
@@ -60,8 +133,9 @@ Future<Skill?> toggleSkill(BuildContext context, WidgetRef ref, Skill s, bool on
 }
 
 class _SkillRow extends ConsumerStatefulWidget {
-  const _SkillRow(this.s);
+  const _SkillRow(this.s, {this.delay = Duration.zero});
   final Skill s;
+  final Duration delay;
 
   @override
   ConsumerState<_SkillRow> createState() => _SkillRowState();
@@ -81,6 +155,7 @@ class _SkillRowState extends ConsumerState<_SkillRow> {
     final s = widget.s;
     final on = _pending ?? s.enabled;
     final row = FadeSlideIn(
+      delay: widget.delay,
       child: Dimmed(
         dimmed: !on,
         child: RowTile(
@@ -108,10 +183,13 @@ class _SkillRowState extends ConsumerState<_SkillRow> {
   }
 }
 
-/// 查看 / 编辑一个技能。id == 'new' 为新建；内置原样只读，可复制成自定义版；自定义版可恢复默认。
+/// 查看 / 编辑一个技能。id == 'new' 为新建（[starter] 不为空时带着模板内容）；
+/// 内置原样是“阅读态”：名称、用途、渲染后的步骤，顶部可复制成自定义版；自定义版和自己写的是表单，
+/// 步骤可在“编辑 / 预览”间切换。只有内容真的改了才能保存，带着没保存的改动离开要先确认。
 class SkillEditorScreen extends ConsumerStatefulWidget {
-  const SkillEditorScreen({super.key, required this.id});
+  const SkillEditorScreen({super.key, required this.id, this.starter});
   final String id;
+  final SkillStarter? starter;
 
   @override
   ConsumerState<SkillEditorScreen> createState() => _SkillEditorScreenState();
@@ -119,12 +197,23 @@ class SkillEditorScreen extends ConsumerStatefulWidget {
 
 class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
   late Skill? _skill = ref.read(skillsProvider).value?.where((s) => s.id == widget.id).firstOrNull;
-  late final _name = TextEditingController(text: _skill?.name);
-  late final _desc = TextEditingController(text: _skill?.description);
-  late final _body = TextEditingController(text: _skill?.body);
+  late final _name = TextEditingController(text: _skill?.name ?? widget.starter?.name);
+  late final _desc = TextEditingController(text: _skill?.description ?? widget.starter?.description);
+  late final _body = TextEditingController(text: _skill?.body ?? widget.starter?.body);
+  late final _form = Listenable.merge([_name, _desc, _body]);
   bool _busy = false;
+  bool _preview = false;
+  bool _saved = false;
 
   bool get _readOnly => _skill?.builtin ?? false;
+
+  /// 和服务器上的版本（新建时是空白）比，有没有没保存的改动。模板带进来的内容算改动。
+  bool get _dirty {
+    final s = _skill;
+    return _name.text != (s?.name ?? '') || _desc.text != (s?.description ?? '') || _body.text != (s?.body ?? '');
+  }
+
+  bool get _canSave => !_readOnly && _dirty && _name.text.trim().isNotEmpty && _desc.text.trim().isNotEmpty;
 
   @override
   void dispose() {
@@ -153,16 +242,14 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
   }
 
   Future<void> _save() async {
-    if (_name.text.trim().isEmpty || _desc.text.trim().isEmpty) {
-      showToast(context, '名称和“什么时候用”都要填');
-      return;
-    }
     final body = {'name': _name.text.trim(), 'description': _desc.text.trim(), 'body': _body.text};
     final ctl = ref.read(skillsProvider.notifier);
     final cur = _skill;
     await _run(() async {
       cur == null ? await ctl.create(body) : await ctl.patch(cur.id, body);
-      if (mounted) context.pop();
+      if (!mounted) return;
+      _saved = true; // 已存：返回不再拦
+      context.pop();
     });
   }
 
@@ -177,7 +264,7 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
 
   Future<void> _toggle(bool on) => _run(() async {
         final s = await toggleSkill(context, ref, _skill!, on);
-        if (s != null && mounted) setState(() => _skill = s); // 只换开关状态，输入框里没保存的改动不动
+        if (s != null && mounted) setState(() => _skill = s); // 只换开关状态；输入框里没保存的改动不动，也照样算改动
       });
 
   Future<void> _reset() async {
@@ -187,62 +274,128 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
     await _run(() async {
       final s = await ref.read(skillsProvider.notifier).act(_skill!.id, 'reset');
       if (!mounted) return;
-      setState(() => _skill = s);
+      setState(() {
+        _skill = s;
+        _preview = false;
+      });
       _fill(s);
       showToast(context, '已恢复默认');
     });
   }
 
+  /// 带着没保存的改动返回：先问一句。
+  Future<void> _maybeLeave() async {
+    final ok = await confirmDanger(context, title: '放弃没保存的改动？', text: '刚才改的内容不会保存。', action: '放弃');
+    if (ok && mounted) context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final s = _skill;
-    return SubPage(
-      title: Text(s == null ? '新技能' : (_readOnly ? '内置技能' : '编辑技能')),
-      actions: [
-        if (s?.customized ?? false) TextButton(onPressed: _busy ? null : _reset, child: const Text('恢复默认')),
-        if (!_readOnly)
-          Padding(
-            padding: const EdgeInsets.only(right: Sp.x2),
-            child: FilledButton(onPressed: _busy ? null : _save, child: const Text('保存')),
-          ),
-      ],
-      body: PageBody(children: [
-        if (s != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: Sp.x3),
-            child: ListGroup(children: [
-              RowTile(
-                icon: s.enabled ? Icons.toggle_on_outlined : Icons.toggle_off_outlined,
-                title: '启用',
-                subtitle: s.enabled ? '我会在合适的时候按它做' : '已停用：我看不到它，也不会用它',
-                trailing: Semantics(
-                  label: '启用「${s.name}」',
-                  child: Switch(value: s.enabled, onChanged: _busy ? null : _toggle),
+    return ListenableBuilder(
+      listenable: _form,
+      builder: (context, _) {
+        final s = _skill;
+        return PopScope(
+          canPop: _readOnly || !_dirty || _saved,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) _maybeLeave();
+          },
+          child: SubPage(
+            title: Text(s == null ? '新技能' : (_readOnly ? '内置技能' : '编辑技能')),
+            actions: [
+              if (s?.customized ?? false) TextButton(onPressed: _busy ? null : _reset, child: const Text('恢复默认')),
+              if (!_readOnly)
+                Padding(
+                  padding: const EdgeInsets.only(right: Sp.x2),
+                  child: FilledButton(onPressed: _busy || !_canSave ? null : _save, child: const Text('保存')),
                 ),
+            ],
+            body: PageBody(children: [
+              if (s != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: Sp.x3),
+                  child: ListGroup(children: [
+                    RowTile(
+                      icon: s.enabled ? Icons.toggle_on_outlined : Icons.toggle_off_outlined,
+                      title: '启用',
+                      subtitle: s.enabled ? '我会在合适的时候按它做' : '已停用：我看不到它，也不会用它',
+                      trailing: Semantics(
+                        label: '启用「${s.name}」',
+                        child: Switch(value: s.enabled, onChanged: _busy ? null : _toggle),
+                      ),
+                    ),
+                  ]),
+                ),
+              SwapSwitcher(child: _Origin(key: ValueKey('${s?.builtin}-${s?.customized}'), skill: s, busy: _busy, onCustomize: _customize)),
+              FadeSwitcher(child: _readOnly ? _reading(context, s!) : _editor(context)),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 内置原样：像读一篇说明，而不是一张填不了的表。
+  Widget _reading(BuildContext context, Skill s) => Column(
+        key: const ValueKey('read'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Sp.x1),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(s.name, style: context.text.titleLarge),
+              const SizedBox(height: Sp.x1),
+              Text(s.description, style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
+            ]),
+          ),
+          const SectionTitle('步骤'),
+          AppCard(child: s.body.trim().isEmpty ? Text('（没有写步骤）', style: context.text.bodySmall) : AppMarkdown(s.body)),
+        ],
+      );
+
+  Widget _editor(BuildContext context) => Column(
+        key: const ValueKey('form'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(controller: _name, decoration: const InputDecoration(labelText: '名称', hintText: '比如：写周报')),
+          const SizedBox(height: Sp.x3),
+          TextField(
+            controller: _desc,
+            maxLines: 2,
+            decoration: const InputDecoration(labelText: '什么时候用', hintText: '用户让我写周报、总结一周进展时'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x4, 0, Sp.x2),
+            child: Row(children: [
+              Expanded(child: Text('步骤（Markdown）', style: context.text.labelSmall)),
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: const [ButtonSegment(value: false, label: Text('编辑')), ButtonSegment(value: true, label: Text('预览'))],
+                selected: {_preview},
+                onSelectionChanged: (v) => setState(() => _preview = v.first),
               ),
             ]),
           ),
-        SwapSwitcher(child: _Origin(key: ValueKey('${s?.builtin}-${s?.customized}'), skill: s, busy: _busy, onCustomize: _customize)),
-        TextField(controller: _name, readOnly: _readOnly, decoration: const InputDecoration(labelText: '名称', hintText: '比如：写周报')),
-        const SizedBox(height: Sp.x3),
-        TextField(
-          controller: _desc,
-          readOnly: _readOnly,
-          maxLines: 2,
-          decoration: const InputDecoration(labelText: '什么时候用', hintText: '用户让我写周报、总结一周进展时'),
-        ),
-        const SizedBox(height: Sp.x3),
-        TextField(
-          controller: _body,
-          readOnly: _readOnly,
-          minLines: 12,
-          maxLines: null,
-          style: context.text.bodyMedium?.copyWith(fontFamily: 'monospace', fontSize: Fs.sm),
-          decoration: const InputDecoration(labelText: '步骤（Markdown）', alignLabelWithHint: true, hintText: '1. 先列出本周完成的事\n2. …'),
-        ),
-      ]),
-    );
-  }
+          SwapSwitcher(
+            child: _preview
+                ? AppCard(
+                    key: const ValueKey('preview'),
+                    child: _body.text.trim().isEmpty
+                        ? Text('还没有写步骤', style: context.text.bodySmall)
+                        : AppMarkdown(_body.text),
+                  )
+                : TextField(
+                    key: const ValueKey('edit'),
+                    controller: _body,
+                    minLines: 12,
+                    maxLines: null,
+                    style: context.text.bodyMedium?.copyWith(fontFamily: 'monospace', fontSize: Fs.sm),
+                    decoration: const InputDecoration(
+                        labelText: '步骤（Markdown）', alignLabelWithHint: true, hintText: '1. 先列出本周完成的事\n2. …'),
+                  ),
+          ),
+        ],
+      );
 }
 
 /// 编辑页顶部的出身说明：内置原样给“复制一份来改”，自定义版说明会顶替内置；自己写的不显示。

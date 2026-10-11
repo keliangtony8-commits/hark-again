@@ -109,7 +109,18 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .danger-text { color: var(--danger); }
 button.row-body { text-align: left; }
 .row-icon.file-ext { width: 32px; height: 32px; border-radius: var(--r-sm); background: var(--tile); font-size: 9px; font-weight: var(--fw-strong); letter-spacing: .04em; }
-.skill-body { white-space: pre-wrap; font-family: var(--font-mono); font-size: var(--fs-sm); background: var(--tile); padding: var(--sp-4); border-radius: var(--r-md); margin: 0; }
+.skill-intro { margin: var(--sp-2) 0 0; }
+.skill-intro .page-hero-label { margin: 0 var(--sp-1) var(--sp-2); }
+.skill-search { margin: 0 0 var(--sp-2); }
+.skill-starters { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-4); }
+.skill-starters .row-sub { margin: 0; }
+.skill-starter-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.skill-starter-list .btn { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.skill-name { margin: 0 var(--sp-1) var(--sp-1); font-size: var(--fs-lg); font-weight: var(--fw-strong); }
+.skill-read { background: var(--tile); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); }
+.skill-body-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: var(--sp-2) 0; font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+.skill-body-input { width: 100%; min-height: 14em; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); border: 1px solid transparent; background: var(--tile); color: var(--text); outline: 0; resize: vertical; line-height: 1.55; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.skill-body-input:focus { border-color: color-mix(in srgb, var(--text) 24%, transparent); background: var(--surface); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .text-link { display: block; margin: 0 0 var(--sp-4); font-size: var(--fs-sm); color: var(--accent); font-weight: var(--fw-title); }
 .error-banner { align-self: center; font-size: var(--fs-sm); color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); padding: var(--sp-2) var(--sp-4); border-radius: var(--r-full); }

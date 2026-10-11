@@ -12,6 +12,7 @@ import 'features/me/connectors_screen.dart';
 import 'features/me/me_screen.dart';
 import 'features/me/memory_screen.dart';
 import 'features/me/pages_screen.dart';
+import 'features/me/skill_library.dart';
 import 'features/me/skills_screen.dart';
 import 'features/me/task_detail.dart';
 import 'features/me/tasks_screen.dart';
@@ -69,7 +70,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(path: 'pages', builder: (_, _) => const PagesScreen()),
         GoRoute(path: 'usage', builder: (_, _) => const UsageScreen()),
         GoRoute(path: 'skills', builder: (_, _) => const SkillsScreen(), routes: [
-          GoRoute(path: ':id', builder: (_, s) => SkillEditorScreen(id: s.pathParameters['id']!)),
+          GoRoute(path: ':id', builder: (_, s) => SkillEditorScreen(id: s.pathParameters['id']!, starter: s.extra is SkillStarter ? s.extra as SkillStarter : null)),
         ]),
       ]),
     ],

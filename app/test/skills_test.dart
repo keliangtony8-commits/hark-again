@@ -1,8 +1,9 @@
 // 技能页：老服务器没有 customized = false；自定义版在“内置”分组带“已自定义”、不能左滑删；
 // 内置只读页“复制一份来改”→ POST customize、输入框可编辑、保存走 PUT；自定义版“恢复默认”确认后 POST reset、
-// 输入框回到原文并只读；取消确认不发请求；失败提示服务器的话。
+// 回到阅读态（步骤渲染成 Markdown）；只有改了才能存，带着改动离开先确认；起步模板与搜索；取消确认不发请求；失败提示服务器的话。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/resource.dart';
+import 'package:assistant/features/me/skill_library.dart';
 import 'package:assistant/features/me/skills_screen.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -103,7 +104,8 @@ void main() {
   testWidgets('customize a builtin then save via PUT', (tester) async {
     final api = FakeApi([skill('writing', '写作')]);
     final c = await pump(tester, api, const SkillEditorScreen(id: 'writing'));
-    expect(field(tester, '名称').readOnly, true);
+    expect(find.byType(TextField), findsNothing, reason: '内置原样是阅读态，不是一张填不了的表');
+    expect(find.text('写作 的时候'), findsOneWidget);
     expect(find.text('保存'), findsNothing);
     expect(find.text('恢复默认'), findsNothing);
 
@@ -114,8 +116,10 @@ void main() {
     expect(find.text('复制一份来改'), findsNothing);
     expect(find.text('恢复默认'), findsOneWidget);
     expect(c.read(skillsProvider).value!.single.customized, true);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '保存')).onPressed, isNull, reason: '没改不能存');
 
     await tester.enterText(find.widgetWithText(TextField, '名称'), '写作（我的）');
+    await tester.pump();
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(api.calls.last, 'PUT /api/catalog/skills/writing');
@@ -139,9 +143,9 @@ void main() {
     await tester.tap(find.text('恢复默认').last);
     await tester.pumpAndSettle();
     expect(api.calls.last, 'POST /api/catalog/skills/writing/reset');
-    expect(field(tester, '名称').controller!.text, '写作');
-    expect(field(tester, '步骤（Markdown）').controller!.text, '原文');
-    expect(field(tester, '名称').readOnly, true);
+    expect(find.text('写作'), findsOneWidget);
+    expect(find.text('原文', findRichText: true), findsOneWidget, reason: '步骤渲染成 Markdown');
+    expect(find.byType(TextField), findsNothing);
     expect(find.text('复制一份来改'), findsOneWidget);
   });
 
@@ -151,6 +155,55 @@ void main() {
     await tester.tap(find.text('复制一份来改'));
     await tester.pumpAndSettle();
     expect(find.text('服务器忙'), findsOneWidget);
-    expect(field(tester, '名称').readOnly, true);
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets('starter prefills a new skill; leaving with changes asks first', (tester) async {
+    await pump(tester, FakeApi([]), SkillEditorScreen(id: 'new', starter: skillStarters.first));
+    expect(field(tester, '名称').controller!.text, '写周报');
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '保存')).onPressed, isNotNull, reason: '模板内容算改动，可直接存');
+
+    await tester.tap(find.text('预览'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('分“完成', findRichText: true), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('放弃没保存的改动？'), findsOneWidget);
+    await tester.tap(find.text('放弃'));
+    await tester.pumpAndSettle();
+    expect(find.text('列表'), findsOneWidget);
+  });
+
+  testWidgets('list: empty mine shows starters; search filters and clears', (tester) async {
+    final api = FakeApi([for (var i = 0; i < 7; i++) skill('b$i', i == 3 ? 'GitHub' : '内置$i')]);
+    await pump(tester, api, const SkillsScreen());
+    expect(find.text('7 个技能 · 全部在用'), findsOneWidget);
+    for (final st in skillStarters) {
+      expect(find.text(st.name), findsOneWidget);
+    }
+    await tester.enterText(find.byType(TextField), 'git');
+    await tester.pumpAndSettle();
+    expect(find.text('GitHub'), findsOneWidget);
+    expect(find.text('内置0'), findsNothing);
+    expect(find.text(skillStarters.first.name), findsNothing, reason: '搜索时不显示起步模板');
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+    expect(find.text('没有匹配的技能'), findsOneWidget);
+    await tester.tap(find.text('清除搜索'));
+    await tester.pumpAndSettle();
+    expect(find.text('内置0'), findsOneWidget);
+  });
+
+  test('summary and filter are pure', () {
+    final list = [
+      Skill.fromJson(skill('a', '写作')),
+      Skill.fromJson({...skill('b', '周报', builtin: false), 'enabled': false}),
+    ];
+    expect(skillSummary(list), '2 个技能 · 1 个在用 · 1 个自己写的');
+    expect(skillSummary([]), '教我做事的固定方法');
+    final r = filterSkills(list, '原文');
+    expect((r.mine.length, r.builtin.length), (1, 1));
+    expect(filterSkills(list, '周').mine.single.id, 'b');
   });
 }

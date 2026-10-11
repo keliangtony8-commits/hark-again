@@ -178,7 +178,7 @@ class SkeletonList extends StatelessWidget {
       );
 }
 
-/// 列表页的统一三态：加载 = 骨架，失败 = 提示 + 重试，空 = [empty]，有数据 = [builder]。
+/// 列表页的统一三态（交叉淡化切换）：加载 = 骨架，失败 = 提示 + 重试，空 = [empty]，有数据 = [builder]。
 class AsyncBody<T> extends StatelessWidget {
   const AsyncBody({super.key, required this.value, required this.builder, this.empty, this.onRetry});
   final AsyncValue<List<T>> value;
@@ -186,19 +186,24 @@ class AsyncBody<T> extends StatelessWidget {
   final Widget? empty;
   final VoidCallback? onRetry;
 
+  /// 四态各有自己的 key：骨架 → 内容（或空 / 出错）交叉淡化；同一态内的数据更新不触发过渡。
   @override
-  Widget build(BuildContext context) => value.when(
-        skipLoadingOnReload: true,
-        loading: () => const PageBody(children: [SkeletonList(rows: 4)]),
-        error: (e, _) => PageBody(children: [
-          EmptyHint(
-            icon: Icons.cloud_off_rounded,
-            title: '加载失败',
-            text: '$e',
-            action: onRetry == null ? null : OutlinedButton(onPressed: onRetry, child: const Text('重试')),
-          ),
-        ]),
-        data: (list) => list.isEmpty && empty != null ? PageBody(children: [empty!]) : builder(list),
+  Widget build(BuildContext context) => FadeSwitcher(
+        child: value.when(
+          skipLoadingOnReload: true,
+          loading: () => const PageBody(key: ValueKey('loading'), children: [SkeletonList(rows: 4)]),
+          error: (e, _) => PageBody(key: const ValueKey('error'), children: [
+            EmptyHint(
+              icon: Icons.cloud_off_rounded,
+              title: '加载失败',
+              text: '$e',
+              action: onRetry == null ? null : OutlinedButton(onPressed: onRetry, child: const Text('重试')),
+            ),
+          ]),
+          data: (list) => list.isEmpty && empty != null
+              ? PageBody(key: const ValueKey('empty'), children: [empty!])
+              : KeyedSubtree(key: const ValueKey('data'), child: builder(list)),
+        ),
       );
 }
 
