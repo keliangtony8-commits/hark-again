@@ -27,7 +27,7 @@ lib/
   shell/app_shell.dart  外壳 = Backdrop → 当前 Tab → FloatingTopBar；三个一级入口（主页/聊天/项目），顶栏只在一级路径（shellRoots）显示，子页面时 FloatAway 隐藏
   shell/top_bar.dart    浮动顶栏：左侧空位 + 居中 SegmentedNav（玻璃胶囊 + 滑块，主页带未读点）+ 头像（push /me）
   shell/launch_composer.dart 主页/项目底部的输入胶囊 LaunchComposer：同一个 Composer，发出 = askInNewChat（新对话 + 切到聊天）；聚焦 = FrostScrim 磨砂 + 左侧“收起”+ 上方建议（starterPrompts，聊天空状态共用）；返回键先收起
-  shell/shell_page.dart 一级页面外框：把顶栏高度加进 MediaQuery.padding.top（内容可滚到顶栏下面），在顶栏左侧空位画本页的上下文按钮（lead），可选 header 行（主聊天标题胶囊）
+  shell/shell_page.dart 一级页面外框：把顶栏高度加进 MediaQuery.padding.top（内容可滚到顶栏下面），在顶栏左侧空位画本页的上下文按钮（lead），可选 header 行（主聊天标题）；内容外包 kit TopFade（ShaderMask 只改透明度）：fadeClearOf 以上全透明（有 header 到 header 底边，没有到顶栏中线），到让位线全显——滚上去的内容不和标题/头像叠字
   app.dart              路由（未登录自动去 /login）；/me 是头像进入的顶层全屏页（不是 Tab），深链直达时返回去主页
 ```
 
@@ -87,3 +87,4 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v0.70：聊天记忆卡 blocks/memory_block.dart（MemoryBlock 块）。状态不存块里，models/memory.dart memoryCardState 对照 memoriesProvider 推算（unknown/active/undone/diverged）；撤销只走 memoriesProvider 的 remove/patch/create；chat_controller 收到记忆卡 invalidate(memoriesProvider)。网页对应 blocks/MemoryBlock.tsx + lib/memoryStore.ts（记忆页与记忆卡共用的唯一记忆列表仓库，useMemories）。
 - v0.78：内容卡 blocks/content_blocks.dart：DraftBlockView（tileFill 小块，原样 SelectableText，CopyAction + 分享 core/share.dart shareText）、SummaryBlockView（AppCard，subtitle labelSmall + titleLarge，foldable(>600 字或 >14 行) → kit FoldedBox(Layout.summaryFold) 底边渐隐，展开/收起 = FadeSwitcher 按 open 换 key + TurnIcon）、ImagesBlockView（单张 AspectRatio 4:3、多张横排 Layout.imageStrip×imageTileWidth 错峰入场；motion.dart fadeInFrame 下好淡入，坏图 broken_image 占位；点开 showImageViewer = GlassDialog + InteractiveViewer + 打开原图）。ImageItem.safe 只认 http(s)。测试 test/content_blocks_test.dart。
 - v0.79：子页页头/起步卡收进 kit：PageIntro(summary, line)（摘要小字 + 说明，两行都 SwapSwitcher）、StarterCard(title, text, starters)（空列表的起步按钮卡，自带 FadeSlideIn）、SectionTitle(count:) 行尾数量；技能/定时任务/连接器/保险箱四页共用。纯逻辑 features/me/connector_library.dart（sortAccounts 已连接→可连接→未配置、connectorSummary、groupSecrets/vaultSummary、secretHint 只露 ••••末四位、secretKinds）。连接器页：账户排序 + 未配置 Dimmed + 尾部“已连接/连接” SwapSwitcher，MCP 空 → StarterCard，有了 → 标题行 QuietAction 添加，MCP 列表 FadeSwitcher 四态，工具弹层页头（N 个工具 · host）+ 错峰；保险箱：+ 移到 AppBar、空 → 两类起步按钮直开对应表单、点行 → 操作菜单删除（左滑之外的明面入口）、addSecret(kind:) 唯一入口。测试 test/connector_library_test.dart。
+- v0.80：修主聊天叠字（截图里标题“额度”压在滚上去的消息上、用户气泡顶到头像）。ui/kit.dart TopFade(clear, solid)，ShellPage 用它包页面内容（header/lead 不包），ShellPage.fadeClearOf(top, headerHeight)。测试 test/shell_page_test.dart；截图样例 /api/usage 补 tokens/calls。

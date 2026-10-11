@@ -433,8 +433,6 @@ class _RenderSizeReporter extends RenderProxyBox {
   }
 }
 
-/// 一段还在变长的文字只露出“最后几行”：固定高度、底对齐，顶上一截渐隐（像滚动的字幕）。
-/// 用于思考过程这类只关心最新进展的流式文字；lines 决定露几行，按 style 的字号和行高算高度。
 /// 长内容折起：最多露出 [maxHeight] 高，底边渐隐提示“还有”（摘要卡展开前）。只在确实很长时用。
 class FoldedBox extends StatelessWidget {
   const FoldedBox({super.key, required this.maxHeight, required this.child});
@@ -461,6 +459,37 @@ class FoldedBox extends StatelessWidget {
   }
 }
 
+/// 内容从浮动顶栏下面滚过时的上沿渐隐：[clear] 以上完全透明（露出壁纸，不和顶栏/标题叠字），
+/// 到 [solid] 渐变成全显。只改透明度、不画颜色，所以和任何壁纸/深浅色都对得上。一级页面外框（ShellPage）用它。
+class TopFade extends StatelessWidget {
+  const TopFade({super.key, required this.clear, required this.solid, required this.child});
+  final double clear;
+  final double solid;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = context.palette.text;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (r) {
+        final h = r.height <= 0 ? 1.0 : r.height;
+        final a = (clear / h).clamp(0.0, 1.0);
+        final b = (solid / h).clamp(a, 1.0);
+        return LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [ink.withValues(alpha: 0), ink.withValues(alpha: 0), ink, ink],
+          stops: [0, a, b, 1],
+        ).createShader(r);
+      },
+      child: child,
+    );
+  }
+}
+
+/// 一段还在变长的文字只露出“最后几行”：固定高度、底对齐，顶上一截渐隐（像滚动的字幕）。
+/// 用于思考过程这类只关心最新进展的流式文字；lines 决定露几行，按 style 的字号和行高算高度。
 class TailText extends StatelessWidget {
   const TailText(this.text, {super.key, required this.style, this.lines = 2});
   final String text;

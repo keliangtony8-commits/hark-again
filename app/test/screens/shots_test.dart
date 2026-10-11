@@ -88,7 +88,7 @@ class _Api implements Api {
       ];
     }
     if (path.startsWith('/api/usage')) {
-      return {'currency': 'CNY', 'budget': 50, 'priced': ['fast'], 'today': {'cost': 0.4}, 'month': {'cost': 12.3, 'tokens': 2100000}};
+      return {'currency': 'CNY', 'budget': 50, 'priced': ['fast'], 'today': {'cost': 0.4, 'tokens': 86000, 'calls': 23}, 'month': {'cost': 12.3, 'tokens': 2100000, 'calls': 412}};
     }
     if (path.startsWith('/api/conversations/')) {
       return {
