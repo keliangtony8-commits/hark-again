@@ -15,7 +15,7 @@ Caddy (HTTPS, 静态前端, 反代)
 - 两端都只依赖 `docs/protocol.md` 这份协议；后端不关心是哪个客户端
 
 ## 模型（默认阶跃 Step Plan）
-- `.env` 填 `STEP_API_KEY`。网关别名：`fast` = step-3.7-flash（日常、能看图）、`smart` = step-5-preview（深度）、`lite` = step-3.5-flash（摘要等后台小活）。国内账号把 `deploy/litellm/config.yaml` 的 `api_base` 和 `STEP_BASE_URL` 换成 `api.stepfun.com`。
+- `.env` 填 `STEP_API_KEY`。网关别名：`fast` = step-3.7-flash（日常、能看图）、`smart` = step-5-preview（深度、也能看图）、`lite` = step-3.5-flash（摘要等后台小活）。国内账号把 `deploy/litellm/config.yaml` 的 `api_base` 和 `STEP_BASE_URL` 换成 `api.stepfun.com`。
 - 推理模型的思考过程会实时显示在“思考中”小卡里（WS `thinking.delta`），不存库、不回传给模型。
 - 有的供应商每个流式包都带累计用量：`llm.py` 只记最后一次（中途停止也记已花的）。
 - 直连模式（不跑 LiteLLM，省约 500MB 内存）：`LLM_BASE_URL` 填供应商地址、`LLM_API_KEY`、`MODEL_MAP` 把别名翻成真实模型名，见 `.env.example`。
@@ -155,3 +155,8 @@ docker compose --profile build-only build sandbox-image                      # �
 ## 内存预算（参考）
 postgres ~200M、litellm ~300M、searxng ~150M、backend+worker ~300M、browser 打开时 ~600M、每个沙盒容器上限 1G。
 2G 内存的 VPS 能跑，但别同时开浏览器和多个项目沙盒；4G 比较从容。
+
+## 看图（v0.72）
+- `app/vision.py` 是图片进模型的唯一入口；`agent/context.py` 只调用它。当前这一问的图片：模型别名在 `VISION_MODELS` → 原图（Pillow 缩到 `IMAGE_MAX_SIDE`，统一 JPEG data URL）；更早的图或模型不能看图 → `VISION_MODEL` 写一段描述（含图中文字），缓存在 `data/captions/<上传id>.txt`，每张图只花一次钱。
+- 描述失败只给图片名、这一轮照常，下一轮自动重试；单轮最多补 6 张描述。用量记为 kind=vision。
+- 冒烟：`python tests/smoke_vision.py`。

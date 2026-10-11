@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import usage
+from .. import usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -96,10 +96,10 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
     否则（断线、关机）落库后把取消继续抛出去。"""
     cid, project_id, model = conv.id, conv.project_id, chat_model(conv.model)
-    hist = await build_history(db, cid)
+    hist = await build_history(db, cid, model)
     history = hist.messages
     last_user = next((m for m in reversed(history) if m["role"] == "user"), None)
-    query = last_user["content"] if last_user and isinstance(last_user["content"], str) else ""
+    query = vision.text_of(last_user["content"]) if last_user else ""
     system = await build_system_prompt(db, project_id, query)
     if hist.summary:
         system += f"\n\n这段对话更早的内容（摘要，原文已不在下面）：\n{hist.summary}"

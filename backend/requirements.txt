@@ -11,3 +11,4 @@ alembic==1.13.*
 python-multipart==0.0.*
 croniter==3.*
 cryptography==43.*
+pillow==11.*

@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     # 没选或选的别名后来被删了就用 default_model。定时任务、摘要不受影响
     chat_models: dict[str, str] = {"fast": "快速", "smart": "深度"}
     summary_model: str = "fast"     # 滚动摘要用的便宜模型别名
+    # 看图（vision.py）：能直接收图片的别名（阶跃 step-3.7-flash = fast、step-5-preview = smart 实测都能看图；lite 不能）；其余别名看到的是图片的文字描述。
+    # vision_model = 写描述用的看图别名（每张图只描述一次并缓存）；image_max_side = 发给模型前缩到的最长边（省 token）
+    vision_models: list[str] = ["fast", "smart"]
+    vision_model: str = "fast"
+    image_max_side: int = 1280
     history_chars: int = 24000      # 发给模型的对话原文预算（字符）；超出部分折叠进摘要
     # 用量与花费（usage.py）：别名 → [输入单价, 输出单价]，单位 currency / 百万 token；没写的别名只记 token 不算钱
     model_prices: dict[str, list[float]] = {}

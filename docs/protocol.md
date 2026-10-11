@@ -19,7 +19,7 @@
 客户端 → 服务器：
 | type | 字段 | 说明 |
 |---|---|---|
-| `user.message` | `text`, `conversation_id?`, `project_id?`, `attachments?: [uploadId]`, `model?` | 发一条消息；一次只跑一轮。`model` = 这个对话改用的模型别名（`GET /api/catalog/models` 里的 id；`""` = 回默认；不认识的忽略），记到对话上、本轮起生效。客户端只在本机改过且还没 PATCH 成功（或新对话）时带 |
+| `user.message` | `text`, `conversation_id?`, `project_id?`, `attachments?: [uploadId]`, `model?` | 发一条消息；一次只跑一轮。`model` = 这个对话改用的模型别名（`GET /api/catalog/models` 里的 id；`""` = 回默认；不认识的忽略），记到对话上、本轮起生效。客户端只在本机改过且还没 PATCH 成功（或新对话）时带。附件里的图片（jpeg/png/webp/gif）模型能看懂（v0.72，服务端处理，客户端无需改动）：当前这一问且模型在 VISION_MODELS 里 → 发原图（缩到 1280）；其余 → 图片的文字描述（每张描述一次并缓存） |
 | `message.regenerate` | `conversation_id`, `message_id?`, `text?`, `model?` | 重新生成最后一条回复：删掉最后一条用户消息之后的回复，同一条用户消息再跑一轮（不保留旧版本）。`message_id` = 客户端眼中的最后一条回复，不是最新的就回 `error`、什么都不删；不带 = 上一轮失败没有回复时“重试”。带 `text` = **编辑**：最后一条用户消息的文字原地换成它（id 不变、附件保留、标题不动；文字空且没附件 → `error`）再答。带 `model` = 换模型重答（同 user.message，记到对话上）。不排队，线不通直接提示 |
 | `message.cancel` | `conversation_id?` | 停止正在生成的这一轮。带 id 就必须对得上正在跑的对话；没有在跑的轮次就忽略（刚好已说完）。不排队 |
 | `approval.reply` | `id`, `approved: bool` | 回答审批卡 |

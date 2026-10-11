@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import llm, memory_store, project_brief, skills_store
+from .. import llm, memory_store, project_brief, skills_store, vision
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -54,10 +54,13 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
 
 
 def _render(blocks: list[dict]) -> str:
-    """把一条消息转成给模型的文本：文本附件内联内容，其他文件只给名字。"""
+    """把一条消息转成给模型的文本：文本附件内联内容，图片给（缓存的）描述，其他文件只给名字。"""
     text = blocks_to_text([b for b in blocks if b.get("type") != "file"])
     for b in blocks:
         if b.get("type") != "file":
+            continue
+        if vision.is_image(b):
+            text += "\n\n" + vision.placeholder(b)
             continue
         path = upload_path(b["id"]) if b.get("source") == "upload" else None
         if path and is_text(b["name"]):
@@ -99,8 +102,8 @@ async def _fold(previous: str, rows: list[tuple[str, str]]) -> str:
     ], model=settings.summary_model)
 
 
-async def build_history(db: AsyncSession, conversation_id: str) -> History:
-    """预算内的最近原文 + 更早内容的摘要。
+async def build_history(db: AsyncSession, conversation_id: str, model: str | None = None) -> History:
+    """预算内的最近原文 + 更早内容的摘要。model = 这一轮用的别名（决定当前这一问的图片发原图还是发描述）。
 
     不变式：最后一条用户消息（当前这一问）及其后的内容永远是原文，所以重答/编辑只动原文区，摘要不受影响。
     原文超预算时，把摘要之后、窗口之前的消息折叠进摘要（压到 FOLD_TARGET，留余量），用便宜模型一次调用。
@@ -114,6 +117,7 @@ async def build_history(db: AsyncSession, conversation_id: str) -> History:
     budget = settings.history_chars
 
     ids, roles = [m.id for m in rows], [m.role for m in rows]  # 先取出来：失败时 rollback 会让 ORM 对象过期
+    blocks = [m.blocks for m in rows]
     summary = conv.summary if conv else ""
     upto = conv.summary_upto if conv else None
     covered = ids.index(upto) + 1 if upto in ids else 0
@@ -136,5 +140,15 @@ async def build_history(db: AsyncSession, conversation_id: str) -> History:
         conv.summary, conv.summary_upto = "", None
         await db.commit()
     first = max(start, covered)
-    return History(summary=summary,
-                   messages=[{"role": roles[i], "content": texts[i]} for i in range(first, len(rows))])
+
+    # 图片：当前这一问且模型能看图 → 原图；其余（更早的、或模型不能看图）→ 文字描述（缺的现在补，之后走缓存）
+    pixels = vision.accepts_images(model or settings.default_model)
+    def raw(i: int) -> bool:
+        return pixels and i >= last_user and roles[i] == "user"
+    need = [b for i in range(first, len(rows)) if not raw(i) for b in blocks[i]]
+    if any(vision.is_image(b) for b in need):
+        await vision.describe_missing(need)
+        texts[first:] = [_render(blocks[i]) for i in range(first, len(rows))]
+    return History(summary=summary, messages=[
+        {"role": roles[i], "content": vision.content_with_images(texts[i], blocks[i]) if raw(i) else texts[i]}
+        for i in range(first, len(rows))])

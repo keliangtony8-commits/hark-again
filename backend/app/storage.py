@@ -10,6 +10,7 @@ DATA = Path(settings.data_dir)
 PROJECTS = DATA / "projects"
 UPLOADS = DATA / "uploads"
 SKILLS = DATA / "skills"
+CAPTIONS = DATA / "captions"  # 图片描述缓存（vision.py）：captions/<上传 id>.txt
 TEXT_EXT = {".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".tsx", ".html", ".css", ".yml", ".yaml", ".toml", ".sql", ".sh", ".log"}
 
 
@@ -48,3 +49,7 @@ def upload_path(uid: str) -> Path | None:
     d = safe_join(UPLOADS, uid)
     files = list(d.iterdir()) if d.is_dir() else []
     return files[0] if files else None
+
+
+def caption_path(uid: str) -> Path:
+    return safe_join(CAPTIONS, f"{uid}.txt")
