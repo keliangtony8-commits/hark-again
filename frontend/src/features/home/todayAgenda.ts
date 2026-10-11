@@ -43,6 +43,15 @@ export function todayAgenda(tasks: ScheduledTask[], now = new Date()): AgendaIte
   });
 }
 
+/** HH:MM（钟点列、摘要、“现在”标记共用）。 */
+export const clockOf = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+/** “现在”标记插在第几行之前：第一件钟点晚于此刻的那行；全在前或全在后 = null（贴在头尾只是噪音）。同 App agendaNowAt。 */
+export function agendaNowAt(items: AgendaItem[], now: Date = new Date()): number | null {
+  const i = items.findIndex((x) => x.at.getTime() > now.getTime());
+  return i <= 0 ? null : i;
+}
+
 export const agendaHint = (i: AgendaItem) => ({ next: "下一个", running: "进行中…", done: "已完成" } as Partial<Record<AgendaState, string>>)[i.state] ?? "";
 export const agendaProblem = (i: AgendaItem) => (i.state === "failed" ? "失败" : i.state === "paused" ? "已暂停" : null);
 

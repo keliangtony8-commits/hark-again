@@ -157,8 +157,12 @@ class GlassCard extends StatelessWidget {
 
 /// 分组列表卡：行之间是从图标右侧开始的发丝线（和行首图标对齐），整卡一个大圆角。
 class GlassGroup extends StatelessWidget {
-  const GlassGroup({super.key, required this.children});
+  const GlassGroup({super.key, required this.children, this.separator});
   final List<Widget> children;
+
+  /// 第 i 行（i ≥ 1）上方的分隔；返回 null 用默认细线（缩进到行首图标之后）。
+  /// 用途：行首不是图标的列表把细线对齐到自己的标题边，或在两行之间放一条标记（主页“今天”的“现在”）。
+  final Widget? Function(int i)? separator;
 
   @override
   Widget build(BuildContext context) {
@@ -172,7 +176,7 @@ class GlassGroup extends StatelessWidget {
           type: MaterialType.transparency, // 行里的 InkWell 水波纹画在玻璃上
           child: Column(children: [
             for (var i = 0; i < children.length; i++) ...[
-              if (i > 0) Divider(indent: Sp.x4 + Layout.rowIcon + Sp.x4, endIndent: 0, color: line),
+              if (i > 0) separator?.call(i) ?? Divider(indent: Sp.x4 + Layout.rowIcon + Sp.x4, endIndent: 0, color: line),
               children[i],
             ],
           ]),

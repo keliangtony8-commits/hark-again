@@ -39,8 +39,8 @@ export function SummaryBlock({ block }: { block: S }) {
     <article className="card blk-summary">
       <header className="blk-summary-head">
         <div>
-          {block.subtitle && <div className="blk-summary-sub">{block.subtitle}</div>}
           <h3 className="blk-summary-title">{block.title}</h3>
+          {block.subtitle && <div className="blk-summary-sub">{block.subtitle}</div>}
         </div>
         <CopyButton text={copyText([block])} label="复制全文" />
       </header>

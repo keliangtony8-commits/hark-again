@@ -276,6 +276,7 @@ abstract final class Layout {
   static const imageStrip = 176.0, imageTileWidth = 232.0; // 图片卡多张时横排：每张的高 / 宽；单张按 4:3 铺满
   static const productTileMin = 148.0; // 商品宫格每格最窄多宽（手机两列、平板更多列）
   static const offerImageRatio = 2.0; // 主页建议卡顶部配图的宽高比（宽图，不把卡撑太高）
+  static const nowDot = 6.0; // 主页“今天”的“现在”标记：细线起头的小圆点
   static const agendaTime = 48.0; // 主页“今天”行首钟点列的宽（HH:MM 等宽数字，上下对齐）
   static const orderThumb = 40.0; // 订单卡每行商品小图的边长
   static const seekPagesMax = 60; // 定位消息时最多往上翻多少屏（防止死循环）

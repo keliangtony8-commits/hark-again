@@ -103,4 +103,5 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v0.92：卡片里的输入框用 theme/field_border.dart 的 `compactField(label:, suffix:)`（紧凑版，表单卡在用；弹层/整页仍用主题默认）；一级页面上沿渐隐 TopFade 是缓入曲线，到让位线下 `Layout.topFadeRamp` 才全显（ShellPage.fadeSolidOf），列表顶部留白别小于它。截图样例的图片走 shots_test `_seedImage`（塞图片缓存，测试里没网）。
 - v0.90：输入框外形只用 theme/field_border.dart 的 FieldBorder（填充式圆角块，isOutline=false，标签浮在块里；聚焦一圈细线）；别再用 OutlineInputBorder 配带标签的输入框。换对话时 chat_view 把列表跳回 0（最新一条）。截图新增 `-chat-ask`（信息表单），主页样例含“已交给助手”的建议卡。
 - v1.01：Home“今天”日程规则只在 features/home/today_agenda.dart（todayAgenda/agendaSummary/agendaHint/agendaProblem/agendaDetail；cron 今天的时刻 core/cron.dart cronTodayAt），画法 home_screen.dart TodaySection；网页 features/home/todayAgenda.ts 同规则。测试 test/today_agenda_test.dart。
+- v1.04：日程“现在”线 = today_agenda.dart `agendaNowAt`（前后都有事才画）+ home_screen `_NowLine`，经 `GlassGroup(separator:)` 替掉那一格分隔线（separator 返回 null = 默认细线；行首不是图标的列表用它把细线对齐标题边）。Markdown 标题层级只在 ui/markdown.dart（h2 = titleMedium + 上距 Sp.x3，h3 = titleSmall text2）；摘要卡标题 headlineMedium 衬线、subtitle 在下。截图 shots_test `-chat-day`（c5 简报卡）。
 - v1.02：日程里只有“已完成”变淡（`AgendaItem.faded`），失败不淡；截图新增 `-home-today`（任务样例按现在时刻排，_cronAt）。

@@ -3,6 +3,9 @@
 .blk-text > :last-child { margin-bottom: 0; }
 .blk-text p { margin: 0 0 var(--sp-3); }
 .blk-text h1, .blk-text h2, .blk-text h3 { font-size: var(--fs-md); font-weight: var(--fw-strong); margin: var(--sp-5) 0 var(--sp-2); }
+/* v1.04 层级（同 App ui/markdown.dart）：h1 文档标题大一档，h3 二级色小字 */
+.blk-text h1 { font-size: var(--fs-lg); }
+.blk-text h3 { font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text-2); margin-top: var(--sp-4); }
 .blk-text ul, .blk-text ol { padding-left: 1.3em; margin: 0 0 var(--sp-3); }
 .blk-text li { margin: var(--sp-1) 0; }
 .blk-text code { font-family: var(--font-mono); font-size: 0.88em; background: var(--tile); padding: 2px 6px; border-radius: 6px; }
@@ -93,8 +96,10 @@
 .blk-summary { padding: var(--sp-4) var(--sp-2) var(--sp-2) var(--sp-5); }
 .blk-summary-head { display: flex; align-items: flex-start; gap: var(--sp-2); }
 .blk-summary-head > div { flex: 1; min-width: 0; padding-top: var(--sp-1); }
-.blk-summary-sub { font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
-.blk-summary-title { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-title); line-height: 1.35; }
+.blk-summary-sub { margin-top: var(--sp-1); font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+/* v1.04：文档标题用衬线（同 App headlineMedium），出处/概要小字在标题下面 */
+.blk-summary-title { margin: 0; font-family: var(--font-serif); font-size: calc(var(--fs-xl) - 4px); font-weight: var(--fw-title);
+  line-height: 1.2; letter-spacing: var(--display-tracking); }
 .blk-summary-body { margin-top: var(--sp-2); padding-right: var(--sp-3); }
 .blk-summary-body.folded { max-height: 280px; overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent); mask-image: linear-gradient(to bottom, #000 70%, transparent); }

@@ -122,6 +122,25 @@ final _signInChat = {
   ],
 };
 
+// “帮我准备今天”（v1.03）：用户点主页胶囊 → 助手出当日简报卡（show_summary）+ 一句话
+final _dayChat = {
+  'id': 'c5',
+  'title': '帮我准备今天',
+  'messages': [
+    _msg('d1', 'user', '帮我准备今天'),
+    _cards('d2', [
+      {
+        'type': 'summary',
+        'title': '今天 · 10月12日 周一',
+        'subtitle': '3 件排定的事 · 1 张卡等你 · 2 条未读',
+        'markdown': '## 时间线\n- **08:00** 早间简报 — 已完成\n- **11:00** 论文资料汇总 — 失败了，等你看一眼\n- **21:00** 睡前背单词 — 待运行\n\n'
+            '## 要留意\n- 周三前寄回那箱书（快递信息还差地址）\n- 图书馆四楼靠窗位今天 14:00 开放预约\n\n## 天气\n晴，18–25°C，下午有风。',
+      },
+      {'type': 'text', 'text': '上午最要紧的是把论文汇总那条修好，我已经在主页放了张卡，点一下我就去查。'},
+    ]),
+  ],
+};
+
 // 助手缺信息时的信息表单（ask_user）：一张已回答 + 一张待填（候选、选填、多行）
 final _askChat = {
   'id': 'c4',
@@ -318,6 +337,7 @@ class _Api implements Api {
     if (path == '/api/conversations/c2') return _shopChat;
     if (path == '/api/conversations/c3') return _signInChat;
     if (path == '/api/conversations/c4') return _askChat;
+    if (path == '/api/conversations/c5') return _dayChat;
     if (path.startsWith('/api/conversations/')) {
       return {
         'id': 'c1',
@@ -347,6 +367,7 @@ class _Api implements Api {
         {'id': 'c2', 'title': '耳机'},
         {'id': 'c3', 'title': '图书馆座位'},
         {'id': 'c4', 'title': '寄快递'},
+        {'id': 'c5', 'title': '帮我准备今天'},
       ];
     }
     return <dynamic>[];
@@ -455,6 +476,8 @@ void main() {
       await _shot(tester, '$mode-chat-form');
       await tester.runAsync(() => container.read(chatProvider('').notifier).open('c4'));
       await _shot(tester, '$mode-chat-ask');
+      await tester.runAsync(() => container.read(chatProvider('').notifier).open('c5'));
+      await _shot(tester, '$mode-chat-day');
       router.go('/projects');
       await _shot(tester, '$mode-projects');
       // 弹层（GlassSheet）：表单盖在项目页上，看玻璃透出的内容和 tile 底的输入框

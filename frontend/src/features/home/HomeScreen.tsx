@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import BlockRenderer from "../../blocks/BlockRenderer";
 import { useInbox } from "../../hooks/useInbox";
@@ -16,7 +16,7 @@ import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
 import { OfferImage, OfferSource } from "./OfferMedia";
-import { agendaDetail, agendaHint, agendaProblem, agendaSummary, PREP_DAY_LABEL, PREP_DAY_PROMPT, todayAgenda } from "./todayAgenda";
+import { agendaDetail, agendaHint, agendaNowAt, clockOf, agendaProblem, agendaSummary, PREP_DAY_LABEL, PREP_DAY_PROMPT, todayAgenda } from "./todayAgenda";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
 
@@ -101,6 +101,7 @@ export default function HomeScreen() {
 
   const today = todayAgenda(tasks.items);
   const todaySummary = agendaSummary(today);
+  const nowAt = agendaNowAt(today);
 
   return (
     <Page wide footer={<LaunchComposer />}>
@@ -221,12 +222,15 @@ export default function HomeScreen() {
               const problem = agendaProblem(it);
               const hint = agendaHint(it);
               return (
-                <Link key={it.task.id} to={`/me/tasks/${it.task.id}`} className={`row today-row enter ${it.faded ? "row-off" : ""} ${it.state === "next" ? "today-next" : ""}`} style={nth(i + 1)}>
+                <Fragment key={it.task.id}>
+                {i === nowAt && <div className="today-now enter" style={nth(i + 1)} role="separator" aria-label={`现在 ${clockOf(new Date())}`}><span>现在</span><i /></div>}
+                <Link to={`/me/tasks/${it.task.id}`} className={`row today-row enter ${it.faded ? "row-off" : ""} ${it.state === "next" ? "today-next" : ""}`} style={nth(i + 1)}>
                   <span className="today-time">{it.time}</span>
                   <div className="row-body"><div className="row-title">{it.task.name}</div>
                     <div className="row-sub">{problem && <><span className="row-problem">{problem}</span> · </>}{agendaDetail(it)}</div></div>
                   {hint && <span key={hint} className="row-hint fade-in">{hint}</span>}
                 </Link>
+                </Fragment>
               );
             })}
           </div>

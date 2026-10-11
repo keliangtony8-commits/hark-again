@@ -18,10 +18,20 @@ class AgendaItem {
   final DateTime at;
   final AgendaState state;
 
-  String get time => '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+  String get time => clockOf(at);
 
   /// 顺利跑完的一项：行变淡，让还没发生的更显眼。失败不变淡——淡掉的警示字发灰发脏，又正是要人看见的（v1.02 截图）。
   bool get faded => state == AgendaState.done;
+}
+
+/// HH:MM（等宽钟点列、摘要、“现在”标记共用）。
+String clockOf(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+/// “现在”标记插在第几行之前：第一件钟点晚于此刻的那行。只在前后都有事时才有意义（全在前或全在后 = null），
+/// 否则一条线贴在列表头尾只是噪音。
+int? agendaNowAt(List<AgendaItem> items, DateTime now) {
+  final i = items.indexWhere((x) => x.at.isAfter(now));
+  return i <= 0 ? null : i;
 }
 
 /// 今天这条任务排在几点：一次性任务 = 计划时刻正好在今天；重复任务 = cron 今天的时刻。不在今天 = null。

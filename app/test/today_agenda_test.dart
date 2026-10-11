@@ -140,8 +140,20 @@ void main() {
     expect(find.text('下一个'), findsOneWidget);
     final dims = tester.widgetList<Dimmed>(find.byType(Dimmed)).map((d) => d.dimmed).toList();
     expect(dims, [true, false]);
+    expect(find.text('现在'), findsOneWidget, reason: '两件之间画一条“现在”');
+    expect(find.byWidgetPredicate((w) => w is Semantics && (w.properties.label ?? '').startsWith('现在 ')), findsOneWidget);
     await tester.tap(find.text('任务b'));
     await tester.pumpAndSettle();
     expect(pushed, ['/me/tasks/b']);
+  });
+
+  test('“现在”标记：插在第一件还没到点的前面；全在前或全在后不画', () {
+    final items = todayAgenda([task('a', '0 8 * * *'), task('b', '0 11 * * *'), task('c', '0 15 * * *'), task('d', '0 21 * * *')], now);
+    expect(agendaNowAt(items, now), 2);
+    expect(agendaNowAt(items, DateTime(2026, 10, 12, 7)), isNull, reason: '全在后');
+    expect(agendaNowAt(items, DateTime(2026, 10, 12, 22)), isNull, reason: '全在前');
+    expect(agendaNowAt(items, DateTime(2026, 10, 12, 15)), 3, reason: '正好到点的算已过');
+    expect(agendaNowAt(const [], now), isNull);
+    expect(clockOf(DateTime(2026, 1, 1, 7, 5)), '07:05');
   });
 }

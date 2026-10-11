@@ -23,9 +23,14 @@ class AppMarkdown extends StatelessWidget {
       styleSheet: MarkdownStyleSheet(
         p: base,
         a: base.copyWith(color: p.accent, decoration: TextDecoration.underline, decorationColor: p.accent.withValues(alpha: 0.4)),
+        // 标题层级（v1.04）：h1 = 文档标题，h2 = 段落小标题（正文同号、加一档字重），h3 = 二级色小字。
+        // 原先 h2 18/600 与卡片标题 20/600 挤成一档，段与段之间也没有呼吸。小标题上方留 Sp.x3，和正文段距分开。
         h1: context.text.titleLarge,
-        h2: context.text.titleLarge?.copyWith(fontSize: Fs.lg - 2),
-        h3: context.text.titleMedium,
+        h1Padding: const EdgeInsets.only(top: Sp.x3),
+        h2: context.text.titleMedium,
+        h2Padding: const EdgeInsets.only(top: Sp.x3),
+        h3: context.text.titleSmall?.copyWith(color: p.text2),
+        h3Padding: const EdgeInsets.only(top: Sp.x2),
         strong: base.copyWith(fontWeight: Weights.strong),
         listBullet: base.copyWith(color: p.text2),
         blockquote: base.copyWith(color: p.text2),
@@ -35,7 +40,7 @@ class AppMarkdown extends StatelessWidget {
         code: TextStyle(fontFamily: 'monospace', fontSize: Fs.sm, backgroundColor: context.tileFill, color: p.text),
         codeblockDecoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
         tableBorder: TableBorder.all(color: context.hairline),
-        tableHead: base.copyWith(fontWeight: FontWeight.w600),
+        tableHead: base.copyWith(fontWeight: Weights.strong),
         tableBody: context.text.bodyMedium,
         horizontalRuleDecoration: BoxDecoration(
           border: Border(top: BorderSide(color: p.border)),

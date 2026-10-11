@@ -175,7 +175,9 @@ class TodaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = todayAgenda(tasks, DateTime.now());
+    final now = DateTime.now();
+    final items = todayAgenda(tasks, now);
+    final nowAt = agendaNowAt(items, now);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SectionTitle('今天',
           trailing: loading ? null : SwapSwitcher(child: Text(agendaSummary(items), key: ValueKey(agendaSummary(items)), style: context.text.labelSmall))),
@@ -190,10 +192,17 @@ class TodaySection extends StatelessWidget {
                         subtitle: '每天的简报、提醒放进定时任务，会排在这里',
                         onTap: () => context.push('/me/tasks')),
                   ])
-                : GlassGroup(key: const ValueKey('list'), children: [
-                    for (var i = 0; i < items.length; i++)
-                      FadeSlideIn(delay: Motion.stagger(i, from: 1), child: _AgendaRow(item: items[i])),
-                  ]),
+                : GlassGroup(
+                    key: const ValueKey('list'),
+                    // 细线对齐标题边（行首是钟点列不是图标）；“现在”那一格换成 _NowLine，替掉细线而不是多插一行。
+                    separator: (i) => i == nowAt
+                        ? FadeSlideIn(delay: Motion.stagger(i, from: 1), child: _NowLine(at: now))
+                        : Divider(indent: Sp.x4 + Layout.agendaTime + Sp.x4, endIndent: 0, color: context.hairline),
+                    children: [
+                      for (var i = 0; i < items.length; i++)
+                        FadeSlideIn(delay: Motion.stagger(i, from: 1), child: _AgendaRow(item: items[i])),
+                    ],
+                  ),
       ),
       if (onPrep != null && !loading) ...[
         const SizedBox(height: Layout.cardGap),
@@ -228,6 +237,34 @@ class _AgendaRow extends StatelessWidget {
         problem: agendaProblem(item),
         trailing: hint.isEmpty ? const SizedBox.shrink() : SwapSwitcher(child: RowHint(hint, key: ValueKey(hint))),
         onTap: () => context.push('/me/tasks/${item.task.id}'),
+      ),
+    );
+  }
+}
+
+/// 日程里“此刻”的位置：钟点列写“现在”，标题边起一颗小点 + 一条细线延到行尾。只用正文二级/三级色，
+/// 不用强调色、不循环闪——它是方位，不是提醒。读屏念“现在 HH:MM”。
+class _NowLine extends StatelessWidget {
+  const _NowLine({required this.at});
+  final DateTime at;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Semantics(
+      label: '现在 ${clockOf(at)}',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x1),
+        child: Row(children: [
+          SizedBox(
+            width: Layout.agendaTime,
+            child: Text('现在', style: context.text.labelSmall?.copyWith(color: p.text2, fontWeight: Weights.title)),
+          ),
+          const SizedBox(width: Sp.x4),
+          Container(width: Layout.nowDot, height: Layout.nowDot, decoration: BoxDecoration(color: p.text2, shape: BoxShape.circle)),
+          Expanded(child: Container(height: 1, color: p.text3)),
+        ]),
       ),
     );
   }

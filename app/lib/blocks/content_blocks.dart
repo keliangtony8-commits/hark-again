@@ -101,9 +101,13 @@ class _SummaryBlockViewState extends State<SummaryBlockView> {
                   padding: const EdgeInsets.only(top: Sp.x1),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    // 文档标题用衬线（v1.04，和页面主标题同一种“标题感”），出处/概要小字放在标题下面。
                     children: [
-                      if (b.subtitle != null && b.subtitle!.isNotEmpty) Text(b.subtitle!, style: context.text.labelSmall),
-                      Text(b.title, style: context.text.titleLarge),
+                      Text(b.title, style: context.text.headlineMedium),
+                      if (b.subtitle != null && b.subtitle!.isNotEmpty) ...[
+                        const SizedBox(height: Sp.x1),
+                        Text(b.subtitle!, style: context.text.labelSmall),
+                      ],
                     ],
                   ),
                 ),
@@ -111,7 +115,7 @@ class _SummaryBlockViewState extends State<SummaryBlockView> {
               CopyAction(text: copyText([b]), tooltip: '复制全文'),
             ],
           ),
-          const SizedBox(height: Sp.x2),
+          const SizedBox(height: Sp.x1), // 正文首个小标题自带 Sp.x3 上距
           Padding(
             padding: const EdgeInsets.only(right: Sp.x3),
             child: !fold
