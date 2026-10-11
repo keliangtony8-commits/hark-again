@@ -24,7 +24,9 @@
 .panel-idea:active { transform: scale(.97); }
 
 .today-row { display: flex; gap: var(--sp-3); align-items: center; }
-.today-time { font-size: var(--fs-sm); color: var(--text-3); width: 52px; flex: none; }
+.today-time { font-size: var(--fs-sm); color: var(--text-2); width: 48px; flex: none; font-variant-numeric: tabular-nums; } /* = App Layout.agendaTime */
+.today-next .today-time { color: var(--text); font-weight: var(--fw-title); }
+.section-note { color: var(--text-3); } /* 区块标题行尾的一句摘要，和标题同一小字层级 */
 
 /* 未读报告：图标右上角强调色小点 */
 .report-row .row-icon { position: relative; }

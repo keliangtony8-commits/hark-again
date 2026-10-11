@@ -21,3 +21,20 @@ const cronPresets = [
   ('每周一 10:00', '0 10 * * 1'),
   ('每晚 21:00', '0 21 * * *'),
 ];
+
+/// 这条 cron 今天（[now] 所在的本地日）会不会跑、几点跑：只认固定“分 时”（每小时这类不算“今天的一件事”）。
+/// 与网页版 lib/cron.ts cronTodayAt 同规则。
+DateTime? cronTodayAt(String cron, DateTime now) {
+  final f = cron.trim().split(RegExp(r'\s+'));
+  if (f.length < 5) return null;
+  final num = RegExp(r'^\d+$');
+  final (m, h, dom, dow) = (f[0], f[1], f[2], f[4]);
+  if (!num.hasMatch(m) || !num.hasMatch(h)) return null;
+  final wd = now.weekday % 7; // cron：0 = 周日
+  if (dow != '*') {
+    final ok = dow == '1-5' ? wd >= 1 && wd <= 5 : dow.split(',').any((d) => num.hasMatch(d) && int.parse(d) % 7 == wd);
+    if (!ok) return null;
+  }
+  if (dom != '*' && (!num.hasMatch(dom) || int.parse(dom) != now.day)) return null;
+  return DateTime(now.year, now.month, now.day, int.parse(h), int.parse(m));
+}

@@ -6,7 +6,6 @@ import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { HomeCard, ScheduledTask } from "../../lib/types";
 import { cardEyebrow, cardRoute, cardTarget, type CardTarget } from "../../lib/cardTargets";
-import { scheduleLabel, todayAt } from "../../lib/taskLabels";
 import { formatDate } from "../../lib/format";
 import LaunchComposer, { useAskInNewChat } from "../../shell/LaunchComposer";
 import { ShellLead } from "../../shell/ShellLead";
@@ -17,6 +16,7 @@ import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
 import { OfferImage, OfferSource } from "./OfferMedia";
+import { agendaDetail, agendaHint, agendaProblem, agendaSummary, todayAgenda } from "./todayAgenda";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
 
@@ -99,11 +99,8 @@ export default function HomeScreen() {
   const [editing, setEditing] = useState<ScheduledTask | null>(null);
   const taskOf = (c: HomeCard) => tasks.items.find((t) => t.id === c.task_id) ?? null;
 
-  const today = tasks.items
-    .filter((t) => t.active && t.output === "report")
-    .map((t) => ({ t, at: todayAt(t) }))
-    .filter((x): x is { t: ScheduledTask; at: string } => !!x.at)
-    .sort((a, b) => a.at.localeCompare(b.at));
+  const today = todayAgenda(tasks.items);
+  const todaySummary = agendaSummary(today);
 
   return (
     <Page wide footer={<LaunchComposer />}>
@@ -212,19 +209,28 @@ export default function HomeScreen() {
         </Section>
       )}
 
-      <Section title="今天">
-        <div className="list">
-          {today.length === 0 ? (
-            <div className="row"><span className="row-icon"><IconClock /></span>
-              <div className="row-body"><div className="row-title">今天没有排定的任务</div>
-                <div className="row-sub">在“我的 → 定时任务”里添加</div></div></div>
-          ) : today.map(({ t, at }) => (
-            <div key={t.id} className="row today-row">
-              <span className="today-time">{at}</span>
-              <div className="row-body"><div className="row-title">{t.name}</div><div className="row-sub">{scheduleLabel(t)}</div></div>
-            </div>
-          ))}
-        </div>
+      {/* 今天：按钟点一行一件（todayAgenda.ts 定规则）；下一个加重、过去的变淡、失败/暂停只染那两个字；点行进任务详情 */}
+      <Section title="今天" action={tasks.loading ? undefined : <span key={todaySummary} className="section-note fade-in">{todaySummary}</span>}>
+        {tasks.loading ? <Skeleton rows={1} /> : (
+          <div className="list">
+            {today.length === 0 ? (
+              <Link className="row" to="/me/tasks"><span className="row-icon"><IconClock /></span>
+                <div className="row-body"><div className="row-title">今天没有排定的任务</div>
+                  <div className="row-sub">每天的简报、提醒放进定时任务，会排在这里</div></div><IconChevron /></Link>
+            ) : today.map((it, i) => {
+              const problem = agendaProblem(it);
+              const hint = agendaHint(it);
+              return (
+                <Link key={it.task.id} to={`/me/tasks/${it.task.id}`} className={`row today-row enter ${it.past ? "row-off" : ""} ${it.state === "next" ? "today-next" : ""}`} style={nth(i + 1)}>
+                  <span className="today-time">{it.time}</span>
+                  <div className="row-body"><div className="row-title">{it.task.name}</div>
+                    <div className="row-sub">{problem && <><span className="row-problem">{problem}</span> · </>}{agendaDetail(it)}</div></div>
+                  {hint && <span key={hint} className="row-hint fade-in">{hint}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </Section>
       </aside>
       </div>

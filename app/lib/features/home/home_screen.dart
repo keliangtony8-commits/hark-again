@@ -1,4 +1,4 @@
-// Home：一屏看完今天要紧的事。从上到下：问候 → 为你准备（+ 稍后提醒一行）→ 面板（+ 创建一个新面板）→ 收件箱。输入在底部全局胶囊。
+// Home：一屏看完今天要紧的事。从上到下：问候 → 为你准备（+ 稍后提醒一行）→ 面板（+ 创建一个新面板）→ 收件箱 → 今天（日程）。输入在底部全局胶囊。
 // 全部是玻璃卡（ui/glass.dart），卡间距 Layout.cardGap，左右留白 Layout.gutter。
 // 与网页版 HomeScreen 同一套信息架构。
 import 'dart:async';
@@ -27,6 +27,7 @@ import 'card_snooze.dart';
 import 'inbox.dart';
 import '../me/task_form.dart';
 import 'new_panel.dart';
+import 'today_agenda.dart';
 
 String hm(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
@@ -149,6 +150,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ]),
               ),
             ],
+            TodaySection(tasks: tasks, loading: ref.watch(tasksProvider).isLoading),
           ]),
           ),
         ),
@@ -159,6 +161,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _preview(HomeCard c) {
     final t = plainText(c.blocks).replaceAll(RegExp(r'[#*_`>|-]'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
     return t.isEmpty ? '点开查看结果' : (t.length > 80 ? '${t.substring(0, 80)}…' : t);
+  }
+}
+
+/// “今天”：今天排着的任务按钟点一行一件（today_agenda.dart 定规则）。行首等宽钟点列，下一个用正文色加粗、
+/// 过去的整行变淡；失败/暂停只把那两个字染警示色；点行进任务详情。没有任务时一行引导去定时任务页。
+class TodaySection extends StatelessWidget {
+  const TodaySection({super.key, required this.tasks, required this.loading});
+  final List<ScheduledTask> tasks;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = todayAgenda(tasks, DateTime.now());
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SectionTitle('今天',
+          trailing: loading ? null : SwapSwitcher(child: Text(agendaSummary(items), key: ValueKey(agendaSummary(items)), style: context.text.labelSmall))),
+      FadeSwitcher(
+        child: loading
+            ? const SkeletonList(key: ValueKey('loading'), rows: 1)
+            : items.isEmpty
+                ? GlassGroup(key: const ValueKey('empty'), children: [
+                    RowTile(
+                        icon: Icons.event_available_outlined,
+                        title: '今天没有排定的任务',
+                        subtitle: '每天的简报、提醒放进定时任务，会排在这里',
+                        onTap: () => context.push('/me/tasks')),
+                  ])
+                : GlassGroup(key: const ValueKey('list'), children: [
+                    for (var i = 0; i < items.length; i++)
+                      FadeSlideIn(delay: Motion.stagger(i, from: 1), child: _AgendaRow(item: items[i])),
+                  ]),
+      ),
+    ]);
+  }
+}
+
+class _AgendaRow extends StatelessWidget {
+  const _AgendaRow({required this.item});
+  final AgendaItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final next = item.state == AgendaState.next;
+    final hint = agendaHint(item);
+    return Dimmed(
+      dimmed: item.past,
+      child: RowTile(
+        leading: SizedBox(
+          width: Layout.agendaTime,
+          child: Text(item.time,
+              style: context.text.titleSmall?.copyWith(color: next ? p.text : p.text2, fontWeight: next ? Weights.title : null)),
+        ),
+        title: item.task.name,
+        subtitle: agendaDetail(item),
+        problem: agendaProblem(item),
+        trailing: hint.isEmpty ? const SizedBox.shrink() : SwapSwitcher(child: RowHint(hint, key: ValueKey(hint))),
+        onTap: () => context.push('/me/tasks/${item.task.id}'),
+      ),
+    );
   }
 }
 

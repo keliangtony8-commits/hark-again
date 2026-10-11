@@ -1,5 +1,5 @@
 // 定时任务的状态文案：列表行和详情页共用；与 App features/me/task_labels.dart 同规则同措辞。
-import { describeCron, nextRunToday } from "./cron";
+import { describeCron } from "./cron";
 import { formatWhen } from "./format";
 import type { ScheduledTask } from "./types";
 
@@ -37,13 +37,4 @@ export function autoPauseNote(t: ScheduledTask): string | null {
   return autoPaused(t)
     ? `连着失败了 ${t.fail_streak ?? 0} 次，我先把它停了，免得一直白跑。改好后打开开关恢复；也可以先“立即运行”试一次，成功了会自动恢复。`
     : null;
-}
-
-/** Home“今天”里的钟点：重复任务按 cron 今天的时刻；一次性任务今天要跑且没跑过才算。 */
-export function todayAt(t: ScheduledTask, now = new Date()): string | null {
-  if (!t.run_at) return nextRunToday(t.cron, now);
-  if (t.done) return null;
-  const at = new Date(t.run_at);
-  if (at.toDateString() !== now.toDateString()) return null;
-  return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
 }

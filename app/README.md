@@ -102,3 +102,4 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v0.94：建议卡“来源”行自带 minTap 高度，前后只补 Sp.x1（不再叠 Sp.x4）。截图新增 `-home-end`（主页往下翻，含“需要你亲自处理”卡 k5）。
 - v0.92：卡片里的输入框用 theme/field_border.dart 的 `compactField(label:, suffix:)`（紧凑版，表单卡在用；弹层/整页仍用主题默认）；一级页面上沿渐隐 TopFade 是缓入曲线，到让位线下 `Layout.topFadeRamp` 才全显（ShellPage.fadeSolidOf），列表顶部留白别小于它。截图样例的图片走 shots_test `_seedImage`（塞图片缓存，测试里没网）。
 - v0.90：输入框外形只用 theme/field_border.dart 的 FieldBorder（填充式圆角块，isOutline=false，标签浮在块里；聚焦一圈细线）；别再用 OutlineInputBorder 配带标签的输入框。换对话时 chat_view 把列表跳回 0（最新一条）。截图新增 `-chat-ask`（信息表单），主页样例含“已交给助手”的建议卡。
+- v1.01：Home“今天”日程规则只在 features/home/today_agenda.dart（todayAgenda/agendaSummary/agendaHint/agendaProblem/agendaDetail；cron 今天的时刻 core/cron.dart cronTodayAt），画法 home_screen.dart TodaySection；网页 features/home/todayAgenda.ts 同规则。测试 test/today_agenda_test.dart。

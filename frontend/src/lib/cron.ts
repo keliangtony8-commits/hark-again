@@ -13,15 +13,21 @@ export function describeCron(cron: string): string {
   return `每天 ${time}`;
 }
 
-export function nextRunToday(cron: string, now = new Date()): string | null {
-  const [m, h, dom, , dow] = cron.trim().split(/\s+/);
-  if (!/^\d+$/.test(m ?? "") || !/^\d+$/.test(h ?? "")) return null;
-  const d = now.getDay();
-  if (dow && dow !== "*") {
-    if (dow === "1-5" ? d === 0 || d === 6 : !dow.split(",").map(Number).includes(d)) return null;
+/** 这条 cron 今天（now 所在的本地日）会不会跑、几点跑：只认固定“分 时”（每小时这类不算“今天的一件事”）。
+ * 与 App core/cron.dart cronTodayAt 同规则。 */
+export function cronTodayAt(cron: string, now = new Date()): Date | null {
+  const f = cron.trim().split(/\s+/);
+  if (f.length < 5) return null;
+  const [m, h, dom, , dow] = f;
+  const num = /^\d+$/;
+  if (!num.test(m) || !num.test(h)) return null;
+  const wd = now.getDay();
+  if (dow !== "*") {
+    const ok = dow === "1-5" ? wd >= 1 && wd <= 5 : dow.split(",").some((d) => num.test(d) && +d % 7 === wd);
+    if (!ok) return null;
   }
-  if (dom && dom !== "*" && +dom !== now.getDate()) return null;
-  return `${pad(h)}:${pad(m)}`;
+  if (dom !== "*" && (!num.test(dom) || +dom !== now.getDate())) return null;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), +h, +m);
 }
 
 export const CRON_PRESETS = [
