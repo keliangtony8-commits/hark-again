@@ -20,7 +20,7 @@ const GROUPS = [
     { to: "/me/pages", icon: IconLayout, title: "Pages", sub: "我为你做的可分享网页" },
   ] },
   { title: "连接", items: [
-    { to: "/me/connectors", icon: IconPlug, title: "连接的账户", sub: "Gmail、日历、GitHub、MCP、API Key" },
+    { to: "/me/connectors", icon: IconPlug, title: "连接器", sub: "Gmail、日历、GitHub 和 MCP 服务器" },
     { to: "/me/vault", icon: IconShield, title: "保险箱", sub: "加密保存的登录和密钥，模型看不到明文" },
   ] },
 ];
@@ -49,6 +49,27 @@ function UsageSummary() {
   );
 }
 
+/** 页头身份行：“用户名 · 域名”（GET /api/auth/me）。没取到（加载中 / 老服务器）只显示域名；取到后淡入（= App _Identity）。 */
+function Identity() {
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    http.get<{ username?: string }>("/api/auth/me")
+      .then((j) => { if (live) setName(j.username?.trim() || null); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+  const raw = server.get() || location.origin;
+  let host = raw;
+  try { host = new URL(raw).host || raw; } catch { /* 不是完整 URL 就原样显示 */ }
+  return (
+    <div className="me-server" aria-label={name ? `已登录 ${name}，服务器 ${host}` : `服务器 ${host}`}>
+      {name && <span key={name} className="me-name fade-in">{name}<span className="me-dot" aria-hidden="true">·</span></span>}
+      <span>{host}</span>
+    </div>
+  );
+}
+
 /** “我的”（设计 v2）：不是栏目，点顶栏头像进来。大头像（点开换颜色）+ 用量卡 + 分组列表 + 外观与偏好 + 退出登录。 */
 export default function MeScreen() {
   const nav = useNavigate();
@@ -70,7 +91,7 @@ export default function MeScreen() {
           <Avatar large onClick={() => setPop((v) => !v)} label="换头像颜色" />
           {pop && <AvatarColorPop onClose={closePop} boundary={hero} />}
           <h1>我的</h1>
-          <div className="me-server">{server.get() || location.origin}</div>
+          <Identity />
         </div>
         <UsageSummary />
         {GROUPS.map((g, i) => (

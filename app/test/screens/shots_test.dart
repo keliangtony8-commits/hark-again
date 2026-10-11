@@ -29,7 +29,7 @@ final _out = Platform.environment['SHOTS_OUT'] ?? '/tmp/shots/out';
 
 class _SignedIn extends SessionNotifier {
   @override
-  Future<Session> build() async => const Session(server: 'http://x', token: 't');
+  Future<Session> build() async => const Session(server: 'https://ai.example.com', token: 't');
 
   @override
   Future<void> signOut() async => state = const AsyncData(Session(server: 'https://my.server'));
@@ -122,6 +122,43 @@ final _signInChat = {
   ],
 };
 
+/// 用量报表：本月 1 号到今天每天都有数（周末少），三个最花钱的对话（一个已删），两个模型，上月同期。
+Map<String, dynamic> _usage() {
+  final now = DateTime.now();
+  const pattern = [0.9, 1.4, 0.6, 1.8, 1.1, 0.3, 0.2, 1.6, 1.2, 2.1, 0.8, 1.3, 0.5, 0.4];
+  final daily = [
+    for (var d = 1; d <= now.day; d++)
+      {
+        'date': '${now.year}-${now.month.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}',
+        'cost': pattern[(d - 1) % pattern.length],
+        'tokens': (pattern[(d - 1) % pattern.length] * 170000).round(),
+        'calls': (pattern[(d - 1) % pattern.length] * 33).round(),
+      },
+  ];
+  return {
+    'currency': 'CNY',
+    'budget': 50,
+    'priced': ['fast', 'smart'],
+    'today': {'cost': 0.4, 'tokens': 86000, 'calls': 23},
+    'month': {
+      'cost': 12.3,
+      'tokens': 2100000,
+      'calls': 412,
+      'models': [
+        {'model': 'smart', 'calls': 96, 'prompt_tokens': 610000, 'completion_tokens': 140000, 'cost': 8.6},
+        {'model': 'fast', 'calls': 316, 'prompt_tokens': 1120000, 'completion_tokens': 230000, 'cost': 3.7},
+      ],
+    },
+    'daily': daily,
+    'conversations': [
+      {'id': 'c1', 'title': '考研英语作文批改', 'calls': 58, 'tokens': 420000, 'cost': 3.1},
+      {'id': 'c2', 'title': '买一副降噪耳机', 'calls': 31, 'tokens': 260000, 'cost': 1.9},
+      {'id': 'c9', 'title': null, 'calls': 12, 'tokens': 90000, 'cost': 0.6},
+    ],
+    'last_month': {'cost': 21.4, 'tokens': 3600000, 'calls': 700, 'to_date': {'cost': 10.2, 'tokens': 1800000, 'calls': 330}},
+  };
+}
+
 String _ago(Duration d) => DateTime.now().subtract(d).toUtc().toIso8601String();
 
 class _Api implements Api {
@@ -177,9 +214,8 @@ class _Api implements Api {
         {'id': 'p3', 'name': '国庆旅行', 'emoji': '🏔️', 'rules': '预算 3000 以内', 'conversation_count': 0, 'last_active_at': _ago(const Duration(days: 9))},
       ];
     }
-    if (path.startsWith('/api/usage')) {
-      return {'currency': 'CNY', 'budget': 50, 'priced': ['fast'], 'today': {'cost': 0.4, 'tokens': 86000, 'calls': 23}, 'month': {'cost': 12.3, 'tokens': 2100000, 'calls': 412}};
-    }
+    if (path == '/api/auth/me') return {'username': 'keliang'};
+    if (path.startsWith('/api/usage')) return _usage();
     if (path == '/api/memories') {
       return [
         {'id': 'mem12345', 'content': '图书馆习惯坐四楼靠窗', 'category': 'preference', 'updated_at': _ago(Duration.zero)}

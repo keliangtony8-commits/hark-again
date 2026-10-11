@@ -1,7 +1,7 @@
 // 我的：点右上角头像进入的全屏页（设计 v2）。不是 Tab，没有 AppBar——和一级页面同一张壁纸、同一套玻璃。
 // 从上到下：返回钮 → 页头（大头像，点它改颜色；衬线“我的” + 服务器）→ 用量卡（本月花费 / 预算 + 查看用量）
 //   → 分组卡：了解你（记忆、技能、定时任务）· 连接（连接器、保险箱、Pages）· 外观与偏好（浅深色、减少透明度、头像颜色）
-//   → 服务器 → 单独一行“退出登录”。每项一个子页面，路由在 app.dart（子页面是 ui/sub_page.dart 的 SubPage：同一张壁纸 + 玻璃标题栏）。
+//   → 服务器 → 单独一行“退出登录”。页头身份行：用户名（GET /api/auth/me，取到后淡入）+ 服务器域名。每项一个子页面，路由在 app.dart（子页面是 ui/sub_page.dart 的 SubPage：同一张壁纸 + 玻璃标题栏）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -67,7 +67,8 @@ class _MeBody extends ConsumerWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('我的', style: context.text.displayMedium),
-              Text(host.isEmpty ? '未设置服务器' : host, style: context.text.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: Sp.x1),
+              _Identity(name: ref.watch(accountNameProvider).value, host: host),
             ]),
           ),
         ]),
@@ -142,6 +143,35 @@ class _MeBody extends ConsumerWidget {
         ]),
       ),
     ]);
+  }
+}
+
+/// 页头身份行：“用户名 · 域名”。用户名没取到（加载中 / 老服务器）只显示域名；取到后整行换态淡入，不跳版（高度一行）。
+class _Identity extends StatelessWidget {
+  const _Identity({required this.name, required this.host});
+  final String? name;
+  final String host;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final where = host.isEmpty ? '未设置服务器' : host;
+    final n = name;
+    return SwapSwitcher(
+      child: Text.rich(
+        key: ValueKey(n ?? ''),
+        TextSpan(children: [
+          if (n != null) ...[
+            TextSpan(text: n, style: context.text.titleSmall?.copyWith(color: p.text)),
+            TextSpan(text: '  ·  ', style: context.text.bodySmall?.copyWith(color: p.text3)),
+          ],
+          TextSpan(text: where, style: context.text.bodySmall),
+        ]),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        semanticsLabel: n == null ? '服务器 $where' : '已登录 $n，服务器 $where',
+      ),
+    );
   }
 }
 

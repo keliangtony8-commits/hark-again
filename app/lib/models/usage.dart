@@ -131,6 +131,9 @@ class UsageReport {
 
   /// 有用量的别名里有没有没定价的（那部分钱算不出来，界面要提示“只统计 token”）。
   bool get hasUnpriced => month.models.any((m) => !priced.contains(m.model));
+
+  /// 本月一次调用都没有（新装、月初）：用量页不画全零的每日图，换一张说明卡。
+  bool get idle => month.calls == 0 && month.tokens == 0;
 }
 
 /// 一段用量的合计 + 按模型拆分：单个对话的累计（GET /api/conversations/{id}/usage）和

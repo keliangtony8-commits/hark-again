@@ -5,6 +5,7 @@
 
 ## 1. 鉴权
 - `POST /api/auth/login` `{username, password}` → `{token}`（JWT）
+- `GET /api/auth/me` → `{username}`（当前主人；“我的”页页头身份行用。老服务器没有 → 客户端只显示服务器域名）
 - REST：请求头 `Authorization: Bearer <token>`
 - WebSocket、图片/下载地址（带不了请求头）：`?token=<token>`
 - 401 → 客户端清掉 token 回登录页

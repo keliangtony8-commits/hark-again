@@ -1,4 +1,4 @@
-// 用量与花费：本月花了多少（对比预算、对比上月同期）、今天、本月每天（usage_chart.dart，选一天看它按模型拆分：usage_day.dart）、最花钱的对话（点开跳进去）、按模型拆分。数据只读，来自 GET /api/usage。
+// 用量与花费（本月一次调用都没有 → 统计格下面一张说明卡，不画全零的图）：本月花了多少（对比预算、对比上月同期）、今天、本月每天（usage_chart.dart，选一天看它按模型拆分：usage_day.dart）、最花钱的对话（点开跳进去）、按模型拆分。数据只读，来自 GET /api/usage。
 // 右上角导出：本月报表 → CSV（models/usage_csv.dart）→ 系统分享面板，不多发请求。
 // 我的页那一行也读同一个 provider，显示“本月 ¥x / ¥预算”。
 import 'package:flutter/material.dart';
@@ -129,7 +129,14 @@ class _Report extends StatelessWidget {
           Expanded(child: _Stat(label: '本月 token', value: formatTokens(r.month.tokens), note: '${r.month.calls} 次调用')),
         ]),
       ),
-      if (r.daily.isNotEmpty) ...[
+      if (r.idle)
+        const EmptyHint(
+          key: Key('usage-idle'),
+          icon: Icons.insights_rounded,
+          title: '本月还没有用量',
+          text: '和助手聊上几句，这里会按天画出用量，并列出最花钱的对话和各个模型的花费。',
+        ),
+      if (r.daily.isNotEmpty && !r.idle) ...[
         const SectionTitle('本月每天'),
         FadeSlideIn(delay: Motion.stagger(2), child: AppCard(
             child: DailyUsageChart(report: r, detail: (day, today) => DayBreakdown(report: r, day: day, today: today)),

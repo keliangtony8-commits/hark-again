@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { http } from "../../lib/api";
-import { budgetLevel, budgetRatio, formatMoney, formatTokens, hasUnpriced, type UsageReport } from "../../lib/usage";
+import { budgetLevel, budgetRatio, formatMoney, formatTokens, hasUnpriced, isIdle, type UsageReport } from "../../lib/usage";
 import { downloadText } from "../../lib/export";
 import { usageCsv, usageCsvFileName } from "../../lib/usageCsv";
-import { IconDownload } from "../../ui/icons";
-import { stagger } from "../../ui/kit";
+import { IconDownload, IconGauge } from "../../ui/icons";
+import { Hint, stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
 import DailyChart from "./DailyChart";
 import DayBreakdown from "./DayBreakdown";
@@ -54,7 +54,8 @@ export default function UsageCard() {
           <div><span>本月 token</span><b><CountUp value={formatTokens(r.month.tokens)} /></b><small>{r.month.calls} 次调用</small></div>
         </div>
       </div>
-      {r.daily && r.daily.length > 0 && <div className="enter" style={stagger(1)}><DailyChart report={r} detail={(day, today) => <DayBreakdown report={r} day={day} today={today} />} /></div>}
+      {isIdle(r) && <div className="enter" style={stagger(1)}><Hint icon={<IconGauge />} title="本月还没有用量" text="和助手聊上几句，这里会按天画出用量，并列出最花钱的对话和各个模型的花费。" /></div>}
+      {!isIdle(r) && r.daily && r.daily.length > 0 && <div className="enter" style={stagger(1)}><DailyChart report={r} detail={(day, today) => <DayBreakdown report={r} day={day} today={today} />} /></div>}
       {r.conversations && r.conversations.length > 0 && <div className="enter" style={stagger(2)}><TopConversations report={r} /></div>}
       {r.month.models.length > 0 && <div className="enter" style={stagger(3)}><ModelUsageList models={r.month.models} priced={r.priced} currency={r.currency} /></div>}
       {(!money || hasUnpriced(r)) && (

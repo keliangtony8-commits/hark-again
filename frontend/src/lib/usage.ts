@@ -35,6 +35,8 @@ export function monthDelta(r: UsageReport): number | null {
 export const FLAT_WITHIN = 0.05;
 
 export const hasUnpriced = (r: UsageReport) => r.month.models.some((m) => !r.priced.includes(m.model));
+/** 本月一次调用都没有（新装、月初）：用量页不画全零的每日图，换一张说明卡（= App UsageReport.idle）。 */
+export const isIdle = (r: UsageReport) => r.month.calls === 0 && r.month.tokens === 0;
 
 export function formatMoney(v: number, currency: string) {
   const sign = currency === "CNY" ? "¥" : currency === "USD" ? "$" : `${currency} `;
