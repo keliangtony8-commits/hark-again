@@ -1,6 +1,7 @@
 """Home：把“要反复看的信息”做成定时刷新的面板（create_panel），以及在对话里管理 Home 上已有的东西（manage_home）：
 “我主页上有什么”“把天气面板改成每天 7 点”“删掉那个比分面板”“收件箱那条不用管了”。
 面板本质是 output=panel 的定时任务，增删改都走 app/task_store.py（与接口、客户端同一套规则：改名卡片跟着改、删除连卡带记录）。"""
+import httpx
 from sqlalchemy import select
 
 from zoneinfo import ZoneInfo
@@ -9,6 +10,7 @@ from ... import card_snooze, home_offers, schedule, task_store
 from ...config import settings
 from ...models import HomeCard, ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
+from .display import IMAGE_PROBE_TIMEOUT, probe_image
 
 _KIND = {"action": "建议", "panel": "面板", "report": "收件箱"}
 REPORTS_LISTED = 10  # 收件箱只列最近几条，免得把上下文撑大
@@ -39,14 +41,27 @@ async def create_panel(ctx: ToolContext, title: str, prompt: str, cron: str) -> 
           "title": {"type": "string", "description": "要做的事，几个字到一句，如“续费校园网”"},
           "reason": {"type": "string", "description": "为什么现在做，一两句具体事实，如“周五到期，今天续还有 9 折”"},
           "prompt": {"type": "string", "description": "用户点按钮后发给助手的完整指令，独立可执行（看不到当前对话），写明对象、网站、数量、价格上限等"},
-          "label": {"type": "string", "description": "按钮上的字，12 字以内，说清点了会做什么：帮我续费 / 起草回复 / 查航班；不给就是“去做”"}},
+          "label": {"type": "string", "description": "按钮上的字，12 字以内，说清点了会做什么：帮我续费 / 起草回复 / 查航班；不给就是“去做”"},
+          "image": {"type": "string", "description": "可选：卡顶配图，只用这件事本身页面上的真实图片地址（商品图、活动海报），不能自己拼；打不开会被去掉"},
+          "url": {"type": "string", "description": "可选：这件事的原页（商品页、邮件网页版、活动页），卡上显示“来源 · 域名”"}},
        "required": ["title", "prompt"]})
-async def offer_on_home(ctx: ToolContext, title: str, prompt: str, reason: str = "", label: str | None = None) -> ToolResult:
+async def offer_on_home(ctx: ToolContext, title: str, prompt: str, reason: str = "", label: str | None = None,
+                        image: str | None = None, url: str | None = None) -> ToolResult:
+    note = ""
     try:
-        card, status, retired = await home_offers.offer(ctx.db, title, reason, prompt, label)
+        image = home_offers.clean_url(image, "配图")
+    except ValueError:
+        image, note = None, " 配图地址不是真实网址，没放图。"
+    if image:
+        async with httpx.AsyncClient(timeout=IMAGE_PROBE_TIMEOUT, follow_redirects=True,
+                                     headers={"User-Agent": "Mozilla/5.0 (assistant image check)"}) as client:
+            if not await probe_image(client, image):
+                image, note = None, " 配图打不开（或不是图片），没放图。"
+    try:
+        card, status, retired = await home_offers.offer(ctx.db, title, reason, prompt, label, image=image, url=url)
     except ValueError as e:
         return ToolResult(str(e))
-    out = f"已{'更新' if status == 'updated' else '放到'} Home：「{card.title}」（id={card.id}），按钮“{card.action_label or '去做'}”。"
+    out = f"已{'更新' if status == 'updated' else '放到'} Home：「{card.title}」（id={card.id}），按钮“{card.action_label or '去做'}”。" + note
     if retired:
         out += " 建议太多，收起了较旧的：" + "、".join(f"「{c.title}」" for c in retired) + "。"
     return ToolResult(out)
@@ -59,6 +74,7 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
         s += f" · 刷新指令：{task.prompt[:80]}"
     elif card.kind == "action" and card.origin == home_offers.ORIGIN:
         s += f" · 你提议的 · 按钮“{card.action_label or '去做'}”" + (" · 未读" if card.unread else "")
+        s += (" · 有配图" if card.image_url else "") + (f" · 原页 {card.link_url[:80]}" if card.link_url else "")
         if card.conversation_id:
             s += " · 用户已点按钮开始做"
         if card.snoozed_until is not None:

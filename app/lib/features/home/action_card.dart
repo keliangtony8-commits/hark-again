@@ -5,12 +5,15 @@
 // 助手提议的卡（card.offered）：标题上方一行“可以替你做”，主按钮用卡上的字（actionText）。点了走 startOffer：
 // 服务端开新对话并记在卡上，App 打开它并发指令；卡留在主页变成“已交给助手”（card.started），主按钮“查看对话”回到那段，
 // 次按钮“收起”。系统提醒点“去做”直接把指令发进新对话（onDo），不收起（恢复后服务端自己收起）。
+// 建议卡可带配图（card.imageUrl：卡顶一张宽图，淡入）和原页（card.linkUrl：正文下“来源 · 域名 ↗”，点图也去原页）。
 // 映射只在 cardTargets 一处；不认识的值当没有（老 App 遇到新服务端不出错）。网页版 lib/cardTargets.ts 同一张表。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../blocks/block_view.dart';
+import '../../blocks/content_blocks.dart';
+import '../../core/links.dart';
 import '../../core/api.dart';
 import '../../core/resource.dart';
 import '../../models/resources.dart';
@@ -97,6 +100,7 @@ class ActionCard extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: Layout.cardGap),
       child: GlassCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (card.imageUrl != null) ...[OfferImage(card: card), const SizedBox(height: Sp.x3)],
           Row(children: [
             PopSwitcher(
               child: IconBadge(key: ValueKey(started), target?.icon ?? (started ? Icons.forum_rounded : Icons.auto_awesome_rounded)),
@@ -122,6 +126,7 @@ class ActionCard extends ConsumerWidget {
             ),
           ]),
           if (card.blocks.isNotEmpty) ...[const SizedBox(height: Sp.x3), BlockList(card.blocks)],
+          if (card.linkHost != null) ...[const SizedBox(height: Sp.x2), OfferSource(card: card)],
           const SizedBox(height: Sp.x4),
           Row(children: [
             for (var i = 0; i < buttons.length; i++) ...[
@@ -129,6 +134,47 @@ class ActionCard extends ConsumerWidget {
               Expanded(child: buttons[i]),
             ],
           ]),
+        ]),
+      ),
+    );
+  }
+}
+
+/// 建议卡顶部配图：宽图圆角，加载完淡入，打不开显示占位；有原页时点图去原页。
+class OfferImage extends StatelessWidget {
+  const OfferImage({super.key, required this.card});
+  final HomeCard card;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(Radii.tile),
+      child: AspectRatio(aspectRatio: Layout.offerImageRatio, child: NetImage(card.imageUrl!)),
+    );
+    final link = card.linkUrl;
+    return link == null
+        ? Semantics(image: true, label: card.title, child: image)
+        : Pressable(onTap: () => openUrl(link), semanticLabel: '打开原页 ${card.linkHost}', child: image);
+  }
+}
+
+/// 正文下一行“来源 · 域名 ↗”：安静的小字，点了用浏览器打开原页。
+class OfferSource extends StatelessWidget {
+  const OfferSource({super.key, required this.card});
+  final HomeCard card;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = context.text.labelSmall?.copyWith(color: context.palette.text3);
+    return Pressable(
+      onTap: () => openUrl(card.linkUrl!),
+      semanticLabel: '打开原页 ${card.linkHost}',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: A11y.minTap),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Flexible(child: Text('来源 · ${card.linkHost}', style: style, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: Sp.x1),
+          Icon(Icons.north_east_rounded, size: Fs.sm, color: context.palette.text3),
         ]),
       ),
     );

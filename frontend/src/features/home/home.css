@@ -33,6 +33,17 @@
 .report-row.unread .row-title { font-weight: var(--fw-title); }
 
 /* 稍后提醒：建议卡标题右边的小钮 + “为你准备”底部一行（展开列出，可现在放回） */
+/* 建议卡配图（2:1 宽图，淡入）+ 来源行 */
+.offer-img { display: block; aspect-ratio: 2 / 1; margin-bottom: var(--sp-3); border-radius: var(--r-tile); overflow: hidden; background: var(--tile); }
+.offer-img img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--dur-slow) var(--ease), transform var(--dur-slow) var(--ease); }
+.offer-img img.ok { opacity: 1; }
+a.offer-img:hover img.ok { transform: scale(1.02); }
+.offer-img-bad { display: grid; place-items: center; width: 100%; height: 100%; color: var(--text-3); }
+.offer-source { display: inline-flex; align-items: center; gap: var(--sp-1); min-height: 32px; font-size: var(--fs-xs); color: var(--text-3); text-decoration: none; }
+.offer-source:hover { color: var(--text-2); }
+.offer-source:hover svg { transform: translate(1px, -1px); }
+.offer-source svg { transition: transform var(--dur-fast) var(--ease); }
+@media (prefers-reduced-motion: reduce) { .offer-img img, .offer-source svg { transition: none; } }
 .action-card-head .menu { margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-2)) 0 0; }
 .action-card-head .menu-trigger { color: var(--text-3); }
 .snoozed { margin-top: calc(-1 * var(--sp-1)); }

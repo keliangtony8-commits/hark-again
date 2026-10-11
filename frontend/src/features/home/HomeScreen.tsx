@@ -16,6 +16,7 @@ import { Menu, Page, Section, Skeleton, stagger } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
+import { OfferImage, OfferSource } from "./OfferMedia";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
 
@@ -127,6 +128,7 @@ export default function HomeScreen() {
           const Icon = target?.Icon ?? (started ? IconChat : IconSpark);
           return (
             <div key={c.id} className="glass-card action-card enter" style={nth(i)}>
+              <OfferImage card={c} />
               <div className="action-card-head">
                 <span className="row-icon icon-pop" key={String(started)}><Icon /></span>
                 <div className="action-card-title">
@@ -136,6 +138,7 @@ export default function HomeScreen() {
                 <SnoozeMenu card={c} onSnooze={snooze} />
               </div>
               {c.blocks.length > 0 && <BlockRenderer blocks={c.blocks} />}
+              <OfferSource card={c} />
               {/* 等宽胶囊，最后一颗是主操作（实心） */}
               <div className="pills">
                 <button className="pill" onClick={() => dismiss(c)}>{started ? "收起" : "忽略"}</button>

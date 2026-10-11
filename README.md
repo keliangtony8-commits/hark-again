@@ -81,7 +81,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - credentials.py 按 URL 解析凭证：OAuth 连接优先，其次保险箱
 - browser_client.py 调云浏览器服务
 - pages_store.py 可分享网页（/p/<slug>/，带沙盒 CSP）；meta.source 记来源，find_by_source / wire
-- home_offers.py 助手提议的 Home 建议卡唯一入口（工具 offer_on_home：kind=action + origin=agent + action_label 按钮字 + action_prompt；同标题原地更新、重新未读、清稍后提醒；同时最多 MAX_LIVE=5 张，多了收起最旧的智能体建议，系统提醒不动；manage_home list 标“你提议的”/“用户已点按钮开始做”）；start() = 点主按钮开对话并链回卡上（routes/home.py POST /api/cards/{id}/start，v0.89，复用 conversation_id 列无迁移）。迁移 0020
+- home_offers.py 助手提议的 Home 建议卡唯一入口（工具 offer_on_home：kind=action + origin=agent + action_label 按钮字 + action_prompt；同标题原地更新、重新未读、清稍后提醒；同时最多 MAX_LIVE=5 张，多了收起最旧的智能体建议，系统提醒不动；manage_home list 标“你提议的”/“用户已点按钮开始做”）；start() = 点主按钮开对话并链回卡上（routes/home.py POST /api/cards/{id}/start，v0.89，复用 conversation_id 列无迁移）；v0.91 配图 image_url + 原页 link_url（clean_url 只收 http(s)；配图由工具用 display.probe_image 先探测，打不开就照放不带图；原页不合格拒卡）。迁移 0021
 - card_snooze.py Home 卡片“稍后提醒”唯一入口（check/snooze/on_patch 是 /api/cards PATCH 的 on_update 钩子；wake_due 由 worker 每轮叫醒到点的卡：清空 + 重新未读 + 顶到最前；wire 让 snoozed_until 总带时区；manage_home 的 snooze/unsnooze 也走它）
 - conversation_share.py 分享对话唯一入口（render 服务端渲染只读快照：Markdown 子集先转义再加标签、无脚本；share/unshare/state；source="conversation:<id>"，同一对话链接不变；load(db,cid) 带消息读对话；智能体工具 share_conversation（agent/builtin/pages.py，scope=conversation：ToolContext.conversation_id 有值才提供，“把这段对话分享给朋友”/“停止分享”）与客户端分享面板同一快照同一链接）
 - memory_digest.py “我对你的了解”：全部记忆 → 一段第二人称概括（单行表 memory_digest，id=me）。GET /api/memory-digest 零模型调用，只比指纹（每条记忆 id+updated_at 的哈希）报 stale；POST 才调一次 SUMMARY_MODEL（kind=digest，输入按 INPUT_CHARS 截断、profile 优先）；从不自动生成

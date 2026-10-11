@@ -80,7 +80,9 @@ export type TaskRun = { id: string; trigger: "schedule" | "manual"; status: "run
 export type HomeCard = { id: string; kind: "action" | "panel" | "report"; conversation_id: string | null; task_id: string | null; title: string; blocks: Block[]; action_prompt: string | null; target: string | null;
   /** 主按钮上的字，空 = “去做”；origin "agent" = 助手提议的卡：点主按钮 POST /api/cards/{id}/start，
    *  之后 conversation_id 指向开出来的对话（卡变成“已交给助手 · 查看对话”），见 backend app/home_offers.py */
-  action_label?: string | null; origin?: string | null; dismissed: boolean; unread: boolean; updated_at: string;
+  action_label?: string | null; origin?: string | null;
+  /** 建议卡卡顶配图 / 原页链接（只认 http(s)，见 features/home/OfferMedia.tsx）。旧服务器没有。 */
+  image_url?: string | null; link_url?: string | null; dismissed: boolean; unread: boolean; updated_at: string;
   /** 稍后提醒到这个时刻：非空就先不显示，到点服务端放回（清空 + 重新未读）。旧服务器没有这个字段。 */
   snoozed_until?: string | null };
 export type InboxItem = { id: string; kind: HomeCard["kind"]; title: string; conversation_id: string | null; created_at: string };

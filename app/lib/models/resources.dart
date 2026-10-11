@@ -202,6 +202,8 @@ class TaskRun {
   bool get manual => trigger == 'manual';
 }
 
+String? _webUrl(Object? v) => v is String && (v.startsWith('https://') || v.startsWith('http://')) ? v : null;
+
 class HomeCard {
   const HomeCard({
     required this.id,
@@ -214,6 +216,8 @@ class HomeCard {
     this.target,
     this.actionLabel,
     this.origin,
+    this.imageUrl,
+    this.linkUrl,
     required this.dismissed,
     this.unread = false,
     this.updatedAt,
@@ -230,6 +234,8 @@ class HomeCard {
     target: j['target'] as String?,
     actionLabel: j['action_label'] as String?,
     origin: j['origin'] as String?,
+    imageUrl: _webUrl(j['image_url']),
+    linkUrl: _webUrl(j['link_url']),
     dismissed: j['dismissed'] as bool? ?? false,
     unread: j['unread'] as bool? ?? false,
     updatedAt: _date(j['updated_at']),
@@ -252,6 +258,16 @@ class HomeCard {
   /// 助手提议的卡已被点过：服务端开了对话并记在卡上（POST /api/cards/{id}/start），卡变成“已交给助手 · 查看对话”。
   bool get started => offered && conversationId != null;
   String get actionText => (actionLabel ?? '').trim().isEmpty ? '去做' : actionLabel!.trim();
+
+  /// 建议卡的卡顶配图 / 原页链接（只认 http(s)，其余当没有）。
+  final String? imageUrl, linkUrl;
+
+  /// 原页的域名（去掉 www.），卡上写“来源 · 域名”；没有链接为 null。
+  String? get linkHost {
+    final h = linkUrl == null ? '' : (Uri.tryParse(linkUrl!)?.host ?? '');
+    return h.isEmpty ? null : (h.startsWith('www.') ? h.substring(4) : h);
+  }
+
   final bool dismissed, unread;
   final DateTime? updatedAt;
 

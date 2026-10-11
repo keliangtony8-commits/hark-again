@@ -146,6 +146,9 @@ class HomeCard(Base):
     # 主按钮上的字（空 = “去做”）；origin=agent 表示智能体提议的卡（规则见 app/home_offers.py），空 = 系统提醒/接口建的
     action_label: Mapped[str | None] = mapped_column(String(24), nullable=True)
     origin: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # 建议卡的配图（卡顶一张图）和原页链接（“来源 · 域名”）：都只收 http(s)，配图由工具先探测能打开才存（app/home_offers.py）
+    image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    link_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     dismissed: Mapped[bool] = mapped_column(default=False)
     # 未读：新报告/新建议为 True；用户打开对应对话（或点“全部已读”）后清掉。面板刷新不算新消息。
     unread: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

@@ -13,6 +13,8 @@
 - 同时在 Home 上的智能体建议最多 MAX_LIVE 张；再多就把最旧的一张收起（dismissed），系统提醒不算也不动。
 - 稍后提醒中的卡也算“在 Home 上”（同标题会被叫回来更新）。
 - 同标题重新提议 = 新的一件事：清掉旧的对话链接，按钮回到“可以替你做”。
+- 配图 image / 原页 url 可选，只收 http(s) 且 ≤ URL_MAX；不合格抛 ValueError。配图能不能打开由调用方（工具）先探测，
+  这里不联网。同标题重新提议时没给就清掉（新的一件事）。
 - 按钮字 ≤ LABEL_MAX；标题 ≤ TITLE_MAX；指令必须写（点了要能独立执行，看不到当前对话）。
 """
 from datetime import datetime, timezone
@@ -28,6 +30,16 @@ MAX_LIVE = 5
 LABEL_MAX = 12
 TITLE_MAX = 60
 REASON_MAX = 400
+URL_MAX = 1024
+
+
+def clean_url(v: str | None, what: str) -> str | None:
+    v = (v or "").strip()
+    if not v:
+        return None
+    if not v.lower().startswith(("http://", "https://")) or len(v) > URL_MAX or any(ch.isspace() for ch in v):
+        raise ValueError(f"{what}要是 http(s) 开头的真实网址（{URL_MAX} 字以内），不要自己拼。")
+    return v
 
 
 def _clean(title: str, reason: str, prompt: str, label: str | None) -> tuple[str, str, str, str | None]:
@@ -54,9 +66,10 @@ async def live(db: AsyncSession) -> list[HomeCard]:
 
 
 async def offer(db: AsyncSession, title: str, reason: str, prompt: str, label: str | None = None,
-                now: datetime | None = None) -> tuple[HomeCard, str, list[HomeCard]]:
+                now: datetime | None = None, image: str | None = None, url: str | None = None) -> tuple[HomeCard, str, list[HomeCard]]:
     """放一张建议卡；返回 (卡, "created"|"updated", 被挤下去的旧卡)。不合格抛 ValueError（中文，给模型看）。自己 commit。"""
     title, reason, prompt, label = _clean(title, reason, prompt, label)
+    image, url = clean_url(image, "配图"), clean_url(url, "原页链接")
     now = now or datetime.now(timezone.utc)
     cards = await live(db)
     card = next((c for c in cards if c.title == title), None)
@@ -66,6 +79,7 @@ async def offer(db: AsyncSession, title: str, reason: str, prompt: str, label: s
         db.add(card)
     card.blocks = text_to_blocks(reason) if reason else []
     card.action_prompt, card.action_label = prompt, label
+    card.image_url, card.link_url = image, url
     card.unread, card.snoozed_until, card.updated_at = True, None, now
     card.conversation_id = None
     retired = []

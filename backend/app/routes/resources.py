@@ -75,6 +75,8 @@ class CardIn(BaseModel):
     action_prompt: str | None = None
     target: str | None = None  # 客户端固定去处，如 "usage"
     action_label: str | None = Field(None, max_length=24)  # 主按钮上的字，空 = “去做”
+    image_url: str | None = Field(None, max_length=1024, pattern=r"^https?://")  # 卡顶配图
+    link_url: str | None = Field(None, max_length=1024, pattern=r"^https?://")  # 原页链接
     unread: bool = True  # 经接口新建的卡（主动建议）默认未读
 
 
