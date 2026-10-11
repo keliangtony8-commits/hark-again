@@ -188,6 +188,14 @@ Map<String, dynamic> _usage() {
   };
 }
 
+/// 今天“现在 + d”那一刻的每日 cron（跨日就贴在当天边上），让“今天”日程的状态不随跑截图的时刻变。
+String _cronAt(Duration d) {
+  final now = DateTime.now();
+  var t = now.add(d);
+  if (t.day != now.day) t = d.isNegative ? DateTime(now.year, now.month, now.day) : DateTime(now.year, now.month, now.day, 23, 59);
+  return '${t.minute} ${t.hour} * * *';
+}
+
 String _ago(Duration d) => DateTime.now().subtract(d).toUtc().toIso8601String();
 
 class _Api implements Api {
@@ -285,12 +293,19 @@ class _Api implements Api {
       ];
     }
     if (path == '/api/tasks') {
-      // v1.00：一条正常、一条连续失败被自动暂停（进“需要留意”组）、一条手动停
+      // v1.00 任务页：正常 / 连续失败被自动暂停（进“需要留意”组）/ 手动停。
+      // v1.02 主页“今天”：时刻相对现在排（截图随时跑都有 已完成 → 失败 → 下一个 → 已暂停 → 稍后）。
       return [
-        {'id': 't1', 'name': '早间简报', 'prompt': '', 'cron': '0 8 * * *', 'active': true, 'output': 'report',
-         'last_run_at': _ago(const Duration(hours: 3)), 'last_status': 'ok'},
-        {'id': 't2', 'name': '考研倒计时面板', 'prompt': '', 'cron': '0 7 * * *', 'active': false, 'output': 'panel',
-         'last_run_at': _ago(const Duration(hours: 4)), 'last_status': 'error', 'fail_streak': 3, 'paused_reason': 'failures'},
+        {'id': 't1', 'name': '早间简报', 'prompt': '', 'cron': _cronAt(const Duration(hours: -3)), 'active': true, 'output': 'report',
+         'last_run_at': _ago(const Duration(hours: 2, minutes: 59)), 'last_status': 'ok'},
+        {'id': 't4', 'name': '背单词提醒', 'prompt': '', 'cron': _cronAt(const Duration(hours: -1)), 'active': true, 'output': 'report',
+         'last_run_at': _ago(const Duration(minutes: 59)), 'last_status': 'error', 'fail_streak': 1},
+        {'id': 't5', 'name': '图书馆抢座', 'prompt': '', 'cron': _cronAt(const Duration(hours: 1)), 'active': true, 'output': 'report'},
+        {'id': 't2', 'name': '周报整理', 'prompt': '', 'cron': _cronAt(const Duration(hours: 2)), 'active': false, 'output': 'report',
+         'last_run_at': _ago(const Duration(days: 1)), 'last_status': 'error', 'fail_streak': 3, 'paused_reason': 'failures'},
+        {'id': 't6', 'name': '考研倒计时面板', 'prompt': '', 'cron': '0 * * * *', 'active': true, 'output': 'panel',
+         'last_run_at': _ago(const Duration(minutes: 20)), 'last_status': 'ok'},
+        {'id': 't7', 'name': '查明天天气', 'prompt': '', 'cron': _cronAt(const Duration(hours: 5)), 'active': true, 'output': 'report'},
         {'id': 't3', 'name': '晚间复盘', 'prompt': '', 'cron': '0 21 * * *', 'active': false, 'output': 'report'},
       ];
     }
@@ -422,6 +437,8 @@ void main() {
       await _shot(tester, '$mode-home');
       await tester.dragFrom(const Offset(200, 600), const Offset(0, -1000)); // 往下翻：后几张建议卡（含“需要你亲自处理”）
       await _shot(tester, '$mode-home-end');
+      await tester.dragFrom(const Offset(200, 600), const Offset(0, -3000)); // 翻到底：“今天”日程（v1.02）
+      await _shot(tester, '$mode-home-today');
       await tester.dragFrom(const Offset(200, 300), const Offset(0, 3000));
       await tester.pump(const Duration(seconds: 1));
       await tester.tap(find.byType(TextField)); // 底部输入胶囊聚焦：磨砂 + 收起钮 + 建议

@@ -99,7 +99,18 @@ void main() {
     expect(pushed, ['/me/tasks']);
   });
 
-  testWidgets('行：钟点、过去变淡、点行进详情', (tester) async {
+  test('只有跑完的变淡，失败的不淡（警示字要看得见）', () {
+    final today = DateTime.now();
+    final noon = DateTime(today.year, today.month, today.day, 12);
+    final items = todayAgenda([
+      task('a', '0 8 * * *', last: 'ok', lastRun: DateTime(today.year, today.month, today.day, 8, 1)),
+      task('b', '0 9 * * *', last: 'error', lastRun: DateTime(today.year, today.month, today.day, 9, 1)),
+    ], noon);
+    expect(items.map((i) => i.state), [AgendaState.done, AgendaState.failed]);
+    expect(items.map((i) => i.faded), [true, false]);
+  });
+
+  testWidgets('行：钟点、跑完变淡、点行进详情', (tester) async {
     // 用真实“现在”：一件昨天就该跑过的（今天 00:00，已跑）+ 一件今天 23:59 的
     final today = DateTime.now();
     final pushed = await pumpToday(tester, [

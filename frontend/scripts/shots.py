@@ -48,15 +48,24 @@ FIXTURES = {
          "blocks": [TEXT("**今天** 有两节课，下午 3 点交实验报告。")], "action_prompt": None, "target": None,
          "dismissed": False, "unread": True, "updated_at": NOW},
     ],
+    # 时钟固定 10:30（Asia/Shanghai，周日）：主页“今天”= 已完成 08:00 → 失败 09:00 → 下一个 11:30 → 已暂停 14:00 → 稍后 21:00（v1.02）；
+    # 任务页同一批：自动暂停进“需要留意”、手动停的变淡、面板不进日程。
     "/api/tasks": [
         {"id": "t2", "name": "早间简报", "prompt": "", "cron": "0 8 * * *", "active": True, "output": "report",
-         "run_requested": False, "last_run_at": NOW, "last_status": "ok", "next_run_at": None},
+         "run_requested": False, "last_run_at": "2026-10-11T00:00:20Z", "last_status": "ok", "next_run_at": None},
+        {"id": "t5", "name": "背单词提醒", "prompt": "", "cron": "0 9 * * *", "active": True, "output": "report",
+         "run_requested": False, "last_run_at": "2026-10-11T01:00:30Z", "last_status": "error", "next_run_at": None, "fail_streak": 1},
+        {"id": "t6", "name": "图书馆抢座", "prompt": "", "cron": "30 11 * * *", "active": True, "output": "report",
+         "run_requested": False, "last_run_at": None, "last_status": None, "next_run_at": None},
+        {"id": "t4", "name": "周报整理", "prompt": "", "cron": "0 14 * * *", "active": False, "output": "report",
+         "run_requested": False, "last_run_at": "2026-10-10T06:00:00Z", "last_status": "error", "next_run_at": None,
+         "fail_streak": 3, "paused_reason": "failures"},
         {"id": "t3", "name": "晚间复盘", "prompt": "", "cron": "0 21 * * *", "active": True, "output": "report",
          "run_requested": False, "last_run_at": None, "last_status": None, "next_run_at": None},
-        # v1.00：连续失败被自动暂停的任务（进“需要留意”组）
-        {"id": "t4", "name": "考研倒计时面板", "prompt": "", "cron": "0 7 * * *", "active": False, "output": "panel",
-         "run_requested": False, "last_run_at": NOW, "last_status": "error", "next_run_at": None,
-         "fail_streak": 3, "paused_reason": "failures"},
+        {"id": "t7", "name": "考研倒计时面板", "prompt": "", "cron": "0 7 * * *", "active": True, "output": "panel",
+         "run_requested": False, "last_run_at": "2026-10-10T23:00:00Z", "last_status": "ok", "next_run_at": None},
+        {"id": "t8", "name": "健身打卡", "prompt": "", "cron": "0 19 * * *", "active": False, "output": "report",
+         "run_requested": False, "last_run_at": None, "last_status": None, "next_run_at": None},
     ],
     "/api/projects": [
         {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW,
@@ -107,7 +116,17 @@ FIXTURES = {
     "/api/conversations/c1/usage": {"currency": "CNY", "priced": ["fast"], "total": {"calls": 4, "tokens": 5200, "cost": 0.012, "models": []}},
     "/api/usage": {"currency": "CNY", "budget": 30, "priced": ["fast"],
                    "today": {"calls": 18, "tokens": 42000, "cost": 0.41, "models": []},
-                   "month": {"calls": 520, "tokens": 1250000, "cost": 24.6, "models": []}},
+                   "month": {"calls": 520, "tokens": 1250000, "cost": 24.6, "models": [
+                       {"model": "smart", "calls": 120, "prompt_tokens": 520000, "completion_tokens": 130000, "cost": 17.2},
+                       {"model": "fast", "calls": 400, "prompt_tokens": 480000, "completion_tokens": 120000, "cost": 7.4}]},
+                   # v1.02：和 App 截图同一套“有数据的一个月”——每日图、最花钱的对话、上月同期（之前只有总数，下半页空着没法对照）
+                   "daily": [{"date": f"2026-10-{d:02d}", "cost": c, "tokens": int(c * 50000), "calls": int(c * 21)}
+                             for d, c in zip(range(1, 11), [1.8, 2.8, 1.2, 3.6, 2.2, 0.6, 0.4, 3.2, 2.4, 4.2])]
+                            + [{"date": "2026-10-11", "cost": 0.41, "tokens": 42000, "calls": 18}],  # 今天 = today 合计
+                   "conversations": [{"id": "c1", "title": "DeepSeek 和 GPT 的价格对比", "calls": 58, "tokens": 420000, "cost": 6.1},
+                                     {"id": "c2", "title": "周末去杭州的安排", "calls": 31, "tokens": 260000, "cost": 3.8},
+                                     {"id": "c9", "title": None, "calls": 12, "tokens": 90000, "cost": 1.2}],
+                   "last_month": {"calls": 610, "tokens": 1500000, "cost": 28.0, "to_date": {"calls": 240, "tokens": 700000, "cost": 11.0}}},
     # 子页面（v0.52：桌面子页/弹层也要和一级页面同一套玻璃框架）
     "/api/auth/me": {"username": "keliang"},
     "/api/memories": [
@@ -132,7 +151,7 @@ FIXTURES = {
     ],
     "/api/vault": [
         {"id": "v1", "kind": "api_key", "name": "DeepSeek", "username": None, "hosts": ["api.deepseek.com"], "header_name": "Authorization",
-         "header_prefix": "Bearer ", "preview": "sk-…a3f9", "created_at": NOW},
+         "header_prefix": "Bearer ", "preview": "a3f9", "created_at": NOW},
     ],
     "/api/pages": [
         {"id": "pg1", "slug": "trip", "title": "日本旅行计划", "url": "https://example.com/p/trip", "updated": 1791680000, "published": True},
@@ -171,6 +190,12 @@ def api(route):
     path = "/" + path.split("?", 1)[0]
     if path.startswith("/api/conversations/") and path.endswith("/usage"):
         path = "/api/conversations/c1/usage"  # 每个对话的用量都用同一份（缺了标题栏用量会读空）
+    if path.startswith("/api/usage/days/"):  # 每日图默认选中今天 → 那天的明细（缺了 total 页面会白屏）
+        body = {"currency": "CNY", "priced": ["fast"], "date": path.rsplit("/", 1)[1],
+                "total": {"calls": 18, "tokens": 42000, "cost": 0.41, "models": [
+                    {"model": "fast", "calls": 18, "prompt_tokens": 34000, "completion_tokens": 8000, "cost": 0.41}]},
+                "conversations": [{"id": "c1", "title": "DeepSeek 和 GPT 的价格对比", "calls": 9, "tokens": 21000, "cost": 0.22}]}
+        return route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
     body = FIXTURES.get(path, [] if route.request.method == "GET" else {})
     route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
@@ -186,6 +211,7 @@ def main():
                                           timezone_id="Asia/Shanghai", locale="zh-CN", color_scheme=theme)
                 ctx.add_init_script(f"localStorage.setItem('assistant.token','shot');localStorage.setItem('assistant.server','{base}');")
                 page = ctx.new_page()
+                page.on("pageerror", lambda e: print("PAGE ERROR:", e))  # 页面崩了（白屏）时把原因打出来
                 page.clock.set_fixed_time(NOW)
                 page.route("**/api/**", api)
                 page.route("https://img.example.com/**", image)

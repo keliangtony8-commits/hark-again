@@ -221,7 +221,7 @@ export default function HomeScreen() {
               const problem = agendaProblem(it);
               const hint = agendaHint(it);
               return (
-                <Link key={it.task.id} to={`/me/tasks/${it.task.id}`} className={`row today-row enter ${it.past ? "row-off" : ""} ${it.state === "next" ? "today-next" : ""}`} style={nth(i + 1)}>
+                <Link key={it.task.id} to={`/me/tasks/${it.task.id}`} className={`row today-row enter ${it.faded ? "row-off" : ""} ${it.state === "next" ? "today-next" : ""}`} style={nth(i + 1)}>
                   <span className="today-time">{it.time}</span>
                   <div className="row-body"><div className="row-title">{it.task.name}</div>
                     <div className="row-sub">{problem && <><span className="row-problem">{problem}</span> · </>}{agendaDetail(it)}</div></div>

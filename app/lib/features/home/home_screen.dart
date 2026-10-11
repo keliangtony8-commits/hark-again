@@ -165,7 +165,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 /// “今天”：今天排着的任务按钟点一行一件（today_agenda.dart 定规则）。行首等宽钟点列，下一个用正文色加粗、
-/// 过去的整行变淡；失败/暂停只把那两个字染警示色；点行进任务详情。没有任务时一行引导去定时任务页。
+/// 跑完的整行变淡（失败不淡）；失败/暂停只把那两个字染警示色；点行进任务详情。没有任务时一行引导去定时任务页。
 class TodaySection extends StatelessWidget {
   const TodaySection({super.key, required this.tasks, required this.loading});
   final List<ScheduledTask> tasks;
@@ -207,7 +207,7 @@ class _AgendaRow extends StatelessWidget {
     final next = item.state == AgendaState.next;
     final hint = agendaHint(item);
     return Dimmed(
-      dimmed: item.past,
+      dimmed: item.faded,
       child: RowTile(
         leading: SizedBox(
           width: Layout.agendaTime,

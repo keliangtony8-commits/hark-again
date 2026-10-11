@@ -5,7 +5,7 @@ import type { ScheduledTask } from "../../lib/types";
 import { autoPaused } from "../../lib/taskLabels";
 
 export type AgendaState = "done" | "failed" | "running" | "next" | "later" | "paused";
-export type AgendaItem = { task: ScheduledTask; at: Date; state: AgendaState; time: string; past: boolean };
+export type AgendaItem = { task: ScheduledTask; at: Date; state: AgendaState; time: string; faded: boolean };
 
 const two = (n: number) => String(n).padStart(2, "0");
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
@@ -35,7 +35,7 @@ export function todayAgenda(tasks: ScheduledTask[], now = new Date()): AgendaIte
       nextGiven = true;
       return "next";
     })();
-    return { task: t, at, state, time: `${two(at.getHours())}:${two(at.getMinutes())}`, past: state === "done" || state === "failed" };
+    return { task: t, at, state, time: `${two(at.getHours())}:${two(at.getMinutes())}`, faded: state === "done" }; // 失败不变淡：警示字要看得见
   });
 }
 

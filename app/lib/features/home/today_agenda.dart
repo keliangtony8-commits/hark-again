@@ -16,8 +16,8 @@ class AgendaItem {
 
   String get time => '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
 
-  /// 已经过去的一项（完成/失败）：行变淡，让还没发生的更显眼。
-  bool get past => state == AgendaState.done || state == AgendaState.failed;
+  /// 顺利跑完的一项：行变淡，让还没发生的更显眼。失败不变淡——淡掉的警示字发灰发脏，又正是要人看见的（v1.02 截图）。
+  bool get faded => state == AgendaState.done;
 }
 
 /// 今天这条任务排在几点：一次性任务 = 计划时刻正好在今天；重复任务 = cron 今天的时刻。不在今天 = null。
