@@ -83,7 +83,7 @@ function Field({ field, login, value, onChange, shown, onShow, autoFocus, inputR
       <span>{field.label}{field.optional && <em>（选填）</em>}</span>
       <div className="blk-form-input">
         {kind === "multiline" ? (
-          <textarea name={field.name} value={value} rows={2} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
+          <textarea name={field.name} value={value} rows={1} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
         ) : (
         <input ref={inputRef} name={field.name} value={value} autoFocus={autoFocus} spellCheck={false} autoCapitalize="off"
           type={secret && !shown ? "password" : kind === "email" ? "email" : kind === "phone" ? "tel" : "text"}

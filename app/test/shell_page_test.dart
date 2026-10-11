@@ -23,6 +23,21 @@ void main() {
     expect(clear, lessThan(top + Layout.shellTop));
   });
 
+  test('让位线下再缓入渐显一段（不切硬边），且不超过聊天列表顶部留白', () {
+    const inset = 100.0;
+    expect(ShellPage.fadeSolidOf(inset), inset + Layout.topFadeRamp);
+    expect(Layout.topFadeRamp, lessThanOrEqualTo(Sp.x4));
+    expect(TopFade.alphaAt(0), 0);
+    expect(TopFade.alphaAt(1), 1);
+    var last = -1.0;
+    for (final x in TopFade.ramp) {
+      final a = TopFade.alphaAt(x);
+      expect(a, greaterThan(last));
+      last = a;
+    }
+    expect(TopFade.alphaAt(0.2), lessThan(0.2)); // 缓入：开头比线性更淡
+  });
+
   testWidgets('只渐隐页面内容，标题和左侧按钮不受影响', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);

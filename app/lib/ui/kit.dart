@@ -460,12 +460,17 @@ class FoldedBox extends StatelessWidget {
 }
 
 /// 内容从浮动顶栏下面滚过时的上沿渐隐：[clear] 以上完全透明（露出壁纸，不和顶栏/标题叠字），
-/// 到 [solid] 渐变成全显。只改透明度、不画颜色，所以和任何壁纸/深浅色都对得上。一级页面外框（ShellPage）用它。
+/// 到 [solid] 按缓入曲线渐变成全显（线性渐变在深色墨气泡上会显出一道硬边，v0.92 修）。
+/// 只改透明度、不画颜色，所以和任何壁纸/深浅色都对得上。一级页面外框（ShellPage）用它。
 class TopFade extends StatelessWidget {
   const TopFade({super.key, required this.clear, required this.solid, required this.child});
   final double clear;
   final double solid;
   final Widget child;
+
+  /// 渐变的采样点（0..1 在 clear→solid 之间）和对应透明度：easeInOut 采样，头尾都柔。
+  static const ramp = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0];
+  static double alphaAt(double x) => Curves.easeInOut.transform(x.clamp(0.0, 1.0));
 
   @override
   Widget build(BuildContext context) {
@@ -479,8 +484,8 @@ class TopFade extends StatelessWidget {
         return LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [ink.withValues(alpha: 0), ink.withValues(alpha: 0), ink, ink],
-          stops: [0, a, b, 1],
+          colors: [ink.withValues(alpha: 0), for (final x in ramp) ink.withValues(alpha: alphaAt(x)), ink],
+          stops: [0, for (final x in ramp) a + (b - a) * x, 1],
         ).createShader(r);
       },
       child: child,

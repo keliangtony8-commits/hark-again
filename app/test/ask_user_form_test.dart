@@ -67,6 +67,9 @@ void main() {
     expect(phone.keyboardType, TextInputType.phone);
     final note = tester.widget<TextField>(find.widgetWithText(TextField, '备注（选填）'));
     expect(note.maxLines, 4);
+    expect(note.minLines, 1); // v0.92：多行框从一行起，边写边长
+    expect(note.decoration!.isDense, isTrue); // 卡片里用紧凑输入框（compactField）
+    expect(phone.decoration!.isDense, isTrue);
 
     await tester.tap(find.widgetWithText(ChoiceChip, '4 位'));
     await tester.pump();

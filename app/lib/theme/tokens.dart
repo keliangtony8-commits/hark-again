@@ -258,6 +258,7 @@ abstract final class Layout {
   static const rowMin = 56.0, rowMinTwoLine = 64.0; // 列表行高：单行 / 带副标题
   static const topBarTop = Sp.x2; // 顶栏离状态栏的距离
   static const shellTop = topBarTop + topBar + Sp.x3; // 一级页面内容要让出的顶部高度（不含状态栏）= 顶栏 + 12
+  static const topFadeRamp = Sp.x4; // 让位线下面再渐显这么高（缓入），滚上去的深色气泡不再在标题下切出硬边；≤ 聊天列表顶部留白
   static const avatarLarge = 72.0; // “我的”页头的大头像
   static const wheel = 200.0; // 头像色轮直径
   static const segmentsMax = 320.0; // 分段导航最宽多宽（平板上不拉满）

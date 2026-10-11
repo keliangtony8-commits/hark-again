@@ -189,6 +189,10 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-form.submitted .blk-form-state { color: var(--text-2); }
 .blk-form-body { display: flex; flex-direction: column; gap: var(--sp-2); }
 .blk-form-field { margin-bottom: 0; }
+/* 卡片里的紧凑输入框（v0.92，与 App theme/field_border.dart compactField 同义）：小号标签、收紧内边距，
+   多行框从一行起、边写边长到 4 行，五六项的表单不再占满一屏。标签包在 <label> 里，所以 ui.css 的 .form-field > span 管不到这里。 */
+.blk-form-field > label > span { display: block; font-size: var(--fs-xs); font-weight: var(--fw-body); color: var(--text-2); margin-bottom: var(--sp-1); }
+.blk-form-field input, .blk-form-field textarea { padding: var(--sp-2) var(--sp-3); }
 .blk-form-input { position: relative; }
 .blk-form-input input { padding-right: 44px; }
 .blk-form-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; display: grid; place-items: center;
@@ -199,7 +203,7 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-form-note { display: flex; align-items: center; gap: var(--sp-1); margin: 0; font-size: var(--fs-xs); color: var(--text-3); }
 .blk-form-title small.blk-form-why { white-space: normal; }
 .blk-form-field > label > span em { font-style: normal; color: var(--text-3); font-weight: var(--fw-body); }
-.blk-form-input textarea { min-height: 64px; }
+.blk-form-input textarea { min-height: 0; field-sizing: content; max-height: calc(4lh + 2 * var(--sp-2)); resize: none; }
 .blk-form-options { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
 .blk-form-option { height: 32px; padding: 0 var(--sp-3); font-size: var(--fs-sm); cursor: pointer; border: 0;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--spring); }

@@ -5,6 +5,17 @@
 // “填充式”排版：标签浮在填充块里面、内容下移让位。
 import 'package:flutter/material.dart';
 
+import 'tokens.dart';
+
+/// 卡片里的紧凑输入框（聊天表单卡）：外形同主题的 FieldBorder，只是 isDense + 上下内边距收紧，
+/// 一张五六项的表单在手机上不再占满一屏（v0.92）。弹层/整页表单仍用主题默认的宽松版。
+InputDecoration compactField({String? label, Widget? suffix}) => InputDecoration(
+      labelText: label,
+      suffixIcon: suffix,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
+    );
+
 class FieldBorder extends InputBorder {
   const FieldBorder({required this.radius, super.borderSide = BorderSide.none});
 

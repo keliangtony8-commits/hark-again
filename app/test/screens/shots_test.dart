@@ -212,6 +212,8 @@ class _Api implements Api {
           'origin': 'agent',
           'action_label': '帮我订座',
           'action_prompt': '帮我约明早 8 点图书馆四楼靠窗的座位',
+          'image_url': _offerImage,
+          'link_url': 'https://www.seat.lib.example.edu/floor/4',
           'title': '明早图书馆四楼靠窗还有空位',
           'blocks': [
             {'type': 'text', 'text': '8:00 开放预约，靠窗那排还剩 6 个。'}
@@ -304,6 +306,31 @@ class _Api implements Api {
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError();
 }
 
+/// 建议卡配图：测试里网络图片拿不到（400 → 坏图占位），先把一张画出来的图塞进图片缓存，
+/// 键和 Image.network 用的 NetworkImage(url) 相同，NetImage 就直接拿到它。
+const _offerImage = 'https://img.example.com/library-window.jpg';
+
+Future<void> _seedImage(String url) async {
+  const w = 800, h = 400;
+  final rec = ui.PictureRecorder();
+  final c = Canvas(rec);
+  final rect = Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble());
+  c.drawRect(rect, Paint()..shader = ui.Gradient.linear(Offset.zero, const Offset(0, 400), const [Color(0xFFF3E3C8), Color(0xFFC9A27A)]));
+  final frame = Paint()..color = const Color(0xFF6B4E37);
+  for (var i = 0; i < 3; i++) {
+    final x = 70.0 + i * 230;
+    c.drawRect(Rect.fromLTWH(x, 50, 200, 230), frame);
+    c.drawRect(Rect.fromLTWH(x + 10, 60, 180, 210), Paint()..shader = ui.Gradient.linear(Offset(x, 60), Offset(x, 270), const [Color(0xFFDDEBF2), Color(0xFFA9C7D8)]));
+    c.drawRect(Rect.fromLTWH(x + 97, 60, 6, 210), frame);
+  }
+  c.drawRect(const Rect.fromLTWH(0, 300, 800, 26), Paint()..color = const Color(0xFF8A6446));
+  final image = await rec.endRecording().toImage(w, h);
+  PaintingBinding.instance.imageCache.putIfAbsent(
+    NetworkImage(url),
+    () => OneFrameImageStreamCompleter(Future.value(ImageInfo(image: image))),
+  );
+}
+
 Future<void> _loadFonts() async {
   Future<void> load(String family, String path) async {
     final f = File(path);
@@ -336,6 +363,7 @@ Future<void> _shot(WidgetTester tester, String name) async {
 void main() {
   testWidgets('设计 v2 截图', skip: !_on, (tester) async {
     await tester.runAsync(_loadFonts);
+    await tester.runAsync(() => _seedImage(_offerImage));
     tester.view.physicalSize = const Size(1080, 2340);
     tester.view.devicePixelRatio = 2.625;
     tester.view.padding = const FakeViewPadding(top: 63, bottom: 42);

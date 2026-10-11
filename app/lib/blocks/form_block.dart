@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../models/block.dart';
 import '../theme/app_theme.dart';
+import '../theme/field_border.dart';
 import '../theme/tokens.dart';
 import '../ui/glass.dart';
 import '../ui/kit.dart';
@@ -165,6 +166,7 @@ class _FormBlockViewState extends State<FormBlockView> {
               label: Text(o),
               selected: ctl.text.trim() == o,
               showCheckmark: false,
+              visualDensity: VisualDensity.compact,
               onSelected: (_) => ctl.value = TextEditingValue(text: o, selection: TextSelection.collapsed(offset: o.length)),
             ),
         ]),
@@ -178,7 +180,7 @@ class _FormBlockViewState extends State<FormBlockView> {
     final shown = _revealed.contains(f.name);
     return TextField(
       controller: _ctl[f.name],
-      minLines: multiline ? 2 : 1,
+      minLines: 1, // 多行也从一行起，边写边长到 4 行（v0.92 表单变矮）
       maxLines: multiline ? 4 : 1,
       obscureText: secret && !shown,
       enableSuggestions: !secret,
@@ -199,11 +201,12 @@ class _FormBlockViewState extends State<FormBlockView> {
       },
       textInputAction: multiline ? TextInputAction.newline : (isLast ? TextInputAction.done : TextInputAction.next),
       onSubmitted: isLast && !multiline ? (_) => _reply(true) : null,
-      decoration: InputDecoration(
-        labelText: f.optional ? '${f.label}（选填）' : f.label,
-        suffixIcon: secret
+      decoration: compactField(
+        label: f.optional ? '${f.label}（选填）' : f.label,
+        suffix: secret
             ? IconButton(
                 tooltip: shown ? '隐藏密码' : '显示密码',
+                visualDensity: VisualDensity.compact,
                 icon: Icon(shown ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: QuietAction.iconSize),
                 onPressed: () => setState(() => shown ? _revealed.remove(f.name) : _revealed.add(f.name)),
               )

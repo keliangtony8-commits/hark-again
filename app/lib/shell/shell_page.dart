@@ -3,7 +3,8 @@
 // 内容可以从顶栏下面滚过去（被玻璃模糊），而不是被一块实心色挡住。
 // header：紧贴顶栏下面的一行（主聊天的标题），高度固定为 headerHeight，同样计入让位。
 // 滚上去的内容在让位线上方渐隐（TopFade）：顶栏是悬浮胶囊、两边是空的，不渐隐的话消息会和
-//   头像、标题叠在一起（v0.80 修：聊天标题“额度”和滚上去的消息叠字）。有 header 时整行 header 下面才开始显。
+//   头像、标题叠在一起（v0.80 修：聊天标题“额度”和滚上去的消息叠字）。有 header 时整行 header 下面才开始显，
+//   到让位线下 Layout.topFadeRamp 才全显（缓入，v0.92：墨色气泡不再切出硬边）。
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
@@ -28,6 +29,9 @@ class ShellPage extends StatelessWidget {
   static double fadeClearOf(double top, double headerHeight) =>
       top + (headerHeight > 0 ? _headerTop + headerHeight : Layout.topBarTop + Layout.topBar / 2);
 
+  /// 内容从哪一行起完全显出来：让位线 [inset] 再往下 [Layout.topFadeRamp]（缓入渐显，不切硬边）。
+  static double fadeSolidOf(double inset) => inset + Layout.topFadeRamp;
+
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
@@ -37,7 +41,7 @@ class ShellPage extends StatelessWidget {
     return Stack(children: [
       TopFade(
         clear: fadeClearOf(top, header == null ? 0 : headerHeight),
-        solid: inset,
+        solid: fadeSolidOf(inset),
         child: MediaQuery(
           data: mq.copyWith(padding: mq.padding.copyWith(top: inset)),
           child: child,

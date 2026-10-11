@@ -31,7 +31,8 @@ FIXTURES = {
         # v0.85/v0.89：助手提议的建议卡，一张待点、一张已交给助手
         {"id": "k3", "kind": "action", "origin": "agent", "action_label": "帮我订座", "conversation_id": None, "task_id": None,
          "title": "明早图书馆四楼靠窗还有空位", "blocks": [TEXT("8:00 开放预约，靠窗那排还剩 6 个。")],
-         "action_prompt": "帮我约明早 8 点图书馆四楼靠窗的座位", "target": None, "dismissed": False, "unread": True, "updated_at": NOW},
+         "action_prompt": "帮我约明早 8 点图书馆四楼靠窗的座位", "target": None,
+         "image_url": "https://img.example.com/library-window.svg", "link_url": "https://www.seat.lib.example.edu/floor/4", "dismissed": False, "unread": True, "updated_at": NOW},
         {"id": "k4", "kind": "action", "origin": "agent", "action_label": "整理笔记", "conversation_id": "c1", "task_id": None,
          "title": "这周的高数笔记可以整理成提纲", "blocks": [TEXT("周五小测前过一遍，大约 10 分钟。")],
          "action_prompt": "把这周的高数笔记整理成一页提纲", "target": None, "dismissed": False, "unread": False, "updated_at": NOW},
@@ -140,6 +141,23 @@ def serve() -> str:
     return f"http://127.0.0.1:{srv.server_port}"
 
 
+# 建议卡配图：外网图片在截图里拿不到，这里画一张同款“图书馆窗户”矢量图应答（和 App shots_test 的 _seedImage 一致）。
+OFFER_IMAGE = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400">'
+    '<defs><linearGradient id="w" x2="0" y2="1"><stop offset="0" stop-color="#F3E3C8"/><stop offset="1" stop-color="#C9A27A"/></linearGradient>'
+    '<linearGradient id="g" x2="0" y2="1"><stop offset="0" stop-color="#DDEBF2"/><stop offset="1" stop-color="#A9C7D8"/></linearGradient></defs>'
+    '<rect width="800" height="400" fill="url(#w)"/>'
+    + "".join(f'<rect x="{70 + i * 230}" y="50" width="200" height="230" fill="#6B4E37"/>'
+              f'<rect x="{80 + i * 230}" y="60" width="180" height="210" fill="url(#g)"/>'
+              f'<rect x="{167 + i * 230}" y="60" width="6" height="210" fill="#6B4E37"/>' for i in range(3))
+    + '<rect y="300" width="800" height="26" fill="#8A6446"/></svg>'
+)
+
+
+def image(route):
+    route.fulfill(status=200, content_type="image/svg+xml", body=OFFER_IMAGE)
+
+
 def api(route):
     path = route.request.url.split("://", 1)[1].split("/", 1)[1]
     path = "/" + path.split("?", 1)[0]
@@ -162,6 +180,7 @@ def main():
                 page = ctx.new_page()
                 page.clock.set_fixed_time(NOW)
                 page.route("**/api/**", api)
+                page.route("https://img.example.com/**", image)
                 page.route_web_socket("**/ws**", lambda ws: None)
                 shots = [("home", "/#/"), ("projects", "/#/projects"), ("me", "/#/me"), ("usage", "/#/me/usage"), ("project-chat", "/#/projects/pr1")]
                 for shot, url in shots:
