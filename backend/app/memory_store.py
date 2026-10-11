@@ -65,3 +65,61 @@ async def find_similar(db: AsyncSession, content: str) -> tuple[Memory | None, l
     await _backfill(db, mems)
     best = max(mems, key=lambda m: _cos(vec, m.embedding), default=None)
     return (best if best and _cos(vec, best.embedding) >= DUPLICATE else None), vec
+
+
+# ---- 按条引用与写入：工具（agent/builtin/memory.py）只调这里，聊天里的“记忆卡”也从这里出 ----
+# 上下文里每条记忆带一个短引用（id 前 REF_LEN 位），模型改/删时传引用，不用再靠关键词猜。
+REF_LEN = 8
+
+
+def ref(m: Memory) -> str:
+    return m.id[:REF_LEN]
+
+
+def context_line(m: Memory) -> str:
+    return f"- [{m.category}] {m.content} (#{ref(m)})"
+
+
+async def resolve(db: AsyncSession, refs: list[str]) -> tuple[list[Memory], list[str]]:
+    """短引用 → 记忆。返回 (找到的, 找不到或有歧义的引用)。引用可带 #，大小写不敏感。"""
+    found: list[Memory] = []
+    bad: list[str] = []
+    for r in refs:
+        key = r.strip().lstrip("#").lower()
+        rows = (await db.scalars(select(Memory).where(Memory.id.startswith(key)))).all() if len(key) >= 4 else []
+        if len(rows) == 1 and rows[0] not in found:
+            found.append(rows[0])
+        elif len(rows) != 1:
+            bad.append(r)
+    return found, bad
+
+
+async def save(db: AsyncSession, content: str, category: str) -> tuple[Memory, str | None]:
+    """记一条：意思相同的旧记忆就地覆盖（偏好会变，以最新为准）。返回 (记忆, 被覆盖前的内容或 None)。"""
+    old, vec = await find_similar(db, content)
+    if old:
+        previous = old.content
+        old.content, old.category, old.embedding = content, category, vec
+        await db.commit()
+        return old, previous
+    m = Memory(content=content, category=category, embedding=vec)
+    db.add(m)
+    await db.commit()
+    return m, None
+
+
+async def update(db: AsyncSession, m: Memory, content: str | None, category: str | None) -> str:
+    """改一条，返回改前内容。内容变了向量清空（检索时懒补，不在这里多调一次向量接口）。"""
+    previous = m.content
+    if content and content != m.content:
+        m.content, m.embedding = content, None
+    if category:
+        m.category = category
+    await db.commit()
+    return previous
+
+
+def card(action: str, items: list[tuple[Memory, str | None]]) -> dict:
+    """聊天里的记忆卡块（blocks.MemoryBlock）。action = saved | updated | forgotten。"""
+    return {"type": "memory", "action": action, "items": [
+        {"id": m.id, "content": m.content, "category": m.category, **({"previous": p} if p else {})} for m, p in items]}

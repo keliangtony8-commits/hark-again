@@ -85,8 +85,24 @@ class StatsBlock(BaseModel):
     items: list[StatItem] = Field(min_length=1, max_length=6)
 
 
+class MemoryItem(BaseModel):
+    id: str
+    content: str
+    category: str = "general"
+    previous: str | None = None  # updated：改前的内容（撤销用）
+
+
+class MemoryBlock(BaseModel):
+    """记忆卡：本轮回复里记住/改了/忘掉了哪些事。只由记忆工具产出（memory_store.card）。
+    不存“已撤销”状态：客户端对照当前记忆列表推算（saved 的 id 不在了 = 已撤销；updated 内容回到 previous = 已撤销；
+    forgotten 的内容又在了 = 已恢复），所以重开对话也一致。"""
+    type: Literal["memory"] = "memory"
+    action: Literal["saved", "updated", "forgotten"]
+    items: list[MemoryItem] = Field(min_length=1)
+
+
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
-                        PageBlock, StatsBlock],
+                        PageBlock, StatsBlock, MemoryBlock],
                   Field(discriminator="type")]
 
 
@@ -113,6 +129,9 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[网页「{b['title']}」{b['url']}，slug: {b['slug']}]")
         elif t == "approval":
             parts.append(f"[审批：{b['title']}——{b['state']}]")
+        elif t == "memory":
+            verb = {"saved": "已记住", "updated": "已修改记忆", "forgotten": "已忘掉"}.get(b["action"], "记忆")
+            parts.append(f"[{verb}：" + "；".join(i["content"] for i in b["items"]) + "]")
         elif t == "file":
             parts.append(f"[文件：{b['name']}]")
     return "\n\n".join(parts)

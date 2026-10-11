@@ -8,7 +8,12 @@ export type ApprovalBlock = { type: "approval"; id: string; title: string; detai
 export type BrowserBlock = { type: "browser"; session: string };
 export type PageBlock = { type: "page"; slug: string; title: string; url: string };
 export type StatsBlock = { type: "stats"; items: { label: string; value: string; note?: string | null }[] };
-export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock;
+/** 记忆卡：本轮回复记住/改了/忘掉了什么（= backend blocks.MemoryBlock）。“已撤销”不在块里，见 lib/memory.ts memoryCardState。 */
+export type MemoryBlock = {
+  type: "memory"; action: "saved" | "updated" | "forgotten";
+  items: { id: string; content: string; category: string; previous?: string | null }[];
+};
+export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

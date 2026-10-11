@@ -1,5 +1,6 @@
 // 记忆页的纯逻辑：分类名、分类计数、搜索+分类筛选，以及“我对你的了解”的数据形状。
 // 不碰界面，测试直接调。记忆全量本来就在列表里（单用户几百条），筛选在客户端做，不打服务器。
+import 'block.dart';
 import 'resources.dart';
 
 /// 已知分类的中文名，顺序即显示顺序；服务器给了不认识的分类就原样显示、排在后面。
@@ -61,4 +62,40 @@ class MemoryDigest {
   final bool stale;
 
   bool get hasText => text != null && text!.isNotEmpty;
+}
+
+/// 聊天里记忆卡的当前状态（对照记忆列表推算，所以重开对话、在记忆页手动改过也一致）。
+enum MemoryCardState {
+  /// 列表还没拿到：只显示，不给撤销键。
+  unknown,
+
+  /// 改动仍然生效：可撤销。
+  active,
+
+  /// 已撤销（saved 的删了 / updated 的改回去了 / forgotten 的又恢复了）。
+  undone,
+
+  /// 记忆后来被别处改动或删掉，和这张卡已对不上：只显示。
+  diverged,
+}
+
+MemoryCardState memoryCardState(MemoryBlock b, List<MemoryItem>? list) {
+  if (list == null || b.items.isEmpty) return MemoryCardState.unknown;
+  final byId = {for (final m in list) m.id: m};
+  final contents = {for (final m in list) m.content};
+  switch (b.action) {
+    case 'saved':
+      if (b.items.every((i) => !byId.containsKey(i.id))) return MemoryCardState.undone;
+      return MemoryCardState.active;
+    case 'updated':
+      final now = [for (final i in b.items) byId[i.id]];
+      if (now.any((m) => m == null)) return MemoryCardState.diverged;
+      if ([for (final (k, i) in b.items.indexed) now[k]!.content == i.previous].every((x) => x)) return MemoryCardState.undone;
+      if ([for (final (k, i) in b.items.indexed) now[k]!.content == i.content].every((x) => x)) return MemoryCardState.active;
+      return MemoryCardState.diverged;
+    case 'forgotten':
+      if (b.items.every((i) => contents.contains(i.content))) return MemoryCardState.undone;
+      return MemoryCardState.active;
+  }
+  return MemoryCardState.unknown;
 }

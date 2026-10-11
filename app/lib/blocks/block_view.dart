@@ -6,6 +6,7 @@ import '../theme/tokens.dart';
 import 'basic_blocks.dart';
 import 'browser_block.dart';
 import 'interactive_blocks.dart';
+import 'memory_block.dart';
 
 class BlockView extends StatelessWidget {
   const BlockView(this.block, {super.key});
@@ -22,6 +23,7 @@ class BlockView extends StatelessWidget {
         BrowserBlock b => BrowserBlockView(b),
         PageBlock b => PageBlockView(b),
         StatsBlock b => StatsBlockView(b),
+        MemoryBlock b => MemoryBlockView(b),
         UnknownBlock _ => const SizedBox.shrink(), // 新版服务器的新卡片：旧 App 安静忽略
       };
 }

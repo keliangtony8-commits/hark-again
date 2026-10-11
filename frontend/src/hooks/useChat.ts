@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "../lib/api";
+import { memoryStore } from "../lib/memoryStore";
 import { OUTBOX_GIVE_UP_MS, outbox } from "../lib/outbox";
 import { ChatSocket, type LinkStatus } from "../lib/socket";
 import type { Block, Message, ServerEvent, TextBlock, Upload } from "../lib/types";
@@ -98,6 +99,7 @@ export function useChat(projectId?: string) {
       case "block.start":
       case "block.update":
         patchPending((p) => { const blocks = [...p.blocks]; blocks[e.index] = e.block; return { ...p, blocks }; });
+        if (e.block.type === "memory") memoryStore.invalidate(); // 助手改了记忆：记忆页和记忆卡共用的列表重拉
         break;
       case "block.delta":
         patchPending((p) => {

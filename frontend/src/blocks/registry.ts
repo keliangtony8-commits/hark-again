@@ -9,6 +9,7 @@ import ApprovalBlock from "./ApprovalBlock";
 import BrowserBlock from "./BrowserBlock";
 import PageBlock from "./PageBlock";
 import StatsBlock from "./StatsBlock";
+import MemoryBlock from "./MemoryBlock";
 
 // 新增一种卡片：写组件 → 在这里登记。渲染器和聊天流程不用改。
 export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Block, { type: K }> }> } = {
@@ -21,4 +22,5 @@ export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Bl
   browser: BrowserBlock,
   page: PageBlock,
   stats: StatsBlock,
+  memory: MemoryBlock,
 };

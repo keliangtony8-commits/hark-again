@@ -29,7 +29,8 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
 
     mems = await memory_store.relevant(db, query)
     if mems:
-        parts.append("关于用户你已知道：\n" + "\n".join(f"- [{m.category}] {m.content}" for m in mems))
+        parts.append("关于用户你已知道（# 后是引用，改/删时传给 update_memory / forget）：\n"
+                     + "\n".join(memory_store.context_line(m) for m in mems))
 
     skills = skills_store.enabled_skills()
     if skills:  # 只放启用的目录，正文按需 use_skill 读取

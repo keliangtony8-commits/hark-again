@@ -24,6 +24,9 @@ sealed class Block {
         'browser' => BrowserBlock(j['session'] as String? ?? 'main'),
         'page' => PageBlock(slug: j['slug'] as String, title: j['title'] as String? ?? '', url: j['url'] as String? ?? ''),
         'stats' => StatsBlock([for (final i in (j['items'] as List? ?? [])) StatItem.fromJson(i as Map<String, dynamic>)]),
+        'memory' => MemoryBlock(
+            action: j['action'] as String? ?? 'saved',
+            items: [for (final i in (j['items'] as List? ?? [])) MemoryChange.fromJson(i as Map<String, dynamic>)]),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -99,6 +102,26 @@ class StatItem {
 class StatsBlock extends Block {
   const StatsBlock(this.items);
   final List<StatItem> items;
+}
+
+/// 记忆卡里的一条：被记住/改/忘掉的记忆。previous 只有 updated 才有（改前内容，撤销用）。
+class MemoryChange {
+  const MemoryChange({required this.id, required this.content, required this.category, this.previous});
+  factory MemoryChange.fromJson(Map<String, dynamic> j) => MemoryChange(
+      id: j['id'] as String? ?? '',
+      content: j['content'] as String? ?? '',
+      category: j['category'] as String? ?? 'general',
+      previous: j['previous'] as String?);
+  final String id, content, category;
+  final String? previous;
+}
+
+/// 记忆卡：本轮回复里记住（saved）/ 改了（updated）/ 忘掉了（forgotten）哪些事。
+/// “已撤销”不存在块里，由 models/memory.dart memoryCardState 对照当前记忆列表推算。
+class MemoryBlock extends Block {
+  const MemoryBlock({required this.action, required this.items});
+  final String action;
+  final List<MemoryChange> items;
 }
 
 class UnknownBlock extends Block {

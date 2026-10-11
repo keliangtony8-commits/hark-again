@@ -50,6 +50,7 @@
 | `browser` | `session`（实时画面：`GET /api/browser/screen?token=` 轮询；接管：`POST /api/browser/mouse {x,y}` 0–1 归一化坐标，`POST /api/browser/keyboard {text?, key?}`） |
 | `page` | `slug`, `title`, `url` |
 | `stats` | `items: [{label, value, note?}]`（1–6 项；关键数字小卡片，标签 + 大数字 + 一句变化；模型用 `show_stats` 工具产出，面板刷新优先用它） |
+| `memory` | `action: saved\|updated\|forgotten`, `items: [{id, content, category, previous?}]`（记忆卡：本轮记住/改了/忘掉了什么；只由记忆工具产出。“已撤销”不在块里：客户端对照 GET /api/memories 推算——saved 的 id 不在 = 已撤销，updated 内容等于 previous = 已改回，forgotten 内容都在 = 已恢复；撤销走 /api/memories 的 DELETE / PATCH / POST。客户端收到 block.start 的记忆卡时重拉记忆列表） |
 
 文件地址：upload → `/api/uploads/{id}?token=`；project → `/api/projects/{project_id}/files/{id}?token=`
 

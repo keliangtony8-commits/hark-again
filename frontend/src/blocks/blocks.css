@@ -75,3 +75,11 @@
 
 /* 关键数字 tile（stats 块）：窄屏一列，宽了自动两三列 */
 .blk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--sp-2); }
+
+/* 记忆卡：安静的便签，不抢正文（= App memory_block.dart）。划掉 = 那句已不再生效。 */
+.blk-memory { max-width: 520px; padding: var(--sp-2) var(--sp-1) var(--sp-3) var(--sp-3); background: var(--tile); border: 1px solid var(--border); border-radius: var(--r-md); }
+.blk-memory-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 32px; color: var(--text-2); }
+.blk-memory-title { flex: 1; font-size: var(--fs-xs); font-weight: var(--fw-title); letter-spacing: .02em; }
+.blk-memory-line { padding-right: var(--sp-3); margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--text); transition: color var(--dur) var(--ease); }
+.blk-memory-line.struck { color: var(--text-3); text-decoration: line-through; }
+.blk-memory-prev { padding-right: var(--sp-3); margin-top: 2px; font-size: var(--fs-xs); color: var(--text-3); text-decoration: line-through; }

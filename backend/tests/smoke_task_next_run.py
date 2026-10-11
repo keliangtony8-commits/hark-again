@@ -59,7 +59,8 @@ async def check():
     assert abs((next_run_at(stale, now) - now).total_seconds()) < 1
     # SQLite 读回来的无时区时间按 UTC 处理
     naive = ScheduledTask(name="c", prompt="x", cron="0 * * * *", last_run_at=(now - timedelta(minutes=5)).replace(tzinfo=None), created_at=now, active=True, run_requested=False)
-    assert next_run_at(naive, now) > now
+    # （上次运行可能在上个整点之前 → 已过期 = 显示“现在”，所以是 >=；跨整点时间段不再偶发失败）
+    assert next_run_at(naive, now) >= now - timedelta(seconds=1)
     bad = ScheduledTask(name="d", prompt="x", cron="不是 cron", created_at=now, active=True, run_requested=False)
     assert next_run_at(bad, now) is None and not is_due(bad, now)
     # 存库再读回（SQLite）：路由给出的与函数一致

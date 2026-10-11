@@ -83,3 +83,4 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 
 - v0.67：features/chat/thought_view.dart 管“思考”的两种样子（生成中 ThinkingCard 带秒数；完成后 ThoughtSummary 可展开）；内容下方的小图标键一律用 ui/kit.dart 的 QuietAction / CopyAction（复制原地变对勾，不弹提示条），图标换状态用 motion.dart 的 PopSwitcher，箭头转向用 TurnIcon。
 - v0.69：数字展示值统一走 motion.dart 的 CountUp（ValueTile 已接；解析规则在 ui/format.dart NumberParts：恰好一个数字才滚），“加载 ↔ 内容 ↔ 空状态”换态统一用 FadeSwitcher（给 child 随态变化的 key）；新时长令牌 Motion.count。网页对应 ui/CountUp.tsx + lib/numberParts.ts（--dur-count），入场错峰用 base.css 的 .enter + style --i。
+- v0.70：聊天记忆卡 blocks/memory_block.dart（MemoryBlock 块）。状态不存块里，models/memory.dart memoryCardState 对照 memoriesProvider 推算（unknown/active/undone/diverged）；撤销只走 memoriesProvider 的 remove/patch/create；chat_controller 收到记忆卡 invalidate(memoriesProvider)。网页对应 blocks/MemoryBlock.tsx + lib/memoryStore.ts（记忆页与记忆卡共用的唯一记忆列表仓库，useMemories）。

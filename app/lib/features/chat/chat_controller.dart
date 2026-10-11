@@ -24,6 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../core/chat_socket.dart';
+import '../../core/resource.dart';
 import '../../models/block.dart';
 import '../../models/export.dart';
 import '../../models/message.dart';
@@ -231,7 +232,10 @@ class ChatController extends Notifier<ChatState> {
           messages: [...ms, const Message(id: 'pending', role: 'assistant', blocks: [], pending: true)],
         );
       case 'block.start' || 'block.update':
-        _patchPending((m) => m.copyWith(blocks: _setAt(m.blocks, e['index'] as int, Block.fromJson(e['block'] as Map<String, dynamic>))));
+        final block = Block.fromJson(e['block'] as Map<String, dynamic>);
+        _patchPending((m) => m.copyWith(blocks: _setAt(m.blocks, e['index'] as int, block)));
+        // 助手改了记忆：记忆列表（记忆页、记忆卡的撤销状态都读它）过期，重拉一次
+        if (block is MemoryBlock) ref.invalidate(memoriesProvider);
       case 'block.delta':
         _patchPending((m) {
           final i = e['index'] as int;

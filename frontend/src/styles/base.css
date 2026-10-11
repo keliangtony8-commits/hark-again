@@ -72,6 +72,7 @@ html.theme-switching, html.theme-switching *, html.theme-switching *::before, ht
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* 入场：淡入上浮，--i 决定错峰第几拍（= App FadeSlideIn + Motion.stagger）。骨架换成内容、刷新后换字都用它 */
 .enter { animation: rise var(--dur) var(--ease) both; }
+.fade-in { animation: fade var(--dur) var(--ease) both; } /* 文案/按钮换状态时淡入（配 key 换节点） */
 .enter[style] { animation-delay: calc(var(--stagger) * var(--i, 0)); } /* 属性选择器抬高优先级：.glass-card 自带的 animation 简写不会把错峰清零 */
 /* 系统“减少动态”：所有动画/过渡瞬间完成（终态照样到位），循环动画只跑一次 */
 @media (prefers-reduced-motion: reduce) {

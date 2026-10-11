@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useResource } from "../../hooks/useResource";
 import { categoryCounts, categoryLabel, filterMemories, MEMORY_CATEGORIES } from "../../lib/memory";
 import { formatWhen } from "../../lib/format";
+import { useMemories } from "../../lib/memoryStore";
 import type { Memory } from "../../lib/types";
 import { IconBrain, IconPlus, IconSearch } from "../../ui/icons";
 import { Highlight, Hint, Page, PageHeader, SearchField, Sheet, Skeleton } from "../../ui/kit";
@@ -9,7 +9,7 @@ import MemoryDigestCard from "./MemoryDigestCard";
 
 /** 记忆：概括卡 → 搜索 → 分类筛选 → 按分类分组。与 App MemoryScreen 同版式，筛选规则在 lib/memory.ts。 */
 export default function MemoryScreen() {
-  const mem = useResource<Memory>("/api/memories");
+  const mem = useMemories(); // 与聊天里的记忆卡共用一份列表（lib/memoryStore.ts）
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<string | null>(null);
   const [editing, setEditing] = useState<Partial<Memory> | null>(null);
@@ -33,7 +33,7 @@ export default function MemoryScreen() {
       <button className="icon-btn" onClick={() => setEditing({ category: category ?? "general", content: "" })} aria-label="添加"><IconPlus /></button>} />}>
       <p className="desc">每次对话我都会参考这些。说错了就改，不想让我记的直接删。</p>
       <MemoryDigestCard version={mem.items} />
-      {mem.loading ? <Skeleton /> : mem.items.length === 0 ? (
+      {!mem.loaded ? <Skeleton /> : mem.items.length === 0 ? (
         <Hint icon={<IconBrain size={26} />} title="还没有记忆" text="聊天时我会自动记下你的偏好，你也可以手动添加。" />
       ) : (<>
         <SearchField className="memory-search" value={query} onChange={setQuery} placeholder="搜索记忆" />

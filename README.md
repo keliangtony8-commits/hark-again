@@ -24,6 +24,7 @@ Caddy (HTTPS, 静态前端, 反代)
 ## 语音与记忆检索
 - `VOICE_PROVIDER=stepfun`（默认）：语音输入用 stepaudio-2.5-asr（App 的 m4a、网页的 webm 由后端 ffmpeg 转 wav），朗读用 stepaudio-2.5-tts（`POST /api/voice/speak`，音色 `STEP_TTS_VOICE`）。`gateway`：识别走网关 `stt` 别名，朗读用设备自带语音。逻辑全在 `backend/app/voice.py`。
 - 记忆向量检索：填 `SILICONFLOW_API_KEY`（硅基流动 bge-m3，免费额度）；不填记忆退回“最近 N 条”。
+- 记忆按条管理（v0.70）：上下文里每条记忆带 `#短引用`（id 前 8 位），工具 remember / update_memory / forget 只经 `memory_store`（save/update/resolve/card）；每次真改了记忆，回复里附一张 `memory` 块（记忆卡），客户端可撤销。
 
 ## 启动（一键部署，推荐）
 VPS 装好 Debian 12（或 Ubuntu 22.04+），≥2 核 4GB。把代码放上去（`git clone` 私有仓库，或上传 zip 解压到 `/opt/assistant`），然后：
