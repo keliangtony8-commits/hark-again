@@ -1,7 +1,7 @@
 """项目工作区：读写文件直接在后端做（快、零成本）；执行命令交给隔离沙盒。只在项目对话中可用。"""
-from ... import sandbox_client
-from ...storage import is_text, project_dir, safe_join
-from ..tools import ToolContext, ToolResult, tool
+from ... import sandbox_client, vision
+from ...storage import is_text, mime_of, project_dir, safe_join
+from ..tools import ToolContext, ToolImage, ToolResult, tool
 
 import re
 
@@ -36,12 +36,17 @@ async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
     return ToolResult("\n".join(lines) or "（空）")
 
 
-@tool("read_file", "正在读文件", "读取项目里的文本文件。",
+@tool("read_file", "正在读文件", "读取项目里的文本文件；图片文件（jpg/png/webp/gif）会直接给你看。",
       {"type": "object", "properties": {"path": _PATH}, "required": ["path"]}, scope="project")
 async def read_file(ctx: ToolContext, path: str) -> ToolResult:
     p = safe_join(project_dir(ctx.project_id), path)
     if not p.is_file():
         return ToolResult("文件不存在。")
+    if mime_of(p.name) in vision.IMAGE_MIMES:
+        size = p.stat().st_size
+        if size > vision.TOOL_IMAGE_MAX_BYTES:
+            return ToolResult(f"{path} 是图片，但太大（{size} B），先用 run_command 缩小再看。")
+        return ToolResult(f"{path} 是图片（{size} B）。", images=[ToolImage(p.name, p.read_bytes())])
     if not is_text(p.name):
         return ToolResult(f"{path} 不是文本文件（{p.stat().st_size} B），可以用 run_command 处理。")
     text = p.read_text(encoding="utf-8", errors="replace")

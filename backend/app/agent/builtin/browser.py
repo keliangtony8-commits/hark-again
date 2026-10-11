@@ -4,7 +4,7 @@
 import re
 
 from ... import browser_client, vault
-from ..tools import ToolContext, ToolResult, tool
+from ..tools import ToolContext, ToolImage, ToolResult, tool
 
 RISKY_BUTTON = re.compile(r"支付|付款|购买|下单|提交订单|确认订单|发送|发布|删除|pay|buy|purchase|checkout|place order|send|post|delete", re.I)
 _last_names: dict[str, str] = {}  # ref -> 元素名，用来判断点击的风险
@@ -66,6 +66,19 @@ async def browser_scroll(ctx: ToolContext, dy: int = 600) -> ToolResult:
       {"type": "object", "properties": {}})
 async def browser_read(ctx: ToolContext) -> ToolResult:
     return ToolResult(_render(await browser_client.snapshot_call("GET", "/snapshot")))
+
+
+@tool("browser_look", "正在看页面",
+      "截一张云浏览器当前画面给你看。快照文字说不清时再用（图表、图片内容、布局、按钮在哪、页面是否正常显示），"
+      "比快照费 token，别每步都截。",
+      {"type": "object", "properties": {}})
+async def browser_look(ctx: ToolContext) -> ToolResult:
+    r = await browser_client.call("GET", "/screen")
+    if r.status_code == 404:
+        return ToolResult("浏览器还没打开页面，先用 browser_open。")
+    if r.status_code >= 400:
+        raise RuntimeError(f"截图失败（{r.status_code}）")
+    return ToolResult("当前页面截图：", [_live_card()], images=[ToolImage("页面截图.jpg", r.content)])
 
 
 @tool("browser_login", "正在登录",

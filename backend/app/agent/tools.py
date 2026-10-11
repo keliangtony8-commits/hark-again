@@ -1,7 +1,7 @@
 """工具注册表。
 
 每个工具一个文件放在 agent/builtin/，用 @tool 注册；内核只认识注册表，不认识具体工具。
-工具返回 ToolResult：content 回给模型看，blocks 直接展示给用户（表格、链接卡等）。
+工具返回 ToolResult：content 回给模型看，blocks 直接展示给用户（表格、链接卡等），images 给模型看图（vision.for_tool）。
 """
 import importlib
 import pkgutil
@@ -28,9 +28,17 @@ class ToolContext:
 
 
 @dataclass
+class ToolImage:
+    """工具拿到、要给模型“看”的图（原始字节）。怎么给（原图还是描述）由 vision.for_tool 决定，工具不用管。"""
+    name: str
+    data: bytes
+
+
+@dataclass
 class ToolResult:
     content: str
     blocks: list[dict] = field(default_factory=list)
+    images: list[ToolImage] = field(default_factory=list)
 
 
 @dataclass

@@ -159,4 +159,5 @@ postgres ~200M、litellm ~300M、searxng ~150M、backend+worker ~300M、browser 
 ## 看图（v0.72）
 - `app/vision.py` 是图片进模型的唯一入口；`agent/context.py` 只调用它。当前这一问的图片：模型别名在 `VISION_MODELS` → 原图（Pillow 缩到 `IMAGE_MAX_SIDE`，统一 JPEG data URL）；更早的图或模型不能看图 → `VISION_MODEL` 写一段描述（含图中文字），缓存在 `data/captions/<上传id>.txt`，每张图只花一次钱。
 - 描述失败只给图片名、这一轮照常，下一轮自动重试；单轮最多补 6 张描述。用量记为 kind=vision。
-- 冒烟：`python tests/smoke_vision.py`。
+- 工具也能给模型看图：工具在 `ToolResult.images` 里放 `ToolImage(name, bytes)`，怎么给由 `vision.for_tool` 决定——能看图的别名 → 在本步工具结果之后补一条带原图的 user 消息（明确写“不是用户说的话”，只活在本轮工具循环里、不进历史）；不能看图 → 描述写进最后一个工具结果（按内容哈希缓存 `captions/sha-*.txt`）。一步最多 3 张，单张 ≤10MB。现有来源：`read_file` 读项目里的图片、`browser_look` 截云浏览器当前画面。新工具要给图只管填 images，别自己拼消息。
+- 冒烟：`python tests/smoke_vision.py`、`python tests/smoke_tool_images.py`。

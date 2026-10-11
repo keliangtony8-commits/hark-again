@@ -8,8 +8,10 @@ import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
+from .. import vision
+from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from .tools import REGISTRY, ToolContext, schemas
+from .tools import REGISTRY, ToolContext, ToolResult, schemas
 
 MAX_STEPS = 6  # 防止工具死循环烧钱
 
@@ -122,29 +124,37 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         messages.append({"role": "assistant", "content": turn.text or None, "tool_calls": [
             {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}
             for c in turn.tool_calls]})
+        images = []
         for call in turn.tool_calls:
-            content = ""
+            result = ToolResult("")
             async for ev in _call_tool(call, ctx, builder):
-                if isinstance(ev, str):
-                    content = ev
+                if isinstance(ev, ToolResult):
+                    result = ev
                 else:
                     yield ev
-            messages.append({"role": "tool", "tool_call_id": call.id, "content": content})
+            images += result.images
+            messages.append({"role": "tool", "tool_call_id": call.id, "content": result.content})
+        if images:  # 工具给了图：原图补一条消息，或描述并进最后一个工具结果（vision.for_tool 决定）
+            note, msg = await vision.for_tool(images, model or settings.default_model)
+            if note:
+                messages[-1]["content"] += "\n\n" + note
+            if msg:
+                messages.append(msg)
 
     yield Done(builder.blocks)
 
 
 
 async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
-    """执行一次工具调用：查表 → (需要时)审批 → 执行 → 产出事件，最后产出给模型的结果文本(str)。"""
+    """执行一次工具调用：查表 → (需要时)审批 → 执行 → 产出事件，最后产出给模型的 ToolResult（文字 + 图）。"""
     t = REGISTRY.get(call.name)
     if not t or not t.available(ctx):
-        yield f"没有可用的工具 {call.name}。"
+        yield ToolResult(f"没有可用的工具 {call.name}。")
         return
     try:
         args = json.loads(call.arguments or "{}")
     except json.JSONDecodeError:
-        yield "参数不是合法 JSON，请重试。"
+        yield ToolResult("参数不是合法 JSON，请重试。")
         return
 
     if t.risk and (reason := t.risk(args)):
@@ -155,7 +165,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
             else:
                 yield ev
         if not approved:
-            yield "用户没有批准这个操作，已取消。不要换方式绕过，告诉用户即可。"
+            yield ToolResult("用户没有批准这个操作，已取消。不要换方式绕过，告诉用户即可。")
             return
 
     yield ToolStatus(call.id, call.name, t.label, "running")
@@ -163,13 +173,13 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
         result = await t.run(ctx, **args)
     except Exception as e:  # 工具失败交给模型处理（换方法或如实告知）
         yield ToolStatus(call.id, call.name, t.label, "error")
-        yield f"工具出错：{e}"
+        yield ToolResult(f"工具出错：{e}")
         return
     for b in result.blocks:
         if not builder.has(b):
             yield builder.add(b)
     yield ToolStatus(call.id, call.name, t.label, "done")
-    yield result.content
+    yield ToolResult(result.content, images=result.images)
 
 async def _ask_approval(builder: MessageBuilder, ctx: ToolContext, reason: str, args: dict):
     """插入审批卡 → 等用户决定 → 更新卡片状态。最后产出 bool。"""
