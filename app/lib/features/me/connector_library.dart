@@ -16,6 +16,7 @@ String connectorSummary(List<Connector> accounts, List<McpServerItem>? servers) 
   final parts = [
     if (n > 0) '已连接 $n 个账户',
     if (servers != null && servers.isNotEmpty) '${servers.length} 个 MCP 服务器',
+    if (servers != null && servers.any((s) => s.problemText != null)) '${servers.where((s) => s.problemText != null).length} 个需要处理',
   ];
   return parts.isEmpty ? '还没有连接任何服务' : parts.join(' · ');
 }

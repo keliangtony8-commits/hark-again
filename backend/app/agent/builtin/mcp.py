@@ -21,7 +21,10 @@ async def mcp_tools(ctx: ToolContext, server: str) -> ToolResult:
     s = await _server(ctx, server)
     if not s:
         return ToolResult("没有这个 MCP 服务器。")
-    tools = await mcp.list_tools(s)
+    try:
+        tools = await mcp.guarded(ctx.db, s, mcp.list_tools(s))
+    except mcp.Unreachable as e:
+        return ToolResult(mcp.tool_message(s, e))
     for t in tools:
         _readonly[(server, t["name"])] = bool((t.get("annotations") or {}).get("readOnlyHint"))
     return ToolResult("\n\n".join(
@@ -43,4 +46,10 @@ async def mcp_call(ctx: ToolContext, server: str, tool: str, arguments: dict | N
     s = await _server(ctx, server)
     if not s:
         return ToolResult("没有这个 MCP 服务器。")
-    return ToolResult((await mcp.call_tool(s, tool, arguments or {}))[:12000])
+    try:
+        out = await mcp.guarded(ctx.db, s, mcp.call_tool(s, tool, arguments or {}))
+    except mcp.Unreachable as e:
+        return ToolResult(mcp.tool_message(s, e))
+    except mcp.McpError as e:
+        return ToolResult(f"工具报错：{e}")
+    return ToolResult(out[:12000])

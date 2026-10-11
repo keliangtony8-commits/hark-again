@@ -215,8 +215,15 @@ class _McpRow extends ConsumerWidget {
           child: RowTile(
             icon: Icons.extension_outlined,
             title: s.name,
-            subtitle: hostOf(s.url),
-            trailing: s.hasToken ? const Pill('带令牌') : null,
+            // 连不上 / 令牌被拒：副标题先说问题（警示色），主页同时有一张“需要你亲自处理”的卡
+            subtitle: s.problemText == null ? hostOf(s.url) : '${s.problemText} · ${hostOf(s.url)}',
+            subtitleColor: s.problemText == null ? null : context.palette.warning,
+            trailing: SwapSwitcher(
+              child: s.problemText != null
+                  ? Icon(Icons.error_outline_rounded, key: const ValueKey('problem'), size: 20, color: context.palette.warning,
+                      semanticLabel: s.problemText)
+                  : (s.hasToken ? const Pill('带令牌', key: ValueKey('token')) : const SizedBox.shrink(key: ValueKey('none'))),
+            ),
             onTap: () => _showTools(context, ref),
           ),
         ),
@@ -257,5 +264,8 @@ class _McpRow extends ConsumerWidget {
           },
         ),
     );
+    // 打开工具列表 = 一次体检（后端据此放 / 收主页提醒）：关掉后刷新这一行的状态
+    await tools.then((_) {}, onError: (_) {});
+    if (context.mounted) await ref.read(mcpServersProvider.notifier).reload();
   }
 }

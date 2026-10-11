@@ -71,6 +71,29 @@ void main() {
     expect(tester.getTopLeft(find.text('Google')).dy, lessThan(tester.getTopLeft(find.text('GitHub')).dy));
   });
 
+  test('MCP 服务器问题：auth / down / 不认识 / 老服务器不给', () {
+    McpServerItem m(Object? problem) => McpServerItem.fromJson({'id': 'm', 'name': 'm', 'url': 'https://m.dev/mcp', 'problem': ?problem});
+    expect(m('auth').problemText, '令牌被拒绝');
+    expect(m('down').problemText, '连不上');
+    expect(m('weird').problemText, isNull);
+    expect(m(null).problemText, isNull);
+    expect(connectorSummary(const [], [m('down'), m(null)]), '2 个 MCP 服务器 · 1 个需要处理');
+  });
+
+  testWidgets('连接器页：连不上的 MCP 服务器行先说问题，带警示图标', (tester) async {
+    await pump(tester, '/me/connectors', const ConnectorsScreen(), {
+      '/api/connectors/mcp': [
+        {'id': 'a', 'name': 'notes', 'url': 'https://notes.dev/mcp', 'has_token': true, 'problem': 'down'},
+        {'id': 'b', 'name': 'calc', 'url': 'https://calc.dev/mcp', 'has_token': true},
+      ],
+    });
+    expect(find.text('连不上 · notes.dev'), findsOneWidget);
+    expect(find.text('calc.dev'), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
+    expect(find.text('带令牌'), findsOneWidget); // 有问题的那行不再显示“带令牌”
+    expect(find.text('2 个 MCP 服务器 · 1 个需要处理'), findsOneWidget);
+  });
+
   testWidgets('保险箱：分组带数量；空时起步按钮直接打开对应表单', (tester) async {
     await pump(tester, '/me/vault', const VaultScreen(), {
       '/api/vault': [

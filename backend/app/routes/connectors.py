@@ -92,13 +92,15 @@ class McpIn(BaseModel):
     token: str = ""
 
 
-def _mcp_public(s: McpServer) -> dict:
-    return {"id": s.id, "name": s.name, "url": s.url, "has_token": bool(s.token_ciphertext)}
+def _mcp_public(s: McpServer, problem: str | None = None) -> dict:
+    """problem：还没恢复的问题 "auth"（令牌被拒）| "down"（连不上）| null，客户端在这一行标出来。"""
+    return {"id": s.id, "name": s.name, "url": s.url, "has_token": bool(s.token_ciphertext), "problem": problem}
 
 
 @router.get("/mcp")
 async def list_mcp(db: AsyncSession = Depends(get_session)):
-    return [_mcp_public(s) for s in (await db.scalars(select(McpServer).order_by(McpServer.created_at))).all()]
+    servers = (await db.scalars(select(McpServer).order_by(McpServer.created_at))).all()
+    return [_mcp_public(s, await mcp.problem(db, s)) for s in servers]
 
 
 @router.post("/mcp")
@@ -121,12 +123,15 @@ async def mcp_tools(sid: str, db: AsyncSession = Depends(get_session)):
     s = await db.get(McpServer, sid)
     if not s:
         raise HTTPException(404)
-    return [{"name": t["name"], "description": t.get("description", "")} for t in await mcp.list_tools(s)]
+    try:  # 用户打开工具列表也算一次体检：不通 → 主页提醒 + 502；通了 → 收起旧提醒
+        tools = await mcp.guarded(db, s, mcp.list_tools(s))
+    except mcp.Unreachable as e:
+        raise HTTPException(502, f"连不上这个 MCP 服务器：{e}")
+    return [{"name": t["name"], "description": t.get("description", "")} for t in tools]
 
 
 @router.delete("/mcp/{sid}")
 async def remove_mcp(sid: str, db: AsyncSession = Depends(get_session)):
     if s := await db.get(McpServer, sid):
-        await db.delete(s)
-        await db.commit()
+        await mcp.forget(db, s)
     return {"ok": True}

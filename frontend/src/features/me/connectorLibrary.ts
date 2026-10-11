@@ -10,7 +10,9 @@ export function sortAccounts(list: Connector[]): Connector[] {
 /** 页头小标签；servers 为 null = MCP 还在加载，先不说这部分。 */
 export function connectorSummary(accounts: Connector[], servers: McpServerInfo[] | null): string {
   const n = accounts.filter((c) => c.account).length;
-  const parts = [n > 0 ? `已连接 ${n} 个账户` : "", servers && servers.length ? `${servers.length} 个 MCP 服务器` : ""].filter(Boolean);
+  const broken = servers ? servers.filter((s) => mcpProblemText(s)).length : 0;
+  const parts = [n > 0 ? `已连接 ${n} 个账户` : "", servers && servers.length ? `${servers.length} 个 MCP 服务器` : "",
+    broken ? `${broken} 个需要处理` : ""].filter(Boolean);
   return parts.length ? parts.join(" · ") : "还没有连接任何服务";
 }
 
@@ -31,3 +33,8 @@ export const SECRET_KINDS = [
   { kind: "login", label: "网站登录", desc: "我在云浏览器里替你登录这个网站" },
   { kind: "api_key", label: "API Key", desc: "我调用这个服务时按域名带上它" },
 ] as const;
+
+/** MCP 服务器行上的问题；不认识的值当没有（与 App McpServerItem.problemText 同一规则）。 */
+export function mcpProblemText(s: McpServerInfo): string | null {
+  return s.problem === "auth" ? "令牌被拒绝" : s.problem === "down" ? "连不上" : null;
+}

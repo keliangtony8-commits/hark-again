@@ -57,7 +57,7 @@ async def main():
 
     await spend(2.0)                                              # 101%：发 100% 档，收起旧预算卡
     async with SessionLocal() as db:
-        db.add(HomeCard(kind="action", title="旧预算卡", target="usage", blocks=[]))
+        db.add(HomeCard(kind="action", title="旧预算卡", target="usage", alert_subject="budget", blocks=[]))
         db.add(HomeCard(kind="action", title="别的建议", blocks=[]))
         await db.commit()
     c = await check()

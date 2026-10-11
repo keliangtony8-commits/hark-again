@@ -159,7 +159,7 @@ assert [x["origin"] for x in live("connectors")] == ["agent"]
 async def bad():
     async with SessionLocal() as db:
         try:
-            await system_alerts.post(db, key="x", title="t", text="t", open="nowhere")
+            await system_alerts.post(db, subject="x", once="1", title="t", text="t", open="nowhere")
         except ValueError:
             return True
         return False
@@ -168,8 +168,8 @@ async def task_alert():
     from app.models import ScheduledTask
     async with SessionLocal() as db:
         t = ScheduledTask(name="早报", prompt="新闻", cron="0 8 * * *"); db.add(t); await db.commit()
-        a = await system_alerts.post(db, key="k1", title="早报失败", text="x", open=f"task:{t.id}", prompt="看看")
-        b = await system_alerts.post(db, key="k1", title="早报失败", text="x", open=f"task:{t.id}")
+        a = await system_alerts.post(db, subject=f"task:{t.id}", once="k1", title="早报失败", text="x", open=f"task:{t.id}", prompt="看看")
+        b = await system_alerts.post(db, subject=f"task:{t.id}", once="k1", title="早报失败", text="x", open=f"task:{t.id}")
         await db.commit()
         n = await system_alerts.clear(db, f"task:{t.id}"); await db.commit()
         return a.target, a.task_id == t.id, b, n

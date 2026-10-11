@@ -137,11 +137,14 @@ class PullRefresh extends StatelessWidget {
 }
 
 class RowTile extends StatelessWidget {
-  const RowTile({super.key, this.icon, required this.title, this.subtitle, this.trailing, this.onTap, this.leading});
+  const RowTile({super.key, this.icon, required this.title, this.subtitle, this.subtitleColor, this.trailing, this.onTap, this.leading});
   final IconData? icon;
   final Widget? leading;
   final String title;
   final String? subtitle;
+
+  /// 副标题换色（如连不上 = palette.warning）；空 = bodySmall 默认色。
+  final Color? subtitleColor;
   final Widget? trailing;
   final VoidCallback? onTap;
 
@@ -161,7 +164,7 @@ class RowTile extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
             if (subtitle != null)
-              Text(subtitle!, style: context.text.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(subtitle!, style: context.text.bodySmall?.copyWith(color: subtitleColor), maxLines: 2, overflow: TextOverflow.ellipsis),
           ]),
         ),
         if (trailing != null) trailing! else if (onTap != null) Icon(Icons.chevron_right_rounded, color: p.text3, size: Layout.rowIcon),

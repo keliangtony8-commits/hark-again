@@ -367,11 +367,22 @@ class Connector {
 }
 
 class McpServerItem {
-  const McpServerItem({required this.id, required this.name, required this.url, required this.hasToken});
-  factory McpServerItem.fromJson(Map<String, dynamic> j) =>
-      McpServerItem(id: j['id'] as String, name: j['name'] as String? ?? '', url: j['url'] as String? ?? '', hasToken: j['has_token'] as bool? ?? false);
+  const McpServerItem({required this.id, required this.name, required this.url, required this.hasToken, this.problem});
+  factory McpServerItem.fromJson(Map<String, dynamic> j) => McpServerItem(
+    id: j['id'] as String,
+    name: j['name'] as String? ?? '',
+    url: j['url'] as String? ?? '',
+    hasToken: j['has_token'] as bool? ?? false,
+    problem: j['problem'] as String?,
+  );
   final String id, name, url;
   final bool hasToken;
+
+  /// 还没恢复的问题："auth"（令牌被拒）| "down"（连不上）| null（老服务器不给 = 没问题）。规则见后端 connectors/mcp.py。
+  final String? problem;
+
+  /// 行上的那句话；不认识的值当没有。
+  String? get problemText => switch (problem) { 'auth' => '令牌被拒绝', 'down' => '连不上', _ => null };
 }
 
 class PageItem {

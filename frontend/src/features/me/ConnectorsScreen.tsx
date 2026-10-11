@@ -3,9 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { Connector, McpServerInfo } from "../../lib/types";
-import { IconChevron, IconPlus, IconShield, IconSpark } from "../../ui/icons";
+import { IconAlert, IconChevron, IconPlus, IconShield, IconSpark } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
-import { connectorSummary, sortAccounts } from "./connectorLibrary";
+import { connectorSummary, mcpProblemText, sortAccounts } from "./connectorLibrary";
 import { confirmDialog } from "../../ui/dialog";
 
 const favicon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
@@ -47,6 +47,7 @@ export default function ConnectorsScreen() {
     setTools({ server, list: null });
     try { setTools({ server, list: await http.get(`/api/connectors/mcp/${server.id}/tools`) }); }
     catch (e) { setTools({ server, list: [], err: e instanceof Error ? e.message : "连不上" }); }
+    finally { void servers.reload(); } // 打开工具列表 = 一次体检（后端据此放 / 收主页提醒），刷新这一行的状态
   };
   const addMcp = async () => {
     if (!mcpDraft) return;
@@ -95,8 +96,11 @@ export default function ConnectorsScreen() {
               <div key={s.id} className="row enter" style={stagger(++n)}>
                 <button className="task-row" onClick={() => void showTools(s)}>
                   <span className="row-icon"><IconSpark /></span>
-                  <span className="row-body"><span className="row-title">{s.name}</span><span className="row-sub">{hostOf(s.url)}</span></span>
-                  {s.has_token && <span className="row-hint">带令牌</span>}
+                  <span className="row-body"><span className="row-title">{s.name}</span>
+                    <span className={mcpProblemText(s) ? "row-sub row-problem" : "row-sub"}>{mcpProblemText(s) ? `${mcpProblemText(s)} · ${hostOf(s.url)}` : hostOf(s.url)}</span></span>
+                  {mcpProblemText(s)
+                    ? <span className="row-problem-icon icon-pop" role="img" aria-label={mcpProblemText(s)!}><IconAlert /></span>
+                    : s.has_token && <span className="row-hint">带令牌</span>}
                 </button>
                 <button className="btn btn-ghost btn-sm" onClick={async () => { if (await confirmDialog({ title: `移除 ${s.name}？`, action: "移除" })) void servers.remove(s.id); }}>移除</button>
               </div>

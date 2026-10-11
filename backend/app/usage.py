@@ -101,9 +101,9 @@ async def check_budget(db: AsyncSession, now: datetime | None = None) -> HomeCar
     if level is None:
         return None
     local = now.astimezone(ZoneInfo(settings.timezone))
-    key = f"budget:{local:%Y-%m}:{round(level * 100)}:{budget:g}"  # 改了预算 = 新的一组档位
+    once = f"{local:%Y-%m}:{round(level * 100)}:{budget:g}"  # 改了预算 = 新的一组档位
     title, text = _budget_alert(level, cost, budget, local)
-    card = await system_alerts.post(db, key=key, title=title, text=text, open="usage", prompt=BUDGET_PROMPT)
+    card = await system_alerts.post(db, subject="budget", once=once, title=title, text=text, open="usage", prompt=BUDGET_PROMPT)
     if card is not None:  # 新的一档顶掉旧的预算卡（system_alerts replace）
         await db.commit()
     return card

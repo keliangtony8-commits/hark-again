@@ -64,7 +64,7 @@ async def _alert(db: AsyncSession, task: ScheduledTask, run: TaskRun, now: datet
             f"{what}之后仍按计划重试；连着失败不会重复提醒，恢复后这张卡自动收起。")
     # 键含运行 id：同一次运行收尾两遍也只有一张
     return await system_alerts.post(
-        db, key=f"task:{task.id}:{run.id}", title=f"定时任务「{task.name}」没跑成功", text=text, open=f"task:{task.id}",
+        db, subject=f"task:{task.id}", once=run.id, title=f"定时任务「{task.name}」没跑成功", text=text, open=f"task:{task.id}",
         prompt=(f"我的定时任务「{task.name}」刚才运行失败了，错误是：{run.error}。"
                 f"它的提示词是：{task.prompt}。帮我看看原因，需要的话建议怎么改提示词或时间。"))
 

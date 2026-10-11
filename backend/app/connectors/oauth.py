@@ -76,7 +76,7 @@ async def complete(db: AsyncSession, p: Provider, code: str) -> Connection:
     conn.account = str(info.get(p.account_field, ""))
     _store(conn, tok)
     db.add(conn)
-    await system_alerts.clear(db, "connectors")
+    await system_alerts.clear(db, f"connector:{conn.provider}")
     await db.commit()
     return conn
 
@@ -84,7 +84,7 @@ async def complete(db: AsyncSession, p: Provider, code: str) -> Connection:
 async def forget(db: AsyncSession, conn: Connection) -> None:
     """断开连接：删掉它，连同“已失效”的提醒（用户主动断开，不必再提醒重连）。"""
     await db.delete(conn)
-    await system_alerts.clear(db, "connectors")
+    await system_alerts.clear(db, f"connector:{conn.provider}")
     await db.commit()
 
 
@@ -95,7 +95,7 @@ async def expired(db: AsyncSession, conn: Connection, reason: str) -> ReconnectN
     who = f"（{conn.account}）" if conn.account else ""
     fp = hashlib.sha256(conn.ciphertext.encode()).hexdigest()[:16]
     await system_alerts.post(
-        db, key=f"connector:{conn.provider}:{fp}", title=f"{name} 连接已失效",
+        db, subject=f"connector:{conn.provider}", once=fp, title=f"{name} 连接已失效",
         text=(f"{reason}。在重新连接之前，助手用不了你的 {name}{who}。\n\n"
               "去连接器页重新连接一次就好，连上后这张卡自动收起。"),
         open="connectors")
