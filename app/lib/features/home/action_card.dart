@@ -146,8 +146,9 @@ class ActionCard extends ConsumerWidget {
             ),
           ]),
           if (card.blocks.isNotEmpty) ...[const SizedBox(height: Sp.x3), BlockList(card.blocks)],
-          if (card.linkHost != null) ...[const SizedBox(height: Sp.x2), OfferSource(card: card)],
-          const SizedBox(height: Sp.x4),
+          // 来源行自带 ≥ minTap 的可点高度（字上下各有留白），前后只补 Sp.x1，别再叠一个 Sp.x4 撑出空洞
+          if (card.linkHost != null) ...[const SizedBox(height: Sp.x1), OfferSource(card: card), const SizedBox(height: Sp.x1)]
+          else const SizedBox(height: Sp.x4),
           Row(children: [
             for (var i = 0; i < buttons.length; i++) ...[
               if (i > 0) const SizedBox(width: Sp.x2),

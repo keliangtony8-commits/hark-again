@@ -36,6 +36,10 @@ FIXTURES = {
         {"id": "k4", "kind": "action", "origin": "agent", "action_label": "整理笔记", "conversation_id": "c1", "task_id": None,
          "title": "这周的高数笔记可以整理成提纲", "blocks": [TEXT("周五小测前过一遍，大约 10 分钟。")],
          "action_prompt": "把这周的高数笔记整理成一页提纲", "target": None, "dismissed": False, "unread": False, "updated_at": NOW},
+        # v0.93：只有去处、没有指令的助手卡（眉题“需要你亲自处理”）
+        {"id": "k5", "kind": "action", "origin": "agent", "action_label": None, "conversation_id": None, "task_id": None,
+         "title": "GitHub 连接失效了", "blocks": [TEXT("令牌昨晚过期，代码仓库的定时同步停了。重新连一下就好。")],
+         "action_prompt": None, "target": "connectors", "dismissed": False, "unread": True, "updated_at": NOW},
         {"id": "p1", "kind": "panel", "conversation_id": None, "task_id": "t1", "title": "今天的天气",
          "blocks": [{"type": "stats", "items": [{"label": "上海", "value": "24°C", "note": "多云"},
                                                 {"label": "日落", "value": "17:32"}]}],
@@ -187,6 +191,10 @@ def main():
                     page.goto(base + url)
                     page.wait_for_timeout(700)
                     page.screenshot(path=str(OUT / f"{name}-{theme}-{shot}.png"))
+                    if shot == "home":  # 主页滚到底：看建议卡下半截和右栏收尾（v0.94）
+                        page.evaluate("document.querySelector('.page').scrollTo(0, 1e6)")
+                        page.wait_for_timeout(400)
+                        page.screenshot(path=str(OUT / f"{name}-{theme}-home-end.png"))
                 page.goto(base + "/#/chat")
                 page.wait_for_timeout(500)
                 if name == "desktop":

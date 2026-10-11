@@ -2,6 +2,8 @@
 .page { flex: 1; min-height: 0; overflow-y: auto; }
 /* --inset-top / --inset-bottom 由外壳给：一级页面要让出浮动顶栏，带输入胶囊的页面要让出底部（.page.has-composer） */
 .page-inner { max-width: var(--content-w); margin: 0 auto; padding: calc(var(--inset-top, 0px) + var(--sp-4)) var(--gutter) var(--sp-7); }
+/* 宽版页面（主页）：窄屏和普通页一样宽，≥1100px 放宽到 --content-wide 给“主列 + 右栏”用 */
+@media (min-width: 1100px) { .page-inner.wide { max-width: var(--content-wide); } }
 .page.has-composer .page-inner { padding-bottom: calc(var(--footer-h, 88px) + var(--sp-5)); }
 /* 子页面标题栏：顶部一条浮动玻璃胶囊（和一级页面的顶栏同位置、同高度） */
 .page-head { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--topbar-h); padding: 0 var(--sp-1);

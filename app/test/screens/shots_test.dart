@@ -234,6 +234,17 @@ class _Api implements Api {
           'unread': false,
         },
         {
+          'id': 'k5',
+          'kind': 'action',
+          'origin': 'agent',
+          'target': 'connectors',
+          'title': 'GitHub 连接失效了',
+          'blocks': [
+            {'type': 'text', 'text': '令牌昨晚过期，代码仓库的定时同步停了。重新连一下就好。'}
+          ],
+          'unread': true,
+        },
+        {
           'id': 'k2',
           'kind': 'panel',
           'title': '今天的天气',
@@ -385,6 +396,10 @@ void main() {
       await tester.pump();
       final router = container.read(routerProvider);
       await _shot(tester, '$mode-home');
+      await tester.dragFrom(const Offset(200, 600), const Offset(0, -1000)); // 往下翻：后几张建议卡（含“需要你亲自处理”）
+      await _shot(tester, '$mode-home-end');
+      await tester.dragFrom(const Offset(200, 300), const Offset(0, 3000));
+      await tester.pump(const Duration(seconds: 1));
       await tester.tap(find.byType(TextField)); // 底部输入胶囊聚焦：磨砂 + 收起钮 + 建议
       await _shot(tester, '$mode-home-focused');
       FocusManager.instance.primaryFocus?.unfocus();

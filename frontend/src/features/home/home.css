@@ -59,3 +59,13 @@ a.offer-img:hover img.ok { transform: scale(1.02); }
 .snoozed-item { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); }
 .snoozed-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snoozed-time { color: var(--text-3); }
+
+/* 宽屏两栏（≥1100px，和 .page-inner.wide 同一断点）：主列放要你动手的卡，右栏放扫一眼的面板 / 收件箱 / 今天。
+   窄屏两块按原顺序叠成一列，右栏第一个区块照常隔一个 --section-gap。 */
+.home-rail > .section:first-child { margin-top: var(--section-gap); }
+@media (min-width: 1100px) {
+  .home-grid { display: grid; grid-template-columns: minmax(0, 1fr) var(--rail-w); gap: var(--sp-6); align-items: start; }
+  .home-rail > .section:first-child { margin-top: 0; }
+  /* 主列约 600 宽：配图压到 5:2，别让一张图占掉半屏 */
+  .home-main .offer-img { aspect-ratio: 5 / 2; }
+}

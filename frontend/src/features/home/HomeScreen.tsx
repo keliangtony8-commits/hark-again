@@ -106,7 +106,7 @@ export default function HomeScreen() {
     .sort((a, b) => a.at.localeCompare(b.at));
 
   return (
-    <Page footer={<LaunchComposer />}>
+    <Page wide footer={<LaunchComposer />}>
       <ShellLead>
         <button className="glass-btn glass" onClick={() => setNewPanel(true)} aria-label="新面板" title="新面板"><IconPlus /></button>
       </ShellLead>
@@ -115,6 +115,9 @@ export default function HomeScreen() {
         <h1>{greet}</h1>
       </div>
 
+      {/* 宽屏：左主列“为你准备”（要你动手的），右栏面板 / 收件箱 / 今天（扫一眼的）；窄屏按原顺序一列 */}
+      <div className="home-grid">
+      <div className="home-main">
       <Section title="为你准备">
         {cards.loading ? <Skeleton rows={2} /> : actions.length === 0 && snoozed.length === 0 ? (
           <div className="glass-card onboarding enter">
@@ -154,7 +157,9 @@ export default function HomeScreen() {
         })}
         {!cards.loading && <SnoozedRow cards={snoozed} onSnooze={snooze} />}
       </Section>
+      </div>
 
+      <aside className="home-rail">
       <Section title="面板">
         {cards.loading ? <Skeleton rows={1} /> : panels.length === 0 ? (
           // 还没有面板：一句话 + 几个起点胶囊（点了开新对话去搭），下面仍是“创建一个新面板”
@@ -220,6 +225,8 @@ export default function HomeScreen() {
           ))}
         </div>
       </Section>
+      </aside>
+      </div>
 
       {newPanel && <NewPanelSheet onClose={() => setNewPanel(false)} />}
       {editing && <TaskSheet title="编辑面板" panel initial={draftOf(editing)} onClose={() => setEditing(null)}

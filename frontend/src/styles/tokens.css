@@ -84,6 +84,8 @@
 
   /* 布局 */
   --content-w: 720px;
+  --content-wide: 1080px; /* 宽屏主页：主列 + 右侧栏（≥1100px 才展开，见 ui.css .page-inner.wide） */
+  --rail-w: 360px;       /* 宽屏主页右侧栏（面板 / 收件箱 / 今天） */
   --sidebar-w: 280px;
   --topbar-h: 52px;      /* 浮动顶栏（分段导航）高度，App Layout.topBar */
   --topbar-top: 10px;    /* 顶栏离窗口上沿 */
