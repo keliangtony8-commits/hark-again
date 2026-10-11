@@ -34,6 +34,7 @@ class ToolContext:
     approve: Approver = deny_all
     conversation_id: str | None = None  # 当前对话（分享对话等“作用于这段对话本身”的工具用）
     ask: Asker = nobody  # 在聊天里弹表单卡问用户（登录、验证码）
+    task_id: str | None = None  # 这一轮是哪个定时任务在跑（None = 用户在聊天）；如早间简报不把自己列进今天的日程
 
 
 @dataclass

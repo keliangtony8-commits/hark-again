@@ -6,7 +6,10 @@ import { autoPaused } from "../../lib/taskLabels";
 
 /** Home“今天”段末的宽胶囊：开新对话让助手准备今天（后端 day_overview + 技能 prep-my-day 出简报卡）。与 App 同字。 */
 export const PREP_DAY_LABEL = "帮我准备今天";
-export const PREP_DAY_PROMPT = "帮我准备今天";
+export { PREP_DAY_PROMPT, MORNING_BRIEF, briefTaskOf } from "../me/taskLibrary";
+
+/** 胶囊下的小按钮：还没排早间简报时，一键打开预填的任务表单（每天 07:00，可改）；排了就不出（它已是日程里的一行）。 */
+export const SCHEDULE_BRIEF_LABEL = "每天早上自动准备";
 
 export type AgendaState = "done" | "failed" | "running" | "next" | "later" | "paused";
 export type AgendaItem = { task: ScheduledTask; at: Date; state: AgendaState; time: string; faded: boolean };

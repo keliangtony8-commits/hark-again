@@ -15,9 +15,9 @@ import 'package:go_router/go_router.dart';
 final now = DateTime(2026, 10, 12, 12, 0); // 周一中午
 
 ScheduledTask task(String id, String cron,
-        {bool active = true, String output = 'report', String? last, DateTime? lastRun, String? reason, int streak = 0, DateTime? runAt, bool done = false, bool requested = false}) =>
+        {bool active = true, String output = 'report', String? last, DateTime? lastRun, String? reason, int streak = 0, DateTime? runAt, bool done = false, bool requested = false, String prompt = 'p'}) =>
     ScheduledTask.fromJson({
-      'id': id, 'name': '任务$id', 'prompt': 'p', 'cron': cron, 'active': active, 'output': output, 'run_requested': requested,
+      'id': id, 'name': '任务$id', 'prompt': prompt, 'cron': cron, 'active': active, 'output': output, 'run_requested': requested,
       'last_status': last, 'last_run_at': lastRun?.toUtc().toIso8601String(), 'paused_reason': reason, 'fail_streak': streak,
       'run_at': runAt?.toUtc().toIso8601String(), 'done': done,
     });
@@ -75,13 +75,14 @@ void main() {
     expect(todayAgenda([task('q', '0 20 * * *', requested: true)], now).single.state, AgendaState.running);
   });
 
-  Future<List<String>> pumpToday(WidgetTester tester, List<ScheduledTask> tasks, {VoidCallback? onPrep, bool loading = false}) async {
+  Future<List<String>> pumpToday(WidgetTester tester, List<ScheduledTask> tasks,
+      {VoidCallback? onPrep, VoidCallback? onSchedule, bool loading = false}) async {
     final pushed = <String>[];
     final router = GoRouter(initialLocation: '/home', routes: [
       GoRoute(
           path: '/home',
           builder: (_, _) =>
-              Scaffold(body: SingleChildScrollView(child: TodaySection(tasks: tasks, loading: loading, onPrep: onPrep)))),
+              Scaffold(body: SingleChildScrollView(child: TodaySection(tasks: tasks, loading: loading, onPrep: onPrep, onSchedule: onSchedule)))),
       GoRoute(path: '/me/tasks', builder: (_, _) { pushed.add('/me/tasks'); return const Text('TASKS'); }, routes: [
         GoRoute(path: ':id', builder: (_, s) { pushed.add('/me/tasks/${s.pathParameters['id']}'); return const Text('DETAIL'); }),
       ]),
@@ -114,6 +115,32 @@ void main() {
     expect(find.text(prepDayLabel), findsNothing);
     await pumpToday(tester, const [], onPrep: () {}, loading: true);
     expect(find.text(prepDayLabel), findsNothing);
+  });
+
+  test('早间简报：哪些算已经排了', () {
+    expect(morningBrief.prompt, prepDayPrompt);
+    expect(morningBrief.cron, '0 7 * * *');
+    expect(briefTaskOf([task('a', '0 7 * * *', prompt: '帮我准备今天')])?.id, 'a');
+    expect(briefTaskOf([task('o', '0 8 * * *', prompt: '帮我准备今天：天气、日程、待办')])?.id, 'o', reason: '老模板也算');
+    expect(briefTaskOf([task('x', '0 7 * * *', prompt: '查天气')]), isNull);
+    expect(briefTaskOf([task('s', '0 7 * * *', prompt: '帮我准备今天', active: false)]), isNull, reason: '手动停了可以再排');
+    expect(briefTaskOf([task('p', '0 7 * * *', prompt: '帮我准备今天', active: false, reason: 'failures', streak: 3)])?.id, 'p');
+    expect(briefTaskOf([task('w', '0 7 * * *', prompt: '帮我准备今天', output: 'panel')]), isNull);
+    expect(briefTaskOf([task('once', '', prompt: '帮我准备今天', runAt: now)]), isNull);
+  });
+
+  testWidgets('“每天早上自动准备”：没排时出、点了交给表单；排好后不出', (tester) async {
+    var scheduled = 0;
+    await pumpToday(tester, const [], onPrep: () {}, onSchedule: () => scheduled++);
+    expect(find.text(scheduleBriefLabel), findsOneWidget);
+    await tester.tap(find.text(scheduleBriefLabel));
+    await tester.pumpAndSettle();
+    expect(scheduled, 1);
+    await pumpToday(tester, [task('b', '0 7 * * *', prompt: prepDayPrompt)], onPrep: () {}, onSchedule: () => scheduled++);
+    expect(find.text(scheduleBriefLabel), findsNothing);
+    expect(find.text(prepDayLabel), findsOneWidget, reason: '随时手动准备仍在');
+    await pumpToday(tester, const [], onPrep: () {}, onSchedule: () {}, loading: true);
+    expect(find.text(scheduleBriefLabel), findsNothing);
   });
 
   test('只有跑完的变淡，失败的不淡（警示字要看得见）', () {

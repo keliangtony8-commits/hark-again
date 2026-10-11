@@ -7,14 +7,17 @@
 2. 主页上等着用户的卡 = 没收起的建议/系统提醒（稍后提醒到今天的也算，标出几点回来）。
 3. 收件箱未读报告。
 4. 记忆里和今天有关的：写了日期（今天到 WINDOW_DAYS 天内）或写了“周X”且今天正是周X 的记忆。
-天气等需要联网的由技能自己 web_search，这里不碰。"""
+天气等需要联网的由技能自己 web_search，这里不碰。
+
+exclude_task：正在跑的那个定时任务（早间简报自己）。它不进今天的日程（刚把 last_run_at 记成现在，会显示成“已完成”），
+它昨天投递的报告卡也不算未读要提醒的事——简报不该把自己当成今天的一件事。"""
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from croniter import croniter
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import schedule
@@ -91,10 +94,12 @@ def agenda_line(task: ScheduledTask, slots: list[datetime], now: datetime) -> st
     return f"- {times}「{task.name}」{_slot_state(task, current, now)}"
 
 
-async def _agenda(db: AsyncSession, start: datetime, now: datetime) -> list[str]:
+async def _agenda(db: AsyncSession, start: datetime, now: datetime, exclude: str | None = None) -> list[str]:
     tasks = (await db.scalars(select(ScheduledTask).where(ScheduledTask.output == "report"))).all()
     rows: list[tuple[datetime, str]] = []
     for t in tasks:
+        if t.id == exclude:
+            continue
         if not (t.active or t.paused_reason == "failures" or schedule.is_done(t)):
             continue  # 用户手动停掉的不算今天的事
         slots = today_slots(t, start)
@@ -120,9 +125,12 @@ def card_line(card: HomeCard, today: date, tz: ZoneInfo) -> str | None:
     return f"- id={card.id}「{card.title}」{tag}" + (f"：{why}" if why else "")
 
 
-async def _cards(db: AsyncSession, today: date, tz: ZoneInfo) -> tuple[list[str], list[str], int]:
-    rows = (await db.scalars(select(HomeCard).where(HomeCard.dismissed.is_(False), HomeCard.kind.in_(("action", "report")))
-                             .order_by(HomeCard.updated_at.desc()))).all()
+async def _cards(db: AsyncSession, today: date, tz: ZoneInfo,
+                 exclude: str | None = None) -> tuple[list[str], list[str], int]:
+    q = select(HomeCard).where(HomeCard.dismissed.is_(False), HomeCard.kind.in_(("action", "report")))
+    if exclude:  # 任务自己的报告卡；它的失败提醒（system alert 也挂 task_id）照样列——失败正是要说的
+        q = q.where(or_(HomeCard.task_id.is_(None), HomeCard.task_id != exclude, HomeCard.kind != "report"))
+    rows = (await db.scalars(q.order_by(HomeCard.updated_at.desc()))).all()
     actions = [l for c in rows if c.kind == "action" for l in [card_line(c, today, tz)] if l]
     unread = [c for c in rows if c.kind == "report" and c.unread]
     reports = [f"- 「{c.title}」{_aware(c.updated_at).astimezone(tz):%m-%d %H:%M}" for c in unread[:MAX_REPORTS]]
@@ -208,10 +216,10 @@ class DayBrief:
         return "\n".join(out)
 
 
-async def gather(db: AsyncSession, now: datetime | None = None) -> DayBrief:
+async def gather(db: AsyncSession, now: datetime | None = None, exclude_task: str | None = None) -> DayBrief:
     tz = ZoneInfo(settings.timezone)
     now = _aware(now or datetime.now(timezone.utc)).astimezone(tz)
     start = datetime.combine(now.date(), time(0), tzinfo=tz)
-    cards, reports, unread = await _cards(db, now.date(), tz)
-    return DayBrief(now=now, agenda=await _agenda(db, start, now), cards=cards, reports=reports, unread=unread,
+    cards, reports, unread = await _cards(db, now.date(), tz, exclude_task)
+    return DayBrief(now=now, agenda=await _agenda(db, start, now, exclude_task), cards=cards, reports=reports, unread=unread,
                     memories=await _memories(db, now.date()))

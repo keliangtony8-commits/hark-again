@@ -64,8 +64,24 @@ class TaskStarter {
   final String name, prompt, cron;
 }
 
+/// “准备今天”的那句话：Home 段末胶囊发它开一段新对话；早间简报任务也是它（后端技能 prep-my-day 接手出简报卡）。
+const prepDayPrompt = '帮我准备今天';
+
+/// 早间简报：每天早上把“准备今天”交给定时任务，结果作为报告进 Home 收件箱（Home 今天段一键排、起步模板也是它）。
+const morningBrief = TaskStarter('早间简报', prepDayPrompt, '0 7 * * *');
+
+/// 用户已经排了的早间简报：重复的报告任务、还在跑或被自动暂停（手动停了 = 他不要了，可以再排），指令以“帮我准备今天”开头
+/// （老模板“帮我准备今天：天气、日程…”也算）。没有 = null。
+ScheduledTask? briefTaskOf(List<ScheduledTask> list) {
+  for (final t in list) {
+    if (t.isPanel || t.isOnce || !(t.active || t.autoPaused)) continue;
+    if (t.prompt.trim().startsWith(prepDayPrompt)) return t;
+  }
+  return null;
+}
+
 const taskStarters = [
-  TaskStarter('今日简报', '帮我准备今天：天气、日程、待办和需要注意的事，简短一点。', '0 8 * * *'),
+  morningBrief,
   TaskStarter('每周复盘', '回顾这周的对话和完成的事，按“完成 / 没做完 / 下周重点”写一段复盘。', '0 21 * * 0'),
   TaskStarter('睡前背单词', '给我 10 个考研英语高频词，带例句，最后出 3 道小测。', '0 22 * * *'),
 ];

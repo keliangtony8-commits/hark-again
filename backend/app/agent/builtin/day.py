@@ -9,7 +9,10 @@ from ..tools import ToolContext, ToolResult, tool
       "用户说“帮我准备今天”“今天有什么”、早间简报任务，都先调它（只读、不花模型额度），再按技能 prep-my-day 写简报。",
       {"type": "object", "properties": {}})
 async def day_overview(ctx: ToolContext) -> ToolResult:
-    brief = await day_brief.gather(ctx.db)
+    brief = await day_brief.gather(ctx.db, exclude_task=ctx.task_id)
     hint = ("\n\n（今天没有任何已知安排：简报就说今天很空，可以问用户要不要排点什么，别编造日程。）" if brief.empty else
             "\n\n（Home 上已有的卡不要再用 offer_on_home 重复放；自动暂停、失败的任务值得在提醒里点名。）")
+    if ctx.task_id:  # 定时早间简报：没人在看，问了也没人答
+        hint += ("\n（这是定时任务在跑，用户不在：不要提问，简报卡会作为报告出现在用户的 Home 收件箱；"
+                 "需要他点头的事用 offer_on_home。）")
     return ToolResult(brief.text() + hint)

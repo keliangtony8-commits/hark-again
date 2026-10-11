@@ -26,6 +26,7 @@ import 'action_card.dart';
 import 'card_snooze.dart';
 import 'inbox.dart';
 import '../me/task_form.dart';
+import '../me/tasks_screen.dart' show createTask;
 import 'new_panel.dart';
 import 'today_agenda.dart';
 
@@ -150,7 +151,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ]),
               ),
             ],
-            TodaySection(tasks: tasks, loading: ref.watch(tasksProvider).isLoading, onPrep: () => _send(prepDayPrompt)),
+            TodaySection(tasks: tasks, loading: ref.watch(tasksProvider).isLoading, onPrep: () => _send(prepDayPrompt),
+                onSchedule: () => createTask(context, ref, starter: morningBrief)),
           ]),
           ),
         ),
@@ -167,11 +169,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 /// “今天”：今天排着的任务按钟点一行一件（today_agenda.dart 定规则）。行首等宽钟点列，下一个用正文色加粗、
 /// 跑完的整行变淡（失败不淡）；失败/暂停只把那两个字染警示色；点行进任务详情。没有任务时一行引导去定时任务页。
 /// 段末一颗宽胶囊“帮我准备今天”（onPrep）：与“创建一个新面板”同一种入口，交给助手出当日简报卡。
+/// 还没排早间简报时胶囊下再给一颗小胶囊“每天早上自动准备”（onSchedule → 预填好的任务表单）；排好后它淡出，
+/// 简报任务自己成了日程里的一行。
 class TodaySection extends StatelessWidget {
-  const TodaySection({super.key, required this.tasks, required this.loading, this.onPrep});
+  const TodaySection({super.key, required this.tasks, required this.loading, this.onPrep, this.onSchedule});
   final List<ScheduledTask> tasks;
   final bool loading;
-  final VoidCallback? onPrep;
+  final VoidCallback? onPrep, onSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -210,6 +214,18 @@ class TodaySection extends StatelessWidget {
           delay: Motion.stagger(items.length, from: 1),
           child: WidePill(icon: Icons.wb_twilight_outlined, label: prepDayLabel, onTap: onPrep!),
         ),
+        if (onSchedule != null)
+          FadeSwitcher(
+            child: briefTaskOf(tasks) == null
+                ? Padding(
+                    key: const ValueKey('schedule-brief'),
+                    padding: const EdgeInsets.only(top: Sp.x2),
+                    child: Center(
+                      child: PillButton(dense: true, icon: Icons.schedule_rounded, label: scheduleBriefLabel, onTap: onSchedule),
+                    ),
+                  )
+                : const SizedBox(key: ValueKey('brief-scheduled'), width: double.infinity),
+          ),
       ],
     ]);
   }

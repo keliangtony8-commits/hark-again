@@ -43,8 +43,21 @@ export function nextUp(list: ScheduledTask[], now = new Date()): [string, string
 }
 
 /** 起步模板：空列表里给几颗，点了带内容打开新建表单（没点保存前什么都不存）。 */
-export const TASK_STARTERS: { name: string; prompt: string; cron: string }[] = [
-  { name: "今日简报", prompt: "帮我准备今天：天气、日程、待办和需要注意的事，简短一点。", cron: "0 8 * * *" },
+export type TaskStarter = { name: string; prompt: string; cron: string };
+
+/** “准备今天”的那句话：Home 段末胶囊发它开新对话；早间简报任务也是它（后端技能 prep-my-day 出简报卡）。与 App 同字。 */
+export const PREP_DAY_PROMPT = "帮我准备今天";
+
+/** 早间简报：每天早上把“准备今天”交给定时任务，结果作为报告进 Home 收件箱。 */
+export const MORNING_BRIEF: TaskStarter = { name: "早间简报", prompt: PREP_DAY_PROMPT, cron: "0 7 * * *" };
+
+/** 已经排了的早间简报：重复的报告任务、在跑或被自动暂停（手动停了可以再排），指令以“帮我准备今天”开头。与 App briefTaskOf 同规则。 */
+export function briefTaskOf(list: ScheduledTask[]): ScheduledTask | null {
+  return list.find((t) => t.output !== "panel" && !t.run_at && (t.active || autoPaused(t)) && t.prompt.trim().startsWith(PREP_DAY_PROMPT)) ?? null;
+}
+
+export const TASK_STARTERS: TaskStarter[] = [
+  MORNING_BRIEF,
   { name: "每周复盘", prompt: "回顾这周的对话和完成的事，按“完成 / 没做完 / 下周重点”写一段复盘。", cron: "0 21 * * 0" },
   { name: "睡前背单词", prompt: "给我 10 个考研英语高频词，带例句，最后出 3 道小测。", cron: "0 22 * * *" },
 ];

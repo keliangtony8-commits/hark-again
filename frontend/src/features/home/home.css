@@ -27,6 +27,8 @@
 .today-time { font-size: var(--fs-sm); color: var(--text-2); width: 48px; flex: none; font-variant-numeric: tabular-nums; } /* = App Layout.agendaTime */
 /* “现在”标记（v1.04，同 App _NowLine）：替掉两行之间的分隔线——钟点列写“现在”，标题边起小点 + 细线到行尾。
    只用 text-2/text-3，不用强调色、不循环闪：它是方位不是提醒。 */
+.today-schedule { display: flex; justify-content: center; margin-top: var(--sp-2); }
+.today-schedule .btn { color: var(--text-2); }
 .today-now { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-1) var(--sp-4); }
 .today-now > span { width: 48px; flex: none; font-size: var(--fs-xs); color: var(--text-2); font-weight: var(--fw-title); letter-spacing: var(--label-tracking); }
 .today-now > i { flex: 1; height: 1px; background: var(--text-3); position: relative; }

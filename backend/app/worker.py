@@ -78,7 +78,7 @@ async def run_task(task_id: str) -> None:
 
         blocks: list[dict] = []
         try:
-            reply = await run_turn(db, conv, emit=emit)
+            reply = await run_turn(db, conv, emit=emit, task_id=task.id)
             blocks = reply.blocks if reply else []
         except Exception as e:  # 工具/库的意外异常：记成失败原因，照常投递和收尾
             log.exception("task %s crashed", task.name)

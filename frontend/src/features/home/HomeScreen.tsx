@@ -12,11 +12,11 @@ import { ShellLead } from "../../shell/ShellLead";
 import { WidePill } from "../../ui/glass";
 import { IconChat, IconChevron, IconClock, IconEdit, IconHistory, IconInbox, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconSun, IconTrash } from "../../ui/icons";
 import { Menu, Page, Section, Skeleton, stagger } from "../../ui/kit";
-import TaskSheet, { changesOf, draftOf } from "../me/TaskSheet";
+import TaskSheet, { changesOf, draftOf, EMPTY_TASK } from "../me/TaskSheet";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
 import { OfferImage, OfferSource } from "./OfferMedia";
-import { agendaDetail, agendaHint, agendaNowAt, clockOf, agendaProblem, agendaSummary, PREP_DAY_LABEL, PREP_DAY_PROMPT, todayAgenda } from "./todayAgenda";
+import { agendaDetail, agendaHint, agendaNowAt, clockOf, agendaProblem, agendaSummary, briefTaskOf, MORNING_BRIEF, PREP_DAY_LABEL, PREP_DAY_PROMPT, SCHEDULE_BRIEF_LABEL, todayAgenda } from "./todayAgenda";
 import "./home.css";
 import { confirmDialog } from "../../ui/dialog";
 
@@ -97,6 +97,7 @@ export default function HomeScreen() {
   };
   // 编辑面板 = 编辑它的任务（同一张 TaskSheet）；改名由服务端同步到卡片，存完重拉卡片
   const [editing, setEditing] = useState<ScheduledTask | null>(null);
+  const [schedulingBrief, setSchedulingBrief] = useState(false);
   const taskOf = (c: HomeCard) => tasks.items.find((t) => t.id === c.task_id) ?? null;
 
   const today = todayAgenda(tasks.items);
@@ -236,12 +237,17 @@ export default function HomeScreen() {
           </div>
         )}
         {!tasks.loading && <div className="enter" style={nth(today.length + 1)}>
-          <WidePill label={PREP_DAY_LABEL} icon={<IconSun size={18} />} onClick={() => ask(PREP_DAY_PROMPT)} /></div>}
+          <WidePill label={PREP_DAY_LABEL} icon={<IconSun size={18} />} onClick={() => ask(PREP_DAY_PROMPT)} />
+          {!briefTaskOf(tasks.items) && <div className="today-schedule fade-in">
+            <button className="btn btn-ghost btn-sm" onClick={() => setSchedulingBrief(true)}><IconClock size={16} />{SCHEDULE_BRIEF_LABEL}</button></div>}
+        </div>}
       </Section>
       </aside>
       </div>
 
       {newPanel && <NewPanelSheet onClose={() => setNewPanel(false)} />}
+      {schedulingBrief && <TaskSheet title="早间简报" initial={{ ...EMPTY_TASK, ...MORNING_BRIEF }} onClose={() => setSchedulingBrief(false)}
+        onSave={async (d) => { await tasks.create(d); }} />}
       {editing && <TaskSheet title="编辑面板" panel initial={draftOf(editing)} onClose={() => setEditing(null)}
         onSave={async (d) => {
           const c = changesOf(draftOf(editing), d);
