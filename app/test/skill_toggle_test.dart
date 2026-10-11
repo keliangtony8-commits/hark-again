@@ -7,6 +7,7 @@ import 'package:assistant/core/resource.dart';
 import 'package:assistant/features/me/skills_screen.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
+import 'package:assistant/ui/kit.dart';
 import 'package:assistant/ui/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,7 +67,7 @@ bool dimmedOf(WidgetTester tester, String name) =>
     tester.widget<Dimmed>(find.ancestor(of: find.text(name), matching: find.byType(Dimmed))).dimmed;
 
 Finder switchIn(String name) =>
-    find.descendant(of: find.ancestor(of: find.text(name), matching: find.byType(Dimmed)), matching: find.byType(Switch));
+    find.descendant(of: find.ancestor(of: find.text(name), matching: find.byType(RowTile)), matching: find.byType(Switch));
 
 void main() {
   test('旧服务器没有 enabled 字段 = 启用', () {

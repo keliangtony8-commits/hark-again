@@ -108,3 +108,4 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v1.02：日程里只有“已完成”变淡（`AgendaItem.faded`），失败不淡；截图新增 `-home-today`（任务样例按现在时刻排，_cronAt）。
 - v1.06：ChoiceChip 外观只来自 theme chipTheme（StadiumBorder、无描边、未选 tile + text2 = labelStyle、选中 ink + onInk = secondaryLabelStyle；别在 chipTheme 里用 WidgetStateTextStyle，字色会丢），测试 test/chip_theme_test.dart。任务行失败（非运行中）和自动暂停都走 RowTile.problem（问题字在前）。截图新增 `-memory` / `-vault`。
 - v1.07：报告的收件箱行副标题 / 横幅第二行只用 models/resources.dart 的 HomeCard.glance / InboxItem.glance（headline · gist，老服务器退回纯文本），页面别再自己截正文。测试 test/report_glance_test.dart。
+- v1.08：“新来了一条”只经 features/home/inbox.dart 的 `inboxArrivalProvider` 广播（InboxNotifier._apply 写，InboxWatcher 读/清）——别再让横幅依赖“是外壳自己问到的”。InboxWatcher 包住外壳整层（横幅在顶栏之上）。行“关着”用 `RowTile(dimmed:)`（只淡图标和文字，行尾开关不淡）；整行都不能用才外包 Dimmed。开关关着的轨道有 text3 细线（theme switchTheme）。截图新增 `-home-inbox` / `-banner` / `-pages` / `-skills` / `-project`。测试 inbox_test（谁问到都弹）、row_dimmed_test。

@@ -1,4 +1,4 @@
-// 收件箱轮询：首次只当基线、来了新的才弹横幅、读掉/忽略不弹、摘要变了 Home 卡片跟着重拉、横幅点开去对话。
+// 收件箱轮询：首次只当基线、来了新的才弹横幅（谁问到的都弹）、读掉/忽略不弹、摘要变了 Home 卡片跟着重拉、横幅点开去对话。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/home/inbox.dart';
 import 'package:assistant/models/resources.dart';
@@ -64,6 +64,44 @@ void main() {
     await n.markRead();
     expect(api.lastReadBody, <String, dynamic>{});
     expect(c.read(inboxProvider).unread, 0);
+  });
+
+  test('arrival is announced no matter who refreshed (v1.08)', () async {
+    final api = FakeApi()..inbox = summary(1, 'a');
+    final c = ProviderContainer(overrides: [apiProvider.overrideWithValue(api)]);
+    addTearDown(c.dispose);
+    final seen = <String?>[];
+    c.listen(inboxArrivalProvider, (_, item) => seen.add(item?.id));
+    final n = c.read(inboxProvider.notifier);
+    await n.refresh(); // 基线不广播
+    expect(c.read(inboxArrivalProvider), isNull);
+    api.inbox = summary(2, 'b');
+    await n.refresh(); // 比如 Home 面板刷新时的轮询先问到
+    expect(c.read(inboxArrivalProvider)?.id, 'b');
+    await n.refresh(); // 再问一次没变化：不重复广播
+    expect(seen, ['b']);
+    c.read(inboxArrivalProvider.notifier).clear();
+    expect(c.read(inboxArrivalProvider), isNull);
+  });
+
+  testWidgets('watcher shows the banner for an arrival it did not fetch itself', (t) async {
+    final api = FakeApi()..inbox = summary(1, 'a');
+    final c = ProviderContainer(overrides: [apiProvider.overrideWithValue(api)]);
+    addTearDown(c.dispose);
+    await t.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: MaterialApp(theme: buildTheme(Brightness.light), home: const InboxWatcher(child: SizedBox.expand())),
+    ));
+    await t.pump();
+    api.inbox = summary(2, 'b');
+    await c.read(inboxProvider.notifier).refresh(); // 不是外壳自己问的
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 600));
+    expect(find.text('报告b'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5)); // 停留时间到自动收起
+    await t.pump(const Duration(seconds: 1));
+    expect(find.text('报告b'), findsNothing);
+    expect(c.read(inboxArrivalProvider), isNull);
   });
 
   testWidgets('banner shows title and opens on tap', (t) async {

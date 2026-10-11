@@ -1,6 +1,8 @@
 // 收件箱未读：没有推送（FCM）时的“有新的吗”。
 // 数据流：InboxNotifier 是未读数的唯一来源（Home 角标、横幅、“全部已读”都读它）；
 // 摘要一变就让 cardsProvider 重新拉，Home 列表自然跟上，页面不各自轮询。
+// “新来了一条”只经 inboxArrivalProvider 广播：不管是谁触发的 refresh（外壳轮询、Home 下拉/面板刷新时的轮询、
+// 忽略卡片后），横幅都会出来——v1.08 之前只有外壳自己问到的才弹，被 Home 的 5 秒轮询抢先读到就静默吞掉了。
 // 节奏由 InboxWatcher（挂在外壳上）决定：回到前台立刻问一次，前台时每 Timing.inboxPoll 问一次，后台不问。
 import 'dart:async';
 
@@ -48,9 +50,23 @@ class InboxNotifier extends Notifier<InboxSummary> {
     if (next.sameAs(prev)) return null;
     state = next;
     if (!first) ref.read(cardsProvider.notifier).reload();
-    return !first && next.hasNewSince(prev) ? next.latest : null;
+    final arrived = !first && next.hasNewSince(prev) ? next.latest : null;
+    if (arrived != null) ref.read(inboxArrivalProvider.notifier).announce(arrived);
+    return arrived;
   }
 }
+
+/// 刚到的那一条（横幅要弹的），null = 没有。只由 InboxNotifier 写入，InboxWatcher 读并在收起时清掉。
+class InboxArrival extends Notifier<InboxItem?> {
+  @override
+  InboxItem? build() => null;
+
+  void announce(InboxItem item) => state = item;
+
+  void clear() => state = null;
+}
+
+final inboxArrivalProvider = NotifierProvider<InboxArrival, InboxItem?>(InboxArrival.new);
 
 final inboxProvider = NotifierProvider<InboxNotifier, InboxSummary>(InboxNotifier.new);
 
@@ -76,12 +92,17 @@ class InboxWatcher extends ConsumerStatefulWidget {
 class _InboxWatcherState extends ConsumerState<InboxWatcher> {
   late final AppLifecycleListener _life;
   Timer? _poll, _hide;
-  InboxItem? _banner;
 
   @override
   void initState() {
     super.initState();
     _life = AppLifecycleListener(onResume: _start, onHide: _stop);
+    // 谁问到的新报告都弹：到了就开始计时收起
+    ref.listenManual(inboxArrivalProvider, (_, item) {
+      if (item == null) return;
+      _hide?.cancel();
+      _hide = Timer(Timing.bannerHold, _dismiss);
+    });
     _start();
   }
 
@@ -103,20 +124,17 @@ class _InboxWatcherState extends ConsumerState<InboxWatcher> {
     _poll = null;
   }
 
-  Future<void> _check() async {
-    final item = await ref.read(inboxProvider.notifier).refresh();
-    if (item == null || !mounted) return;
-    setState(() => _banner = item);
-    _hide?.cancel();
-    _hide = Timer(Timing.bannerHold, _dismiss);
-  }
+  Future<void> _check() => ref.read(inboxProvider.notifier).refresh();
 
   void _dismiss() {
-    if (mounted) setState(() => _banner = null);
+    _hide?.cancel();
+    if (mounted) ref.read(inboxArrivalProvider.notifier).clear();
   }
 
   @override
-  Widget build(BuildContext context) => Stack(children: [
+  Widget build(BuildContext context) {
+    final banner = ref.watch(inboxArrivalProvider);
+    return Stack(children: [
         widget.child,
         Positioned(
           left: Sp.x3,
@@ -124,14 +142,14 @@ class _InboxWatcherState extends ConsumerState<InboxWatcher> {
           top: 0,
           child: SafeArea(
             child: SlideDownSwitcher(
-              child: _banner == null
+              child: banner == null
                   ? null
                   : InboxBanner(
-                      key: ValueKey(_banner!.id),
-                      item: _banner!,
+                      key: ValueKey(banner.id),
+                      item: banner,
                       onDismiss: _dismiss,
                       onOpen: () {
-                        final item = _banner!;
+                        final item = banner;
                         _dismiss();
                         openInboxItem(context, ref, conversationId: item.conversationId);
                       },
@@ -140,6 +158,7 @@ class _InboxWatcherState extends ConsumerState<InboxWatcher> {
           ),
         ),
       ]);
+  }
 }
 
 class InboxBanner extends StatelessWidget {

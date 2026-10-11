@@ -117,7 +117,8 @@ a.row:hover, button.row:hover { background: var(--tile); }
 button.row-body { text-align: left; }
 .row-icon.file-ext { width: 32px; height: 32px; border-radius: var(--r-sm); background: var(--tile); font-size: 9px; font-weight: var(--fw-strong); letter-spacing: .04em; }
 /* 列表子页的页头（技能 / 定时任务）：摘要小标签 + 一句说明；空库的起步模板卡。 */
-.page-intro { margin: var(--sp-2) 0 0; }
+/* 顶上不再加距：子页第一块内容一律在标题栏下 .page-inner 的 sp-5 处（用量页的卡片也在那），v1.08 */
+.page-intro { margin: 0; }
 .page-intro .page-hero-label { margin: 0 var(--sp-1) var(--sp-2); }
 .skill-search { margin: 0 0 var(--sp-2); }
 .starters { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-4); }
@@ -279,8 +280,11 @@ button.run-row:hover { background: var(--tile); }
 .memory-group { margin-top: var(--section-gap); }
 .memory-group:first-of-type { margin-top: 0; }
 /* 列表行的“停用”态（已下线的 Page、停用的技能）：变淡，切换有过渡 */
-.row { transition: opacity var(--dur) var(--ease); }
+.row, .row > * { transition: opacity var(--dur) var(--ease); }
 .row.row-off { opacity: var(--op-dimmed); }
+/* 行尾有开关的（技能、定时任务）：只淡图标和文字，开关保持原样——一起淡掉像“点不了”（= App RowTile dimmed，v1.08） */
+.row.row-off:has(> .toggle) { opacity: 1; }
+.row.row-off:has(> .toggle) > :not(.toggle) { opacity: var(--op-dimmed); }
 /* 行尾的脱敏说明（保险箱 ••••abcd、“已连接”）：小字 text3，和 App 的 labelSmall 尾巴一致 */
 /* 行上的问题（连不上 / 令牌被拒）：警示色，不用强调色——强调色只给信号（v2.1） */
 .row-problem { color: var(--warning); font-weight: var(--fw-title); } /* 只染问题那几个字，后面的域名保持原色 */

@@ -163,7 +163,9 @@ ThemeData buildTheme(Brightness brightness) {
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.onInk : p.text3),
       trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.ink : p.tile),
-      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      // 关着的轨道在玻璃上几乎看不见（tile 底 ≈ 卡片底）：补一圈和滑块同色的细线，开着时无线（v1.08）
+      trackOutlineColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Colors.transparent : p.text3),
+      trackOutlineWidth: const WidgetStatePropertyAll(1),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: p.text3),
     dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),

@@ -234,9 +234,8 @@ class _AgendaRow extends StatelessWidget {
     final p = context.palette;
     final next = item.state == AgendaState.next;
     final hint = agendaHint(item);
-    return Dimmed(
-      dimmed: item.faded,
-      child: RowTile(
+    return RowTile(
+        dimmed: item.faded,
         leading: SizedBox(
           width: Layout.agendaTime,
           child: Text(item.time,
@@ -247,7 +246,6 @@ class _AgendaRow extends StatelessWidget {
         problem: agendaProblem(item),
         trailing: hint.isEmpty ? const SizedBox.shrink() : SwapSwitcher(child: RowHint(hint, key: ValueKey(hint))),
         onTap: () => context.push('/me/tasks/${item.task.id}'),
-      ),
     );
   }
 }

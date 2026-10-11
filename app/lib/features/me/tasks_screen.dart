@@ -102,9 +102,8 @@ class _TaskRow extends ConsumerWidget {
       onDelete: () => ref.read(tasksProvider.notifier).remove(task.id),
       child: FadeSlideIn(
         delay: delay,
-        child: Dimmed(
-          dimmed: idle,
-          child: RowTile(
+        child: RowTile(
+            dimmed: idle,
             leading: _TaskBadge(task: task),
             title: task.name,
             problem: problem ? state : null,
@@ -115,7 +114,6 @@ class _TaskRow extends ConsumerWidget {
               child: Switch(value: task.active, onChanged: (v) => ref.read(tasksProvider.notifier).patch(task.id, {'active': v})),
             ),
           ),
-        ),
       ),
     );
   }

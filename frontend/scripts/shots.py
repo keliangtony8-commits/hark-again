@@ -45,8 +45,13 @@ FIXTURES = {
                                                 {"label": "日落", "value": "17:32"}]}],
          "action_prompt": None, "target": None, "dismissed": False, "unread": False, "updated_at": NOW},
         {"id": "r1", "kind": "report", "conversation_id": "c1", "task_id": "t2", "title": "早间简报",
+         "headline": "今天 · 10月11日 周日", "gist": "今天有两节课，下午 3 点交实验报告。",  # v1.08：一眼
          "blocks": [TEXT("**今天** 有两节课，下午 3 点交实验报告。")], "action_prompt": None, "target": None,
          "dismissed": False, "unread": True, "updated_at": NOW},
+        {"id": "r2", "kind": "report", "conversation_id": "c1", "task_id": None, "title": "降噪耳机比价",
+         "headline": "三款都在 ¥2000 内", "gist": "索尼 WH-1000XM5 京东今天降到 ¥1899，比上周低 ¥300。",
+         "blocks": [TEXT("索尼 WH-1000XM5 京东今天降到 ¥1899。")], "action_prompt": None, "target": None,
+         "dismissed": False, "unread": False, "updated_at": NOW},
     ],
     # 时钟固定 10:30（Asia/Shanghai，周日）：主页“今天”= 已完成 08:00 → 失败 09:00 → 下一个 11:30 → 已暂停 14:00 → 稍后 21:00（v1.02）；
     # 任务页同一批：自动暂停进“需要留意”、手动停的变淡、面板不进日程。

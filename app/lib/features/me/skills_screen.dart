@@ -132,9 +132,8 @@ class _SkillRowState extends ConsumerState<_SkillRow> {
     final on = _pending ?? s.enabled;
     final row = FadeSlideIn(
       delay: widget.delay,
-      child: Dimmed(
-        dimmed: !on,
-        child: RowTile(
+      child: RowTile(
+          dimmed: !on,
           icon: s.builtin ? Icons.auto_awesome_outlined : Icons.edit_note_rounded,
           title: s.name,
           subtitle: s.description,
@@ -147,7 +146,6 @@ class _SkillRowState extends ConsumerState<_SkillRow> {
           ]),
           onTap: () => context.push('/me/skills/${s.id}'),
         ),
-      ),
     );
     if (s.fromBuiltin) return row;
     return SwipeToDelete(

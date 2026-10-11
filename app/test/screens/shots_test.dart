@@ -13,6 +13,8 @@ import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
+import 'package:assistant/features/home/inbox.dart';
+import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/sheets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -215,12 +217,23 @@ String _cronAt(Duration d) {
   return '${t.minute} ${t.hour} * * *';
 }
 
+bool _inboxNew = false;
+const _reportLatest = {
+  'id': 'r3',
+  'kind': 'report',
+  'title': '图书馆抢座',
+  'headline': '明早 8:00 四楼靠窗',
+  'gist': '约到了 4F-12，靠窗第二个，8:15 前签到。',
+  'conversation_id': 'c3',
+};
+
 String _ago(Duration d) => DateTime.now().subtract(d).toUtc().toIso8601String();
 
 class _Api implements Api {
   @override
   Future<dynamic> get(String path) async {
-    if (path == '/api/inbox') return {'unread': 1, 'latest': null};
+    // v1.08：收件箱横幅——先是基线，_inboxNew 打开后再问一次就“来了新报告”（带 headline/gist 的一眼）
+    if (path == '/api/inbox') return _inboxNew ? {'unread': 2, 'latest': _reportLatest} : {'unread': 1, 'latest': null};
     if (path == '/api/cards') {
       return [
         {
@@ -271,6 +284,33 @@ class _Api implements Api {
           ],
           'unread': true,
         },
+        // v1.08：收件箱里的报告（headline · gist = 一眼）
+        {
+          'id': 'r1',
+          'kind': 'report',
+          'conversation_id': 'c5',
+          'title': '早间简报',
+          'headline': '今天 · 10月12日 周一',
+          'gist': '上午两节高数，下午三点前要交实验报告。',
+          'blocks': [
+            {'type': 'text', 'text': '上午两节高数，下午三点前要交实验报告。'}
+          ],
+          'unread': true,
+          'updated_at': _ago(const Duration(hours: 3)),
+        },
+        {
+          'id': 'r2',
+          'kind': 'report',
+          'conversation_id': 'c1',
+          'title': '降噪耳机比价',
+          'headline': '三款都在 ¥1000 内',
+          'gist': '索尼 WH-1000XM5 京东今天降到 ¥1899，比上周低 ¥300。',
+          'blocks': [
+            {'type': 'text', 'text': '索尼 WH-1000XM5 京东今天降到 ¥1899。'}
+          ],
+          'unread': false,
+          'updated_at': _ago(const Duration(hours: 20)),
+        },
         {
           'id': 'k2',
           'kind': 'panel',
@@ -297,6 +337,22 @@ class _Api implements Api {
       ];
     }
     if (path == '/api/auth/me') return {'username': 'keliang'};
+    if (path == '/api/pages') {
+      final t = DateTime.now().millisecondsSinceEpoch / 1000;
+      return [
+        {'id': 'pg1', 'slug': 'trip', 'title': '国庆川西行程', 'url': 'https://ai.example.com/p/trip', 'updated': t - 3600},
+        {'id': 'pg2', 'slug': 'cv', 'title': '实习简历', 'url': 'https://ai.example.com/p/cv', 'updated': t - 86400 * 3},
+        {'id': 'pg3', 'slug': 'old', 'title': '社团招新海报', 'url': 'https://ai.example.com/p/old', 'updated': t - 86400 * 30, 'published': false},
+      ];
+    }
+    if (path == '/api/catalog/skills') {
+      return [
+        {'id': 'web-research', 'name': '网页调研', 'description': '多来源搜索后汇总', 'builtin': true},
+        {'id': 'prep-my-day', 'name': '准备今天', 'description': '日程、待处理和提醒汇成一张简报', 'builtin': true, 'customized': true},
+        {'id': 'shopping', 'name': '购物比价', 'description': '找货、比价、下单前确认', 'builtin': true, 'enabled': false},
+        {'id': 'essay', 'name': '作文批改', 'description': '按考研英语评分标准逐句改', 'builtin': false},
+      ];
+    }
     if (path == '/api/connectors') {
       return [
         {'id': 'github', 'name': 'GitHub', 'desc': '仓库、议题、代码', 'configured': true, 'account': 'keliang'},
@@ -478,6 +534,15 @@ void main() {
       await _shot(tester, '$mode-home-today');
       await tester.dragFrom(const Offset(200, 300), const Offset(0, 3000));
       await tester.pump(const Duration(seconds: 1));
+      await tester.dragFrom(const Offset(200, 600), const Offset(0, -1500)); // 收件箱：报告行 = 标题 + 一眼（v1.08）
+      await _shot(tester, '$mode-home-inbox');
+      _inboxNew = true; // 问到新报告 → 顶部横幅（v1.08；谁问到的都弹）
+      await container.read(inboxProvider.notifier).refresh();
+      await _shot(tester, '$mode-banner');
+      await tester.pump(Timing.bannerHold);
+      _inboxNew = false;
+      await tester.dragFrom(const Offset(200, 300), const Offset(0, 3000));
+      await tester.pump(const Duration(seconds: 1));
       await tester.tap(find.byType(TextField)); // 底部输入胶囊聚焦：磨砂 + 收起钮 + 建议
       await _shot(tester, '$mode-home-focused');
       FocusManager.instance.primaryFocus?.unfocus();
@@ -532,8 +597,16 @@ void main() {
       router.push('/me/vault'); // 保险箱：网站登录 / API Key 两组（v1.06）
       await _shot(tester, '$mode-vault');
       router.pop();
+      router.push('/me/pages'); // Pages：在线 / 已下线（v1.08）
+      await _shot(tester, '$mode-pages');
+      router.pop();
+      router.push('/me/skills'); // 技能：已自定义 / 关掉的（v1.08）
+      await _shot(tester, '$mode-skills');
+      router.pop();
       router.push('/me/usage'); // 子页面（SubPage 玻璃标题栏）
       await _shot(tester, '$mode-usage');
+      router.go('/projects/p1'); // 项目详情（v1.08）
+      await _shot(tester, '$mode-project');
       router.go('/projects/p1/brief');
       await _shot(tester, '$mode-brief');
       await container.read(sessionProvider.notifier).signOut(); // 登录页

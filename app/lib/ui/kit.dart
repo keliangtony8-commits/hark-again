@@ -137,7 +137,8 @@ class PullRefresh extends StatelessWidget {
 }
 
 class RowTile extends StatelessWidget {
-  const RowTile({super.key, this.icon, required this.title, this.subtitle, this.problem, this.trailing, this.onTap, this.leading});
+  const RowTile(
+      {super.key, this.icon, required this.title, this.subtitle, this.problem, this.trailing, this.onTap, this.leading, this.dimmed = false});
   final IconData? icon;
   final Widget? leading;
   final String title;
@@ -149,6 +150,10 @@ class RowTile extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
 
+  /// 这一项是关着的（停用的技能、暂停的任务）：图标和文字变淡，行尾的开关/按钮保持原样——
+  /// 控件一起淡掉看着像“点不了”（v1.08）。整行都不能用时才在外面包 Dimmed。
+  final bool dimmed;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -157,6 +162,10 @@ class RowTile extends StatelessWidget {
       child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2),
       child: Row(children: [
+        Expanded(
+          child: Dimmed(
+            dimmed: dimmed,
+            child: Row(children: [
         if (leading != null || icon != null) ...[
           leading ?? IconBadge(icon!),
           const SizedBox(width: Sp.x4),
@@ -177,6 +186,9 @@ class RowTile extends StatelessWidget {
             else if (subtitle != null)
               Text(subtitle!, style: context.text.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
           ]),
+        ),
+            ]),
+          ),
         ),
         if (trailing != null) trailing! else if (onTap != null) Icon(Icons.chevron_right_rounded, color: p.text3, size: Layout.rowIcon),
       ]),
