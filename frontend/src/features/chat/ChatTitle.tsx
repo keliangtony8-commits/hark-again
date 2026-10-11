@@ -3,11 +3,13 @@ import { useConversationUsage } from "../../hooks/useConversationUsage";
 import { formatMoney, formatTokens, type ConversationUsage, usageLine } from "../../lib/usage";
 import { Sheet } from "../../ui/kit";
 import ModelUsageList from "../me/ModelUsageList";
+import ShareSheet from "./ShareSheet";
 
 /** 聊天顶栏标题 + 下面一行本对话用量（“¥0.012 · 3.4K token”），点那行弹出按模型明细。与 App 的 ChatTitle 同规则。 */
 export default function ChatTitle({ title, conversationId, streaming }: { title: string; conversationId: string | null; streaming: boolean }) {
   const { usage } = useConversationUsage(conversationId, streaming);
   const [open, setOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const line = usage ? usageLine(usage) : null;
   return (
     <div className="chat-top-title">
@@ -15,19 +17,23 @@ export default function ChatTitle({ title, conversationId, streaming }: { title:
       {line && (
         <button key={line} className="chat-usage" onClick={() => setOpen(true)} aria-label={`本对话用量 ${line}`}>{line}</button>
       )}
-      {open && usage && <UsageSheet usage={usage} onClose={() => setOpen(false)} />}
+      {open && usage && <UsageSheet usage={usage} onClose={() => setOpen(false)}
+        onShare={() => { setOpen(false); setSharing(true); }} />}
+      {sharing && conversationId && <ShareSheet conversationId={conversationId} onClose={() => setSharing(false)} />}
     </div>
   );
 }
 
-function UsageSheet({ usage: u, onClose }: { usage: ConversationUsage; onClose: () => void }) {
+function UsageSheet({ usage: u, onClose, onShare }: { usage: ConversationUsage; onClose: () => void; onShare: () => void }) {
   const t = u.total;
   const money = u.priced.length > 0;
   const prompt = t.models.reduce((s, m) => s + m.prompt_tokens, 0);
   const completion = t.models.reduce((s, m) => s + m.completion_tokens, 0);
   const unpriced = t.models.some((m) => !u.priced.includes(m.model));
   return (
-    <Sheet title="本对话用量" onClose={onClose} actions={<button className="btn btn-ghost" onClick={onClose}>关闭</button>}>
+    <Sheet title="本对话用量" onClose={onClose} actions={<>
+      <button className="btn btn-ghost" onClick={onShare}>分享为网页</button>
+      <button className="btn btn-ghost" onClick={onClose}>关闭</button></>}>
       <div className="usage">
         <div className="usage-hero list">
           <div className="usage-big">{money ? formatMoney(t.cost, u.currency) : `${formatTokens(t.tokens)} token`}</div>

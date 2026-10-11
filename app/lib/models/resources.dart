@@ -353,6 +353,20 @@ class PageItem {
   final bool published;
 }
 
+/// 对话的分享状态（GET/POST/DELETE /api/conversations/{id}/share）。
+/// page == null：从没分享过；page 有但 shared == false：停止分享了（链接保留，再分享原链接恢复）。
+/// stale：快照之后对话又有新内容。
+class ConversationShare {
+  const ConversationShare({this.page, this.shared = false, this.stale = false});
+  factory ConversationShare.fromJson(Map<String, dynamic> j) => ConversationShare(
+        page: j['slug'] is String ? PageItem.fromJson(j) : null,
+        shared: j['shared'] == true,
+        stale: j['stale'] == true,
+      );
+  final PageItem? page;
+  final bool shared, stale;
+}
+
 class ProjectFile {
   const ProjectFile({required this.path, required this.name, required this.size, required this.mime});
   factory ProjectFile.fromJson(Map<String, dynamic> j) =>

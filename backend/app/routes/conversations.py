@@ -4,7 +4,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import usage
+from .. import conversation_share, usage
 from ..auth import require_user
 from ..config import settings
 from ..db import get_session
@@ -115,6 +115,34 @@ async def conversation_usage(cid: str, db: AsyncSession = Depends(get_session)):
     if not await db.get(Conversation, cid):
         raise HTTPException(404)
     return await usage.conversation_report(db, cid)
+
+
+async def _with_messages(db: AsyncSession, cid: str) -> Conversation:
+    c = await db.scalar(select(Conversation).where(Conversation.id == cid).options(selectinload(Conversation.messages)))
+    if not c:
+        raise HTTPException(404)
+    return c
+
+
+@router.get("/{cid}/share")
+async def share_state(cid: str, db: AsyncSession = Depends(get_session)):
+    """分享状态：{shared:false} 或 页面 + stale（快照之后对话又有变化）。逻辑全在 conversation_share。"""
+    c = await _with_messages(db, cid)
+    return conversation_share.state(c, c.messages)
+
+
+@router.post("/{cid}/share")
+async def share(cid: str, db: AsyncSession = Depends(get_session)):
+    """生成 / 更新只读网页快照并公开，同一对话链接不变。"""
+    c = await _with_messages(db, cid)
+    return conversation_share.share(c, c.messages)
+
+
+@router.delete("/{cid}/share")
+async def unshare(cid: str, db: AsyncSession = Depends(get_session)):
+    """停止分享 = 页面下线（链接保留，再分享原链接恢复）。"""
+    c = await _with_messages(db, cid)
+    return conversation_share.unshare(c, c.messages)
 
 
 @router.delete("/{cid}")

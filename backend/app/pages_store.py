@@ -1,7 +1,9 @@
 """Pages：我生成的可分享网页。一个 Page = data/pages/<slug>/index.html + meta.json。
 公开地址 /p/<slug>/，响应带 CSP sandbox，页面脚本拿不到 App 的登录信息。
-meta = {slug, title, updated, published}：published=False 是“下线”——文件留着、公开地址 404（与不存在同一响应，
-不暴露页面存在），随时可重新发布，链接不变。元数据只在这里读写（老 meta 没有 published 视为已发布）。"""
+meta = {slug, title, updated, published, source?}：published=False 是“下线”——文件留着、公开地址 404（与不存在同一响应，
+不暴露页面存在），随时可重新发布，链接不变。元数据只在这里读写（老 meta 没有 published 视为已发布）。
+source = 页面从哪来："conversation:<id>" 是“分享对话”生成的快照（conversation_share.py），智能体做的页面没有。
+同一对话再分享 = 改写同一个 slug，链接不变；find_by_source 按它找回。"""
 import json
 import re
 import secrets
@@ -31,8 +33,11 @@ def _read(d: Path) -> dict | None:
         m = json.loads((d / "meta.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    return {"slug": m.get("slug", d.name), "title": m.get("title", ""), "updated": m.get("updated", 0),
-            "published": m.get("published", True) is not False}
+    out = {"slug": m.get("slug", d.name), "title": m.get("title", ""), "updated": m.get("updated", 0),
+           "published": m.get("published", True) is not False}
+    if m.get("source"):
+        out["source"] = m["source"]
+    return out
 
 
 def _write(d: Path, meta: dict) -> dict:
@@ -40,8 +45,10 @@ def _write(d: Path, meta: dict) -> dict:
     return meta
 
 
-def save(title: str, html: str, slug: str | None = None) -> dict:
-    """生成或改写内容。改写已有页面保留它的发布状态（下线的页面改完仍是下线，由用户决定何时重新发布）。"""
+def save(title: str, html: str, slug: str | None = None, *, source: str | None = None,
+         publish: bool | None = None) -> dict:
+    """生成或改写内容。改写已有页面保留它的发布状态（下线的页面改完仍是下线，由用户决定何时重新发布）；
+    publish=True 只给用户亲手点的“分享”用（明确要公开）。source 不传则沿用旧值。"""
     if len(html.encode()) > MAX_HTML:
         raise ValueError("页面太大")
     slug = slug if slug and _dir(slug).is_dir() else _slug(title)
@@ -49,7 +56,11 @@ def save(title: str, html: str, slug: str | None = None) -> dict:
     old = _read(d)
     d.mkdir(parents=True, exist_ok=True)
     (d / "index.html").write_text(html, encoding="utf-8")
-    return _write(d, {"slug": slug, "title": title, "updated": time.time(), "published": old["published"] if old else True})
+    meta = {"slug": slug, "title": title, "updated": time.time(),
+            "published": publish if publish is not None else (old["published"] if old else True)}
+    if source or (old and old.get("source")):
+        meta["source"] = source or old["source"]
+    return _write(d, meta)
 
 
 def get(slug: str) -> dict | None:
@@ -86,6 +97,16 @@ def list_pages() -> list[dict]:
         return []
     metas = [m for d in PAGES.iterdir() if d.is_dir() and (d / "index.html").is_file() and (m := _read(d))]
     return sorted(metas, key=lambda m: -m["updated"])
+
+
+def find_by_source(source: str) -> dict | None:
+    """这个来源最近生成的页面（分享对话用；页面不多，扫目录即可）。"""
+    return next((m for m in list_pages() if m.get("source") == source), None)
+
+
+def wire(m: dict) -> dict:
+    """协议形状：id 与其他资源统一，url 由服务器地址拼出。"""
+    return {**m, "id": m["slug"], "url": url_of(m["slug"])}
 
 
 def delete(slug: str) -> None:

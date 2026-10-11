@@ -24,8 +24,7 @@ async def view(slug: str):
                                                             "X-Robots-Tag": "noindex", "Cache-Control": "no-cache"})
 
 
-def _wire(m: dict) -> dict:
-    return {**m, "id": m["slug"], "url": pages_store.url_of(m["slug"])}  # id：与其他资源统一
+_wire = pages_store.wire
 
 
 class PageIn(BaseModel):

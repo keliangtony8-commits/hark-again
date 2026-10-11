@@ -59,7 +59,8 @@ docker compose --profile build-only build sandbox-image                      # �
 - connectors/    OAuth 服务声明（providers.py）、授权与刷新（oauth.py）、MCP 客户端（mcp.py）
 - credentials.py 按 URL 解析凭证：OAuth 连接优先，其次保险箱
 - browser_client.py 调云浏览器服务
-- pages_store.py 可分享网页（/p/<slug>/，带沙盒 CSP）
+- pages_store.py 可分享网页（/p/<slug>/，带沙盒 CSP）；meta.source 记来源，find_by_source / wire
+- conversation_share.py 分享对话唯一入口（render 服务端渲染只读快照：Markdown 子集先转义再加标签、无脚本；share/unshare/state；source="conversation:<id>"，同一对话链接不变）
 - memory_digest.py “我对你的了解”：全部记忆 → 一段第二人称概括（单行表 memory_digest，id=me）。GET /api/memory-digest 零模型调用，只比指纹（每条记忆 id+updated_at 的哈希）报 stale；POST 才调一次 SUMMARY_MODEL（kind=digest，输入按 INPUT_CHARS 截断、profile 优先）；从不自动生成
 - usage.py       用量与花费：llm.py 每次调用后 record() 一行（自己的短会话，失败吞掉）；runner 用 scope(对话id) 归属；report() 出今天/本月（用户时区）+ 本月逐日 daily + 本月最花钱的对话 conversations（_top_conversations：外连接一次查标题，前 TOP_CONVERSATIONS=5，删了的对话 title=null）供 GET /api/usage，conversation_report() 出单个对话累计供 GET /api/conversations/{id}/usage（两者共用 _aggregate 形状）；check_budget() 记账后检查本月花费是否跨过 MONTHLY_BUDGET×BUDGET_ALERTS 的某档 → Home action 卡（target=usage），去重表 alerts_sent（key=budget:年月:档:预算），新档收起旧预算卡
 

@@ -15,6 +15,7 @@ import '../../ui/motion.dart';
 import '../me/usage_screen.dart' show ModelUsageList;
 import '../../ui/sheets.dart';
 import 'chat_controller.dart';
+import 'conversation_share.dart';
 
 final conversationUsageProvider = FutureProvider.autoDispose.family<UsageTotal, String>((ref, id) async =>
     UsageTotal.fromJson((await ref.read(apiProvider).get('/api/conversations/$id/usage') as Map).cast<String, dynamic>()));
@@ -85,8 +86,21 @@ class ConversationUsageSheet extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x5),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Sp.x1),
-              child: Text('本对话用量', style: context.text.titleLarge),
+              padding: const EdgeInsets.only(left: Sp.x1),
+              child: Row(children: [
+                Expanded(child: Text('本对话用量', style: context.text.titleLarge)),
+                // 当前对话的分享入口：从用量页换到分享页（同一位置的 Sheet，不叠两层）
+                IconButton(
+                  tooltip: '分享为网页',
+                  icon: const Icon(Icons.public_rounded),
+                  onPressed: () {
+                    final nav = Navigator.of(context);
+                    final root = nav.context;
+                    nav.pop();
+                    showConversationShare(root, id);
+                  },
+                ),
+              ]),
             ),
             const SizedBox(height: Sp.x3),
             SwapSwitcher(

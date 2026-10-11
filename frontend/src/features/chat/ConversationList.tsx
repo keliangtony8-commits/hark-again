@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Conversations } from "../../hooks/useConversations";
 import { groupConversations } from "../../lib/history";
 import type { ConversationSummary } from "../../lib/types";
-import { IconClose, IconDownload, IconEdit, IconMore, IconPin, IconPlus, IconSearch, IconTrash } from "../../ui/icons";
+import { IconClose, IconDownload, IconEdit, IconGlobe, IconMore, IconPin, IconPlus, IconSearch, IconTrash } from "../../ui/icons";
 import { Highlight, Menu, SearchField } from "../../ui/kit";
 import { confirmDialog } from "../../ui/dialog";
+import ShareSheet from "./ShareSheet";
 
 type Props = {
   title: string;
@@ -17,11 +18,12 @@ type Props = {
 };
 
 /**
- * 对话历史：搜索框 + 分组列表（置顶 / 今天 / …）+ 每行菜单（置顶、改名、导出、删除）。
+ * 对话历史：搜索框 + 分组列表（置顶 / 今天 / …）+ 每行菜单（置顶、改名、分享为网页、导出、删除）。
  * 桌面是常驻侧栏，移动端是抽屉——同一个组件，CSS 决定形态。数据全在 useConversations。
  */
 export default function ConversationList({ title, list, activeId, onOpen, onDelete, onClose }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<string | null>(null);
   const q = list.query.trim();
   // 搜索时按相关度（服务端顺序）平铺；平时按时间分组
   const groups = useMemo(
@@ -47,6 +49,7 @@ export default function ConversationList({ title, list, activeId, onOpen, onDele
                 onEdit={(on) => setEditing(on ? c.id : null)}
                 onRename={(t) => { setEditing(null); list.rename(c.id, t); }}
                 onPin={() => list.setPinned(c.id, !c.pinned)}
+                onShare={() => setSharing(c.id)}
                 onExport={() => list.exportMarkdown(c)}
                 onDelete={async () => { if (await confirmDialog({ title: `删除「${c.title}」？`, text: "整段对话会一起删除。" })) onDelete(c.id); }} />
             ))}
@@ -54,16 +57,17 @@ export default function ConversationList({ title, list, activeId, onOpen, onDele
         ))}
         {q && !list.searching && list.items.length === 0 && <div className="conv-empty">没有找到「{q}」</div>}
       </nav>
+      {sharing && <ShareSheet conversationId={sharing} onClose={() => setSharing(null)} />}
     </aside>
   );
 }
 
 type RowProps = {
   c: ConversationSummary; q: string; index: number; active: boolean; editing: boolean;
-  onOpen: () => void; onEdit: (on: boolean) => void; onRename: (t: string) => void; onPin: () => void; onExport: () => void; onDelete: () => void;
+  onOpen: () => void; onEdit: (on: boolean) => void; onRename: (t: string) => void; onPin: () => void; onShare: () => void; onExport: () => void; onDelete: () => void;
 };
 
-function ConversationRow({ c, q, index, active, editing, onOpen, onEdit, onRename, onPin, onExport, onDelete }: RowProps) {
+function ConversationRow({ c, q, index, active, editing, onOpen, onEdit, onRename, onPin, onShare, onExport, onDelete }: RowProps) {
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => { if (editing) input.current?.select(); }, [editing]);
 
@@ -89,6 +93,7 @@ function ConversationRow({ c, q, index, active, editing, onOpen, onEdit, onRenam
       <Menu trigger={<IconMore />} items={[
         { label: c.pinned ? "取消置顶" : "置顶", icon: <IconPin />, onSelect: onPin },
         { label: "重命名", icon: <IconEdit />, onSelect: () => onEdit(true) },
+        { label: "分享为网页", icon: <IconGlobe />, onSelect: onShare },
         { label: "导出 Markdown", icon: <IconDownload />, onSelect: onExport },
         { label: "删除", icon: <IconTrash />, danger: true, onSelect: onDelete },
       ]} />
