@@ -107,7 +107,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     status = "done"
     interrupted = False
     try:
-        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve), builder, model):
+        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid), builder, model):
             if not isinstance(ev, loop.Done):
                 await emit(to_wire(ev))
     except asyncio.CancelledError:

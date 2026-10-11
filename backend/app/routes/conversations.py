@@ -118,7 +118,7 @@ async def conversation_usage(cid: str, db: AsyncSession = Depends(get_session)):
 
 
 async def _with_messages(db: AsyncSession, cid: str) -> Conversation:
-    c = await db.scalar(select(Conversation).where(Conversation.id == cid).options(selectinload(Conversation.messages)))
+    c = await conversation_share.load(db, cid)
     if not c:
         raise HTTPException(404)
     return c

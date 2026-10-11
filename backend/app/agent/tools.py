@@ -24,6 +24,7 @@ class ToolContext:
     db: AsyncSession
     project_id: str | None = None
     approve: Approver = deny_all
+    conversation_id: str | None = None  # 当前对话（分享对话等“作用于这段对话本身”的工具用）
 
 
 @dataclass
@@ -39,11 +40,15 @@ class Tool:
     description: str      # 给模型看
     parameters: dict      # JSON Schema
     run: Callable[..., Awaitable[ToolResult]]
-    scope: str = "always"  # always | project（只在项目对话里提供，如文件与沙盒）
+    scope: str = "always"  # always | project（只在项目对话里提供，如文件与沙盒）| conversation（需要知道当前对话）
     risk: Callable[[dict], str | None] | None = None  # 返回需要审批的理由；None = 直接执行
 
     def available(self, ctx: ToolContext) -> bool:
-        return self.scope == "always" or (self.scope == "project" and ctx.project_id is not None)
+        if self.scope == "project":
+            return ctx.project_id is not None
+        if self.scope == "conversation":
+            return ctx.conversation_id is not None
+        return True
 
 
 REGISTRY: dict[str, Tool] = {}

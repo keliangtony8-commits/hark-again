@@ -1,5 +1,5 @@
 """分享对话 = 把对话做成一张只读的公开网页快照（Pages 的一种，source="conversation:<id>"）。
-唯一入口：share / unshare / state，路由 routes/conversations.py 只转发。
+唯一入口：load / share / unshare / state，路由 routes/conversations.py 与工具 agent/builtin/pages.py share_conversation 只转发。
 - 快照：分享那一刻的内容；对话之后有新消息 → state 里 stale=True，客户端提示“更新分享”，同一链接覆盖。
 - 停止分享 = 页面下线（pages_store 的 published=False），链接保留，再分享原链接复活。
 - 只放对外安全的东西：文字 / 代码 / 表格 / 链接 / 数字卡 / 生成的网页链接；
@@ -12,6 +12,10 @@ from zoneinfo import ZoneInfo
 
 from . import pages_store
 from .config import settings
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from .models import Conversation, Message
 
 
@@ -207,7 +211,13 @@ def render(c: Conversation, messages: list[Message], now: datetime | None = None
         '<footer>只读快照，由我的助手生成</footer></main></body></html>')
 
 
-# ---------- 对外三件事 ----------
+# ---------- 对外入口 ----------
+
+async def load(db: AsyncSession, cid: str) -> Conversation | None:
+    """带消息读出对话（快照要全部消息）。不存在 → None。"""
+    return await db.scalar(select(Conversation).where(Conversation.id == cid)
+                           .options(selectinload(Conversation.messages)))
+
 
 def _last_change(c: Conversation, messages: list[Message]) -> float:
     times = [m.created_at for m in messages if m.created_at] + ([c.updated_at] if c.updated_at else [])

@@ -236,6 +236,8 @@ class ChatController extends Notifier<ChatState> {
         _patchPending((m) => m.copyWith(blocks: _setAt(m.blocks, e['index'] as int, block)));
         // 助手改了记忆：记忆列表（记忆页、记忆卡的撤销状态都读它）过期，重拉一次
         if (block is MemoryBlock) ref.invalidate(memoriesProvider);
+        // 助手发布了网页 / 分享了这段对话：Pages 列表过期（分享面板是 autoDispose，打开时自己会重拉）
+        if (block is PageBlock) ref.invalidate(pagesProvider);
       case 'block.delta':
         _patchPending((m) {
           final i = e['index'] as int;
