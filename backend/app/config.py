@@ -135,6 +135,7 @@ class Settings(BaseSettings):
     vault_key: str = ""  # Fernet 密钥，见 .env.example
     public_url: str = "http://localhost"  # 外网访问地址，OAuth 回调、Pages、端口预览链接用
     internal_url: str = "http://backend:8000"  # 容器之间访问后端的地址：助手自己的云浏览器打开端口预览时用（preview.py）
+    preview_rewrite: bool = True  # 端口预览改写页面里以 / 开头的绝对路径（preview_rewrite.py）；有问题时设 false 原样转发
     app_scheme: str = "myassistant"  # 原生 App 的深链 scheme，须与 AndroidManifest / Info.plist 一致
     google_client_id: str = ""
     google_client_secret: str = ""

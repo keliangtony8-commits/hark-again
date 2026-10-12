@@ -16,7 +16,9 @@ forward() 经 sandbox_client.preview_send 交给沙盒服务，沙盒在专用�
     jupyter-server-proxy）：Flask(ProxyFix)/Werkzeug、Jupyter、Streamlit 一类会据此生成带前缀的链接。
   - WebSocket 照样转（热更新、Streamlit/Gradio、Jupyter 内核）：签名同一条，先和上游握手、带回上游选的子协议再接受，
     帧原样搬运（文本/二进制不变），关闭码两边互传；有来往就算电脑在用。
-  - 已知限制（写进工具说明）：页面里以 / 开头的绝对路径会跳出预览前缀，要用相对路径或框架的 base 选项。
+  - 页面里以 / 开头的绝对路径（/assets/…、fetch("/api/…")、import "/src/…"）由 preview_rewrite.py 补上前缀（v1.75）。
+    已知限制（写进工具说明）：前端路由按 location.pathname 匹配的（React Router BrowserRouter 等）首页匹配不上，
+    要用 hash 路由或把 basename 设成当前路径；webpack 运行时拼出的绝对路径大多也能被注入脚本拦住，个别会漏。
 """
 import base64
 import hashlib

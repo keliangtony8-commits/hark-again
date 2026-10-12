@@ -7,7 +7,7 @@ from starlette.background import BackgroundTask
 
 import httpx
 
-from .. import preview, sandbox_client
+from .. import preview, preview_rewrite, sandbox_client
 from ..auth import require_user
 from .files import _workspace
 
@@ -69,9 +69,22 @@ async def forward(token: str, path: str, request: Request):
         except ValueError:
             kind = None
         return _page(kind if kind in ("asleep", "no_service", "too_large") else "unreachable")
-    resp = StreamingResponse(r.aiter_raw(), status_code=r.status_code, background=BackgroundTask(r.aclose))
-    resp.raw_headers = [(k.encode("latin-1"), v.encode("latin-1"))
-                        for k, v in preview.response_headers(r.headers.multi_items(), token)]
+    items, body = list(r.headers.multi_items()), r.aiter_raw()
+    k = preview_rewrite.wants(request.method, r.status_code, r.headers)
+    if k:  # 页面里以 / 开头的绝对路径补上预览前缀（规则全在 preview_rewrite.py）
+        try:
+            items, body = await preview_rewrite.collect(r, k, token)
+        except httpx.HTTPError:
+            await r.aclose()
+            return _page("unreachable")
+    out = [(h.encode("latin-1"), v.encode("latin-1")) for h, v in preview.response_headers(items, token)]
+    if isinstance(body, bytes):
+        await r.aclose()
+        resp = Response(body, status_code=r.status_code)
+        resp.raw_headers = out + [(b"content-length", str(len(body)).encode())]
+        return resp
+    resp = StreamingResponse(body, status_code=r.status_code, background=BackgroundTask(r.aclose))
+    resp.raw_headers = out
     return resp
 
 
