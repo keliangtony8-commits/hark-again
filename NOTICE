@@ -33,3 +33,4 @@
   移植到 backend/app/file_edit.py（seek_sequence、normalise）、backend/tests/smoke_file_seen.py（单测）（v1.41）
 - google-gemini/gemini-cli packages/core/src/agents/browser/snapshotSuperseder.ts — Apache-2.0, Copyright Google LLC, modified
   移植到 backend/app/agent/supersede.py、backend/tests/smoke_supersede.py（单测）（v1.42）
+- deepseek-ai/deepseek-harness packages/fs/tool-fs-search src/glob.ts（sampleAcrossTopLevel、relativeToSearchRoot、topLevelSegment）及 tests/tools.spec.ts 对应用例 — MIT License, Copyright (c) 2026 DeepSeek, modified

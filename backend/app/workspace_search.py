@@ -197,10 +197,12 @@ def _where(path: str) -> str:
     return f"「{path}」里" if path else "工作区里"
 
 
-def _finish(ws: str, name: str, head: str, lines: list[str], shown: int, total: int, tail: list[str]) -> str:
-    """内联前 shown 行（受条数 + 字符预算），其余整份落盘给 read_file 分段读（deepseek-harness 的 formatted spill）。"""
+def _finish(ws: str, name: str, head: str, lines: list[str], shown: int, total: int, tail: list[str],
+            inline: list[str] | None = None, basis: str = "") -> str:
+    """内联前 shown 行（受条数 + 字符预算），其余整份落盘给 read_file 分段读（deepseek-harness 的 formatted spill）。
+    inline：调用方已挑好的内联页（glob 超上限时的顶层抽样）；落盘的仍是完整 lines。basis：说明内联页怎么挑的。"""
     body, used = [], len(head)
-    for line in lines[:shown]:
+    for line in (inline if inline is not None else lines[:shown]):
         if used + len(line) + 1 > INLINE_CHARS:
             break
         body.append(line)
@@ -208,13 +210,58 @@ def _finish(ws: str, name: str, head: str, lines: list[str], shown: int, total: 
     notes = list(tail)
     if len(body) < len(lines):
         full = "\n".join([head, *lines, *tail])
+        what = f"列了 {len(body)} 行（共 {len(lines)} 行，{total} 条）{basis}" if basis else \
+            f"只列了前 {len(body)} 行（共 {len(lines)} 行，{total} 条）"
         try:
             where = spill.save(ws, name, full)
-            notes.append(f"只列了前 {len(body)} 行（共 {len(lines)} 行，{total} 条）；完整结果存在 {where}，"
-                         f"用 read_file 分段看，或者缩小 path / glob / pattern 重新搜。")
+            notes.append(f"{what}；完整结果存在 {where}，用 read_file 分段看，或者缩小 path / glob / pattern 重新搜。")
         except OSError:
-            notes.append(f"只列了前 {len(body)} 行（共 {len(lines)} 行）；缩小 path / glob / pattern 重新搜看其余的。")
+            notes.append(f"{what}；缩小 path / glob / pattern 重新搜看其余的。")
     return "\n".join([head, *body, *notes])
+
+
+# ---------- 超上限时的顶层抽样 ----------
+# Ported from deepseek-harness/packages/fs/tool-fs-search/src/glob.ts (MIT), modified:
+# sampleAcrossTopLevel + topLevelSegment + relativeToSearchRoot；路径分隔符固定 "/"（工作区在 Linux 上），
+# 返回 (items, shown, total)。为什么：超上限时只给“最新的前 100 个”，一个刚 pip/npm 装完的大目录会把整页占满，
+# 模型看不到别的目录里还有匹配；按顶层目录轮流取，每个顶层目录先各拿一个名额，再轮第二圈。
+def _relative_to_root(path: str, root: str) -> str:
+    if root == ".":
+        return path[2:] if path.startswith("./") else path
+    trimmed = root.rstrip("/")
+    if not trimmed:
+        return path.lstrip("/")
+    if path == trimmed:
+        return ""
+    return path[len(trimmed) + 1:] if path.startswith(trimmed + "/") else path
+
+
+def _top_level(path: str) -> str:
+    trimmed = path.lstrip("/")
+    cut = trimmed.find("/")
+    return trimmed if cut == -1 else trimmed[:cut]
+
+
+def sample_across_top_level(paths: list[str], max_items: int, root: str = ".") -> tuple[list[str], int, int]:
+    """paths 已按新→旧排好；返回 (内联页 按顶层分组, 内联页覆盖的顶层数, 全部顶层数)。
+    组顺序和组内顺序都沿用 paths，所以扁平结果（每个路径自成一组）就是原来的“最新的前 N 个”。"""
+    groups: dict[str, list[str]] = {}
+    for p in paths:
+        groups.setdefault(_top_level(_relative_to_root(p, root)), []).append(p)
+    taken: dict[str, list[str]] = {}
+    active = [(key, 0) for key in groups]
+    count = 0
+    while active and count < max_items:
+        nxt = []
+        for key, index in active:
+            if count >= max_items:
+                break
+            count += 1
+            taken.setdefault(key, []).append(groups[key][index])
+            if index + 1 < len(groups[key]):
+                nxt.append((key, index + 1))
+        active = nxt
+    return [p for items in taken.values() for p in items], len(taken), len(groups)
 
 
 # ---------- glob ----------
@@ -242,8 +289,16 @@ def glob(ws: str, pattern: str, path: str = "") -> str:
         return f"{_where(path)}没有文件名匹配 {pattern} 的文件（看了 {w.seen} 个文件，隐藏目录和 node_modules 这类依赖目录默认不搜）。" \
             + ("".join(capped))
     head = f"{_where(path)}找到 {len(hits)} 个匹配 {pattern} 的文件（新改的在前）："
-    lines = [f"{rel}  ({_size(size)}, {_ago(now - mtime)})" for mtime, rel, size in hits]
-    return _finish(ws, "glob", head, lines, GLOB_MAX, len(hits), capped)
+    line_of = {rel: f"{rel}  ({_size(size)}, {_ago(now - mtime)})" for mtime, rel, size in hits}
+    lines = list(line_of.values())
+    if len(hits) <= GLOB_MAX:
+        return _finish(ws, "glob", head, lines, GLOB_MAX, len(hits), capped)
+    items, shown, groups = sample_across_top_level([rel for _, rel, _ in hits], GLOB_MAX, base_rel or ".")
+    if groups == len(hits):  # 扁平结果：抽样就是“最新的前 N 个”，照旧说法
+        return _finish(ws, "glob", head, lines, GLOB_MAX, len(hits), capped)
+    basis = f"，按顶层目录轮流抽样（覆盖 {shown}/{groups} 个顶层目录），不是只取最新的" + \
+        ("；想看某个目录就把 path 指过去" if shown < groups else "")
+    return _finish(ws, "glob", head, lines, GLOB_MAX, len(hits), capped, [line_of[r] for r in items], basis)
 
 
 # ---------- rg 预筛（可选加速） ----------

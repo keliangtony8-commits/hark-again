@@ -36,6 +36,7 @@ async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
       "按文件名模式在工作区里找文件，新改的排前面，带大小和修改时间。"
       "*.py 匹配任意深度的文件名；带 / 的按路径匹配，如 src/**/*.ts、docs/*.md；{a,b} 二选一。"
       "隐藏目录（.git/.jobs/.spill/.home）和 node_modules 这类依赖目录默认不搜，path 明确指进去才搜。"
+      "超过 100 个时按顶层目录轮流抽样列出，完整结果落盘可 read_file。"
       "找文件别用 run_command find/ls -R。",
       {"type": "object", "properties": {
           "pattern": {"type": "string", "description": "文件名模式，如 **/*.py、report*.pdf"},
