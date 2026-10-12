@@ -79,6 +79,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - command_guard.py 命令安全规则唯一入口（v1.20）：verdict(cmd) → block（永不执行）/ ask（弹审批卡）；拆段逐条看，参考 Codex CLI
 - deliver.py     交付唯一入口（v1.22，display_file 工具）：工作区文件/目录 → 文件卡；默认快照进 uploads（source=upload，之后改/删原文件不影响），目录自动打包 zip（跳过 .git/.jobs/node_modules…），超过 deliver_max_mb（默认 50）的普通文件退回工作区文件卡；write_file 不再出卡
 - spill.py       长输出落盘唯一入口（v1.20）：工具结果超过 tool_result_max → 开头+结尾给模型、全文进工作区 .spill/（隐藏，留最近 50 个），read_file offset 读回；参考 deepseek-harness spill-policy
+- quota.py       磁盘配额唯一规则（v1.31：WORKSPACE_DISK_MB 每工作区上限，默认 3072，0 = 不限；满了拒写文件/上传/启动后台任务、停运行中的任务，命令结果提醒模型）
 - jobs.py        后台任务唯一入口（v1.19；v1.20 护栏：idle_timeout 默认 1200 秒无输出判卡住、日志超 job_log_max_mb 停，stop_reason）：工作区 .jobs/<id>/ 文件约定（run.sh/log/exit/pid/cancelled）、启动/对账/取消/丢失判定、结束后在原对话接着说（worker 每 5 秒 tick + follow_ups）
 - vault.py       保险箱：加解密、按域名匹配（唯一解密点）
 - schedule.py    定时任务时刻计算（due_at/is_due/next_run_at，按用户时区）：worker 判断到点与接口的 next_run_at 共用，保证界面写的就是实际会跑的时间

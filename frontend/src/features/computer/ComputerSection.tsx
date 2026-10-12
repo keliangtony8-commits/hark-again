@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { JobLog } from "../../blocks/JobBlock";
 import { http } from "../../lib/api";
 import { COMPUTER_MEMORY_TIGHT, type ComputerStatus, computerDetail, computerHint, computerMemoryRatio, computerOomNote, computerPath,
-  computerRestartText, computerSemantics, computerStateLabel } from "../../lib/computer";
+  computerRestartText, computerSemantics, computerStateLabel, diskFull } from "../../lib/computer";
 import { jobDuration } from "../../lib/jobs";
 import type { JobInfo } from "../../lib/types";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
@@ -54,7 +54,7 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
         )}
         {oom && <div key={s.sandbox.oom_kills} className="computer-oom">{oom}</div>}
       </div>
-      {hint && <span key={hint} className="row-hint computer-hint" aria-hidden>{hint}</span>}
+      {hint && <span key={hint} className={`row-hint computer-hint${diskFull(s) ? " is-warn" : ""}`} aria-hidden>{hint}</span>}
       {to && <span className="row-trail" aria-hidden><IconChevron /></span>}
     </>
   );

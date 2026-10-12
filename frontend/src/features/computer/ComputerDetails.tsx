@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { http } from "../../lib/api";
-import { CLEANUP_TEXT, type CleanupResult, EMPTY_STORAGE, type InstalledTool, type StorageKey, cleanupDone, cleanupLabel, computerPath,
-  processLine, processTitle, storageRows, toolsSummary } from "../../lib/computer";
+import { CLEANUP_TEXT, type CleanupResult, type ComputerStatus, EMPTY_STORAGE, type InstalledTool, type StorageKey, cleanupDone, cleanupLabel,
+  computerDiskLine, computerDiskNote, computerDiskRatio, computerPath, diskTight, processLine, processTitle, storageRows, toolsSummary } from "../../lib/computer";
 import { formatSize } from "../../lib/files";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
-import { IconGlobe, IconExternal, IconCopy, IconChevron, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt } from "../../ui/icons";
+import { IconGlobe, IconExternal, IconCopy, IconChevron, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt, IconDisk } from "../../ui/icons";
 import { Section, Sheet } from "../../ui/kit";
 import type { ComputerCtl } from "./useComputer";
 import { type PreviewLink, portLine, portTitle } from "../../lib/preview";
@@ -78,6 +78,24 @@ const ICONS: Record<StorageKey, () => JSX.Element> = {
   files: () => <IconFolder />, installed: () => <IconDownload />, logs: () => <IconReceipt />, spill: () => <IconDoc />, cache: () => <IconRefresh />,
 };
 
+/** 磁盘配额：已用 / 上限 + 细条；快满、满了条变警示色并说清后果（与状态块的内存条同一画法）。 */
+function QuotaRow({ s }: { s: ComputerStatus }) {
+  const note = computerDiskNote(s);
+  const line = computerDiskLine(s);
+  return (
+    <div className={`row computer-quota${diskTight(s) ? " is-tight" : ""}`} role="group" aria-label={[line, note].filter(Boolean).join("，")}>
+      <span className="row-icon"><IconDisk /></span>
+      <div className="row-body" aria-hidden>
+        <div key={line} className="row-title computer-state">{line}</div>
+        <div className={`meter computer-meter${diskTight(s) ? " meter-near" : ""}`}>
+          <span style={{ transform: `scaleX(${computerDiskRatio(s) ?? 0})` }} />
+        </div>
+        {note && <div key={s.disk_level} className="computer-oom">{note}</div>}
+      </div>
+    </div>
+  );
+}
+
 export function StorageSection({ ws, ctl, enter, onFiles }: { ws: string; ctl: ComputerCtl; enter?: number; onFiles?: () => void }) {
   const [cleaning, setCleaning] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -101,6 +119,7 @@ export function StorageSection({ ws, ctl, enter, onFiles }: { ws: string; ctl: C
       ? <button className="btn btn-ghost btn-sm" disabled={cleaning} onClick={clean}>{cleaning ? "正在清理" : label}</button>
       : done && <span key={done} className="section-note computer-done">{done}</span>}>
       <div className="list">
+        {s.disk_limit != null && <QuotaRow s={s} />}
         {storageRows(st).map(([k, name, line, bytes]) => {
           const body = (<>
             <span className="row-icon">{ICONS[k]()}</span>

@@ -312,11 +312,15 @@ class SwipeToDelete extends StatelessWidget {
 /// 小状态标签：已连接 / 内置 / 登录……[strong] 用强调色。
 /// 行尾的状态小字（“已连接”“带令牌”）：状态只是说明，不做成按钮的样子——能点的动作才用 PillButton(dense)。
 class RowHint extends StatelessWidget {
-  const RowHint(this.text, {super.key});
+  const RowHint(this.text, {super.key, this.warn = false});
   final String text;
 
+  /// 需要用户注意（磁盘满了之类）：警示色。
+  final bool warn;
+
   @override
-  Widget build(BuildContext context) => Text(text, style: context.text.labelSmall);
+  Widget build(BuildContext context) =>
+      Text(text, style: warn ? context.text.labelSmall?.copyWith(color: context.palette.warning) : context.text.labelSmall);
 }
 
 class Pill extends StatelessWidget {

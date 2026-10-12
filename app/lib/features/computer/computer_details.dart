@@ -3,6 +3,7 @@
 //     python train.py --epochs 10
 //     CPU 88% · 内存 200 MB · 运行 3 分 05 秒
 //   磁盘                              清理 12 MB
+//     已用 2.6 GB，上限 3 GB（v1.31 配额，服务器不限时不出现）  ▬▬▬▬▬▬▬▭  快满 / 满了 → 条变警示色 + 一句后果
 //     文件 / 装的软件 / 任务日志 / 长输出存档 / 下载缓存（0 字节的不列，行尾是大小）
 //     装过的工具  pip 12 个 · npm 2 个  →  弹层列出名字和版本
 //   正在监听的端口（v1.30）     ← 只在运行中且有端口时出现
@@ -183,6 +184,7 @@ class _StorageSectionState extends ConsumerState<StorageSection> {
                     ),
             )),
         GlassGroup(children: [
+          if (s.diskLimit != null) _QuotaTile(s),
           for (final (key, name, line, bytes) in storageRows(s.storage))
             RowTile(
               key: ValueKey('disk-$key'),
@@ -200,6 +202,49 @@ class _StorageSectionState extends ConsumerState<StorageSection> {
           ),
         ]),
       ]),
+    );
+  }
+}
+
+/// 磁盘配额：已用 / 上限 + 细条；快满、满了条变警示色并说清后果（与状态块的内存条同一画法）。
+class _QuotaTile extends StatelessWidget {
+  const _QuotaTile(this.s);
+  final ComputerStatus s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final note = computerDiskNote(s);
+    final line = computerDiskLine(s);
+    return Semantics(
+      container: true,
+      label: [line, ?note].join('，'),
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2), // 与 RowTile 同一条行首线
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.storage_rounded, size: Layout.rowIcon, color: s.diskTight ? p.warning : p.text2),
+          const SizedBox(width: Sp.x4),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              SwapSwitcher(child: Text(line, key: ValueKey(line), style: context.text.titleMedium)),
+              Padding(
+                padding: const EdgeInsets.only(top: Sp.x2),
+                child: MeterBar(value: computerDiskRatio(s) ?? 0, height: Sp.x1, color: s.diskTight ? p.warning : p.text2),
+              ),
+              RiseSwitcher(
+                child: note == null
+                    ? const SizedBox.shrink(key: ValueKey('nonote'))
+                    : Padding(
+                        key: ValueKey('note-${s.diskLevel}'),
+                        padding: const EdgeInsets.only(top: Sp.x2),
+                        child: Text(note, style: context.text.bodySmall?.copyWith(color: p.warning)),
+                      ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
 }

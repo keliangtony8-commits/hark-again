@@ -14,7 +14,10 @@ export type ComputerStatus = {
   disk_used: number; disk_partial: boolean; running_jobs: JobInfo[];
   storage?: ComputerStorage; tools?: InstalledTool[];
   ports?: ListeningPort[]; // v1.30 在监听的端口（只在运行中时有）
+  // v1.31 磁盘配额（服务器 app/quota.py）：上限字节（null = 不限）；ok / tight ≥85% / full 满了（新文件写不进、后台任务会被停）/ off
+  disk_limit?: number | null; disk_level?: DiskLevel;
 };
+export type DiskLevel = "ok" | "tight" | "full" | "off";
 export type ComputerProcess = { pid: number; cpu: number; memory: number; elapsed: number; command: string };
 export type ComputerStorage = { files: number; installed: number; logs: number; spill: number; cache: number; cleanable: number };
 export type InstalledTool = { kind: "pip" | "npm" | string; name: string; version: string };
@@ -41,7 +44,7 @@ export function computerMemoryRatio(c: ComputerStatus): number | null {
 }
 
 export function computerDetail(c: ComputerStatus): string {
-  const disk = `文件 ${formatSize(c.disk_used)}${c.disk_partial ? "+" : ""}`;
+  const disk = `文件 ${formatSize(c.disk_used)}${c.disk_partial ? "+" : ""}${c.disk_limit != null ? ` / ${formatSize(c.disk_limit)}` : ""}`;
   const sb = c.sandbox;
   switch (sb.state) {
     case "running":
@@ -54,9 +57,31 @@ export function computerDetail(c: ComputerStatus): string {
 }
 
 export function computerHint(c: ComputerStatus): string | null {
+  if (diskFull(c)) return "磁盘满了";
   if (c.running_jobs.length) return `${c.running_jobs.length} 个任务在跑`;
   if (c.sandbox.outdated && c.sandbox.state !== "unreachable") return "下次用到时更新";
   return c.sandbox.state === "running" ? "空闲" : null;
+}
+
+export const diskFull = (c: ComputerStatus) => c.disk_level === "full";
+export const diskTight = (c: ComputerStatus) => c.disk_level === "tight" || diskFull(c);
+
+/** 磁盘占上限的比例（0–1）；不限 → null（不画条）。 */
+export function computerDiskRatio(c: ComputerStatus): number | null {
+  const l = c.disk_limit;
+  if (l == null || l <= 0) return null;
+  return Math.min(1, Math.max(0, c.disk_used / l));
+}
+
+export const computerDiskLine = (c: ComputerStatus) =>
+  `已用 ${formatSize(c.disk_used)}${c.disk_partial ? "+" : ""}，上限 ${formatSize(c.disk_limit ?? 0)}`;
+
+export function computerDiskNote(c: ComputerStatus): string | null {
+  switch (c.disk_level) {
+    case "full": return "满了：新文件写不进，后台任务会被停下。清理一下，或删掉不要的文件";
+    case "tight": return "快满了：满了以后新文件写不进、后台任务会被停下";
+    default: return null;
+  }
 }
 
 export const computerRestartText = (c: ComputerStatus) =>

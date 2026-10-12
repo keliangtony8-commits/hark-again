@@ -7,7 +7,7 @@ import 'preview.dart';
 class ComputerStatus {
   const ComputerStatus({required this.workspace, required this.state, this.memoryUsed, this.memoryLimit, this.startedAt,
       this.idleMinutes, this.outdated = false, this.diskUsed = 0, this.diskPartial = false, this.jobs = const [],
-      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const []});
+      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off'});
 
   factory ComputerStatus.fromJson(Map<String, dynamic> j) {
     final sb = (j['sandbox'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -21,6 +21,8 @@ class ComputerStatus {
       outdated: sb['outdated'] == true,
       diskUsed: (j['disk_used'] as num?)?.toInt() ?? 0,
       diskPartial: j['disk_partial'] == true,
+      diskLimit: (j['disk_limit'] as num?)?.toInt(),
+      diskLevel: j['disk_level'] as String? ?? 'off',
       jobs: [for (final x in (j['running_jobs'] as List? ?? const [])) JobInfo.fromJson((x as Map).cast<String, dynamic>())],
       cpuPercent: (sb['cpu_percent'] as num?)?.toDouble(),
       oomKills: (sb['oom_kills'] as num?)?.toInt() ?? 0,
@@ -59,6 +61,13 @@ class ComputerStatus {
 
   /// 在监听的端口（v1.30，只在运行中时有）：旁边“预览”= POST …/computer/preview 签链接。
   final List<ListeningPort> ports;
+
+  /// 磁盘配额（v1.31，服务器 app/quota.py）：上限字节（null = 不限）；
+  /// 档位 ok / tight（≥85%，提醒）/ full（满了：新文件写不进、后台任务会被停）/ off。
+  final int? diskLimit;
+  final String diskLevel;
+  bool get diskFull => diskLevel == 'full';
+  bool get diskTight => diskLevel == 'tight' || diskFull;
 
   bool get running => state == 'running';
   bool get reachable => state != 'unreachable';
@@ -117,7 +126,8 @@ double? computerMemoryRatio(ComputerStatus s) {
   return (u / l).clamp(0, 1).toDouble();
 }
 
-String _disk(ComputerStatus s) => '文件 ${formatSize(s.diskUsed)}${s.diskPartial ? '+' : ''}';
+String _disk(ComputerStatus s) => '文件 ${formatSize(s.diskUsed)}${s.diskPartial ? '+' : ''}'
+    '${s.diskLimit != null ? ' / ${formatSize(s.diskLimit!)}' : ''}';
 
 /// 状态下面那一行：在跑看内存，休眠/没开机说明什么时候会开，连不上说清是哪一环。磁盘始终在。
 String computerDetail(ComputerStatus s) {
@@ -137,6 +147,7 @@ String computerDetail(ComputerStatus s) {
 
 /// 行尾小字：有任务在跑说几个；在跑但空闲说“空闲”；镜像更新过说“下次用到时更新”。
 String? computerHint(ComputerStatus s) {
+  if (s.diskFull) return '磁盘满了';
   if (s.jobs.isNotEmpty) return '${s.jobs.length} 个任务在跑';
   if (s.outdated && s.reachable) return '下次用到时更新';
   if (s.running) return '空闲';
@@ -159,6 +170,24 @@ String? computerOomNote(ComputerStatus s) {
   final cap = s.memoryLimit != null ? '（上限 ${formatSize(s.memoryLimit!)}）' : '';
   return '内存不够，系统强制结束过 ${s.oomKills} 个程序$cap。分批处理或重启能缓过来';
 }
+
+/// 磁盘占上限的比例（0–1）；不限 → null（不画条）。
+double? computerDiskRatio(ComputerStatus s) {
+  final l = s.diskLimit;
+  if (l == null || l <= 0) return null;
+  return (s.diskUsed / l).clamp(0, 1).toDouble();
+}
+
+/// 配额那一行的标题：“已用 2.6 GB，上限 3 GB”。
+String computerDiskLine(ComputerStatus s) =>
+    '已用 ${formatSize(s.diskUsed)}${s.diskPartial ? '+' : ''}，上限 ${formatSize(s.diskLimit ?? 0)}';
+
+/// 快满 / 满了的一句；平时 null。
+String? computerDiskNote(ComputerStatus s) => switch (s.diskLevel) {
+      'full' => '满了：新文件写不进，后台任务会被停下。清理一下，或删掉不要的文件',
+      'tight' => '快满了：满了以后新文件写不进、后台任务会被停下',
+      _ => null,
+    };
 
 /// 程序行：标题是命令（去掉 /usr/bin/ 之类的路径），副标题是 CPU · 内存 · 运行多久。
 String processTitle(ComputerProcess p) {

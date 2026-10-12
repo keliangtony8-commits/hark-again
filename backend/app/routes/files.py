@@ -5,7 +5,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import computer, reply_files, storage, workspaces
+import asyncio
+
+from .. import computer, quota, reply_files, storage, workspaces
 from ..db import get_session
 from ..auth import require_query_token, require_user
 from ..config import settings
@@ -52,8 +54,14 @@ async def list_project_files(pid: str = Depends(_workspace)):
 @router.post("/api/projects/{pid}/files", dependencies=auth)
 async def upload_project_file(file: UploadFile, pid: str = Depends(_workspace)):
     p = storage.safe_join(storage.project_dir(pid), file.filename or "file")
+    data = await _read_limited(file)
+    try:
+        await asyncio.to_thread(quota.check, pid, len(data))
+    except quota.QuotaError as e:
+        raise HTTPException(507, str(e))  # 507 Insufficient Storage：客户端原样显示中文原因
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_bytes(await _read_limited(file))
+    p.write_bytes(data)
+    quota.forget(pid)
     return {"path": str(p.relative_to(storage.project_dir(pid))), "size": p.stat().st_size}
 
 
@@ -70,6 +78,7 @@ async def delete_project_file(path: str, pid: str = Depends(_workspace)):
     p = storage.safe_join(storage.project_dir(pid), path)
     if p.is_file():
         p.unlink()
+        quota.forget(pid)
     return {"ok": True}
 
 

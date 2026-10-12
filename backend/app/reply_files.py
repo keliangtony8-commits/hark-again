@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import storage, workspaces
+from . import quota, storage, workspaces
 from .blocks import blocks_to_text
 from .config import settings
 from .models import Conversation, Message
@@ -129,9 +129,14 @@ async def save(db: AsyncSession, message_id: str, project_id: str | None = None)
     where = await workspaces.name(db, pid)
     if where is None:
         raise LookupError("项目不存在")
+    try:
+        quota.check(pid, len(text.encode()))
+    except quota.QuotaError as e:
+        raise ValueError(str(e)) from e
     root = storage.project_dir(pid)
     p = _free_path(root, file_name(msg.blocks or [], msg.created_at))
     p.write_text(text, encoding="utf-8")
+    quota.forget(pid)
     rel = str(p.relative_to(root))
     return {"project_id": pid, "project_name": where, "path": rel, "name": p.name,
             "size": p.stat().st_size, "mime": storage.mime_of(p.name)}

@@ -203,7 +203,7 @@ class _StatusTile extends StatelessWidget {
                         style: context.text.titleMedium?.copyWith(color: problem ? p.warning : null)),
                   ),
                 ),
-                if (hint != null) SwapSwitcher(child: RowHint(hint, key: ValueKey(hint))),
+                if (hint != null) SwapSwitcher(child: RowHint(hint, key: ValueKey(hint), warn: s.diskFull)),
                 if (onOpen != null) Icon(Icons.chevron_right_rounded, color: p.text3, size: Layout.rowIcon),
               ]),
               const SizedBox(height: Sp.x1),

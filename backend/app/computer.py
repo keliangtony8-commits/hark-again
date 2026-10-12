@@ -5,6 +5,7 @@ status(db, ws) 把三处事实拼在一起，只读不启动：
     运行中带内存已用/上限、开机时间、镜像是否过期（下次用到会自动换新）；
   - 工作区占用的磁盘（含隐藏的 .home 装的包、.jobs 日志——这些都真占 VPS 的盘）；
   - 正在跑的后台任务（jobs.wire，带日志尾巴，前端可取消、看日志）；
+  - 磁盘配额（v1.31，quota.py）：disk_limit / disk_level ok|tight|full|off，满了写不进、后台任务被停；
   - 在监听的端口（v1.30，只在运行中时问沙盒；旁边“预览”按钮走 POST …/computer/preview，规则在 preview.py）。
 v1.27 补齐“像一台电脑”的那几样：CPU（占配额的百分比）、正在跑的程序（按 CPU 排前 8）、内存打满被系统杀过几次（OOM）、
 磁盘按用途拆开（文件 / 装的软件 / 任务日志 / 长输出存档 / 下载缓存）、装过的工具清单（pip / npm 用户级安装，直接读工作区
@@ -24,38 +25,16 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import jobs, preview, sandbox_client, workspaces
+from . import jobs, preview, quota, sandbox_client, workspaces
 from .models import Job
 from .storage import project_dir
 from .wire_time import iso
 
-DISK_SCAN_MAX = 200_000  # 最多数这么多个文件（node_modules 很大时也别把接口拖死），超过标 disk_partial
+disk_usage = quota.disk_usage  # 数法只有一份（quota.py），这里沿用旧名
 
 
 class ComputerError(RuntimeError):
     """给用户看的中文原因。"""
-
-
-def disk_usage(root: Path, limit: int = DISK_SCAN_MAX) -> tuple[int, bool]:
-    """(字节数, 是否只数了一部分)。不跟随符号链接（.venv 里一堆链接不重复算）。"""
-    total, seen, stack = 0, 0, [str(root)]
-    while stack:
-        try:
-            with os.scandir(stack.pop()) as it:
-                for e in it:
-                    seen += 1
-                    if seen > limit:
-                        return total, True
-                    try:
-                        if e.is_dir(follow_symlinks=False):
-                            stack.append(e.path)
-                        elif e.is_file(follow_symlinks=False):
-                            total += e.stat(follow_symlinks=False).st_size
-                    except OSError:
-                        continue
-        except OSError:
-            continue
-    return total, False
 
 
 HOME = workspaces.HOME_DIR
@@ -162,13 +141,14 @@ async def status(db: AsyncSession, ws: str) -> dict:
     root = project_dir(ws)
     parts = await asyncio.to_thread(storage_breakdown, root, {j.id for j in running})
     used = sum(parts[k] for k in ("files", "installed", "logs", "spill", "cache"))
+    q = quota.remember(ws, used, parts["partial"])  # 刚数过的就是最新的：顺手喂给配额缓存
     ports: list[dict] = []
     if raw is not None and raw.get("state") == "running":
         try:
             ports = (await preview.listening(ws))["ports"]
         except preview.PreviewError:
             pass
-    return {"ports": ports, "workspace": ws, "name": name, "sandbox": sandbox_wire(raw), "disk_used": used,
+    return {**q.wire(), "ports": ports, "workspace": ws, "name": name, "sandbox": sandbox_wire(raw), "disk_used": used,
             "disk_partial": parts.pop("partial"), "storage": parts,
             "tools": await asyncio.to_thread(installed_tools, root),
             "running_jobs": [jobs.wire(j, chars=600) for j in running]}
@@ -195,6 +175,7 @@ async def cleanup(db: AsyncSession, ws: str) -> dict:
         raise LookupError("没有这个工作区")
     running = {j.id for j in await running_jobs(db, ws)}
     freed = await asyncio.to_thread(clean_disk, project_dir(ws), running)
+    quota.forget(ws)
     try:
         freed += await sandbox_client.cleanup(ws)
     except httpx.HTTPError:

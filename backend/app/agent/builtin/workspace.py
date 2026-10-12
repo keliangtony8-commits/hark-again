@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from ... import command_guard, deliver, jobs, sandbox_client, spill, vision, workspaces
+from ... import command_guard, deliver, jobs, quota, sandbox_client, spill, vision, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -72,8 +72,13 @@ def page(text: str, offset: int = 0, limit: int = MAX_READ) -> str:
        "required": ["path", "content"]})
 async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
     p = safe_join(project_dir(ctx.workspace), path)
+    try:
+        await asyncio.to_thread(quota.check, ctx.workspace, len(content.encode()))
+    except quota.QuotaError as e:
+        return ToolResult(f"没有写入 {path}：{e}", failed="工作区磁盘满了")
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
+    quota.forget(ctx.workspace)
     return ToolResult(f"已写入 {path}（{len(content)} 字符）。")
 
 
@@ -107,7 +112,8 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
       "期间不要反复用 job_status 轮询。后台任务连续 idle_timeout 秒没有任何输出会被判定卡住自动停掉。"
       "前台命令运行中用户能实时看到输出。标准输入默认是空的（交互提示读到 EOF，不会卡住）；"
       "需要喂输入时（确认提示的回答、要处理的数据）用 stdin 传。"
-      "毁系统的命令（rm -rf /、格式化、关机等）会被直接拦下。",
+      "毁系统的命令（rm -rf /、格式化、关机等）会被直接拦下。"
+      "工作区磁盘有上限（含装的软件和日志），满了写不进新文件、后台任务会被停，结果里会提醒你。",
       {"type": "object", "properties": {
           "command": {"type": "string"},
           "timeout": {"type": "integer", "default": 60,
@@ -166,6 +172,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
     if r.get("oom"):
         hint = f"\n（{jobs.oom_hint(r.get('memory_limit'))}）"
+    # 命令可能刚写了大东西：重数一遍（线程里跑，最多数 20 万项），满了 / 快满了才有一句
+    hint += await asyncio.to_thread(quota.model_note, ctx.workspace, True)
     return ToolResult(f"{status}\n{out}{hint}", [
         {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}],
         failed="" if r.get("exit_code") == 0 and not timed_out else status)

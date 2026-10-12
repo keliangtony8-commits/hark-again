@@ -12,6 +12,8 @@
   padding: var(--sp-3) 0 var(--sp-3) var(--sp-4); text-align: left; color: inherit; }
 .computer-job-open .row-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* v1.27：内存打满警示、程序命令（等宽、单行）、清理结果；项目首屏的状态行是链接 */
+.computer-hint.is-warn { color: var(--warning); }
+.computer-quota.is-tight .row-icon { color: var(--warning); }
 .computer-oom { margin-top: var(--sp-2); font-size: var(--fs-xs); color: var(--warning); animation: rise var(--dur) var(--ease) both; }
 .computer-proc { font-family: var(--font-mono); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .computer-done { animation: fade var(--dur) var(--ease) both; }

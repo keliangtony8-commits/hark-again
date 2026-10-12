@@ -9,6 +9,7 @@
 沙盒服务只负责启动、查活、整组杀（sandbox/runner.py）；状态从文件读，所以沙盒服务、后端、worker 谁重启都不丢。
 
 护栏（guard_reason()，worker 每轮对运行中的任务查一次）：日志超过 job_log_max_mb → 停（防撑爆磁盘）；
+工作区磁盘超过配额（quota.py，v1.31）→ 停，满了也不让启动新任务；
 连续 idle_timeout 秒日志没长（mtime 没变；进度条的 \r 刷新也算有输出）→ 判定卡住停掉。停掉的原因记进 stop_reason，
 卡片和通知里都写明，助手照常在原对话接着说（它需要知道并决定怎么办）。思路参考了 deepseek-harness（MIT）jobs 的
 “kill 带 reason、结算时把原因并进结论”，以及 Codex CLI 的命令无输出超时。
@@ -18,6 +19,7 @@ settle() 记下结论和日志尾巴、把聊天里那张任务卡改成最终�
 worker 的 follow_ups() 随后在原对话里带着结果再跑一轮（像有人告诉助手“你那个任务跑完了”），
 模型若已经用 job_status 自己看过结果（followup=seen）就不再打扰。
 """
+import asyncio
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,7 +28,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import sandbox_client
+from . import quota, sandbox_client
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -188,10 +190,12 @@ def last_output_at(job: Job) -> datetime:
 
 
 def guard_reason(job: Job, now: datetime | None = None) -> str | None:
-    """运行中的任务该不该被护栏停掉；该停返回给人看的原因。"""
+    """运行中的任务该不该被护栏停掉；该停返回给人看的原因。会数工作区磁盘（有缓存），异步代码里放线程跑。"""
     now = now or datetime.now(timezone.utc)
     if log_size(job) > settings.job_log_max_mb * 1024 * 1024:
         return f"输出超过 {settings.job_log_max_mb} MB，防止撑爆磁盘"
+    if reason := quota.job_reason(job.project_id):
+        return reason
     idle = job.idle_timeout
     if idle and (now - max(last_output_at(job), _aware(job.created_at))).total_seconds() >= idle:
         return f"连续 {duration_text(idle)} 没有任何新输出，判定卡住"
@@ -218,6 +222,10 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
         raise JobError("命令是空的")
     if (n := await running_count(db, project_id)) >= settings.job_max_running:
         raise JobError(f"这个工作区已有 {n} 个后台任务在跑（上限 {settings.job_max_running}），等它们结束或先取消一个")
+    try:
+        await asyncio.to_thread(quota.check, project_id)
+    except quota.QuotaError as e:
+        raise JobError(str(e)) from e
     limit = max(10, min(int(timeout or settings.job_max_seconds), settings.job_max_seconds))
     job = Job(id=new_id(), project_id=project_id, conversation_id=conversation_id, task_id=task_id,
               title=(title or command.splitlines()[0]).strip()[:60] or "后台任务", command=command, timeout=limit,
@@ -273,7 +281,7 @@ async def refresh(db: AsyncSession, job: Job, check_alive: bool = False) -> Job:
         return job
     if (obs := observe(job)) is not None:
         await settle(db, job, *obs)
-    elif check_alive and (reason := guard_reason(job)):
+    elif check_alive and (reason := await asyncio.to_thread(guard_reason, job)):
         try:
             await stop(db, job, "guard", reason)
         except JobError:

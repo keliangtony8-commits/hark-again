@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     # 护栏：日志超过这么多 MB 就停掉（防撑爆磁盘）；默认连续这么多秒没有任何新输出判定卡住（0 = 不判）
     job_log_max_mb: int = 64
     job_idle_seconds: int = 1200
+    # 每个工作区（项目 / 我的文件）的磁盘上限（MB，含装的软件和任务日志；0 = 不限）。规则在 quota.py
+    workspace_disk_mb: int = 3072
     # 单个工具结果给模型的上限（字符）；超出的完整原文落盘到项目 .spill/（spill.py），主聊天只截断
     tool_result_max: int = 16000
     stt_model: str = "stt"      # 语音识别别名（gateway 模式走 OpenAI 音频接口）
