@@ -28,3 +28,24 @@ export const attachSub = (f: { upload?: { size: number }; ref?: FileBlock; error
 export const MAX_MESSAGE_FILES = 10;
 
 export const extOf = (name: string) => (name.includes(".") ? name.split(".").pop()!.slice(0, 4).toUpperCase() : "FILE");
+
+const KIND_BY_EXT: Record<string, string> = {
+  pdf: "PDF 文档", doc: "Word 文档", docx: "Word 文档", md: "文档", txt: "文本",
+  xls: "表格", xlsx: "表格", csv: "表格", ppt: "演示文稿", pptx: "演示文稿", key: "演示文稿",
+  zip: "压缩包", gz: "压缩包", tgz: "压缩包", tar: "压缩包", "7z": "压缩包", rar: "压缩包",
+  html: "网页", json: "数据", svg: "矢量图",
+};
+
+/** 文件卡第二行的“是什么”——唯一规则（App ui/format.dart fileKind 同义）：先看扩展名，再看 mime 大类，都不认识 = 空。 */
+export const fileKind = (name: string, mime: string) => {
+  const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
+  if (KIND_BY_EXT[ext]) return KIND_BY_EXT[ext];
+  for (const [p, k] of [["image/", "图片"], ["audio/", "音频"], ["video/", "视频"], ["text/", "文本"]] as const)
+    if (mime.startsWith(p)) return k;
+  return "";
+};
+
+/** 文件卡第二行：[种类 · ]大小[ · 我的文件/项目文件]（App fileSubtitle 同义）。 */
+export const fileSubtitle = (b: FileBlock) =>
+  [fileKind(b.name, b.mime), formatSize(b.size), b.source === "project" ? workspaceFilesTitle(b.project_id) : ""]
+    .filter(Boolean).join(" · ");

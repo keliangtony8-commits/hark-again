@@ -1,8 +1,10 @@
 """工作区工具：读写文件直接在后端做（快、零成本）；执行命令交给隔离沙盒。
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
+import asyncio
+
 import httpx
 
-from ... import command_guard, jobs, sandbox_client, spill, vision
+from ... import command_guard, deliver, jobs, sandbox_client, spill, vision
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -65,16 +67,36 @@ def page(text: str, offset: int = 0, limit: int = MAX_READ) -> str:
     return f"{text[start:end]}\n…（第 {start}–{end} 字符，共 {total} 字符；{more}）"
 
 
-@tool("write_file", "正在写文件", "在工作区里创建或覆盖一个文本文件。",
+@tool("write_file", "正在写文件", "在工作区里创建或覆盖一个文本文件（用户看不到卡片；要交给用户的用 display_file）。",
       {"type": "object", "properties": {"path": _PATH, "content": {"type": "string"}},
        "required": ["path", "content"]})
 async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
     p = safe_join(project_dir(ctx.workspace), path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
-    return ToolResult(f"已写入 {path}（{len(content)} 字符）。", [
-        {"type": "file", "source": "project", "id": path, "name": p.name, "mime": "text/plain",
-         "size": p.stat().st_size, "project_id": ctx.workspace}])
+    return ToolResult(f"已写入 {path}（{len(content)} 字符）。")
+
+
+@tool("display_file", "正在把文件交给你",
+      "把工作区里的文件交给用户：聊天里出现文件卡（图片直接显示），用户能打开/下载。用于交付成果——"
+      "命令生成的图表、PDF、表格、压缩包、报告、写好的文档；传目录会自动打包成 zip。"
+      "交付的是此刻的快照，之后改文件不影响已交付的卡片。中间产物、脚本、日志不要交付（除非用户要）。"
+      "交付后在回复里一句话说清是什么，不要再贴文件内容。",
+      {"type": "object", "properties": {
+          "paths": {"type": "array", "items": _PATH, "minItems": 1, "maxItems": deliver.MAX_FILES,
+                    "description": "要交付的文件或目录，按想让用户看到的顺序"}},
+       "required": ["paths"]})
+async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
+    blocks, notes = [], []
+    for path in list(dict.fromkeys(paths))[:deliver.MAX_FILES]:
+        try:
+            d = await asyncio.to_thread(deliver.deliver, ctx.workspace, path)
+        except deliver.DeliverError as e:
+            notes.append(f"没有交付 {path}：{e}")
+            continue
+        blocks.append(d.block)
+        notes.append(d.note)
+    return ToolResult("\n".join(notes), blocks)
 
 
 @tool("run_command", "正在运行命令",

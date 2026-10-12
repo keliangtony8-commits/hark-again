@@ -73,6 +73,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - skills_store.py 技能读写：用户目录里与内置同 id 的文件 = 自定义版（就地顶替内置，customized=true，reset 删掉即恢复）；新建 id 永远唯一，绝不覆盖或顶替；内置不能删、不能直接 PUT；停用开关存 data/skills/_disabled.json（按 id，损坏当全启用），系统提示只列 enabled_skills()，use_skill 拒绝停用的
 - sandbox_client.py 调沙盒服务（前台命令 run；后台任务 start_job/cancel_job/job_alive）
 - command_guard.py 命令安全规则唯一入口（v1.20）：verdict(cmd) → block（永不执行）/ ask（弹审批卡）；拆段逐条看，参考 Codex CLI
+- deliver.py     交付唯一入口（v1.22，display_file 工具）：工作区文件/目录 → 文件卡；默认快照进 uploads（source=upload，之后改/删原文件不影响），目录自动打包 zip（跳过 .git/.jobs/node_modules…），超过 deliver_max_mb（默认 50）的普通文件退回工作区文件卡；write_file 不再出卡
 - spill.py       长输出落盘唯一入口（v1.20）：工具结果超过 tool_result_max → 开头+结尾给模型、全文进工作区 .spill/（隐藏，留最近 50 个），read_file offset 读回；参考 deepseek-harness spill-policy
 - jobs.py        后台任务唯一入口（v1.19；v1.20 护栏：idle_timeout 默认 1200 秒无输出判卡住、日志超 job_log_max_mb 停，stop_reason）：工作区 .jobs/<id>/ 文件约定（run.sh/log/exit/pid/cancelled）、启动/对账/取消/丢失判定、结束后在原对话接着说（worker 每 5 秒 tick + follow_ups）
 - vault.py       保险箱：加解密、按域名匹配（唯一解密点）

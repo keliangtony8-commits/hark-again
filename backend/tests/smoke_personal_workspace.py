@@ -107,8 +107,7 @@ assert not any(REGISTRY[t].scope == "project" for t in tools), tools
 system = seen[-1]["messages"][0]["content"]
 assert "个人工作区" in system and "我的文件" in system, system
 assert (storage.PROJECTS / ME / "算" / "结果.txt").read_text() == "42"
-fb = next(b for b in reply.blocks if b["type"] == "file")
-assert fb["project_id"] == ME and fb["id"] == "算/结果.txt", fb
+assert not any(b["type"] == "file" for b in reply.blocks), reply.blocks  # v1.22：写文件不再出卡，交付走 display_file
 async def proj_prompt():
     async with SessionLocal() as db:
         return await context.build_system_prompt(db, pid)

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api.dart';
 import '../core/links.dart';
+import '../core/workspace.dart';
 import '../models/block.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
@@ -56,7 +57,9 @@ class FileBlockView extends ConsumerWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(block.name, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(formatSize(block.size), style: context.text.bodySmall),
+            Text(fileSubtitle(block.name, block.mime, block.size,
+                    workspaceTitle: block.source == 'project' ? workspaceFilesTitle(block.projectId ?? '') : null),
+                style: context.text.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
           ]),
         ),
         Icon(Icons.download_rounded, color: context.palette.text3),

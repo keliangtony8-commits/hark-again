@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     timezone: str = "Asia/Shanghai"
     data_dir: str = "/data"
     max_upload_mb: int = 20
+    # display_file 交付（deliver.py）：拍快照进 uploads 的上限（MB），超过的普通文件退回工作区文件卡
+    deliver_max_mb: int = 50
     sandbox_url: str = "http://sandbox:9000"
     sandbox_token: str = "change-me"
     # 后台任务（jobs.py）：单个任务最长秒数、每个项目同时最多跑几个（4GB 小 VPS 默认 2）

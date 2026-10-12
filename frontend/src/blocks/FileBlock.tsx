@@ -1,4 +1,4 @@
-import { blockUrl, extOf, formatSize, isImage } from "../lib/files";
+import { blockUrl, extOf, fileSubtitle, isImage } from "../lib/files";
 import type { FileBlock as T } from "../lib/types";
 import { IconDownload } from "../ui/icons";
 
@@ -12,7 +12,7 @@ export default function FileBlock({ block }: { block: T }) {
       <span className="blk-file-ext">{extOf(block.name)}</span>
       <span className="blk-link-body">
         <div className="blk-link-title">{block.name}</div>
-        <div className="blk-link-host">{formatSize(block.size)}{block.source === "project" ? " · 项目文件" : ""}</div>
+        <div className="blk-link-host">{fileSubtitle(block)}</div>
       </span>
       <span className="blk-file-dl"><IconDownload /></span>
     </a>

@@ -47,7 +47,7 @@
 | `links` | `items: [{url, label?, title?}]` |
 | `table` | `title?`, `columns[]`, `rows[][]`, `note?` |
 | `code` | `language`, `title?`, `source` |
-| `file` | `source: upload\|project`, `id`, `name`, `mime`, `size`, `project_id?`（source=project 时是工作区 id：项目 id 或 `me`；下载 `/api/projects/{project_id}/files/{id}`） |
+| `file` | `source: upload\|project`, `id`, `name`, `mime`, `size`, `project_id?`（source=project 时是工作区 id：项目 id 或 `me`；下载 `/api/projects/{project_id}/files/{id}`）。v1.22：助手用 display_file 交付的成果默认是 source=upload 快照（下载 `/api/uploads/{id}`，之后工作区改动不影响）；超过 deliver_max_mb 的退回 source=project。卡片第二行 = 种类 · 大小[ · 我的文件/项目文件]（fileKind 规则两端一致） |
 | `approval` | `id`, `title`, `detail`, `state: pending\|approved\|rejected\|expired` |
 | `browser` | `session`（实时画面：`GET /api/browser/screen?token=` 轮询；接管：`POST /api/browser/mouse {x,y}` 0–1 归一化坐标，`POST /api/browser/keyboard {text?, key?}`） |
 | `page` | `slug`, `title`, `url` |

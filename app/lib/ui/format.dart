@@ -1,6 +1,28 @@
 // 展示用的格式化：文件大小、相对时间、钟点、耗时。所有页面共用，措辞统一。
 String formatSize(int b) => b < 1024 ? '$b B' : b < 1 << 20 ? '${(b / 1024).toStringAsFixed(0)} KB' : '${(b / (1 << 20)).toStringAsFixed(1)} MB';
 
+/// 文件卡第二行的“是什么”——唯一规则（网页 lib/files.ts fileKind 同义）：先看扩展名，再看 mime 大类，都不认识 = 空。
+String fileKind(String name, String mime) {
+  final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+  const byExt = {
+    'pdf': 'PDF 文档', 'doc': 'Word 文档', 'docx': 'Word 文档', 'md': '文档', 'txt': '文本',
+    'xls': '表格', 'xlsx': '表格', 'csv': '表格', 'ppt': '演示文稿', 'pptx': '演示文稿', 'key': '演示文稿',
+    'zip': '压缩包', 'gz': '压缩包', 'tgz': '压缩包', 'tar': '压缩包', '7z': '压缩包', 'rar': '压缩包',
+    'html': '网页', 'json': '数据', 'svg': '矢量图',
+  };
+  final hit = byExt[ext];
+  if (hit != null) return hit;
+  if (mime.startsWith('image/')) return '图片';
+  if (mime.startsWith('audio/')) return '音频';
+  if (mime.startsWith('video/')) return '视频';
+  if (mime.startsWith('text/')) return '文本';
+  return '';
+}
+
+/// 文件卡第二行：[种类 · ]大小[ · 我的文件/项目文件]（工作区文件卡才有最后一段：它会跟着工作区里的文件变）。
+String fileSubtitle(String name, String mime, int size, {String? workspaceTitle}) =>
+    [fileKind(name, mime), formatSize(size), ?workspaceTitle].where((s) => s.isNotEmpty).join(' · ');
+
 String formatAgo(DateTime? t, {DateTime? now}) {
   if (t == null) return '';
   final d = (now ?? DateTime.now()).difference(t);
