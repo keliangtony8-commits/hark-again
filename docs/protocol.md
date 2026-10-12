@@ -14,7 +14,7 @@
 
 > 客户端约定：连接断了就退避重连；断线期间用户发的消息在客户端标“待发送”，连上再发 `user.message`；回复中途断线时，连上后 `GET /api/conversations/{id}` 补全（服务器照常落库）。`approval.reply`、`form.reply`、`message.regenerate` 不排队。服务器按到达顺序一轮接一轮处理（不会丢掉刚结束时立刻发来的下一条）。
 > 重新生成：客户端先在本地撤掉旧回复；收到 `error` 或回复开始前断线 → `GET /api/conversations/{id}` 以服务器为准。
-> 停止：生成中发 `message.cancel`，停止键置灰，等服务器回 `message.done`（半截回复，`status: "stopped"`）或 `message.stopped`（还没吐字）再收尾；客户端不在本地先砍。断线 = 服务器也停下并把半截落库（`status: "stopped"`），重连后 `GET` 能看到。v1.52：服务器进程在一轮中途被杀（崩溃 / OOM / 重启）时，这一轮的进度检查点会在服务器重新起来、或打开对话时变成一条 `status: "interrupted"` 的回复（半截内容保留；还在跑的步骤为 `stopped`，带 `note` 与 `code: "TOOL_OUTCOME_UNKNOWN"`）；客户端行尾标“服务器重启，回答被打断”。v1.56：预算用完收尾的回复 `status: "wrapped"`、原地打转被叫停的 `status: "looped"`（都会出现在 message.done 和 GET 里，内容完整但事没做完）；客户端行尾标说明，最后一条没正常说完（stopped / interrupted / wrapped / looped）的回复下给“继续”，点了就是发一条普通的 `user.message`（text “继续”），服务器在下一轮历史里附对应说明。老客户端不认识的 status 当正常说完。
+> 停止：生成中发 `message.cancel`，停止键置灰，等服务器回 `message.done`（半截回复，`status: "stopped"`）或 `message.stopped`（还没吐字）再收尾；客户端不在本地先砍。断线 = 服务器也停下并把半截落库（`status: "stopped"`），重连后 `GET` 能看到。v1.52：服务器进程在一轮中途被杀（崩溃 / OOM / 重启）时，这一轮的进度检查点会在服务器重新起来、或打开对话时变成一条 `status: "interrupted"` 的回复（半截内容保留；还在跑的步骤为 `stopped`，带 `note` 与 `code: "TOOL_OUTCOME_UNKNOWN"`）；客户端行尾标“服务器重启，回答被打断”。v1.56：预算用完收尾的回复 `status: "wrapped"`、原地打转被叫停的 `status: "looped"`（都会出现在 message.done 和 GET 里，内容完整但事没做完）；客户端行尾标说明，最后一条没正常说完（stopped / interrupted / wrapped / looped）的回复下给“继续”，点了就是发一条普通的 `user.message`（text “继续”），服务器在下一轮历史里附对应说明。老客户端不认识的 status 当正常说完。v1.57：被打断的回复在服务器端还带着工具轨迹（只给模型重放，不上协议，客户端无改动）。
 > 复制：纯客户端，把回复的块转成 Markdown（text 原样、code 加围栏、table 转 Markdown 表、links 列表；审批/浏览器等过程卡片不复制）。
 > 编辑：只能改最后一条用户消息（已在服务器上、不在生成中）。客户端先本地改气泡、撤掉后面的回复，再用 `message.start.user_message` 覆盖；被拒/断线同“重新生成”。
 客户端 → 服务器：

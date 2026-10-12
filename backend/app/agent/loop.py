@@ -228,9 +228,9 @@ class MessageBuilder:
     def steps(self, stopped: bool = False) -> list[dict]:
         return self.timeline.partial() if stopped else [dict(s) for s in self.timeline.steps]
 
-    def trace(self) -> list[dict]:
-        """这一轮的工具轨迹（跨轮保留，规则在 tool_trace.py）。"""
-        return tool_trace.record(self.transcript, self.base) if self.transcript is not None else []
+    def trace(self, missing=tool_trace.ABORTED) -> list[dict]:
+        """这一轮的工具轨迹（跨轮保留，规则在 tool_trace.py）；missing 见 tool_trace.record（崩溃检查点用）。"""
+        return tool_trace.record(self.transcript, self.base, missing=missing) if self.transcript is not None else []
 
 
 async def run(system: str, history: list[dict], ctx: ToolContext,

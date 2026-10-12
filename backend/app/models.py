@@ -79,6 +79,7 @@ class TurnJournal(Base):
     owner: Mapped[str] = mapped_column(String(48))  # "<进程>:<启动 id>"
     blocks: Mapped[list] = mapped_column(JSON, default=list)
     steps: Mapped[list] = mapped_column(JSON, default=list)
+    trace: Mapped[list] = mapped_column(JSON, default=list)  # 到目前为止的工具轨迹（tool_trace.record；恢复后进 messages.trace）
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     beat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 

@@ -73,7 +73,7 @@ def _output(content) -> str:
     return clip(_mask(text))
 
 
-def _groups(items: list[dict]) -> list[list[dict]]:
+def _groups(items: list[dict], missing=ABORTED) -> list[list[dict]]:
     """[[assistant tool_calls, tool…], …]：Codex normalize——缺结果补 ABORTED，孤儿结果丢弃，其它角色丢弃。"""
     out: list[list[dict]] = []
     current: list[dict] | None = None
@@ -100,7 +100,8 @@ def _groups(items: list[dict]) -> list[list[dict]]:
             current = None  # 一段纯文字之后再出现的 tool 结果不属于任何调用
     for g in out:  # 补齐缺的结果，顺序跟调用一致
         have = {t["tool_call_id"]: t for t in g[1:]}
-        g[1:] = [have.get(c["id"]) or {"role": "tool", "tool_call_id": c["id"], "content": ABORTED}
+        g[1:] = [have.get(c["id"]) or {"role": "tool", "tool_call_id": c["id"],
+                                        "content": missing(c["id"]) if callable(missing) else missing}
                  for c in g[0]["tool_calls"]]
     return out
 
@@ -115,12 +116,13 @@ def size(trace: list[dict]) -> int:
     return total
 
 
-def record(messages: list[dict], base: int, limit: int | None = None) -> list[dict]:
-    """这一轮新增的工具轨迹（扁平的 OpenAI 消息列表），超 limit 从最早的批次丢起，至少留最新一批。"""
+def record(messages: list[dict], base: int, limit: int | None = None, missing=ABORTED) -> list[dict]:
+    """这一轮新增的工具轨迹（扁平的 OpenAI 消息列表），超 limit 从最早的批次丢起，至少留最新一批。
+    missing：缺结果的调用补什么——字符串，或 call_id → 字符串（崩溃检查点按步骤状态区分“结果未知”和“做完了但结果没存下”）。"""
     limit = settings.history_trace_chars if limit is None else limit
     if limit <= 0:
         return []
-    groups = _groups(messages[base:])
+    groups = _groups(messages[base:], missing)
     kept: list[list[dict]] = []
     total = 0
     for g in reversed(groups):

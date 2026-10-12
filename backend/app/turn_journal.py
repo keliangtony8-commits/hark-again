@@ -10,6 +10,9 @@
 #        用户中途停止（status=stopped）也附（Codex INTERRUPTED_GUIDANCE：被停下的命令可能执行了一部分）；
 #      ④嫁接心跳（deepseek 靠单进程写日志，我们有 backend + worker 两个进程）：owner = 进程:启动 id，同类进程换了启动 id
 #        或心跳超过 STALE_S 没动 = 那个进程已经没了。
+#      ⑤v1.57 检查点也存工具轨迹（tool_trace.record，嫁接 Codex normalize 的“缺结果补一条”）：恢复出的 interrupted 消息带 trace，
+#        下一轮模型看到被打断前真正调过什么、拿到过什么结果，而不只是一行摘要。缺结果的调用按步骤状态补：
+#        还在跑 → 结果未知（同 UNKNOWN_NOTE）；已经做完/失败 → 做完了但结果没来得及存（结果在 done 事件之后才进消息列表）。
 """一轮回答的崩溃恢复（唯一入口）。
 
 一轮开始 open() 记一行检查点；跑的过程中 seen(event) 在工具开始/结束、新块出现时（文字最多每 SAVE_S 一次）
@@ -42,6 +45,8 @@ STALE_S = 90.0  # 心跳多久没动算进程没了（> 4 次心跳）
 SAVE_S = 3.0  # 只有文字在涨时，检查点最多这么久存一次
 
 UNKNOWN_NOTE = "服务器重启时它还在跑，结果没记下来，可能已经执行了一部分"
+TRACE_UNKNOWN = "（这次调用没有结果：服务器重启时它还在跑，结果没记下来，可能已经执行了一部分。有副作用的先核实再决定要不要重做。）"
+TRACE_LOST = "（这次调用已经{state}，但服务器重启前结果没来得及存下来。需要结果就重新查看，别重复有副作用的操作。）"
 
 BOOT = uuid.uuid4().hex[:12]
 _process = "backend"
@@ -78,6 +83,28 @@ def interrupted_steps(steps: list[dict]) -> list[dict]:
     """还在跑的步骤 → stopped + 结果未知（deepseek TOOL_OUTCOME_UNKNOWN）；其余原样。"""
     return [{**s, "state": "stopped", "note": UNKNOWN_NOTE, "code": TOOL_OUTCOME_UNKNOWN}
             if s.get("state") == "running" else dict(s) for s in steps or []]
+
+
+def trace_missing(steps: list[dict]):
+    """call_id → 缺结果时补的话（步骤 id 就是 call_id）：做完的说结果丢了，其余一律结果未知。"""
+    states = {s.get("id"): s.get("state") for s in steps or []}
+
+    def text(call_id: str) -> str:
+        state = states.get(call_id)
+        if state == "done":
+            return TRACE_LOST.format(state="做完了")
+        if state == "error":
+            return TRACE_LOST.format(state="失败了")
+        return TRACE_UNKNOWN
+    return text
+
+
+def _trace(builder, steps: list[dict]) -> list[dict]:
+    try:
+        return builder.trace(missing=trace_missing(steps))
+    except Exception as e:  # noqa: BLE001 — 轨迹是附加信息，算不出来就不存
+        log.warning("turn journal trace failed: %s", e)
+        return []
 
 
 def _step_line(s: dict) -> str:
@@ -118,9 +145,11 @@ async def recover(db: AsyncSession, conversation_id: str | None = None, now: dat
     if conversation_id is not None:
         q = q.where(TurnJournal.conversation_id == conversation_id)
     rows = [r for r in (await db.scalars(q)).all() if dead(r.owner, r.beat_at, now)]
+    from .agent import tool_trace
     for r in rows:
+        trace = r.trace if tool_trace.valid(r.trace) else []  # 坏的/老行没有 → 退回步骤摘要（context 的 digest）
         db.add(Message(conversation_id=r.conversation_id, role="assistant", status="interrupted",
-                       blocks=settle_blocks(r.blocks or []), steps=interrupted_steps(r.steps or []),
+                       blocks=settle_blocks(r.blocks or []), steps=interrupted_steps(r.steps or []), trace=trace,
                        created_at=_aware(r.started_at) or _now()))
         await db.delete(r)
     if rows:
@@ -173,7 +202,7 @@ class Journal:
         try:
             async with SessionLocal() as db:
                 row = TurnJournal(conversation_id=self.conversation_id, task_id=self.task_id, owner=owner(),
-                                  blocks=[], steps=[])
+                                  blocks=[], steps=[], trace=[])
                 db.add(row)
                 await db.commit()
                 self.id = row.id
@@ -188,9 +217,10 @@ class Journal:
             await self._write(beat_at=_now())
 
     async def save(self, builder) -> None:
-        """存当前的块和步骤（原样：实时块、running 步骤都留着，恢复时才定格）。"""
+        """存当前的块、步骤和工具轨迹（原样：实时块、running 步骤都留着，恢复时才定格）。"""
         self._saved = time.monotonic()
-        await self._write(blocks=[dict(b) for b in builder.blocks], steps=builder.steps(), beat_at=_now())
+        steps = builder.steps()
+        await self._write(blocks=[dict(b) for b in builder.blocks], steps=steps, trace=_trace(builder, steps), beat_at=_now())
 
     async def seen(self, ev, builder) -> None:
         """每个内核事件过一下：工具开始/结束、新块、块替换立刻存；文字增量攒着，最多每 SAVE_S 存一次。"""
