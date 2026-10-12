@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, llm_retry, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, compact, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
+from . import approvals, compact, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -538,8 +538,8 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
     state = "error" if result.failed else "done"
     yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed, result.change) or {})
     content = _with_notes(result.content, notes)
-    if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）
-        content = spill.bound(content, settings.tool_result_max, ctx.workspace, call.name)
+    if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）；日志型再补中间段要点（distill.py）
+        content = await distill.bound(content, settings.tool_result_max, ctx.workspace, call.name, ctx.db)
     yield ToolResult(content, images=result.images)
 
 def _with_notes(content: str, notes: list[str]) -> str:

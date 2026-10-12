@@ -75,3 +75,5 @@
   移植到 backend/app/agent/next_speaker.py（v1.64）
 - google-gemini/gemini-cli packages/core/src/context/toolOutputMaskingService.ts（向后扫描保护线 + 成批遮盖 + 预览格式）— Apache License 2.0, modified
   移植到 backend/app/agent/tool_mask.py（v1.65）
+- google-gemini/gemini-cli packages/core/src/context/toolDistillationService.ts（摘要阈值、MAX_DISTILLATION_SIZE、提取提示词、15 s 超时与失败不影响）— Apache License 2.0, modified
+  移植到 backend/app/agent/distill.py（v1.66）

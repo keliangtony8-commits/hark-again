@@ -137,12 +137,20 @@ def notice(omitted: int, path: str | None, total: int) -> str:
     return f"\n…（中间省略 {omitted} 字符；{where}）…\n"
 
 
-def existing(text: str) -> tuple[str, int] | None:
-    """结果里已有一条落盘说明（沙盒那边存过全文）就返回 (路径, 全文字符数)，否则 None。只认 notice() 的完整写法。"""
+def located(text: str) -> tuple[int, int, str, int] | None:
+    """结果里那条落盘说明的位置：(说明起点, 说明终点, 路径, 全文字符数)；没有就 None。只认 notice() 的完整写法。"""
     m = _NOTICE_RE.search(text)
     if not m or not NAME_RE.match(m.group(3)[len(SPILL_DIR) + 1:]):
         return None
-    return m.group(3), int(m.group(2))
+    end = text.find("）…\n", m.end())
+    return m.start(), (end + 3 if end >= 0 else m.end()), m.group(3), int(m.group(2))
+
+
+def existing(text: str) -> tuple[str, int] | None:
+    """结果里已有一条落盘说明（沙盒那边存过全文）就返回 (路径, 全文字符数)，否则 None。"""
+    if (loc := located(text)) is None:
+        return None
+    return loc[2], loc[3]
 
 
 def bound(text: str, limit: int, project_id: str | None = None, name: str = "output") -> str:

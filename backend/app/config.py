@@ -101,6 +101,11 @@ class Settings(BaseSettings):
     # 旧工具结果遮盖（agent/tool_mask.py，移植自 Gemini CLI toolOutputMaskingService）：每次调模型前，最新一批和最近
     # tool_mask_protect_tokens 的工具输出原样；更早的累计 ≥ tool_mask_min_tokens 才成批换成预览 + 全文文件路径（无损）。
     # tool_mask_min_tokens=0 关闭
+    # 超长日志型工具输出的要点（agent/distill.py，移植自 Gemini CLI toolDistillationService）：首尾截断之外，从被省略的
+    # 中间段挑出报错 / 失败 / 退出码 / 文件:行号补在结果末尾。auto = 全文 ≥ tool_distill_chars 时多一次 summary_model
+    # 小调用摘要（失败退回本地挑行）；rules = 只本地挑行、零调用；off = 不做
+    tool_distill: str = "auto"
+    tool_distill_chars: int = 80_000
     tool_mask_protect_tokens: int = 24_000
     tool_mask_min_tokens: int = 12_000
     # 思考强度（app/reasoning.py）：按别名配可选档 + 默认，如 {"smart": {"levels": ["low", "medium", "high"], "default": "medium"}}；
