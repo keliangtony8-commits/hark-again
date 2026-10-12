@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocks/block_view.dart';
+import '../../blocks/skill_chip.dart';
 import '../../core/speech.dart';
 import '../../models/activity.dart';
 import '../../models/block.dart';
@@ -63,7 +64,16 @@ class MessageView extends StatelessWidget {
     final p = context.palette;
     final text = plainText(message.blocks);
     final files = message.blocks.whereType<FileBlock>().toList();
+    final skills = message.blocks.whereType<SkillBlock>().toList();
     final bubble = Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      if (skills.isNotEmpty) // `$技能` 点名的技能：一排小标签（skill_chip.dart）
+        Padding(
+          padding: const EdgeInsets.only(bottom: Sp.x2),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Wrap(alignment: WrapAlignment.end, spacing: Sp.x2, runSpacing: Sp.x1, children: [for (final s in skills) SkillChip(s)]),
+          ),
+        ),
       for (final f in files)
         Padding(
           padding: const EdgeInsets.only(bottom: Sp.x2),

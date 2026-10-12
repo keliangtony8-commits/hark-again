@@ -60,6 +60,7 @@ sealed class Block {
         'form' => FormBlock.fromJson(j),
         'job' => JobBlock.fromJson(j),
         'shell' => ShellBlock.fromJson(j),
+        'skill' => SkillBlock(id: j['id'] as String? ?? '', name: j['name'] as String? ?? ''),
         'preview' => PreviewBlock.fromJson(j),
         'plan' => PlanBlock.fromJson(j),
         'delegate' => DelegateBlock.fromJson(j),
@@ -490,6 +491,12 @@ class DelegateTask {
   final int? seconds;
   final String? result; // 交回的结论（截断）
   final String? note; // 没做完 / 出错的原因
+}
+
+/// 用户消息里 `$技能` 点名的技能（v1.81，服务器 app/skill_mentions.py 认出来的）：气泡上方一枚小标签。
+class SkillBlock extends Block {
+  const SkillBlock({required this.id, required this.name});
+  final String id, name;
 }
 
 class UnknownBlock extends Block {

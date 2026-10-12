@@ -64,6 +64,13 @@ class FileBlock(BaseModel):
     project_id: str | None = None
 
 
+class SkillBlock(BaseModel):
+    """用户消息里 `$技能` 点名的技能（规则在 app/skill_mentions.py）：只存 id + 名字，正文每轮按当前技能库给模型。"""
+    type: Literal["skill"] = "skill"
+    id: str
+    name: str
+
+
 class ApprovalOption(BaseModel):
     id: str     # once | session | rule（主机命令）
     label: str
@@ -349,7 +356,7 @@ class FormBlock(BaseModel):
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
                         OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock, ChangesBlock,
-                        PlanReviewBlock, ShellBlock],
+                        PlanReviewBlock, ShellBlock, SkillBlock],
                   Field(discriminator="type")]
 
 
@@ -396,6 +403,8 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[{verb}：" + "；".join(i["content"] for i in b["items"]) + "]")
         elif t == "file":
             parts.append(f"[文件：{b['name']}]")
+        elif t == "skill":
+            parts.append(f"[技能：{b['name']}]")
         elif t == "job":
             state = {"running": "运行中（结束时你会收到通知，也可用 job_status 查看）", "done": "已完成", "failed": "失败",
                      "timed_out": "超时被终止", "cancelled": "已取消", "lost": "中断了"}.get(b.get("state"), "")

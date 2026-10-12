@@ -1,24 +1,26 @@
-import type { ProjectFile } from "../../lib/types";
-import { IconFile } from "../../ui/icons";
+import type { ReactNode } from "react";
 import { stagger } from "../../ui/kit";
-import { projectFileLine } from "../projects/projectHome";
 
-/** 输入框顶部的 @ 候选（和编辑条 / 命令条同一个位置）：↑↓ 选、Enter/Tab 补全、Esc 收起由 Composer 处理。
- *  files = null 表示还在读文件列表。 */
-export default function MentionList({ files, active, onPick, onHover }: {
-  files: ProjectFile[] | null; active: number; onPick: (f: ProjectFile) => void; onHover: (i: number) => void;
+/** 候选条里的一行：文件（@）和技能（$）共用。 */
+export type MentionItem = { key: string; icon: ReactNode; title: string; sub: string };
+
+/** 输入框顶部的 @ / $ 候选（和编辑条 / 命令条同一个位置）：↑↓ 选、Enter/Tab 补全、Esc 收起由 Composer 处理。
+ *  items = null 表示还在读列表；为空时显示 empty。 */
+export default function MentionList({ items, active, label, empty, loading, onPick, onHover }: {
+  items: MentionItem[] | null; active: number; label: string; empty: string; loading: string;
+  onPick: (key: string) => void; onHover: (i: number) => void;
 }) {
-  if (!files || files.length === 0) {
-    return <div className="edit-bar mention-empty"><span>{files ? "没有对得上的文件 · 发出去我也会按名字再找一次" : "正在找文件…"}</span></div>;
+  if (!items || items.length === 0) {
+    return <div className="edit-bar mention-empty"><span>{items ? empty : loading}</span></div>;
   }
   return (
-    <ul className="mention-list" role="listbox" aria-label="引用文件">
-      {files.map((f, i) => (
-        <li key={f.path} role="option" aria-selected={i === active} className={`mention-item ${i === active ? "on" : ""}`} style={stagger(i)}
-          onMouseDown={(e) => { e.preventDefault(); onPick(f); }} onMouseEnter={() => onHover(i)}>
-          <IconFile size={14} />
-          <span className="mention-name">{f.name}</span>
-          <span className="mention-sub">{projectFileLine(f)}</span>
+    <ul className="mention-list" role="listbox" aria-label={label}>
+      {items.map((it, i) => (
+        <li key={it.key} role="option" aria-selected={i === active} className={`mention-item ${i === active ? "on" : ""}`} style={stagger(i)}
+          onMouseDown={(e) => { e.preventDefault(); onPick(it.key); }} onMouseEnter={() => onHover(i)}>
+          {it.icon}
+          <span className="mention-name">{it.title}</span>
+          <span className="mention-sub">{it.sub}</span>
         </li>
       ))}
     </ul>

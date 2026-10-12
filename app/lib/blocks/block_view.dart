@@ -17,6 +17,7 @@ import 'plan_review_block.dart';
 import 'plan_block.dart';
 import 'preview_block.dart';
 import 'shell_block.dart';
+import 'skill_chip.dart';
 
 class BlockView extends StatelessWidget {
   const BlockView(this.block, {super.key});
@@ -29,6 +30,7 @@ class BlockView extends StatelessWidget {
         TableBlock b => TableBlockView(b),
         CodeBlock b => CodeBlockView(b),
         FileBlock b => FileBlockView(b),
+        SkillBlock b => SkillChip(b),
         ApprovalBlock b => ApprovalBlockView(b),
         BrowserBlock b => BrowserBlockView(b),
         PageBlock b => PageBlockView(b),

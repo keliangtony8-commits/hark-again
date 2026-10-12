@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import llm, memory_store, project_brief, prompt_cache, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -66,8 +66,12 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
 
 
 def _render(blocks: list[dict]) -> str:
-    """把一条消息转成给模型的文本：文本附件内联内容，图片给（缓存的）描述，其他文件只给名字。"""
-    text = blocks_to_text([b for b in blocks if b.get("type") != "file"])
+    """把一条消息转成给模型的文本：文本附件内联内容，图片给（缓存的）描述，其他文件只给名字；
+    `$技能` 点名的技能给当前正文（skill_mentions.render）。"""
+    text = blocks_to_text([b for b in blocks if b.get("type") not in ("file", "skill")])
+    for b in blocks:
+        if b.get("type") == "skill":
+            text += "\n\n" + skill_mentions.render(b)
     for b in blocks:
         if b.get("type") != "file":
             continue

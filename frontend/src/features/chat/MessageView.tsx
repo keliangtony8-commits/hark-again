@@ -82,8 +82,10 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
   if (message.role === "user") {
     const text = message.blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
     const files = message.blocks.filter((b) => b.type === "file");
+    const skills = message.blocks.filter((b) => b.type === "skill");
     return (
       <div className={`msg user ${message.outbox ?? ""} ${editing ? "editing" : ""}`} data-msg-id={message.id}>
+        {skills.length > 0 && <div className="msg-skills"><BlockRenderer blocks={skills} /></div>}
         {files.length > 0 && <div className="msg-files"><BlockRenderer blocks={files} /></div>}
         {/* 气泡左边悬停才出现的操作：复制；最后一条另有“编辑”（键盘：输入框为空时按 ↑） */}
         {(text || onEdit) && (

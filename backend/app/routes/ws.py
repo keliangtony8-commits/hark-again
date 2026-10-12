@@ -5,7 +5,7 @@ import contextlib
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .. import conversation_title, file_mentions, live_turns, user_shell, workspaces
+from .. import conversation_title, file_mentions, live_turns, skill_mentions, user_shell, workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -81,7 +81,7 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
             await db.flush()
         apply_choice(conv, event)
         user_msg = Message(conversation_id=conv.id, role="user",
-                           blocks=(text_to_blocks(text) if text else []) + files)
+                           blocks=(text_to_blocks(text) if text else []) + files + _skills(text))
         db.add(user_msg)
         await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
@@ -101,7 +101,7 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
         except RewindError as e:
             await emit({"type": "error", "message": str(e)})
             return
-        if isinstance(text, str):  # 编辑后的文字里新写的 @路径：补上引用（原有附件保留，不重复）
+        if isinstance(text, str):  # 编辑后的文字里新写的 @路径 / $技能：补上引用（原有附件保留，不重复；技能按新文字重认）
             await _add_mentions(db, conv, user_msg, text)
         if "model" in event or "reasoning" in event:  # “换个模型 / 思考强度重答”：和 user.message 一样记到对话上
             apply_choice(conv, event)
@@ -136,12 +136,22 @@ def _attachments(ids: list[str]) -> list[dict]:
     return out
 
 
+def _skills(text: str) -> list[dict]:
+    """text 里的 `$技能` → 技能引用块（规则只在 app/skill_mentions.py）；`!命令` 里的 $ 是 shell 变量，不认。"""
+    if not text or user_shell.parse(text) is not None:
+        return []
+    return skill_mentions.blocks(text)
+
+
 async def _add_mentions(db, conv: Conversation, user_msg: Message, text: str) -> None:
     have = [b for b in user_msg.blocks if b.get("type") == "file"]
     taken = {b.get("id") for b in have if b.get("source") == "project"}
     extra = await _project_files(db, conv.project_id, [], MAX_FILES, text)
-    if extra := [b for b in extra if b["id"] not in taken][:MAX_FILES - len(have)]:
-        user_msg.blocks = [*user_msg.blocks, *extra]  # 整体赋值，JSON 列才会被标脏
+    extra = [b for b in extra if b["id"] not in taken][:MAX_FILES - len(have)]
+    skills = [b for b in _skills(text)
+              if b["id"] not in {x.get("id") for x in user_msg.blocks if x.get("type") == "skill"}]
+    if extra or skills:
+        user_msg.blocks = [*user_msg.blocks, *extra, *skills]  # 整体赋值，JSON 列才会被标脏
         await db.commit()
 
 

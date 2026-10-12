@@ -93,3 +93,5 @@
   移植到 backend/app/user_shell.py（v1.77）
 - google-gemini/gemini-cli packages/cli/src/ui/hooks/atCommandProcessor.ts、packages/core/src/utils/atCommandUtils.ts — Apache License 2.0, modified
   移植到 backend/app/file_mentions.py（v1.79）
+- openai/codex codex-rs/skills/src/mentions.rs、codex-rs/skills/src/selection.rs — Apache License 2.0, modified
+  移植到 backend/app/skill_mentions.py（v1.81）

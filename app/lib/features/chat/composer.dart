@@ -9,6 +9,7 @@
 //   focusNode：外面要知道聚焦状态时传进来（LaunchComposer 用它开关整页磨砂）。
 // workspace：这段对话的工作区（core/workspace.dart；项目 = 项目文件，主聊天 = 我的文件）。“添加附件”多一个从它选
 // （features/projects pickProjectFiles，不上传，只带引用）；null = 没有这个来源（如首页的快捷输入框）。
+// 打 $ → 顶部列出启用的技能，点一下补成 `$id `（服务器 app/skill_mentions.py 把正文给模型）。
 // 打 @ → 顶部列出工作区文件（features/chat/mentions.dart），点一下补成 `@路径 `；服务器发出时解析成引用（app/file_mentions.py）。
 // 上传、转写走 core/media.dart；这里只管交互状态。
 import 'dart:async';
@@ -30,7 +31,6 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../../core/workspace.dart';
 import '../../core/resource.dart';
-import '../../models/resources.dart';
 import '../projects/project_files_sheet.dart';
 import 'attachment_tray.dart';
 import 'mentions.dart';
@@ -112,16 +112,17 @@ class _ComposerState extends ConsumerState<Composer> {
 
   void _trackMention() {
     final sel = _c.selection;
-    final m = widget.workspace == null || !sel.isValid || !sel.isCollapsed || shellCommandOf(_c.text) != null
+    // $技能 哪儿都能用；@文件 要有工作区；!命令 里的 @ / $ 是给电脑的，都不弹
+    final m = !sel.isValid || !sel.isCollapsed || shellCommandOf(_c.text) != null
         ? null
-        : mentionAt(_c.text, sel.baseOffset);
+        : mentionAt(_c.text, sel.baseOffset, sigils: {skillSigil, if (widget.workspace != null) fileSigil});
     if (m != _mention && mounted) setState(() => _mention = m);
   }
 
-  void _pickMention(ProjectFile f) {
+  void _pickMention(String key) {
     final m = _mention;
     if (m == null) return;
-    final (text, caret) = applyMention(_c.text, m, f.path);
+    final (text, caret) = applyMention(_c.text, m, key);
     _c.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: caret));
     _focus.requestFocus();
   }
@@ -324,11 +325,22 @@ class _ComposerState extends ConsumerState<Composer> {
       );
 
   Widget _mentionList() {
+    final m = _mention!;
+    if (m.isSkill) {
+      final skills = ref.watch(skillsProvider);
+      return MentionList(
+        key: const ValueKey('mention-skill'),
+        items: [for (final s in rankSkills(skills.value ?? const [], m.query)) MentionItem.skill(s)],
+        empty: skills.isLoading && !skills.hasValue ? '正在读技能…' : '没有对得上的技能 · 可以在“我的 › 技能”里新建',
+        emptyIcon: Icons.auto_awesome_rounded,
+        onPick: _pickMention,
+      );
+    }
     final files = ref.watch(projectFilesProvider(widget.workspace!));
     return MentionList(
       key: const ValueKey('mention'),
-      files: rankMentions(files.value ?? const [], _mention!.query),
-      loading: files.isLoading && !files.hasValue,
+      items: [for (final f in rankMentions(files.value ?? const [], m.query)) MentionItem.file(f)],
+      empty: files.isLoading && !files.hasValue ? '正在找文件…' : '没有对得上的文件 · 发出去我也会按名字再找一次',
       onPick: _pickMention,
     );
   }

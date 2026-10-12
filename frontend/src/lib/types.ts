@@ -5,6 +5,8 @@ export type LinksBlock = { type: "links"; items: { url: string; label?: string; 
 export type TableBlock = { type: "table"; title?: string; columns: string[]; rows: string[][]; note?: string };
 /** live：命令还在跑，source 是最近的输出（服务器 block.update 原地换），跑完换成不带 live 的最终块。 */
 export type CodeBlock = { type: "code"; language?: string; title?: string; source: string; live?: boolean };
+/** v1.81 用户消息里 `$技能` 点名的技能（后端 app/skill_mentions.py）：只有 id + 名字，气泡上方一枚小标签。 */
+export type SkillBlock = { type: "skill"; id: string; name: string };
 export type FileBlock = { type: "file"; source: "upload" | "project"; id: string; name: string; mime: string; size: number; project_id?: string | null };
 /** 审批卡。主机命令卡（v1.49 target = host）多带机器名、note（为什么要你看一眼；warn = 危险提示）、批准范围 options（第一个 = 批准按钮）、批准后 granted。 */
 export type ApprovalOption = { id: string; label: string };
@@ -81,7 +83,7 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   /** v1.80 常驻：restart_at 不为空 = 进程刚退出、等这个时刻重启（state 仍是 running）。老服务器没有这三个字段。 */
   keep_alive?: boolean; restarts?: number; restart_at?: string | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

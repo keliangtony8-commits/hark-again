@@ -165,6 +165,12 @@
 .attach button:hover { background: var(--border); color: var(--text); }
 .attach.loading .attach-ext { animation: blink 1s infinite; }
 .attach.err { box-shadow: inset 0 0 0 1px var(--danger); }
+/* $技能 小标签（blocks/SkillChip.tsx）：气泡上方一排，--tile 底（不是信号位，不用 accent） */
+.msg.user .msg-skills { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-1) var(--sp-2); margin-bottom: var(--sp-2); }
+.skill-chip { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 2px var(--sp-3); border-radius: var(--r-full); background: var(--tile);
+  color: var(--text-2); font-size: var(--fs-xs); text-decoration: none; max-width: 240px; transition: filter var(--dur) var(--ease); }
+.skill-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skill-chip:hover { filter: brightness(.97); color: var(--text); }
 .msg.user .msg-files { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2); }
 
 /* 语音录制：整行替换成录音条，主按钮位置不变（变成“完成”） */

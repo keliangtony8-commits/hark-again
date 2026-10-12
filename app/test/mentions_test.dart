@@ -20,6 +20,13 @@ class _Api implements Api {
         {'path': 'my notes.txt', 'name': 'my notes.txt', 'size': 3, 'mime': 'text/plain', 'modified': 10},
       ];
     }
+    if (path == '/api/catalog/skills') {
+      return [
+        {'id': 'web-research', 'name': '网页调研', 'description': '查资料时用', 'body': '', 'builtin': true},
+        {'id': 'writing', 'name': '写作', 'description': '润色文字', 'body': '', 'builtin': true},
+        {'id': 'off', 'name': '停用的', 'description': '', 'body': '', 'builtin': false, 'enabled': false},
+      ];
+    }
     return null;
   }
 
@@ -62,7 +69,29 @@ Future<void> _type(WidgetTester tester, String text) async {
   await _settle(tester);
 }
 
+Skill _s(String id, String name, {String desc = '', bool on = true}) =>
+    Skill(id: id, name: name, description: desc, body: '', builtin: false, enabled: on);
+
 void main() {
+  test(r'$技能：开头 / 空格后 / 中文后算；US$5、$$ 不算；只认传进来的符号', () {
+    const both = {fileSigil, skillSigil};
+    expect(mentionAt(r'$', 1, sigils: both), const MentionQuery(0, 1, '', sigil: skillSigil));
+    expect(mentionAt(r'按$wr', 4, sigils: both), const MentionQuery(1, 4, 'wr', sigil: skillSigil));
+    expect(mentionAt(r'US$5', 4, sigils: both), isNull);
+    expect(mentionAt(r'$$w', 3, sigils: both), isNull);
+    expect(mentionAt(r'$wr', 3), isNull); // 默认只认 @
+    expect(mentionAt(r'$wr 好', 5, sigils: both), isNull);
+    expect(applyMention(r'按$wr', const MentionQuery(1, 4, 'wr', sigil: skillSigil), 'writing'), (r'按$writing ', 10));
+  });
+
+  test('技能排序：id / 名字开头 > 包含 > 描述包含；停用的不列；同分保持原顺序', () {
+    final skills = [_s('b-write', '改写'), _s('writing', '写作'), _s('x', '杂项', desc: '写邮件 writing'), _s('w-off', '停', on: false)];
+    expect(rankSkills(skills, 'writ').map((s) => s.id), ['writing', 'b-write', 'x']);
+    expect(rankSkills(skills, '写').map((s) => s.id), ['writing', 'b-write', 'x']);
+    expect(rankSkills(skills, '').map((s) => s.id), ['b-write', 'writing', 'x']);
+    expect(rankSkills(skills, 'zzz'), isEmpty);
+  });
+
   test('何时算在打 @：开头 / 空格后 / 中文后算；邮箱、标点隔开、光标不在后面不算', () {
     expect(mentionAt('@', 1), const MentionQuery(0, 1, ''));
     expect(mentionAt('看看@pl', 5), const MentionQuery(2, 5, 'pl'));
@@ -120,9 +149,30 @@ void main() {
     expect(find.byType(MentionList), findsNothing);
   });
 
-  testWidgets('没有工作区（首页快捷输入框）：不弹', (tester) async {
+  testWidgets('没有工作区（首页快捷输入框）：@ 不弹', (tester) async {
     await _pump(tester, workspace: null);
     await _type(tester, '@pl');
+    expect(find.byType(MentionList), findsNothing);
+  });
+
+  testWidgets(r'打 $ 出技能（没有工作区也行）、停用的不列、点一下补成 $id；!命令 不弹', (tester) async {
+    final sent = await _pump(tester, workspace: null);
+    await _type(tester, r'帮我$');
+    expect(find.byType(MentionList), findsOneWidget);
+    expect(find.text('网页调研'), findsOneWidget);
+    expect(find.text('停用的'), findsNothing);
+    await _type(tester, r'帮我$写');
+    expect(find.text('网页调研'), findsNothing);
+    await tester.tap(find.text('写作'));
+    await _settle(tester);
+    expect(find.byType(MentionList), findsNothing);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, r'帮我$writing ');
+    await tester.tap(find.bySemanticsLabel('发送'));
+    await _settle(tester);
+    expect(sent, [r'帮我$writing ']);
+    await _type(tester, r'$qqq');
+    expect(find.textContaining('没有对得上的技能'), findsOneWidget);
+    await _type(tester, r'!echo $HO');
     expect(find.byType(MentionList), findsNothing);
   });
 }
