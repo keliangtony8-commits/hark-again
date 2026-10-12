@@ -57,3 +57,5 @@
   嫁接到 backend/app/agent/context.py compact_now（v1.53）
 - deepseek-ai/deepseek-harness packages/llm/llm/src/index.ts（reasoning efforts 校验 / 默认档）+ llm-deepseek/src/model-info.ts — MIT License, Copyright (c) 2026 DeepSeek, adapted；openai/codex protocol openai_models.rs + core/agent/child_config.rs（按模型档位、子助手沿用）— Apache-2.0, Copyright 2025 OpenAI, modified；google-gemini/gemini-cli packages/core/src/config/defaultModelConfigs.ts（后台小活少想）— Apache-2.0, Copyright 2025 Google LLC, modified
   移植到 backend/app/reasoning.py（v1.54）
+- openai/codex codex-rs/core/src/context_manager/normalize.rs（ensure_call_outputs_present / remove_orphan_outputs 配对规则）、codex-rs/utils/output-truncation/src/lib.rs（记录时中间截断 + 原长说明）— Apache-2.0, Copyright 2025 OpenAI, modified
+  移植到 backend/app/agent/tool_trace.py（v1.55）

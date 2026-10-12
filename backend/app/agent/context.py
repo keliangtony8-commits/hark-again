@@ -14,6 +14,7 @@ from ..config import settings
 from ..connectors.providers import PROVIDERS
 from ..models import Connection, Conversation, McpServer, Message, Project, Secret
 from ..storage import is_text, project_file, upload_path
+from . import tool_trace
 
 ATTACH_CHARS = 6000     # 每个文本附件最多带多少字给模型
 FOLD_TARGET = 0.5       # 需要折叠时，把原文压到预算的这个比例：留出余量，不必每轮都调一次摘要
@@ -130,7 +131,10 @@ class _Snapshot:
     roles: list[str]
     blocks: list[list[dict]]
     notes: list[str]
-    texts: list[str]
+    texts: list[str]   # 给模型 / 摘要的文本：助手回复附一行工具摘要（tool_trace.digest）
+    plain: list[str]   # 同上但不带工具摘要：重放完整轨迹的回复用它（摘要和轨迹不重复）
+    digests: list[str]  # 每条的工具摘要行（用户消息为空）
+    traces: list[list[dict]]  # 能重放的工具轨迹（只有最近 history_trace_turns 条带轨迹的回复非空）
     last_user: int
     summary: str
     covered: int  # 摘要已覆盖前多少条
@@ -142,14 +146,36 @@ async def _snapshot(db: AsyncSession, conversation_id: str) -> _Snapshot:
     rows = (await db.scalars(select(Message).where(Message.conversation_id == conversation_id)
                              .order_by(Message.created_at))).all()
     notes = [turn_journal.history_note(m.status, m.steps) if m.role == "assistant" else "" for m in rows]  # 被打断/停下的回复附说明
-    texts = [_render(m.blocks) + notes[i] for i, m in enumerate(rows)]
+    plain = [_render(m.blocks) + notes[i] for i, m in enumerate(rows)]
+    digests = [tool_trace.digest(m.steps) if m.role == "assistant" else "" for m in rows]
+    texts = [p + d for p, d in zip(plain, digests)]
+    traces = _traces(rows)
     last_user = next((i for i in range(len(rows) - 1, -1, -1) if rows[i].role == "user"), len(rows) - 1)
     ids = [m.id for m in rows]  # 先取出来：失败时 rollback 会让 ORM 对象过期
     summary = conv.summary if conv else ""
     upto = conv.summary_upto if conv else None
     covered = ids.index(upto) + 1 if upto in ids else 0
-    return _Snapshot(conv, ids, [m.role for m in rows], [m.blocks for m in rows], notes, texts, last_user,
+    return _Snapshot(conv, ids, [m.role for m in rows], [m.blocks for m in rows], notes, texts, plain, digests, traces, last_user,
                      summary if covered else "", covered, bool(upto) and covered == 0)
+
+
+def _traces(rows) -> list[list[dict]]:
+    """从后往前，最近 history_trace_turns 条带合法轨迹的助手回复保留轨迹（Codex：工具调用留在历史里），其余为空。"""
+    out: list[list[dict]] = [[] for _ in rows]
+    left = settings.history_trace_turns
+    for i in range(len(rows) - 1, -1, -1):
+        if left <= 0:
+            break
+        m = rows[i]
+        if m.role == "assistant" and tool_trace.valid(m.trace):
+            out[i] = m.trace
+            left -= 1
+    return out
+
+
+def _sizes(snap: "_Snapshot") -> list[int]:
+    """每条消息重放时占多少字：带轨迹的按 正文 + 轨迹 算，其余按 texts 算。"""
+    return [len(snap.plain[i]) + tool_trace.size(t) if t else len(snap.texts[i]) for i, t in enumerate(snap.traces)]
 
 
 async def build_history(db: AsyncSession, conversation_id: str, model: str | None = None) -> History:
@@ -161,7 +187,7 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
     snap = await _snapshot(db, conversation_id)
     conv, ids, roles, blocks, notes, texts = snap.conv, snap.ids, snap.roles, snap.blocks, snap.notes, snap.texts
     last_user, summary, covered = snap.last_user, snap.summary, snap.covered
-    sizes = [len(t) for t in texts]
+    sizes = _sizes(snap)
     budget = settings.history_chars
 
     start = _window_start(sizes, budget, last_user)
@@ -187,12 +213,19 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
         return pixels and i >= last_user and roles[i] == "user"
     n = len(ids)
     need = [b for i in range(first, n) if not raw(i) for b in blocks[i]]
+    plain, traces = snap.plain, snap.traces
     if any(vision.is_image(b) for b in need):
         await vision.describe_missing(need)
-        texts[first:] = [_render(blocks[i]) + notes[i] for i in range(first, n)]
-    return History(summary=summary, messages=[
-        {"role": roles[i], "content": vision.content_with_images(texts[i], blocks[i]) if raw(i) else texts[i]}
-        for i in range(first, n)])
+        for i in range(first, n):
+            plain[i] = _render(blocks[i]) + notes[i]
+            texts[i] = plain[i] + snap.digests[i]
+    out: list[dict] = []
+    for i in range(first, n):
+        if traces[i]:  # 最近几条回复：工具调用 + 结果原样放回，接着是回复文字
+            out += tool_trace.replay(traces[i], plain[i])
+        else:
+            out.append({"role": roles[i], "content": vision.content_with_images(texts[i], blocks[i]) if raw(i) else texts[i]})
+    return History(summary=summary, messages=out)
 
 
 # —— 手动整理上文（Codex /compact、Gemini /compress 的对应物；嫁接 Gemini compressCommand：忙时拒绝、报前后大小、
@@ -204,7 +237,7 @@ class CompactBusy(Exception):
 
 def _state(snap: _Snapshot) -> dict:
     """对话记忆的现状：下一轮发给模型的原文有多大、多少条已压成摘要、还能不能手动整理。"""
-    sizes = [len(t) for t in snap.texts]
+    sizes = _sizes(snap)
     covered = snap.covered
     budget = settings.history_chars
     first = max(_window_start(sizes, budget, snap.last_user), covered)

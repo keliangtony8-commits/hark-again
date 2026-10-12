@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     vision_model: str = "fast"
     image_max_side: int = 1280
     history_chars: int = 24000      # 发给模型的对话原文预算（字符）；超出部分折叠进摘要
+    # 跨轮工具轨迹（agent/tool_trace.py）：最近几条回复把工具调用 + 截短的结果原样放回历史（0 = 关，只留一行摘要）；
+    # 每条回复的轨迹最多多少字。开着每轮约多花 history_trace_turns × history_trace_chars / 3 个输入 token。
+    history_trace_turns: int = 2
+    history_trace_chars: int = 6000
     # 用量与花费（usage.py）：别名 → [输入单价, 输出单价]，单位 currency / 百万 token；没写的别名只记 token 不算钱
     model_prices: dict[str, list[float]] = {}
     currency: str = "CNY"

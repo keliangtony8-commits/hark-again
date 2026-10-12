@@ -163,7 +163,7 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
     reply = None
     if blocks:
         reply = Message(conversation_id=cid, role="assistant", blocks=blocks, status=status,
-                        steps=builder.steps(stopped=status == "stopped"))
+                        steps=builder.steps(stopped=status == "stopped"), trace=builder.trace())
         db.add(reply)
         await journal.drop(db)  # 同一个事务：回复落库 = 检查点消失
         await db.commit()

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, llm_retry, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, compact, loop_guard, supersede, tool_args
+from . import approvals, compact, loop_guard, supersede, tool_args, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -135,6 +135,8 @@ class MessageBuilder:
     blocks: list[dict] = field(default_factory=list)
     _text_open: bool = False
     timeline: activity.Recorder = field(default_factory=activity.Recorder)  # 这条回复的工具步骤（随回复落库）
+    transcript: list[dict] | None = None  # run() 的消息列表本身（引用）：收尾时 tool_trace.record 从 base 起取这一轮的工具轨迹
+    base: int = 0
 
     def text(self, delta: str) -> list[Event]:
         out: list[Event] = []
@@ -221,6 +223,10 @@ class MessageBuilder:
     def steps(self, stopped: bool = False) -> list[dict]:
         return self.timeline.partial() if stopped else [dict(s) for s in self.timeline.steps]
 
+    def trace(self) -> list[dict]:
+        """这一轮的工具轨迹（跨轮保留，规则在 tool_trace.py）。"""
+        return tool_trace.record(self.transcript, self.base) if self.transcript is not None else []
+
 
 async def run(system: str, history: list[dict], ctx: ToolContext,
               builder: MessageBuilder | None = None, model: str | None = None,
@@ -228,6 +234,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     """model = 实际调用的别名（None = 默认）。limits = 这一轮的预算（None = 主助手默认）。builder 可由调用方传入：中途被取消（用户点停止）时，调用方还能拿到已生成的半截块。"""
     messages = [{"role": "system", "content": system}, *history]
     builder = builder if builder is not None else MessageBuilder()
+    builder.transcript, builder.base = messages, len(messages)  # 被停下时调用方也能拿到已经发生的调用
     limits = limits or Limits.default()
     if ctx.model is None:
         ctx.model = model or settings.default_model

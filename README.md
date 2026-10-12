@@ -215,3 +215,4 @@ postgres ~200M、litellm ~300M、searxng ~150M、backend+worker ~300M、browser 
 - 无人值守（`ctx.ask is nobody`）不弹卡，告诉模型按已知信息做、必要时 `offer_on_home`。
 - 冒烟：`python tests/smoke_ask_user.py`。
 - 思考强度（v1.54）：app/reasoning.py = 唯一规则（MODEL_REASONING 解析与校验、resolve(alias, choice) 回落默认、for_helper 最低档、rejected/mark_unsupported、catalog）；llm._create 是唯一发请求处（带 reasoning_effort，400 拒收 → 去参数重发并记住）；conversations.reasoning（迁移 0032），runner.apply_choice（WS model+reasoning），ToolContext.effort → loop/compact/subagent。冒烟 tests/smoke_reasoning.py
+- 跨轮工具轨迹（v1.55）：app/agent/tool_trace.py = 唯一规则（record：这一轮的 tool_calls + 结果按 Codex normalize 配对清洗、记录时截断、快照占位、打码、超额丢最早批次；valid / replay / digest）；messages.trace（迁移 0033，不上协议）；MessageBuilder.transcript/base + trace()；context._traces 最近 HISTORY_TRACE_TURNS 条重放，其余附 digest（也进摘要），_sizes 按重放大小算预算。冒烟 tests/smoke_tool_trace.py

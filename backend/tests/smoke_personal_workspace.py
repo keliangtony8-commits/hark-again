@@ -118,7 +118,7 @@ assert "个人工作区" not in run(proj_prompt()) and "项目工作区" in run(
 script.extend([("run_command", {"command": "python3 -c 'print(6*7)'"}), "42。"])
 run(turn(mid))
 assert calls[-1] == ("exec", ME, "python3 -c 'print(6*7)'"), calls
-tool_msg = next(m for m in seen[-1]["messages"] if m["role"] == "tool")
+tool_msg = [m for m in seen[-1]["messages"] if m["role"] == "tool"][-1]  # 前面可能有上一轮重放的工具轨迹（v1.55）
 assert f"ran in {ME}" in tool_msg["content"], tool_msg
 script.extend([("run_command", {"command": "ls"}), "好。"])
 run(turn(prid))
