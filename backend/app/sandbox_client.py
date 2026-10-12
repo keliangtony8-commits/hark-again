@@ -51,6 +51,15 @@ async def restart(project_id: str) -> None:
         r.raise_for_status()
 
 
+async def cleanup(project_id: str) -> int:
+    """清容器 /tmp 里的下载缓存（不开机），返回腾出的字节。连不上抛 httpx.HTTPError。"""
+    async with httpx.AsyncClient(timeout=60) as c:
+        r = await c.post(f"{settings.sandbox_url}/sandboxes/{project_id}/cleanup",
+                         headers={"Authorization": f"Bearer {settings.sandbox_token}"})
+        r.raise_for_status()
+        return int(r.json().get("freed") or 0)
+
+
 async def _job(action: str, project_id: str, job_id: str) -> dict:
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(f"{settings.sandbox_url}/jobs/{action}",

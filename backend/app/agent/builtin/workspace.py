@@ -156,12 +156,16 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         return ToolResult("沙盒连接中断，命令的结果不确定。")
     timed_out = r.get("timed_out")
     status = "超时被终止" if timed_out else f"退出码 {r['exit_code']}"
+    if r.get("oom"):  # 沙盒比过 cgroup 的 OOM 计数：确实是内存超上限被内核杀的
+        status = f"{jobs.OOM_REASON}（退出码 {r['exit_code']}）"
     out = shown = r.get("output", "")
     if spill.MARK in out:  # 沙盒那边输出太长：中间段省略，完整输出（能存下时）写进了工作区 .spill/
         omitted = r.get("omitted", 0)
         out = out.replace(spill.MARK, spill.notice(omitted, r.get("spill"), r.get("total", 0)))
         shown = shown.replace(spill.MARK, f"\n…（中间省略 {omitted} 字符）…\n")
     hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
+    if r.get("oom"):
+        hint = f"\n（{jobs.oom_hint(r.get('memory_limit'))}）"
     return ToolResult(f"{status}\n{out}{hint}", [
         {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}])
 

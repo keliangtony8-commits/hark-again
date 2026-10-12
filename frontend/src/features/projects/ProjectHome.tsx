@@ -74,7 +74,7 @@ export default function ProjectHome({ project: p, conversations, suggestions, on
           </div>
         </section>
       )}
-      <ComputerSection ws={p.id} enter={i++} />{/* v1.25：项目沙盒在不在跑、在忙什么；加载中/失败不画 */}
+      <ComputerSection ws={p.id} enter={i++} to={`/projects/${p.id}/computer`} />{/* v1.25：项目沙盒在不在跑、在忙什么；加载中/失败不画；v1.27 点进详情 */}
       {suggestions.length > 0 && (
         <section className="section enter" style={nth()}>
           <div className="section-title"><span>{recent.length ? "或者新开一段" : "从这里开始"}</span></div>

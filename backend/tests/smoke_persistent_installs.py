@@ -156,7 +156,7 @@ env_sh = os.path.join(here, "..", "..", "sandbox", "image", "workspace-env.sh")
 dockerfile = open(os.path.join(here, "..", "..", "sandbox", "image", "Dockerfile")).read()
 assert "COPY workspace-env.sh /etc/profile.d/workspace.sh" in dockerfile
 for pkg, word in [("jq", "jq"), ("ripgrep", "ripgrep"), ("poppler-utils", "poppler"), ("imagemagick", "ImageMagick"),
-                  ("sqlite3", "sqlite3"), ("fonts-noto-cjk", "中文字体")]:
+                  ("sqlite3", "sqlite3"), ("fonts-noto-cjk", "中文字体"), ("procps", "procps")]:
     assert pkg in dockerfile and word in workspaces.PREINSTALLED, pkg  # 预装清单两边同步
 ws = storage.project_dir(workspaces.PERSONAL)
 ws.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,160 @@
+// 电脑详情页的两节（v1.27）：和 ComputerSection 读同一个 computerProvider(工作区)，不另外请求。
+//   正在运行的程序       ← 只在运行中且有程序时出现；按 CPU 排，最多 8 个
+//     python train.py --epochs 10
+//     CPU 88% · 内存 200 MB · 运行 3 分 05 秒
+//   磁盘                              清理 12 MB
+//     文件 / 装的软件 / 任务日志 / 长输出存档 / 下载缓存（0 字节的不列，行尾是大小）
+//     装过的工具  pip 12 个 · npm 2 个  →  弹层列出名字和版本
+// “清理”先确认，删的东西由服务器 app/computer.py cleanup 定（存档、已结束任务日志、缓存），文案规则在 models/computer.dart。
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/api.dart';
+import '../../models/computer.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/tokens.dart';
+import '../../ui/format.dart';
+import '../../ui/glass.dart';
+import '../../ui/kit.dart';
+import '../../ui/motion.dart';
+import '../../ui/sheets.dart';
+import 'computer_section.dart';
+
+/// 正在运行的程序。
+class ProcessSection extends ConsumerWidget {
+  const ProcessSection({super.key, required this.ws, this.delay = Duration.zero});
+  final String ws;
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(computerProvider(ws)).value;
+    final list = s != null && s.running ? s.processes : const <ComputerProcess>[];
+    return RiseSwitcher(
+      child: list.isEmpty
+          ? const SizedBox.shrink(key: ValueKey('noproc'))
+          : FadeSlideIn(
+              key: const ValueKey('proc'),
+              delay: delay,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                SectionTitle('正在运行的程序', count: list.length),
+                GlassGroup(children: [
+                  for (final p in list)
+                    RowTile(
+                      key: ValueKey('proc-${p.pid}'),
+                      icon: Icons.terminal_rounded,
+                      title: processTitle(p),
+                      subtitle: processLine(p),
+                    ),
+                ]),
+              ]),
+            ),
+    );
+  }
+}
+
+/// 磁盘：按用途拆开 + 装过的工具 + 一键清理。
+class StorageSection extends ConsumerStatefulWidget {
+  const StorageSection({super.key, required this.ws, this.delay = Duration.zero, this.onFiles});
+  final String ws;
+  final Duration delay;
+
+  /// 点“文件”一行（打开文件弹层）。
+  final VoidCallback? onFiles;
+
+  @override
+  ConsumerState<StorageSection> createState() => _StorageSectionState();
+}
+
+class _StorageSectionState extends ConsumerState<StorageSection> {
+  bool _cleaning = false;
+
+  static const _icons = {
+    'files': Icons.folder_outlined,
+    'installed': Icons.extension_outlined,
+    'logs': Icons.receipt_long_outlined,
+    'spill': Icons.inventory_2_outlined,
+    'cache': Icons.cached_rounded,
+  };
+
+  Future<void> _clean() async {
+    if (!await confirmDanger(context, title: '清理这台电脑？', text: cleanupText, action: '清理')) return;
+    setState(() => _cleaning = true);
+    try {
+      final freed = await ref.read(computerProvider(widget.ws).notifier).cleanup();
+      if (mounted) showToast(context, cleanupDone(freed));
+    } on ApiError catch (e) {
+      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能清理' : e.message);
+    } finally {
+      if (mounted) setState(() => _cleaning = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = ref.watch(computerProvider(widget.ws)).value;
+    if (s == null) return const SizedBox.shrink();
+    final label = cleanupLabel(s.storage);
+    return FadeSlideIn(
+      delay: widget.delay,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle('磁盘',
+            trailing: SwapSwitcher(
+              child: label == null
+                  ? const SizedBox.shrink(key: ValueKey('noclean'))
+                  : TextButton(
+                      key: const ValueKey('clean'),
+                      onPressed: _cleaning ? null : _clean,
+                      child: Text(_cleaning ? '正在清理' : label),
+                    ),
+            )),
+        GlassGroup(children: [
+          for (final (key, name, line, bytes) in storageRows(s.storage))
+            RowTile(
+              key: ValueKey('disk-$key'),
+              icon: _icons[key],
+              title: name,
+              subtitle: line,
+              trailing: SwapSwitcher(child: RowHint(formatSize(bytes), key: ValueKey('$key-$bytes'))),
+              onTap: key == 'files' ? widget.onFiles : null,
+            ),
+          RowTile(
+            icon: Icons.handyman_outlined,
+            title: '装过的工具',
+            subtitle: toolsSummary(s.tools),
+            onTap: s.tools.isEmpty ? null : () => _showTools(context, s.tools),
+          ),
+        ]),
+      ]),
+    );
+  }
+}
+
+void _showTools(BuildContext context, List<InstalledTool> tools) => showAppScrollSheet<void>(
+      context,
+      builder: (ctx) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x5, Sp.x1),
+          child: Text('装过的工具', style: ctx.text.titleLarge),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x3),
+          child: Text('装在工作区 ~/.local 里，以后的对话和后台任务都能直接用；不含系统预装的。', style: ctx.text.bodySmall),
+        ),
+        SheetList(children: [
+          GlassGroup(children: [
+            for (final (i, t) in tools.indexed)
+              FadeSlideIn(
+                key: ValueKey('tool-${t.kind}-${t.name}'),
+                delay: Motion.stagger(i.clamp(0, 8)),
+                child: RowTile(
+                  icon: t.kind == 'npm' ? Icons.javascript_rounded : Icons.code_rounded,
+                  title: t.name,
+                  subtitle: t.kind,
+                  trailing: t.version.isEmpty ? null : RowHint(t.version),
+                ),
+              ),
+          ]),
+        ]),
+      ]),
+    );

@@ -55,6 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/projects', builder: (_, _) => const ProjectsScreen(), routes: [
               GoRoute(path: ':id', builder: (_, s) => ProjectDetailScreen(id: s.pathParameters['id']!), routes: [
                 GoRoute(path: 'brief', builder: (_, s) => ProjectBriefScreen(id: s.pathParameters['id']!)),
+                GoRoute(path: 'computer', builder: (_, s) => ComputerScreen(ws: s.pathParameters['id']!)),
               ]),
             ]),
           ]),

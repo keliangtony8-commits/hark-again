@@ -5,6 +5,7 @@
   run.sh    包装脚本（script()）：timeout 作为进程组组长在后台跑 cmd.sh，pid 写进 pid，
             输出全进 log，结束把退出码原子地写进 exit
   cancelled 取消标记，内容是谁停的：user | agent | guard（stop() 先写它再叫沙盒整组杀，退出码因此算“已取消”）
+  oom       run.sh 写的：任务期间容器 cgroup 的 OOM 计数涨了（内存超上限，内核杀了进程）→ 结论里写明原因
 沙盒服务只负责启动、查活、整组杀（sandbox/runner.py）；状态从文件读，所以沙盒服务、后端、worker 谁重启都不丢。
 
 护栏（guard_reason()，worker 每轮对运行中的任务查一次）：日志超过 job_log_max_mb → 停（防撑爆磁盘）；
@@ -57,6 +58,19 @@ def job_dir(job: Job) -> Path:
     return project_dir(job.project_id) / JOBS_DIR / job.id
 
 
+# 容器自己的 cgroup OOM 计数（v2 / v1），与 sandbox/runner.py _OOM 同一条；读不到输出空。
+OOM_COUNT = ("sed -n 's/^oom_kill //p' /sys/fs/cgroup/memory.events 2>/dev/null || "
+             "sed -n 's/^oom_kill //p' /sys/fs/cgroup/memory/memory.oom_control 2>/dev/null")
+OOM_REASON = "内存超过这台电脑的上限，被系统强制结束"
+
+
+def oom_hint(limit: int | None = None) -> str:
+    """给模型的出路：一次只处理一部分、换省内存的做法；不要原样重跑。"""
+    cap = f"（上限 {limit / 1024 ** 3:g} GB）" if limit else ""
+    return (f"内存打满了{cap}：别原样重跑，改成分批/流式处理、减小 batch 或数据量、用更省内存的库；"
+            "还不够就告诉用户这台电脑内存不够，可以在 .env 调大 SANDBOX_MEM。")
+
+
 def script(job_id: str, timeout: int) -> str:
     """run.sh：从工作区根目录跑；timeout 自成进程组（取消时整组杀），-k 5 超时后再给 5 秒强杀。"""
     j = f"{JOBS_DIR}/{job_id}"
@@ -64,10 +78,14 @@ def script(job_id: str, timeout: int) -> str:
         "#!/bin/bash\n"
         'cd "$(dirname "$0")/../.." || exit 1\n'
         f"J={j}\n"
+        f"before=$({OOM_COUNT})\n"
         f'timeout -k 5 {int(timeout)} bash -l "$J/cmd.sh" > "$J/log" 2>&1 < /dev/null &\n'
         'echo $! > "$J/pid"\n'
         "wait $!\n"
-        'echo $? > "$J/exit.tmp" && mv "$J/exit.tmp" "$J/exit"\n'
+        "code=$?\n"
+        f'after=$({OOM_COUNT})\n'
+        '[ -n "$after" ] && [ "$after" -gt "${before:-0}" ] && touch "$J/oom"\n'
+        'echo $code > "$J/exit.tmp" && mv "$J/exit.tmp" "$J/exit"\n'
     )
 
 
@@ -80,6 +98,8 @@ def observe(job: Job) -> tuple[str, int | None] | None:
         return None
     if (d / "cancelled").exists():
         return "cancelled", code
+    if (d / "oom").exists():
+        return "failed", code
     if code == 124:
         return "timed_out", code
     return ("done" if code == 0 else "failed"), code
@@ -149,7 +169,10 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
 def describe(job: Job) -> str:
     code = "" if job.exit_code is None or job.state in ("done", "cancelled") else f"，退出码 {job.exit_code}"
     label = f"被自动停止（{job.stop_reason}）" if job.stop_reason else LABELS.get(job.state, job.state)
-    return f"{job.id}「{job.title}」：{label}{code}，用时 {duration_text(elapsed(job))}"
+    if job.stop_reason == OOM_REASON:  # 不是我们停的，是内核：给模型一条出路
+        label = f"失败：{OOM_REASON}"
+    line = f"{job.id}「{job.title}」：{label}{code}，用时 {duration_text(elapsed(job))}"
+    return f"{line}。{oom_hint()}" if job.stop_reason == OOM_REASON else line
 
 
 def log_path(job: Job) -> str:
@@ -232,6 +255,8 @@ async def settle(db: AsyncSession, job: Job, state: str, exit_code: int | None) 
         return False
     job.state, job.exit_code = state, exit_code
     job.finished_at = datetime.now(timezone.utc)
+    if state == "failed" and not job.stop_reason and (job_dir(job) / "oom").exists():
+        job.stop_reason = OOM_REASON
     job.tail = log_tail(job, KEEP_TAIL)
     by_agent = state == "cancelled" and _read(job_dir(job) / "cancelled") == "agent"
     if job.followup == "none" and not by_agent and job.conversation_id and await db.get(Conversation, job.conversation_id):

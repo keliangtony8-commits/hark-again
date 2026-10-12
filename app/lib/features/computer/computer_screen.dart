@@ -1,54 +1,46 @@
-// 我的 → 我的电脑（v1.25）：个人工作区（主聊天和定时任务用的那台云端 Linux）的状态页。
-// 页头一句说明 → “状态”一节（ComputerSection：运行/休眠、内存、磁盘、正在跑的后台任务、重启）→ 文件入口
-// → “浏览器登录”（v1.26 BrowserSessionsSection：按网站保存的登录，可退出）。下拉刷新两处一起刷。
+// 电脑详情页：我的 → 我的电脑（个人工作区，v1.25）和项目首屏点“电脑”进来的 /projects/<id>/computer（v1.27）共用。
+// 页头一句说明 → “状态”（ComputerSection：运行/休眠、CPU/内存、内存打满警示、后台任务、重启；运行中一直刷新）
+// → “正在运行的程序”（ProcessSection）→ “磁盘”（StorageSection：按用途拆开、点“文件”开文件弹层、装过的工具、清理）
+// → 个人电脑才有的“浏览器登录”（v1.26 BrowserSessionsSection）。下拉刷新一起刷。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/workspace.dart';
 import '../../models/computer.dart';
 import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
-import '../../ui/motion.dart';
 import '../../ui/sub_page.dart';
 import '../projects/project_files_sheet.dart';
 import 'browser_sessions_section.dart';
+import 'computer_details.dart';
 import 'computer_section.dart';
 
 class ComputerScreen extends ConsumerWidget {
-  const ComputerScreen({super.key});
+  const ComputerScreen({super.key, this.ws = personalWorkspace});
+  final String ws;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(computerProvider(personalWorkspace));
+    final s = ref.watch(computerProvider(ws));
+    final personal = isPersonalWorkspace(ws);
     return SubPage(
-      title: const Text('我的电脑'),
+      title: Text(personal ? '我的电脑' : '项目的电脑'),
       body: PullRefresh(
         onRefresh: () => Future.wait([
-          ref.read(computerProvider(personalWorkspace).notifier).reload(),
-          ref.read(browserSessionsProvider.notifier).reload(),
+          ref.read(computerProvider(ws).notifier).reload(),
+          if (personal) ref.read(browserSessionsProvider.notifier).reload(),
         ]),
         child: PageBody(children: [
           PageIntro(
             summary: s.value == null ? (s.hasError ? '暂时看不到状态' : '正在查看…') : computerStateLabel(s.value!.state),
-            line: '主聊天和定时任务用的云端 Linux：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。',
+            line: personal
+                ? '主聊天和定时任务用的云端 Linux：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。'
+                : '这个项目专用的云端 Linux：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。',
           ),
-          const ComputerSection(ws: personalWorkspace, title: '状态'),
-          FadeSlideIn(
-            delay: Motion.stagger(1),
-            child: Column(children: [
-              const SectionTitle('文件'),
-              GlassGroup(children: [
-                RowTile(
-                  icon: Icons.folder_outlined,
-                  title: workspaceFilesTitle(personalWorkspace),
-                  subtitle: '这台电脑上的文件，我做出来的也在这',
-                  onTap: () => showProjectFiles(context, personalWorkspace),
-                ),
-              ]),
-            ]),
-          ),
-          BrowserSessionsSection(delay: Motion.stagger(2)),
+          ComputerSection(ws: ws, title: '状态', pollAlways: true),
+          ProcessSection(ws: ws, delay: Motion.stagger(1)),
+          StorageSection(ws: ws, delay: Motion.stagger(2), onFiles: () => showProjectFiles(context, ws)),
+          if (personal) BrowserSessionsSection(delay: Motion.stagger(3)),
         ]),
       ),
     );

@@ -173,8 +173,9 @@ class ProjectHome extends ConsumerWidget {
                     ),
               ])),
             ],
-            // 电脑（v1.25）：这个项目的沙盒在不在跑、在忙什么；加载中/连不上服务器时整节不画
-            ComputerSection(ws: projectId, delay: Motion.stagger(i++)),
+            // 电脑（v1.25）：这个项目的沙盒在不在跑、在忙什么；加载中/连不上服务器时整节不画。点状态块进详情页（v1.27）
+            ComputerSection(
+                ws: projectId, delay: Motion.stagger(i++), onOpen: () => context.push('/projects/$projectId/computer')),
             if (suggestions.isNotEmpty) ...[
               enter(SectionTitle(recent.isEmpty ? '从这里开始' : '或者新开一段')),
               enter(Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [

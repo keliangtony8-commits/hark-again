@@ -42,6 +42,7 @@ FLUSH_S = 0.5          # 实时输出多久推一批：太密只是白占带宽
 
 client = docker.from_env()
 last_used: dict[str, float] = {}
+oom_seen: dict[str, int] = {}  # 每个容器上次看到的 OOM 杀进程次数：前台命令退出 137 时比一比，判断是不是内存打满
 app = FastAPI()
 
 
@@ -114,6 +115,7 @@ def _container(pid: str):
         host_dir = os.path.join(HOST_PROJECTS, pid)
         os.makedirs(f"/projects/{pid}", exist_ok=True)
         os.chown(f"/projects/{pid}", 1000, 1000)
+        oom_seen[pid] = 0  # 新容器的 cgroup 计数从 0 开始
         return client.containers.run(
             IMAGE, name=name, detach=True, working_dir="/workspace",
             volumes={host_dir: {"bind": "/workspace", "mode": "rw"}},
@@ -131,6 +133,27 @@ def _outdated(c) -> bool:
         return False
 
 
+# OOM 计数：容器自己的 cgroup（v2 memory.events 的 oom_kill；v1 memory.oom_control）。内核在内存超上限时杀进程会加 1。
+_OOM = ("sed -n 's/^oom_kill //p' /sys/fs/cgroup/memory.events 2>/dev/null || "
+        "sed -n 's/^oom_kill //p' /sys/fs/cgroup/memory/memory.oom_control 2>/dev/null")
+
+
+def _oom_count(c) -> int | None:
+    try:
+        out = (c.exec_run(["bash", "-c", _OOM]).output or b"").decode().split()
+        return int(out[0]) if out else None
+    except Exception:  # noqa: BLE001 — 读不到就不判断
+        return None
+
+
+def mem_bytes(spec: str) -> int | None:
+    """SANDBOX_MEM 的 “1g / 512m” → 字节。"""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)([kmg]?)b?", spec.strip().lower())
+    if not m:
+        return None
+    return int(float(m.group(1)) * {"": 1, "k": 1024, "m": 1024 ** 2, "g": 1024 ** 3}[m.group(2)])
+
+
 # 包装脚本：先记下自己的 pid（= 之后 exec 成的 timeout，它自成进程组，停止时整组杀），
 # 有 stdin 就从环境变量解码接到标准输入（不在工作区落文件），没有就接 /dev/null，然后才跑真正的命令。
 _WRAP = ('echo $$ > /tmp/.exec-{tok}; '
@@ -143,6 +166,8 @@ def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: s
           sink: Sink | None = None) -> dict:
     c = _container(pid)
     last_used[pid] = time.time()
+    if pid not in oom_seen:  # 服务刚重启：先记下现有计数，别把以前的 OOM 算到这条命令头上
+        oom_seen[pid] = _oom_count(c) or 0
     tok = tok or os.urandom(6).hex()
     env = {"STDIN_B64": base64.b64encode(stdin.encode()).decode()} if stdin is not None else None
     ex = client.api.exec_create(c.id, ["bash", "-c", _WRAP.format(tok=tok, timeout=timeout), "_", command],
@@ -159,6 +184,12 @@ def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: s
     last_used[pid] = time.time()
     out = "".join(parts)
     result = {"exit_code": code, "timed_out": code == 124, "output": out}
+    if code == 137:  # 被 SIGKILL：看 cgroup 计数有没有涨，涨了就是内存超上限被内核杀的
+        n = _oom_count(c)
+        if n is not None and n > oom_seen.get(pid, 0):
+            result.update(oom=True, memory_limit=mem_bytes(MEM))
+        if n is not None:
+            oom_seen[pid] = n
     if len(out) > MAX_OUTPUT:
         head, tail = out[:MAX_OUTPUT // 2], out[-MAX_OUTPUT // 2:]
         result.update(output=head + SPILL_MARK + tail, omitted=len(out) - len(head) - len(tail), total=len(out))
@@ -297,22 +328,73 @@ async def remove(pid: str):
         except NotFound:
             pass
         last_used.pop(pid, None)
+        oom_seen.pop(pid, None)
     await asyncio.to_thread(go)
     return {"ok": True}
 
 
-def _memory(c) -> tuple[int | None, int | None]:
-    """(已用, 上限) 字节。已用 = usage 减去可回收的文件缓存（和 docker stats 一样算法），否则读过大文件就像“内存满了”。"""
-    try:
-        m = c.stats(stream=False).get("memory_stats") or {}
-    except Exception:  # noqa: BLE001 — 拿不到就不显示，不影响状态
-        return None, None
+def _usage(m: dict) -> int | None:
+    """内存已用 = usage 减去可回收的文件缓存（和 docker stats 一样算法），否则读过大文件就像“内存满了”。"""
     usage = m.get("usage")
     if usage is None:
-        return None, m.get("limit")
+        return None
     st = m.get("stats") or {}
-    cache = st.get("inactive_file", st.get("total_inactive_file", 0))
-    return max(0, usage - cache), m.get("limit")
+    return max(0, usage - st.get("inactive_file", st.get("total_inactive_file", 0)))
+
+
+def cpu_percent(stats: dict, cpus: float = CPUS) -> float | None:
+    """两次采样之间用掉的 CPU，占这台沙盒 CPU 配额（SANDBOX_CPUS）的百分比，0–100。"""
+    cur, pre = stats.get("cpu_stats") or {}, stats.get("precpu_stats") or {}
+    try:
+        dc = cur["cpu_usage"]["total_usage"] - pre["cpu_usage"]["total_usage"]
+        ds = cur["system_cpu_usage"] - pre["system_cpu_usage"]
+    except (KeyError, TypeError):
+        return None
+    if ds <= 0 or dc < 0:
+        return None
+    online = cur.get("online_cpus") or len(cur["cpu_usage"].get("percpu_usage") or []) or 1
+    return round(min(100.0, dc / ds * online * 100 / max(cpus, 0.01)), 1)
+
+
+def _stats(c) -> dict:
+    """{memory_used, memory_limit, cpu_percent}；拿不到的是 None（不影响状态）。"""
+    try:
+        st = c.stats(stream=False) or {}
+    except Exception:  # noqa: BLE001
+        return {"memory_used": None, "memory_limit": None, "cpu_percent": None}
+    m = st.get("memory_stats") or {}
+    return {"memory_used": _usage(m), "memory_limit": m.get("limit"), "cpu_percent": cpu_percent(st)}
+
+
+# 进程表：按 CPU 排；自己这条查看命令不算。ps 来自镜像里的 procps。
+_PS = "ps -eo pid=,pcpu=,rss=,etimes=,args= --sort=-pcpu 2>/dev/null"
+PROCESS_MAX = 8
+
+
+def parse_ps(text: str, limit: int = PROCESS_MAX) -> list[dict]:
+    out = []
+    for line in text.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) < 5 or not parts[0].isdigit():
+            continue
+        pid, cpu, rss, et, args = parts
+        if args.startswith(("ps -eo", "sleep infinity")) or "/sys/fs/cgroup/memory" in args:
+            continue  # 查看命令本身、容器的占位进程
+        try:
+            out.append({"pid": int(pid), "cpu": float(cpu), "memory": int(rss) * 1024, "elapsed": int(et),
+                        "command": args[:200]})
+        except ValueError:
+            continue
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _processes(c) -> list[dict]:
+    try:
+        return parse_ps((c.exec_run(["bash", "-c", _PS]).output or b"").decode("utf-8", "replace"))
+    except Exception:  # noqa: BLE001
+        return []
 
 
 def _started(c) -> float | None:
@@ -329,18 +411,39 @@ async def status(pid: str):
     _check_pid(pid)
 
     def go() -> dict:
-        out = {"state": "none", "memory_used": None, "memory_limit": None, "started_at": None, "outdated": False,
-               "idle_minutes": IDLE_MINUTES, "last_used": last_used.get(pid)}
+        out = {"state": "none", "memory_used": None, "memory_limit": None, "cpu_percent": None, "started_at": None,
+               "outdated": False, "idle_minutes": IDLE_MINUTES, "last_used": last_used.get(pid), "processes": [],
+               "oom_kills": 0}
         try:
             c = client.containers.get(f"sbx-{pid}")
         except NotFound:
             return out
         out.update(state="running" if c.status == "running" else "stopped", outdated=_outdated(c))
         if c.status == "running":
-            out["memory_used"], out["memory_limit"] = _memory(c)
-            out["started_at"] = _started(c)
+            out.update(_stats(c), started_at=_started(c), processes=_processes(c), oom_kills=_oom_count(c) or 0)
         return out
     return await asyncio.to_thread(go)
+
+
+# 容器自己 /tmp 里的下载缓存（pip / npm，见 workspace-env.sh）：不在工作区里，但占 VPS 的盘，重启也会清掉。
+_CLEAN = ('n=$(du -sb /tmp/.cache /tmp/.npm 2>/dev/null | awk \'{s+=$1} END {print s+0}\'); '
+          'rm -rf /tmp/.cache /tmp/.npm; echo "$n"')
+
+
+@app.post("/sandboxes/{pid}/cleanup", dependencies=[Depends(auth)])
+async def cleanup(pid: str):
+    """清容器里的下载缓存，返回腾出的字节。没在跑就什么都不做（不为清理开机）。"""
+    _check_pid(pid)
+
+    def go() -> int:
+        c = _existing(pid)
+        if c is None or c.status != "running":
+            return 0
+        try:
+            return int((c.exec_run(["bash", "-c", _CLEAN]).output or b"0").decode().split()[-1])
+        except (ValueError, IndexError):
+            return 0
+    return {"freed": await asyncio.to_thread(go)}
 
 
 async def _reaper():

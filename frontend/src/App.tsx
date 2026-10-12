@@ -35,6 +35,7 @@ export default function App() {
           <Route path="chat" element={<ChatScreen />} />
           <Route path="projects" element={<ProjectsScreen />} />
           <Route path="projects/:pid" element={<ProjectScreen />} />
+          <Route path="projects/:pid/computer" element={<ComputerScreen />} />
           <Route path="me" element={<MeScreen />} />
           <Route path="me/memory" element={<MemoryScreen />} />
           <Route path="me/tasks" element={<TasksScreen />} />
