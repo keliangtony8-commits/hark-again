@@ -19,6 +19,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 
+from .. import plan_mode
 from ..config import settings
 from ..db import SessionLocal
 from . import loop
@@ -186,8 +187,12 @@ async def _child(parent: ToolContext, t: Task, push, deadline: float) -> None:
     async with SessionLocal() as db:
         ctx = ToolContext(db=db, project_id=parent.project_id, conversation_id=parent.conversation_id,
                           task_id=parent.task_id, model=parent.model, effort=parent.effort, allow=CHILD_TOOLS, depth=parent.depth + 1,
-                          changes=parent.changes)  # 子助手改的文件也算进这一轮的改动卡
-        system = (await build_system_prompt(db, parent.project_id, t.prompt)).add(STABLE, ROLE).text()
+                          changes=parent.changes,  # 子助手改的文件也算进这一轮的改动卡
+                          plan=plan_mode.State(active=True, can_exit=False) if parent.plan and parent.plan.active else None)
+        prompt = (await build_system_prompt(db, parent.project_id, t.prompt)).add(STABLE, ROLE)
+        if ctx.plan is not None:  # 主助手在计划模式：子助手同样只读（Gemini 计划模式只放调查类子助手）
+            prompt.add(STABLE, plan_mode.CHILD_NOTE)
+        system = prompt.text()
         limits = loop.Limits(max(1, settings.subagent_max_steps), settings.subagent_turn_tokens, deadline, WRAP_UP)
         builder = loop.MessageBuilder()
         history = [{"role": "user", "content": f"任务：{t.title}\n\n{t.prompt}"}]

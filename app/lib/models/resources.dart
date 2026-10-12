@@ -109,7 +109,7 @@ class ModelEfforts {
 }
 
 class ConversationSummary {
-  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId, this.routedModel});
+  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId, this.routedModel, this.planMode = false});
   factory ConversationSummary.fromJson(Map<String, dynamic> j) => ConversationSummary(
     id: j['id'] as String,
     title: j['title'] as String? ?? '新对话',
@@ -120,6 +120,7 @@ class ConversationSummary {
     snippet: j['snippet'] as String?,
     messageId: j['message_id'] as String?,
     routedModel: j['routed_model'] as String?,
+    planMode: j['mode'] == 'plan',
   );
   final String id, title;
   final DateTime? updatedAt;
@@ -127,13 +128,16 @@ class ConversationSummary {
 
   /// 服务器自动起了标题（conversation.title 事件）：只换标题，其余照旧。
   ConversationSummary withTitle(String t) => ConversationSummary(
-    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId, routedModel: routedModel);
+    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId, routedModel: routedModel, planMode: planMode);
 
   /// 这个对话选的聊天模型别名；null = 服务器默认。
   final String? model;
 
   /// 这个对话选的思考强度；null = 模型默认。
   final String? reasoning;
+
+  /// 计划模式（后端 conversations.mode == plan，app/plan_mode.py）：只看不改，先交方案给你批准。
+  final bool planMode;
 
   /// 选了“自动”时上一轮实际用的别名（后端 conversations.routed_model）。
   final String? routedModel;

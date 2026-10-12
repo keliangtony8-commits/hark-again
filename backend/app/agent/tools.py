@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..plan_mode import State as PlanState
 from ..turn_changes import Tracker as ChangeTracker
 from ..workspace_instructions import Tracker
 from ..workspaces import of as workspace_of
@@ -57,6 +58,8 @@ class ToolContext:
     instructions: Tracker = field(default_factory=Tracker)
     # 这一轮 write_file / edit_file 碰过的文件基线（app/turn_changes.py）：收尾出净改动卡 + 整轮撤销；并行副本、子助手共用
     changes: ChangeTracker = field(default_factory=ChangeTracker)
+    # 计划模式（app/plan_mode.py）：None = 没开；State.active 时只放只读工具，exit_plan_mode 批准后 lift()。并行副本共用
+    plan: "PlanState | None" = None
     host: bool = False  # 服务器主机模式开着（run_turn 每轮从 host_mode.enabled 读）：scope="host" 的工具才出现
 
     @property
@@ -71,6 +74,7 @@ class Approval:
     risk 返回普通字符串 = 通用审批卡（或 Tool.card 画的卡）。"""
     reason: str
     card: dict | None = None
+    rejected: str | None = None  # 用户没批准时还给模型的话（None = 通用的“已取消，别绕过”）；如方案卡：没批准 = 问他改哪里
 
 
 @dataclass

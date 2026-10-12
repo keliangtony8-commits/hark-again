@@ -361,3 +361,25 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 @media (prefers-reduced-motion: reduce) {
   .blk-changes-icon, .blk-changes-title, .blk-changes-note { animation: none; }
 }
+
+/* v1.71 方案卡（计划模式）：等批准时警示边框（同审批卡），有结果后收成一行 */
+.blk-review { max-width: 680px; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3);
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); transition: border-color var(--dur) var(--ease); }
+.blk-review:not(.pending) { border-color: var(--border); }
+.blk-review-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: flex-start; gap: var(--sp-2); cursor: pointer; }
+.blk-review-head:disabled { cursor: default; }
+.blk-review-head:focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; border-radius: var(--r-sm); }
+.blk-review-icon { display: grid; margin-top: 2px; color: var(--warning); animation: icon-pop var(--dur) var(--ease); }
+.blk-review:not(.pending) .blk-review-icon { color: var(--text-2); }
+.blk-review-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-weight: var(--fw-title); overflow-wrap: anywhere; }
+.blk-review-hint { font-weight: var(--fw-body); font-size: var(--fs-xs); color: var(--text-3); animation: fade var(--dur) var(--ease); }
+.blk-review-state { flex: none; font-size: var(--fs-xs); font-weight: var(--fw-title); color: var(--warning); animation: rise var(--dur) var(--ease); }
+.blk-review:not(.pending) .blk-review-state { color: var(--text-2); }
+.blk-review-body { animation: rise var(--dur) var(--ease); }
+.blk-review-plan { background: var(--tile); border-radius: var(--r-sm); padding: var(--sp-3); overflow: hidden; }
+.blk-review-plan.is-peek { max-height: 260px; mask-image: linear-gradient(to bottom, #000 75%, transparent); }
+.blk-review-more { margin-top: var(--sp-1); }
+.blk-review-actions { animation: rise var(--dur) var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  .blk-review, .blk-review-icon, .blk-review-hint, .blk-review-state, .blk-review-body, .blk-review-actions { animation: none; transition: none; }
+}

@@ -8,6 +8,7 @@ import ChatTitle from "./ChatTitle";
 import ChatView from "./ChatView";
 import ConversationList from "./ConversationList";
 import EffortChip from "./EffortChip";
+import PlanModeChip from "./PlanModeChip";
 import ModelChip from "./ModelChip";
 import type { ConversationSummary, OutgoingFile } from "../../lib/types";
 import "./chat.css";
@@ -86,6 +87,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
             accessory={<>
               <ModelChip model={chat.model} routed={chat.routed} onChange={chat.setModel} />
               <EffortChip model={chat.model} effort={chat.effort} onChange={chat.setEffort} />
+              <PlanModeChip on={chat.planMode} onChange={chat.setPlanMode} />
             </>}
             onSend={chat.send} onReconnect={chat.reconnect} onResend={chat.resend} onDiscard={chat.discard} />
         </section>

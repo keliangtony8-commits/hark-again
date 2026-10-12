@@ -165,6 +165,16 @@ class ChangesBlock(BaseModel):
     undone: bool | None = None
 
 
+class PlanReviewBlock(BaseModel):
+    """v1.71 计划模式下交给用户批准的方案（app/plan_mode.py，exit_plan_mode 经审批流程画出）：
+    approval.reply 批准 → approved（退出计划模式、这一轮按方案做）/ 拒绝 → rejected（留在计划模式改）/ expired。"""
+    type: Literal["plan_review"] = "plan_review"
+    id: str
+    title: str
+    plan: str
+    state: Literal["pending", "approved", "rejected", "expired"] = "pending"
+
+
 class PageBlock(BaseModel):
     """生成的网页：预览 + 打开 + 复制链接。"""
     type: Literal["page"] = "page"
@@ -322,7 +332,8 @@ class FormBlock(BaseModel):
 
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
-                        OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock, ChangesBlock],
+                        OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock, ChangesBlock,
+                        PlanReviewBlock],
                   Field(discriminator="type")]
 
 
@@ -381,6 +392,9 @@ def blocks_to_text(blocks: list[dict]) -> str:
             from .agent.subagent import history_text  # 规则只在 subagent.py
             if line := history_text(b):
                 parts.append(line)
+        elif t == "plan_review":
+            from .plan_mode import history_text as review_text  # 规则只在 plan_mode.py
+            parts.append(review_text(b))
         elif t == "changes":
             from .turn_changes import history_text as changes_text  # 规则只在 turn_changes.py
             parts.append(changes_text(b))

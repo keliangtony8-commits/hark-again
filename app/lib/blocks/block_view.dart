@@ -13,6 +13,7 @@ import 'interactive_blocks.dart';
 import 'job_block.dart';
 import 'memory_block.dart';
 import 'package:flutter/material.dart';
+import 'plan_review_block.dart';
 import 'plan_block.dart';
 import 'preview_block.dart';
 
@@ -33,6 +34,7 @@ class BlockView extends StatelessWidget {
         StatsBlock b => StatsBlockView(b),
         MemoryBlock b => MemoryBlockView(b),
         ChangesBlock b => ChangesBlockView(b),
+        PlanReviewBlock b => PlanReviewBlockView(b),
         DraftBlock b => DraftBlockView(b),
         SummaryBlock b => SummaryBlockView(b),
         ImagesBlock b => ImagesBlockView(b),

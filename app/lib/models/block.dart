@@ -63,6 +63,11 @@ sealed class Block {
         'plan' => PlanBlock.fromJson(j),
         'delegate' => DelegateBlock.fromJson(j),
         'changes' => ChangesBlock.fromJson(j),
+        'plan_review' => PlanReviewBlock(
+            id: j['id'] as String? ?? '',
+            title: j['title'] as String? ?? '方案',
+            plan: j['plan'] as String? ?? '',
+            state: j['state'] as String? ?? 'pending'),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -143,6 +148,14 @@ class ApprovalBlock extends Block {
   final List<ApprovalOption> options;
   bool get pending => state == 'pending';
   bool get onHost => target == 'host';
+}
+
+/// v1.71 计划模式下交给你批准的方案（后端 app/plan_mode.py；批准走 approval.reply，和审批卡同一条线）。
+/// state：pending 等你批准 / approved 已批准（退出计划模式、这一轮按方案做）/ rejected 要改 / expired 没等到答复。
+class PlanReviewBlock extends Block {
+  const PlanReviewBlock({required this.id, required this.title, required this.plan, required this.state});
+  final String id, title, plan, state;
+  bool get pending => state == 'pending';
 }
 
 /// 云浏览器实时画面卡。session = 按网站起的会话名（后端 app/browser_sessions.py；旧卡 main），
@@ -469,7 +482,7 @@ class ReplySegment {
 }
 
 bool standsAlone(Block b) => switch (b) {
-      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || PlanBlock() || DelegateBlock() || ChangesBlock() => true,
+      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || PlanBlock() || DelegateBlock() || ChangesBlock() || PlanReviewBlock() => true,
       _ => false,
     };
 

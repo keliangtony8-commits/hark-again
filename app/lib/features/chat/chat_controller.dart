@@ -53,7 +53,8 @@ class ChatState {
       this.focus,
       this.model,
       this.effort,
-      this.routed});
+      this.routed,
+      this.planMode = false});
   final List<ConversationSummary> conversations;
   final String? activeId;
   final List<Message> messages;
@@ -80,6 +81,9 @@ class ChatState {
 
   /// 选了“自动”时这一轮 / 上一轮服务器实际用的别名（turn.model 事件、对话详情 routed_model）；模型钮显示“自动 · 快速”。
   final String? routed;
+
+  /// 当前对话在计划模式（v1.71，后端 app/plan_mode.py）：助手只看不改，先交方案给你批准。和模型同属“模型选择”，同一条路送到服务器。
+  final bool planMode;
 
   /// 输入框是否该等：在生成，或有一条在排队（一次只排一条，避免新对话被拆成几段）。
   bool get busy => streaming || messages.any((m) => m.outbox == Outbox.queued);
@@ -113,7 +117,8 @@ class ChatState {
           String? Function()? focus,
           String? Function()? model,
           String? Function()? effort,
-          String? Function()? routed}) =>
+          String? Function()? routed,
+          bool? planMode}) =>
       ChatState(
         conversations: conversations ?? this.conversations,
         activeId: activeId != null ? activeId() : this.activeId,
@@ -128,6 +133,7 @@ class ChatState {
         model: model != null ? model() : this.model,
         effort: effort != null ? effort() : this.effort,
         routed: routed != null ? routed() : this.routed,
+        planMode: planMode ?? this.planMode,
       );
 }
 
@@ -335,6 +341,11 @@ class ChatController extends Notifier<ChatState> {
         _regenerating = false;
         _reattach = false;
         _flush(); // 期间点了“重发”的，轮到它了
+      case 'conversation.mode':
+        // 方案被批准、服务器已退出计划模式（v1.71）：“计划”钮关掉；列表里的这个对话一起改
+        final cid = e['conversation_id'];
+        if (cid is String && cid == state.activeId && !_modelDirty) state = state.copyWith(planMode: e['mode'] == 'plan');
+        if (cid is String) unawaited(refreshList().catchError((_) {}));
       case 'conversation.title':
         // 第一轮回复后服务器在后台起好了短标题（v1.67）：列表和顶栏原地换字（顶栏的 AnimatedSwitcher 淡入），再同步一次缓存
         final cid = e['conversation_id'], title = e['title'];
@@ -466,7 +477,8 @@ class ChatController extends Notifier<ChatState> {
   }
 
   /// 改过还没送到的模型选择，随消息带上。
-  Map<String, dynamic> _modelField() => _modelDirty ? {'model': state.model ?? '', 'reasoning': state.effort ?? ''} : const {};
+  Map<String, dynamic> _modelField() =>
+      _modelDirty ? {'model': state.model ?? '', 'reasoning': state.effort ?? '', 'mode': state.planMode ? 'plan' : 'default'} : const {};
 
   void _expire() {
     _giveUp = null;
@@ -508,6 +520,7 @@ class ChatController extends Notifier<ChatState> {
         model: () => _summaryOf(id)?.model,
         effort: () => _summaryOf(id)?.reasoning,
         routed: () => _summaryOf(id)?.routedModel,
+        planMode: _summaryOf(id)?.planMode ?? false,
         messages: [if (cached != null) ..._messages(cached), ...unsent],
         error: () => null,
         focus: () => id == null ? null : focus);
@@ -538,7 +551,7 @@ class ChatController extends Notifier<ChatState> {
       final detail = await _api.get('/api/conversations/$id') as Map<String, dynamic>;
       final raw = detail['messages'] as List;
       unawaited(_cache.putMessages(id, raw));
-      if (seq == _openSeq && state.activeId == id && !_modelDirty) state = state.copyWith(model: () => detail['model'] as String?, effort: () => detail['reasoning'] as String?);
+      if (seq == _openSeq && state.activeId == id && !_modelDirty) state = state.copyWith(model: () => detail['model'] as String?, effort: () => detail['reasoning'] as String?, planMode: detail['mode'] == 'plan');
       if (seq == _openSeq && state.activeId == id) state = state.copyWith(routed: () => detail['routed_model'] as String?);
       // 等待期间用户换了对话或已经开始发消息：不覆盖眼前的内容
       if (seq != _openSeq || state.activeId != id || state.streaming) return;
@@ -661,15 +674,22 @@ class ChatController extends Notifier<ChatState> {
     await _pushChoice();
   }
 
-  /// 模型选择（模型 + 思考强度）送到服务器：已有对话立刻 PATCH；新对话 / 没成功就留着 dirty，随下一条消息带上。
+  /// 开 / 关计划模式（v1.71）。和模型同一条路：已有对话立刻 PATCH，新对话随第一条消息带上；这一轮正在跑时从下一轮起生效。
+  Future<void> setPlanMode(bool on) async {
+    if (on == state.planMode) return;
+    state = state.copyWith(planMode: on);
+    await _pushChoice();
+  }
+
+  /// 模型选择（模型 + 思考强度 + 计划模式）送到服务器：已有对话立刻 PATCH；新对话 / 没成功就留着 dirty，随下一条消息带上。
   Future<void> _pushChoice() async {
     _modelDirty = true;
     final id = state.activeId;
     if (id == null) return; // 新对话：随第一条消息带上
-    final sent = (state.model, state.effort);
+    final sent = (state.model, state.effort, state.planMode);
     try {
       await _api.patch('/api/conversations/$id', _modelField());
-      if (state.activeId == id && (state.model, state.effort) == sent) _modelDirty = false;
+      if (state.activeId == id && (state.model, state.effort, state.planMode) == sent) _modelDirty = false;
       unawaited(refreshList().catchError((_) {}));
     } on ApiError catch (e) {
       if (!e.isNetwork && state.activeId == id) state = state.copyWith(error: () => e.message);

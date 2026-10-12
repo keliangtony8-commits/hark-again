@@ -53,9 +53,14 @@ export function useChat(projectId?: string) {
   const [routed, setRouted] = useState<string | null>(null);
   const effortRef = useRef(effort);
   effortRef.current = effort;
+  /** 计划模式（v1.71，后端 app/plan_mode.py）：只看不改，先交方案给你批准。和模型同属“模型选择”，同一个 dirty。 */
+  const [planMode, setPlanModeState] = useState(false);
+  const planRef = useRef(planMode);
+  planRef.current = planMode;
   const modelDirty = useRef(false); // 本机改了模型 / 思考强度还没送到服务器（新对话 / PATCH 没成功）
   /** 改过还没送到的模型选择，随消息带上。 */
-  const modelField = () => (modelDirty.current ? { model: modelRef.current ?? "", reasoning: effortRef.current ?? "" } : {});
+  const modelField = () => (modelDirty.current
+    ? { model: modelRef.current ?? "", reasoning: effortRef.current ?? "", mode: planRef.current ? "plan" : "default" } : {});
   const socket = useRef<ChatSocket>();
   const giveUp = useRef<ReturnType<typeof setTimeout>>();
   const started = useRef(false);   // 在飞的这条已收到 message.start
@@ -86,8 +91,8 @@ export function useChat(projectId?: string) {
   /** 拉服务器版本；本机还没发出的消息接在后面，不能被刷新冲掉。 */
   const fetchThread = useCallback(async (id: string, seq: number) => {
     try {
-      const { messages, model: m, reasoning: r, routed_model: rm } = await http.get<{ messages: Message[]; model?: string | null; reasoning?: string | null; routed_model?: string | null }>(`/api/conversations/${id}`);
-      if (seq === openSeq.current && threadRef.current.id === id && !modelDirty.current) { setModelState(m ?? null); setEffortState(r ?? null); }
+      const { messages, model: m, reasoning: r, routed_model: rm, mode: md } = await http.get<{ messages: Message[]; model?: string | null; reasoning?: string | null; routed_model?: string | null; mode?: string | null }>(`/api/conversations/${id}`);
+      if (seq === openSeq.current && threadRef.current.id === id && !modelDirty.current) { setModelState(m ?? null); setEffortState(r ?? null); setPlanModeState(md === "plan"); }
       if (seq === openSeq.current && threadRef.current.id === id) setRouted(rm ?? null);
       if (seq !== openSeq.current || threadRef.current.id !== id || streamingRef.current) return;
       setThread((t) => ({ id, messages: [...messages, ...t.messages.filter(isUnsent)] }));
@@ -181,6 +186,11 @@ export function useChat(projectId?: string) {
           return [...m.filter((x) => !x.pending), done];
         });
         setStreaming(false);   // flush effect 随后送出期间点了“重发”的那条
+        list.refresh();
+        break;
+      case "conversation.mode":
+        // 方案被批准、服务器已退出计划模式（v1.71）：“计划”钮关掉，列表同步
+        if (e.conversation_id === threadRef.current.id && !modelDirty.current) setPlanModeState(e.mode === "plan");
         list.refresh();
         break;
       case "conversation.title":
@@ -322,12 +332,13 @@ export function useChat(projectId?: string) {
     setModelState(summary?.model ?? null);
     setEffortState(summary?.reasoning ?? null);
     setRouted(summary?.routed_model ?? null);
+    setPlanModeState(summary?.mode === "plan");
     const restored = outbox.load(projectId, id);
     if (!id) { setThread({ id: null, messages: restored }); return; }
     try {
-      const { messages, model: m, reasoning: r, routed_model: rm } = await http.get<{ messages: Message[]; model?: string | null; reasoning?: string | null; routed_model?: string | null }>(`/api/conversations/${id}`);
+      const { messages, model: m, reasoning: r, routed_model: rm, mode: md } = await http.get<{ messages: Message[]; model?: string | null; reasoning?: string | null; routed_model?: string | null; mode?: string | null }>(`/api/conversations/${id}`);
       if (seq !== openSeq.current) return;
-      if (!modelDirty.current) { setModelState(m ?? null); setEffortState(r ?? null); }
+      if (!modelDirty.current) { setModelState(m ?? null); setEffortState(r ?? null); setPlanModeState(md === "plan"); }
       setRouted(rm ?? null);
       setThread({ id, messages: [...messages, ...restored] });
       if (!streamingRef.current) watch(id);
@@ -437,10 +448,10 @@ export function useChat(projectId?: string) {
     modelDirty.current = true;
     const id = threadRef.current.id;
     if (!id) return;   // 新对话：随第一条消息带上
-    const [m, e] = [modelRef.current, effortRef.current];
+    const [m, e, pl] = [modelRef.current, effortRef.current, planRef.current];
     try {
-      await list.setChoice(id, m, e);
-      if (threadRef.current.id === id && modelRef.current === m && effortRef.current === e) modelDirty.current = false;
+      await list.setChoice(id, m, e, pl);
+      if (threadRef.current.id === id && modelRef.current === m && effortRef.current === e && planRef.current === pl) modelDirty.current = false;
     } catch { /* 断网等：随下一条消息带过去 */ }
   }, [list.setChoice]);
   const setModel = useCallback(async (choice: string | null) => {
@@ -454,6 +465,14 @@ export function useChat(projectId?: string) {
     if (choice === effortRef.current) return;
     setEffortState(choice);
     effortRef.current = choice;
+    await pushChoice();
+  }, [pushChoice]);
+
+  /** 开 / 关计划模式。和模型同一条路；这一轮正在跑时从下一轮起生效。 */
+  const setPlanMode = useCallback(async (on: boolean) => {
+    if (on === planRef.current) return;
+    setPlanModeState(on);
+    planRef.current = on;
     await pushChoice();
   }, [pushChoice]);
 
@@ -482,7 +501,7 @@ export function useChat(projectId?: string) {
   return {
     refreshActive, undoChanges,
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
-    canRegenerate, canStop, editableId, focus, model, routed, setModel, effort, setEffort, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
+    canRegenerate, canStop, editableId, focus, model, routed, setModel, effort, setEffort, planMode, setPlanMode, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };
 }
 

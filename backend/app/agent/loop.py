@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 
-from .. import activity, browser_files, llm_retry, plan, spill, vision
+from .. import activity, browser_files, llm_retry, plan, plan_mode, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
 from . import approvals, compact, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
@@ -262,6 +262,9 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         if over and step:  # 预算到了：最后一步不给工具，让模型交代进度（第一步就是最后一步时不用交代）
             messages.append({"role": "user", "content": limits.wrap_up})
             limits.wrapped = True
+        if ctx.plan is not None and ctx.plan.lifted:  # 方案刚被批准：系统提示里的计划模式规则拿掉（plan_mode.lift_prompt）
+            plan_mode.lift_prompt(messages)
+            ctx.plan.lifted = False
         seen.apply(messages)
         if tool_mask.enabled():  # 较早的大块工具结果 → 预览 + 全文文件（tool_mask.py，无损；攒够一批才动）
             tool_mask.mask(messages, ctx.workspace, builder.base)
@@ -473,6 +476,11 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
     def denied(note: str) -> ToolStatus:
         return ToolStatus(call.id, call.name, t.label, "denied", rec.denied(call.id, call.name, t.label, args, note))
 
+    if why := plan_mode.refusal(call.name, args, ctx.plan):  # 计划模式只放只读工具（Gemini plan.toml 硬拦，不靠模型自觉）
+        if call.name != plan_mode.TOOL:
+            yield denied("计划模式下不执行")
+        yield ToolResult(why)
+        return
     gate = t.risk(args, ctx) if t.risk else None
     if inspect.isawaitable(gate):  # 要查库才知道问不问的（主机命令的已存规则）
         gate = await gate
@@ -491,7 +499,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
                 yield ev
         if grant is None:
             yield denied("你没有批准")
-            yield ToolResult("用户没有批准这个操作，已取消。不要换方式绕过，告诉用户即可。")
+            yield ToolResult(ask.rejected or "用户没有批准这个操作，已取消。不要换方式绕过，告诉用户即可。")
             return
         if t.grants:
             args["grant"] = grant

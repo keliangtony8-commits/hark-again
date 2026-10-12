@@ -124,7 +124,7 @@ void main() {
     await _settle();
     await ctl.open('c1');
     await ctl.setModel(null);
-    expect(api.patches.single, {'path': '/api/conversations/c1', 'model': '', 'reasoning': ''});
+    expect(api.patches.single, {'path': '/api/conversations/c1', 'model': '', 'reasoning': '', 'mode': 'default'});
     expect(c.read(chatProvider('')).model, isNull);
     ctl.send('下一题');
     expect(socket.sent.last.containsKey('model'), isFalse);
@@ -169,7 +169,7 @@ void main() {
     await ctl2.setModel(null);
     api2.offline = false;
     ctl2.regenerate();
-    expect(socket2.sent.last, {'type': 'message.regenerate', 'conversation_id': 'c1', 'message_id': 'a1', 'model': '', 'reasoning': ''});
+    expect(socket2.sent.last, {'type': 'message.regenerate', 'conversation_id': 'c1', 'message_id': 'a1', 'model': '', 'reasoning': '', 'mode': 'default'});
   });
 
   test('ModelEfforts：解析、默认、换模型后没有那档回默认、选默认存 null；旧服务器没有 efforts', () {
@@ -197,7 +197,7 @@ void main() {
     await ctl.open('c1');
     expect(c.read(chatProvider('')).effort, 'low');
     await ctl.setEffort('high');
-    expect(api.patches.single, {'path': '/api/conversations/c1', 'model': 'smart', 'reasoning': 'high'});
+    expect(api.patches.single, {'path': '/api/conversations/c1', 'model': 'smart', 'reasoning': 'high', 'mode': 'default'});
     ctl.send('下一题');
     expect(socket.sent.last.containsKey('reasoning'), isFalse);
     api.offline = true;
@@ -269,7 +269,7 @@ void main() {
     expect(find.text('难题想得更深'), findsOneWidget);
     await tester.tap(find.text('高'));
     await tester.pumpAndSettle();
-    expect(api.patches.last, {'path': '/api/conversations/c1', 'model': 'smart', 'reasoning': 'high'});
+    expect(api.patches.last, {'path': '/api/conversations/c1', 'model': 'smart', 'reasoning': 'high', 'mode': 'default'});
     expect(find.bySemanticsLabel(RegExp('思考强度：高')), findsOneWidget);
     await tester.tap(find.bySemanticsLabel(RegExp('模型：深度')));
     await tester.pumpAndSettle();

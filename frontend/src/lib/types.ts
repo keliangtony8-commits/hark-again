@@ -73,7 +73,7 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
   started_at?: string | null; finished_at?: string | null; stop_reason?: string | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;
@@ -83,6 +83,8 @@ export type Role = "user" | "assistant";
 /** 这一步改了工作区文件（v1.34 write_file / edit_file；形状见 backend/app/file_edit.py）。hidden = 像密钥的文件，不给 diff。 */
 export type FileChange = { path: string; added: number; removed: number; diff: string; created?: boolean; hidden?: boolean; big?: boolean; deleted?: boolean; moved_from?: string };
 /** v1.68 这一轮改过的文件（后端 app/turn_changes.py）：token 非空 = 能整轮撤销。 */
+/** v1.71 计划模式下交给你批准的方案（后端 app/plan_mode.py）：批准 / 再改改走 approval.reply。 */
+export type PlanReviewBlock = { type: "plan_review"; id: string; title: string; plan: string; state: "pending" | "approved" | "rejected" | "expired" };
 export type ChangesBlock = { type: "changes"; token: string; files: FileChange[]; more?: number | null; undone?: boolean | null };
 export type ActivityStep = { id: string; tool: string; title: string; detail: string; state: "running" | "done" | "error" | "denied" | "stopped"; at?: string; ms?: number; note?: string; change?: FileChange; changes?: FileChange[] };
 /** WS tool.status：step = 完整的一步（老服务器没有）。 */
@@ -98,7 +100,7 @@ export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopp
   /** 模型调用失败在自动重试 / 已换备用模型（v1.50 turn.retry，lib/retry.ts）：只在生成中的占位消息上。 */
   retry?: RetryNotice };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
-export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; routed_model?: string | null; updated_at: string; snippet?: string; message_id?: string };
+export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; routed_model?: string | null; mode?: string | null; updated_at: string; snippet?: string; message_id?: string };
 
 /** v1.61 续传：一轮里的事件都带 turn_id + 从 1 起连续的 seq（老服务器没有）。 */
 export type TurnCursor = { turn_id?: string; seq?: number };
@@ -115,6 +117,7 @@ export type ServerEvent = TurnCursor & (
   | { type: "message.stopped"; conversation_id: string }
   /** v1.67：第一轮回复后服务器在后台起好的短标题（在 message.done 之后到达） */
   | { type: "conversation.title"; conversation_id: string; title: string }
+  | { type: "conversation.mode"; conversation_id: string; mode: string }
   | { type: "error"; message: string }
   /** 对 turn.resume 的答复：live=false = 没这轮（以 GET 为准）；gap = 游标太旧，随后来 turn.snapshot */
   | { type: "turn.resumed"; turn_id: string | null; conversation_id: string | null; live: boolean; ended?: boolean; gap?: boolean }

@@ -4,7 +4,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import conversation_share, conversation_title, model_router, quota, reasoning, turn_changes, turn_journal, usage, workspaces
+from .. import conversation_share, conversation_title, model_router, plan_mode, quota, reasoning, turn_changes, turn_journal, usage, workspaces
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -21,7 +21,7 @@ SNIPPET = 36  # 命中位置前后各取多少字
 def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
     """hit = (命中的消息 id, 摘录)：客户端据此打开对话后滚到那条消息并闪一下。"""
     out = {"id": c.id, "title": c.title, "pinned": c.pinned, "model": c.model, "reasoning": c.reasoning,
-           "routed_model": c.routed_model, "updated_at": iso(c.updated_at)}
+           "routed_model": c.routed_model, "mode": c.mode or "default", "updated_at": iso(c.updated_at)}
     if hit:
         out["message_id"], out["snippet"] = hit
     return out
@@ -73,6 +73,7 @@ class ConversationPatch(BaseModel):
     pinned: bool | None = None
     model: str | None = None  # 别名；"" = 回到默认
     reasoning: str | None = None  # 思考强度（reasoning.EFFORTS）；"" = 回到模型默认
+    mode: str | None = None  # 计划模式（plan_mode.MODES）：default | plan；"" = default
 
 
 @router.patch("/{cid}")
@@ -87,6 +88,10 @@ async def patch_conversation(cid: str, body: ConversationPatch, db: AsyncSession
         if values["reasoning"] and not reasoning.valid(values["reasoning"]):
             raise HTTPException(422, "没有这个思考强度")
         values["reasoning"] = values["reasoning"] or None
+    if "mode" in values:
+        if values["mode"] and not plan_mode.valid(values["mode"]):
+            raise HTTPException(422, "没有这个模式")
+        values["mode"] = values["mode"] or plan_mode.DEFAULT
     if "title" in values:
         values["title"] = values["title"].strip()
         if not values["title"]:
@@ -117,6 +122,7 @@ async def get_conversation(cid: str, db: AsyncSession = Depends(get_session)):
         "model": c.model,
         "reasoning": c.reasoning,
         "routed_model": c.routed_model,
+        "mode": c.mode or "default",
         "messages": [m.to_wire() for m in c.messages],
     }
 

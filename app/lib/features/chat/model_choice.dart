@@ -4,6 +4,8 @@
 // 两项 → 点一下就切换（标签上下错开换字）；三项及以上 → 弹选择菜单。列表不足两项时整个钮不出现。
 // 思考强度钮（EffortChip）紧挨着：当前模型能调（≥2 档，后端 reasoning.catalog）才出现，点开选档（带一行说明）。
 // 两个钮由 ModelChoice 排成一行；换到不能调的模型时思考钮淡出收起。
+// 计划模式钮（PlanModeChip，v1.71）：点一下开 / 关。开着时助手只看不改，先交方案给你批准（后端 app/plan_mode.py）；
+// 方案被批准后服务器推 conversation.mode，钮自己关掉。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,6 +17,7 @@ import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/motion.dart';
+import '../../ui/kit.dart';
 import '../../ui/sheets.dart';
 import 'chat_controller.dart';
 import '../../ui/glass.dart';
@@ -114,7 +117,7 @@ class ModelChip extends ConsumerWidget {
   }
 }
 
-/// 输入框里的“模型选择”：模型钮 + 思考强度钮（当前模型能调才有）。
+/// 输入框里的“模型选择”：模型钮 + 思考强度钮（当前模型能调才有）+ 计划模式开关。
 class ModelChoice extends StatelessWidget {
   const ModelChoice({super.key, required this.scope});
   final String scope;
@@ -123,6 +126,7 @@ class ModelChoice extends StatelessWidget {
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
         ModelChip(scope: scope),
         EffortChip(scope: scope), // 自带 FadeSwitcher（淡入淡出 + 收起宽度）
+        PlanModeChip(scope: scope),
       ]);
 }
 
@@ -185,6 +189,56 @@ class EffortChip extends ConsumerWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// 计划模式开关：关着只是一枚淡色地图图标（输入框一行很挤），开着换成实心图标 +“计划”+ 一圈细边（和非默认模型同一规则）。
+class PlanModeChip extends ConsumerWidget {
+  const PlanModeChip({super.key, required this.scope});
+  final String scope;
+
+  static String semantics(bool on) => on ? '计划模式已开：只看不改，先交方案给你批准。点按关闭' : '计划模式已关。点按打开：先出方案、你批准后再动手';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final on = ref.watch(chatProvider(scope).select((s) => s.planMode));
+    final p = context.palette;
+    final fg = on ? p.text : p.text2;
+    return Padding(
+      padding: const EdgeInsets.only(left: Sp.x1),
+      child: Pressable(
+        onTap: () {
+          ref.read(chatProvider(scope).notifier).setPlanMode(!on);
+          showToast(context, on ? '已退出计划模式' : '计划模式：先出方案，你批准后再动手');
+        },
+        scale: 0.92,
+        semanticLabel: semantics(on),
+        child: SizedBox(
+          height: A11y.minTap,
+          child: Center(
+            child: AnimatedContainer(
+              duration: context.motion(Motion.base),
+              curve: Motion.ease,
+              padding: EdgeInsets.symmetric(horizontal: on ? Sp.x2 + 2 : Sp.x1 + 2, vertical: Sp.x1 + 2),
+              decoration: BoxDecoration(
+                color: context.tileFill,
+                border: Border.all(color: on ? p.text3 : Colors.transparent),
+                borderRadius: BorderRadius.circular(Radii.full),
+              ),
+              child: SwapSwitcher(
+                child: Row(key: ValueKey(on), mainAxisSize: MainAxisSize.min, children: [
+                  Icon(on ? Icons.map_rounded : Icons.map_outlined, size: 15, color: fg),
+                  if (on) ...[
+                    const SizedBox(width: Sp.x1),
+                    Text('计划', style: context.text.labelMedium?.copyWith(color: fg)),
+                  ],
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

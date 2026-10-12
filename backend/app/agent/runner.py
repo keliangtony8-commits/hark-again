@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, llm_retry, model_router, reasoning, turn_changes, turn_journal, usage, vision
+from .. import host_mode, jobs, plan_mode, llm_retry, model_router, reasoning, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -55,6 +55,10 @@ def apply_choice(conv: Conversation, event: dict) -> None:
     """消息 / 重新生成随带的“模型选择”（model + reasoning 一起，客户端改过才带）：各自合法就记到对话上，"" = 回默认。"""
     if "model" in event:
         apply_model(conv, event["model"])
+    if "mode" in event:  # 计划模式开关（plan_mode.MODES；"" = default）
+        mode = event["mode"] or plan_mode.DEFAULT
+        if plan_mode.valid(mode):
+            conv.mode = mode
     effort = event.get("reasoning")
     if effort == "":
         conv.reasoning = None
@@ -116,6 +120,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
     否则（断线、关机）落库后把取消继续抛出去。"""
     cid, project_id, choice, effort, previous = conv.id, conv.project_id, chat_model(conv.model), conv.reasoning, conv.routed_model
+    mode, seen = plan_mode.normalize(conv.mode), conv.mode_seen  # 都在 build_history 之前读：摘要折叠的回滚会让 conv 过期
     await turn_journal.recover(db, cid)  # 别的进程崩掉留下的半截回答先转成 interrupted 消息，排在历史里
     hist = await build_history(db, cid, model_router.view(choice))
     history = hist.messages
@@ -130,6 +135,13 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     host = await host_mode.enabled(db)  # 服务器主机模式：每轮读一次，用户在“我的电脑”里关掉后下一轮就没有 host_command
     if host:
         prompt.add(STABLE, host_mode.PROMPT)
+    if mode == plan_mode.PLAN:  # 计划模式规则放稳定段：同一模式里每轮不变，前缀缓存照样命中
+        prompt.add(STABLE, plan_mode.PROMPT)
+    if switched := plan_mode.notice(seen, mode):  # 两轮之间用户切了模式：先告诉模型一句
+        prompt.add(VOLATILE, switched)
+    if seen != mode:
+        await db.execute(update(Conversation).where(Conversation.id == cid).values(mode_seen=mode, updated_at=Conversation.updated_at))
+        await db.commit()
     if hist.summary:  # 滚动摘要隔几轮就重写一次：放易变段
         prompt.add(VOLATILE, f"这段对话更早的内容（摘要，原文已不在下面）：\n{hist.summary}")
     if not notice and (held := await jobs.take_held(db, cid)):  # 叫醒轮数到上限时压下的任务结论（jobs.follow_ups）
@@ -139,7 +151,8 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     journal = turn_journal.Journal(cid, task_id)  # 进程被杀时这一轮的进度还在（turn_journal.py）
     await journal.open()
     try:
-        return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model, effort)
+        return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model, effort,
+                            plan_mode.State(active=mode == plan_mode.PLAN))
     finally:
         await journal.close()  # 走到这里结果已由 _drive 落库（或出错/没内容）；只有进程死掉才会留下检查点
 
@@ -163,10 +176,11 @@ async def _route(db: AsyncSession, cid: str, choice: str, query: str, history: l
 async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str, history: list[dict], builder: loop.MessageBuilder,
                  journal: turn_journal.Journal, emit: Emit, approve: Approver, stop: asyncio.Event | None,
                  ask: Asker, task_id: str | None, host: bool, model: str,
-                 effort: str | None = None) -> Message | None:
+                 effort: str | None = None, plan: plan_mode.State | None = None) -> Message | None:
     status = "done"
     interrupted = False
-    ctx = ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort)
+    ctx = ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort,
+                      plan=plan)
     try:
         async for ev in loop.run(system, history, ctx, builder, model):
             if isinstance(ev, loop.Done):
@@ -183,6 +197,8 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
     except Exception as e:  # 模型/网关错误：上报，不吞掉
         await emit({"type": "error", "message": llm_retry.user_text(e)})  # 重试也救不回来：说人话（鉴权 / 额度 / 太长 / …）
         return None
+    if plan is not None and plan.exited:  # 这一轮方案被批准、已退出计划模式：客户端把“计划”钮关掉（在 message.done 之前）
+        await _try_emit(emit, {"type": "conversation.mode", "conversation_id": cid, "mode": plan_mode.DEFAULT})
     blocks = builder.partial() if status == "stopped" else builder.final()
     if card := turn_changes.finish(ctx.changes, ctx.workspace):  # 这一轮改过的文件：净改动卡 + 整轮撤销（被停下也出）
         blocks = [*blocks, card]

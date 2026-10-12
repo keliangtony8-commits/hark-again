@@ -42,7 +42,7 @@ export function useConversations(projectId?: string) {
   }, [query, load]);
 
   /** 乐观更新后同步服务端；失败就以服务端为准重新拉。 */
-  const patch = useCallback(async (id: string, body: { title?: string; pinned?: boolean; model?: string; reasoning?: string }) => {
+  const patch = useCallback(async (id: string, body: { title?: string; pinned?: boolean; model?: string; reasoning?: string; mode?: string }) => {
     setItems((xs) => xs.map((c) => (c.id === id ? { ...c, ...body } : c)));
     try { await http.patch(`/api/conversations/${id}`, body); }
     finally { refresh(); }
@@ -55,8 +55,8 @@ export function useConversations(projectId?: string) {
   const setPinned = useCallback((id: string, pinned: boolean) => patch(id, { pinned }), [patch]);
   /** 换对话的模型；null = 回默认（发 ""）。失败会抛出，useChat 据此把选择留到下一条消息带上。 */
   /** 模型选择（模型 + 思考强度）一起 PATCH；null = 回默认。 */
-  const setChoice = useCallback((id: string, model: string | null, reasoning: string | null) =>
-    patch(id, { model: model ?? "", reasoning: reasoning ?? "" }), [patch]);
+  const setChoice = useCallback((id: string, model: string | null, reasoning: string | null, plan = false) =>
+    patch(id, { model: model ?? "", reasoning: reasoning ?? "", mode: plan ? "plan" : "default" }), [patch]);
 
   const remove = useCallback(async (id: string) => {
     setItems((xs) => xs.filter((c) => c.id !== id));
