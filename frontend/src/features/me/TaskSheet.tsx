@@ -2,13 +2,16 @@ import { useState } from "react";
 import type { ScheduledTask } from "../../lib/types";
 import { Sheet } from "../../ui/kit";
 import SchedulePicker from "./SchedulePicker";
+import TaskModelPicker from "./TaskModelPicker";
 
 /** 表单的值：计划两个字段都带（cron 与 run_at 二选一，另一个为空），切换模式时服务端清掉另一个。 */
-export type TaskDraft = Pick<ScheduledTask, "name" | "prompt" | "cron" | "active"> & { run_at: string | null };
-export const EMPTY_TASK: TaskDraft = { name: "", prompt: "", cron: "0 8 * * *", run_at: null, active: true };
+/** model / reasoning：任务自己的模型和思考强度，null = 默认（TaskModelPicker）。 */
+export type TaskDraft = Pick<ScheduledTask, "name" | "prompt" | "cron" | "active"> & { run_at: string | null; model: string | null; reasoning: string | null };
+export const EMPTY_TASK: TaskDraft = { name: "", prompt: "", cron: "0 8 * * *", run_at: null, active: true, model: null, reasoning: null };
 
 /** 从已有任务得到草稿（只取可改的字段，不把只读字段 PATCH 回去）。 */
-export const draftOf = (t: ScheduledTask): TaskDraft => ({ name: t.name, prompt: t.prompt, cron: t.cron, run_at: t.run_at ?? null, active: t.active });
+export const draftOf = (t: ScheduledTask): TaskDraft => ({ name: t.name, prompt: t.prompt, cron: t.cron, run_at: t.run_at ?? null, active: t.active,
+  model: t.model ?? null, reasoning: t.reasoning ?? null });
 
 /** 只取改了的字段（编辑时 PATCH 用；空对象 = 没改，不发请求）。面板改名由服务端同步到 Home 卡片。 */
 export const changesOf = (before: TaskDraft, after: TaskDraft): Partial<TaskDraft> =>
@@ -31,6 +34,7 @@ export default function TaskSheet({ initial, title, onSave, onClose, panel = fal
       <label className="form-field"><span>{panel ? "每次刷新查什么、怎么展示" : "要我做什么"}</span>
         <textarea value={d.prompt} onChange={(e) => setD({ ...d, prompt: e.target.value })} placeholder="帮我准备今天…" /></label>
       <SchedulePicker repeatOnly={panel} value={{ cron: d.cron, run_at: d.run_at }} onChange={(p) => setD({ ...d, ...p })} />
+      <TaskModelPicker value={{ model: d.model, reasoning: d.reasoning }} onChange={(m) => setD({ ...d, ...m })} />
     </Sheet>
   );
 }

@@ -4,7 +4,7 @@ import shutil
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from sqlalchemy import delete, func, select
 
@@ -37,6 +37,11 @@ class MemoryPatch(BaseModel):
     category: str | None = None
 
 
+def _task_choice(cls, v, info):
+    """任务的模型 / 思考强度：两个字段一个规则入口（task_store），不合法 → 422。"""
+    return task_store.model_choice(v) if info.field_name == "model" else task_store.reasoning_choice(v)
+
+
 class TaskIn(BaseModel):
     """cron（重复）与 run_at（一次性）二选一，见 app/schedule.py check()。"""
     name: str
@@ -44,6 +49,10 @@ class TaskIn(BaseModel):
     cron: str = ""
     run_at: datetime | None = None
     active: bool = True
+    model: str | None = None      # 模型别名，null / "" = 默认（task_store.model_choice）
+    reasoning: str | None = None  # 思考强度，null / "" = 模型默认（task_store.reasoning_choice）
+
+    _choice = field_validator("model", "reasoning")(classmethod(_task_choice))
 
     @model_validator(mode="after")
     def _plan(self):
@@ -58,6 +67,10 @@ class TaskPatch(BaseModel):
     cron: str | None = None
     run_at: datetime | None = None
     active: bool | None = None
+    model: str | None = None
+    reasoning: str | None = None
+
+    _choice = field_validator("model", "reasoning")(classmethod(_task_choice))
 
 
 def _check_task_patch(task: ScheduledTask, changes: dict) -> None:

@@ -122,7 +122,9 @@ export type ScheduledTask = { id: string; name: string; prompt: string; cron: st
   /** 服务端算好的下次运行（只读）；停用或 cron 无效 = null */
   next_run_at: string | null;
   /** 一次性任务的时刻（与 cron 二选一，cron 为空串）；重复任务 = null。done：一次性任务已跑过（只读） */
-  run_at?: string | null; done?: boolean };
+  run_at?: string | null; done?: boolean;
+  /** 每次运行用的模型别名 / 思考强度（null = 默认；老服务器没有） */
+  model?: string | null; reasoning?: string | null };
 /** 定时任务的一次运行（GET /api/tasks/{id}/runs，新的在前）；conversation_id：报告那次的对话，面板任务或对话已删为 null。 */
 export type TaskRun = { id: string; trigger: "schedule" | "manual"; status: "running" | "ok" | "error"; error: string | null; conversation_id: string | null; started_at: string; finished_at: string | null; duration_ms: number | null };
 export type HomeCard = { id: string; kind: "action" | "panel" | "report"; conversation_id: string | null; task_id: string | null; title: string; blocks: Block[]; action_prompt: string | null; target: string | null;

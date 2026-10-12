@@ -5,8 +5,34 @@ from datetime import datetime
 
 from sqlalchemy import delete, update as sql_update
 
-from . import schedule, task_runs
-from .models import HomeCard, ScheduledTask
+from . import reasoning, schedule, task_runs
+from .config import settings
+from .models import Conversation, HomeCard, ScheduledTask
+
+
+def model_choice(value: object) -> str | None:
+    """任务的模型选择（接口收进来时）："" / null = 默认（存 null）；不在 CHAT_MODELS 里 → ValueError（422）。
+    存下来以后服务器改了配置也不怕：运行时 llm.chat_model 会回落到默认，和对话一个规则。"""
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str) or value not in settings.chat_models:
+        raise ValueError(f"没有这个模型：{value}（可选 {', '.join(settings.chat_models)}）")
+    return value
+
+
+def reasoning_choice(value: object) -> str | None:
+    """任务的思考强度："" / null = 模型默认；不认识的档 → ValueError。这个模型有没有这档不在这查（换模型后可能又有了），
+    运行时 reasoning.resolve 没有就回默认。"""
+    if value in (None, ""):
+        return None
+    if not reasoning.valid(value):
+        raise ValueError(f"不认识的思考强度：{value}（可选 {', '.join(reasoning.EFFORTS)}）")
+    return value
+
+
+def conversation_for(task: ScheduledTask, title: str) -> Conversation:
+    """每次运行开的新对话：带上任务自己的模型 / 思考强度（worker 只经这里开任务对话）。"""
+    return Conversation(title=title, model=task.model, reasoning=task.reasoning)
 
 
 async def delete_cascade(db, task: ScheduledTask) -> None:

@@ -184,6 +184,8 @@ class ScheduledTask {
     this.nextRunAt,
     this.runAt,
     this.done = false,
+    this.model,
+    this.reasoning,
   });
   factory ScheduledTask.fromJson(Map<String, dynamic> j) => ScheduledTask(
     id: j['id'] as String,
@@ -200,8 +202,13 @@ class ScheduledTask {
     nextRunAt: _date(j['next_run_at']),
     runAt: _date(j['run_at']),
     done: j['done'] as bool? ?? false,
+    model: j['model'] as String?,
+    reasoning: j['reasoning'] as String?,
   );
   final String id, name, prompt, cron, output;
+
+  /// 每次运行用的模型别名 / 思考强度（null = 默认；规则同对话：ModelCatalog.effective / ModelEfforts.effective）。
+  final String? model, reasoning;
   final bool active, runRequested;
   final DateTime? lastRunAt;
 

@@ -10,9 +10,11 @@ import type { ScheduledTask, TaskRun } from "../../lib/types";
 import { IconCheck, IconChevron, IconClock, IconClose, IconEdit, IconHistory, IconPause, IconPlay, IconTrash } from "../../ui/icons";
 import { Hint, Page, PageHeader, Section, Skeleton, Toggle } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "./TaskSheet";
+import { taskModelLabel } from "./TaskModelPicker";
+import { useModelCatalog } from "../../hooks/useModelCatalog";
 import { confirmDialog } from "../../ui/dialog";
 
-/** 定时任务详情（/me/tasks/:id）：任务本身（时间、去向、提示词、开关、立即运行、编辑、删除）+ 最近运行记录。
+/** 定时任务详情（/me/tasks/:id）：任务本身（时间、去向 + 非默认的模型 / 思考档、提示词、开关、立即运行、编辑、删除）+ 最近运行记录。
  *  有运行在排队或进行时每 4 秒刷新，结束就停（useTaskRuns）。报告那次可点开对话（/chat + state.open）。
  *  与 App task_detail.dart 同版面同文案；Home 的“任务失败”提醒卡（target=tasks）直达这里。 */
 export default function TaskDetailScreen() {
@@ -24,6 +26,7 @@ export default function TaskDetailScreen() {
   const onTick = useCallback(() => { refreshTasks(); }, [refreshTasks]);
   const { runs, error, reload, busy } = useTaskRuns(id, !!task?.run_requested, onTick);
   const [editing, setEditing] = useState(false);
+  const cat = useModelCatalog();
 
   if (!task) {
     return (
@@ -51,7 +54,7 @@ export default function TaskDetailScreen() {
           <span className="row-icon"><TaskIcon task={task} /></span>
           <div className="row-body">
             <div className="row-title">{scheduleLabel(task)}</div>
-            <div className="row-sub">{task.output === "panel" ? "刷新 Home 上的面板" : "结果放进 Home 收件箱"}</div>
+            <div className="row-sub">{[task.output === "panel" ? "刷新 Home 上的面板" : "结果放进 Home 收件箱", taskModelLabel(task, cat)].filter(Boolean).join(" · ")}</div>
             {nextRunLabel(task) && <div className="row-sub task-next" key={nextRunLabel(task)}>{nextRunLabel(task)}</div>}
           </div>
           <Toggle on={task.active} label={`启用「${task.name}」`} onChange={(v) => tasks.update(task.id, { active: v })} />

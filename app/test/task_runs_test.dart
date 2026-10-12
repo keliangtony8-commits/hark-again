@@ -1,6 +1,7 @@
 // 定时任务运行记录：模型解析、钟点/耗时格式、提醒卡去处（{task} 换成任务 id）、
 // 列表页“上次失败”、详情页三种状态 + 失败原因、运行中轮询直到结束就停、立即运行、任务不在了。
 import 'package:assistant/core/api.dart';
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/features/home/action_card.dart';
 import 'package:assistant/features/me/task_detail.dart';
 import 'package:assistant/features/me/tasks_screen.dart';
@@ -67,7 +68,7 @@ Future<void> pump(WidgetTester tester, FakeApi api, String location) async {
     ]),
   ]);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(api)],
+    overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp.router(theme: buildTheme(Brightness.light), routerConfig: router),
   ));
   await tester.pumpAndSettle();

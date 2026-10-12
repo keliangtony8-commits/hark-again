@@ -1,4 +1,4 @@
-// 定时任务详情（/me/tasks/:id）：上面是任务本身（时间、去向、提示词、开关、立即运行；标题栏“编辑”= task_form.dart 同一张表单），
+// 定时任务详情（/me/tasks/:id）：上面是任务本身（时间、去向 + 非默认的模型 / 思考档、提示词、开关、立即运行；标题栏“编辑”= task_form.dart 同一张表单），
 // 时间下面一行是“下次运行”（服务端算好的 next_run_at，见 task_labels.dart）；
 // 下面是最近的运行记录（GET /api/tasks/{id}/runs，新的在前）：成功 / 失败（带原因）/ 正在运行，
 // 哪次、手动还是定时、用了多久；报告任务的那次可以点开对话（openConversation），面板任务没有对话。
@@ -26,6 +26,8 @@ import '../../ui/sheets.dart';
 import '../chat/open_conversation.dart';
 import 'task_form.dart';
 import 'task_labels.dart';
+import 'task_model_picker.dart';
+import '../chat/model_choice.dart' show modelCatalogProvider;
 
 final taskRunsProvider = FutureProvider.autoDispose.family<List<TaskRun>, String>((ref, id) async => [
       for (final j in (await ref.read(apiProvider).get('/api/tasks/$id/runs') as List)) TaskRun.fromJson((j as Map).cast<String, dynamic>()),
@@ -149,6 +151,12 @@ class _Header extends ConsumerWidget {
   final bool busy;
   final VoidCallback onRun;
 
+  /// 选了非默认的模型 / 思考档才写（“深度 · 思考 高”），默认不占字。
+  static String? _model(ScheduledTask t, WidgetRef ref) {
+    final s = taskModelLabel(t, ref.watch(modelCatalogProvider).value);
+    return s.isEmpty ? null : s;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
@@ -160,7 +168,10 @@ class _Header extends ConsumerWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(scheduleLabel(task), style: context.text.titleMedium),
-              Text(task.isPanel ? '刷新 Home 上的面板' : '结果放进 Home 收件箱', style: context.text.bodySmall),
+              Text(
+                [task.isPanel ? '刷新 Home 上的面板' : '结果放进 Home 收件箱', ?_model(task, ref)].join(' · '),
+                style: context.text.bodySmall,
+              ),
               // 下次运行跟着开关/改时间变：SwapSwitcher 让文字换得不突兀
               if (nextRunLabel(task).isNotEmpty)
                 SwapSwitcher(

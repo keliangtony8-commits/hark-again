@@ -138,6 +138,9 @@ class ScheduledTask(Base):
     last_status: Mapped[str | None] = mapped_column(String(16), nullable=True)  # 上一次结束的运行：ok | error；没跑过 = null
     fail_streak: Mapped[int] = mapped_column(default=0, server_default="0")  # 连续失败次数（成功归零；见 app/task_runs.py）
     paused_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)  # failures = 连续失败自动暂停；用户手动停 = null
+    # 这个任务每次运行用的模型别名 / 思考强度（null = 默认）；规则同对话（llm.chat_model / reasoning.resolve），校验见 task_store.check_choice
+    model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reasoning: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

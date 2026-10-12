@@ -19,7 +19,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import card_snooze, jobs, report_gist, task_runs, turn_journal
+from . import card_snooze, jobs, report_gist, task_runs, task_store, turn_journal
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -65,7 +65,7 @@ async def run_task(task_id: str) -> None:
         task.last_run_at, task.run_requested = now, False
         local = now.astimezone(ZoneInfo(settings.timezone))
         panel = task.output == "panel"
-        conv = Conversation(title=f"面板 · {task.name}" if panel else f"{task.name} · {local:%m月%d日 %H:%M}")
+        conv = task_store.conversation_for(task, f"面板 · {task.name}" if panel else f"{task.name} · {local:%m月%d日 %H:%M}")
         db.add(conv)
         await db.flush()
         db.add(Message(conversation_id=conv.id, role="user",
