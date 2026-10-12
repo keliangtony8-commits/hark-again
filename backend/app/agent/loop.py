@@ -74,10 +74,19 @@ class MessageBuilder:
         out.append(TextDelta(len(self.blocks) - 1, delta))
         return out
 
-    SINGLETONS = {"browser"}  # 一条回复里只需要一张的卡片（如浏览器实时画面）
+    SINGLETONS = {"browser"}  # 一条回复里同一个会话只需要一张的卡片（浏览器实时画面：按 session 区分）
+
+    def find(self, block: dict) -> int | None:
+        """同一张单例卡已在回复里 → 它的位置。"""
+        if block["type"] not in self.SINGLETONS:
+            return None
+        for i, b in enumerate(self.blocks):
+            if b["type"] == block["type"] and b.get("session") == block.get("session"):
+                return i
+        return None
 
     def has(self, block: dict) -> bool:
-        return block["type"] in self.SINGLETONS and any(b["type"] == block["type"] for b in self.blocks)
+        return self.find(block) is not None
 
     def add(self, block: dict) -> Event:
         self.blocks.append(block)
@@ -169,7 +178,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
         yield ToolResult("参数不是合法 JSON，请重试。")
         return
 
-    if t.risk and (reason := t.risk(args)):
+    if t.risk and (reason := t.risk(args, ctx)):
         try:
             card = t.card(args) if t.card else None
         except (ValueError, TypeError) as e:  # 卡片画不出来 = 参数不对，先让模型改，不打扰用户
@@ -253,6 +262,8 @@ class _Live:
                 task.cancel()
 
     def _show(self, block: dict) -> Event:
+        if self.index is None and (i := self.builder.find(block)) is not None:
+            self.index = i  # 单例卡（同会话的浏览器画面）已经在回复里：原地更新它，不再插第二张
         if self.index is None:
             ev = self.builder.add(block)
             self.index = len(self.builder.blocks) - 1

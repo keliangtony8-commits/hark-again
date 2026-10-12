@@ -13,7 +13,7 @@ MAX_BODY = 10000
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
-def _risk(args: dict) -> str | None:
+def _risk(args: dict, ctx=None) -> str | None:
     m = str(args.get("method", "GET")).upper()
     return f"用你的密钥向外部服务发送 {m} 请求" if m in WRITE_METHODS else None
 

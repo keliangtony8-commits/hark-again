@@ -64,7 +64,9 @@ class ApprovalBlock(BaseModel):
 class BrowserBlock(BaseModel):
     """云浏览器实时画面卡：显示截图，用户可点击/打字接管。"""
     type: Literal["browser"] = "browser"
-    session: str = "main"
+    session: str = "main"  # 会话名（按网站起名，app/browser_sessions.py）；旧卡 main
+    site: str | None = None  # 打开的网站主域名（卡头显示）
+    live: bool = False  # browser_open 正在打开页面（还没画面时客户端显示“正在打开”，不当作没开）
 
 
 class JobBlock(BaseModel):

@@ -26,7 +26,7 @@ sealed class Block {
             projectId: j['project_id'] as String?),
         'approval' => ApprovalBlock(
             id: j['id'] as String, title: j['title'] as String? ?? '', detail: j['detail'] as String? ?? '', state: j['state'] as String? ?? 'pending'),
-        'browser' => BrowserBlock(j['session'] as String? ?? 'main'),
+        'browser' => BrowserBlock(j['session'] as String? ?? 'main', site: j['site'] as String?, live: j['live'] == true),
         'page' => PageBlock(slug: j['slug'] as String, title: j['title'] as String? ?? '', url: j['url'] as String? ?? ''),
         'stats' => StatsBlock([for (final i in (j['items'] as List? ?? [])) StatItem.fromJson(i as Map<String, dynamic>)]),
         'memory' => MemoryBlock(
@@ -101,9 +101,13 @@ class ApprovalBlock extends Block {
   bool get pending => state == 'pending';
 }
 
+/// 云浏览器实时画面卡。session = 按网站起的会话名（后端 app/browser_sessions.py；旧卡 main），
+/// site = 打开的网站（卡头显示），live = 页面还在打开（还没画面时显示“正在打开”，不当作浏览器没开）。
 class BrowserBlock extends Block {
-  const BrowserBlock(this.session);
+  const BrowserBlock(this.session, {this.site, this.live = false});
   final String session;
+  final String? site;
+  final bool live;
 }
 
 /// 项目沙盒里的后台任务卡（后端 app/jobs.py）。块里是落库时的状态；运行中由卡片自己轮询 /api/jobs/{id}（models/job.dart）。

@@ -13,7 +13,7 @@ MAX_READ = 12000
 MAX_READ_LIMIT = 20000
 
 
-def _command_risk(args: dict) -> str | None:
+def _command_risk(args: dict, ctx=None) -> str | None:
     """需要用户点头的命令弹审批卡；会被直接拦下的（block）不弹卡，run_command 里拒绝。规则全在 command_guard.py。"""
     v = command_guard.verdict(args.get("command", ""))
     return v.why if v is not None and v.level == "ask" else None

@@ -105,14 +105,16 @@ async def main():
     # 4) browser_look
     shot = io.BytesIO(); Image.new("RGB", (800, 600), "white").save(shot, "JPEG")
     status = {"code": 404}
-    async def fake_call(method, path, json=None):
-        assert (method, path) == ("GET", "/screen")
+    async def fake_call(session, method, path, json=None):
+        assert (session, method, path) == ("example-com", "GET", "/screen")
         return httpx.Response(status["code"], content=shot.getvalue() if status["code"] == 200 else b"")
     browser_client.call = fake_call
     seen, _ = await run("fast", ("browser_look", {}), project=None)
     tool = next(m for m in seen[1] if m["role"] == "tool")
     assert "先用 browser_open" in tool["content"] and seen[1][-1]["role"] == "tool"
     status["code"] = 200
+    from app import browser_sessions
+    browser_sessions.tab = lambda c, t=None: browser_sessions.Tab(session="example-com", url="https://example.com/")
     seen, blocks = await run("fast", ("browser_look", {}), project=None)
     assert seen[1][-1]["role"] == "user" and seen[1][-1]["content"][1]["type"] == "image_url"
     assert any(b["type"] == "browser" for b in blocks), blocks

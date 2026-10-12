@@ -32,7 +32,7 @@ async def mcp_tools(ctx: ToolContext, server: str) -> ToolResult:
         for t in tools) or "（没有工具）")
 
 
-def _risk(args: dict) -> str | None:
+def _risk(args: dict, ctx=None) -> str | None:
     if _readonly.get((args.get("server", ""), args.get("tool", ""))):
         return None
     return f"调用外部工具 {args.get('server')} / {args.get('tool')}"

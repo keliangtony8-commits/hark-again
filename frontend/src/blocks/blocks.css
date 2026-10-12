@@ -65,7 +65,8 @@
 .blk-approval.approved .blk-approval-head, .blk-approval.rejected .blk-approval-head { color: var(--text-2); }
 
 .blk-browser { max-width: 640px; }
-.blk-browser-title { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.blk-browser-title { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.blk-browser-site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-dot { width: 7px; height: 7px; border-radius: var(--r-full); background: var(--danger); animation: blink 1.6s infinite; }
 .blk-browser-screen { display: block; width: 100%; aspect-ratio: 1280 / 800; object-fit: cover; background: var(--tile); }
 .blk-browser.control .blk-browser-screen { cursor: crosshair; box-shadow: inset 0 0 0 2px var(--accent); }

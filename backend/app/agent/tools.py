@@ -73,7 +73,7 @@ class Tool:
     parameters: dict      # JSON Schema
     run: Callable[..., Awaitable[ToolResult]]
     scope: str = "always"  # always（含文件与沙盒：每段对话都有工作区）| project（只在项目对话里，如项目档案）| conversation（需要知道当前对话）
-    risk: Callable[[dict], str | None] | None = None  # 返回需要审批的理由；None = 直接执行
+    risk: "Callable[[dict, ToolContext], str | None] | None" = None  # (参数, 上下文) → 需要审批的理由；None = 直接执行
     # 需要审批时的卡片：返回一个带 state 的块（如订单卡），内核补上 id；None = 通用审批卡。参数不对就抛 ValueError。
     card: Callable[[dict], dict] | None = None
     # 执行前要问用户的表单（如登录卡）：返回表单卡（不带 id/state）或 None = 不用问。
@@ -92,7 +92,7 @@ REGISTRY: dict[str, Tool] = {}
 
 
 def tool(name: str, label: str, description: str, parameters: dict, scope: str = "always",
-         risk: Callable[[dict], str | None] | None = None, card: Callable[[dict], dict] | None = None,
+         risk: "Callable[[dict, ToolContext], str | None] | None" = None, card: Callable[[dict], dict] | None = None,
          form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None):
     def deco(fn):
         REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form)

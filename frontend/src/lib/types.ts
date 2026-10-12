@@ -6,7 +6,8 @@ export type TableBlock = { type: "table"; title?: string; columns: string[]; row
 export type CodeBlock = { type: "code"; language?: string; title?: string; source: string; live?: boolean };
 export type FileBlock = { type: "file"; source: "upload" | "project"; id: string; name: string; mime: string; size: number; project_id?: string | null };
 export type ApprovalBlock = { type: "approval"; id: string; title: string; detail: string; state: "pending" | "approved" | "rejected" | "expired" };
-export type BrowserBlock = { type: "browser"; session: string };
+/** 云浏览器实时画面：session = 按网站起的会话名（旧卡 main），site = 网站，live = 还在打开（v1.26）。 */
+export type BrowserBlock = { type: "browser"; session: string; site?: string; live?: boolean };
 export type PageBlock = { type: "page"; slug: string; title: string; url: string };
 export type StatsBlock = { type: "stats"; items: { label: string; value: string; note?: string | null }[] };
 /** 记忆卡：本轮回复记住/改了/忘掉了什么（= backend blocks.MemoryBlock）。“已撤销”不在块里，见 lib/memory.ts memoryCardState。 */

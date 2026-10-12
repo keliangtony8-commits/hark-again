@@ -49,7 +49,7 @@
 | `code` | `language`, `title?`, `source`, `live?`（v1.24：`true` = 前台命令还在跑，`source` 是最近 ≤40 行输出，服务器约每 0.5 秒用 `block.update` 整块替换；跑完同一个 index 换成不带 `live` 的最终块（完整输出 + `# 退出码 N`）。客户端运行中显示“运行中”、不给复制、定高贴底。被停止的半截回复里不会再带 `live`） |
 | `file` | `source: upload\|project`, `id`, `name`, `mime`, `size`, `project_id?`（source=project 时是工作区 id：项目 id 或 `me`；下载 `/api/projects/{project_id}/files/{id}`）。v1.22：助手用 display_file 交付的成果默认是 source=upload 快照（下载 `/api/uploads/{id}`，之后工作区改动不影响）；超过 deliver_max_mb 的退回 source=project。卡片第二行 = 种类 · 大小[ · 我的文件/项目文件]（fileKind 规则两端一致） |
 | `approval` | `id`, `title`, `detail`, `state: pending\|approved\|rejected\|expired` |
-| `browser` | `session`（实时画面：`GET /api/browser/screen?token=` 轮询；接管：`POST /api/browser/mouse {x,y}` 0–1 归一化坐标，`POST /api/browser/keyboard {text?, key?}`） |
+| `browser` | `session`（按网站起的会话名，如 `taobao-com`；旧卡 `main`）, `site?`（网站主域名，卡头显示）, `live?`（v1.26：browser_open 还在打开，没画面时显示“正在打开”）。实时画面：`GET /api/browser/screen?token=&session=` 轮询；接管：`POST /api/browser/mouse {x,y,session}` 0–1 归一化坐标，`POST /api/browser/keyboard {text?, key?, session}`。会话列表 `GET /api/browser/sessions` → `{sessions:[{name,label,open,saved,last_used(ISO|null),cookies,domains[≤5]}], max_open}`（只给域名和个数，不给 cookie 值；服务连不上 503）；退出登录 `DELETE /api/browser/sessions/{name}`（关掉并删存档；坏名字 400） |
 | `page` | `slug`, `title`, `url` |
 | `stats` | `items: [{label, value, note?}]`（1–6 项；关键数字小卡片，标签 + 大数字 + 一句变化；模型用 `show_stats` 工具产出，面板刷新优先用它） |
 | `memory` | `action: saved\|updated\|forgotten`, `items: [{id, content, category, previous?}]`（记忆卡：本轮记住/改了/忘掉了什么；只由记忆工具产出。“已撤销”不在块里：客户端对照 GET /api/memories 推算——saved 的 id 不在 = 已撤销，updated 内容等于 previous = 已改回，forgotten 内容都在 = 已恢复；撤销走 /api/memories 的 DELETE / PATCH / POST。客户端收到 block.start 的记忆卡时重拉记忆列表） |

@@ -30,7 +30,8 @@ from app.models import Conversation, Message, Secret
 
 PW = "s3cret-密码"
 browser_calls: list = []
-async def fake_snapshot(method, path, body=None):
+async def fake_snapshot(session, method, path, body=None):
+    assert session == "example-com", session  # 按网站起的会话名
     browser_calls.append((path, body))
     return {"title": "登录 - 示例商城", "url": "https://shop.example.com/login",
             "elements": [{"ref": "1", "tag": "input", "type": "text", "name": "账号"},

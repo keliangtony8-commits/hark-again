@@ -4,10 +4,11 @@ import { PERSONAL_WORKSPACE, workspaceFilesTitle } from "../../lib/workspace";
 import { IconChevron, IconFolder } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, Section } from "../../ui/kit";
 import ProjectFiles from "../projects/ProjectFiles";
+import BrowserSessionsSection from "./BrowserSessionsSection";
 import ComputerSection from "./ComputerSection";
 
 /** 我的 → 我的电脑（v1.25，= App features/computer/computer_screen.dart）：主聊天和定时任务用的那台云端 Linux。
- *  页头摘要 = 状态词 → “状态”一节（ComputerSection）→ 文件入口（我的文件抽屉）。 */
+ *  页头摘要 = 状态词 → “状态”一节（ComputerSection）→ 文件入口（我的文件抽屉）→ 浏览器登录（v1.26，可退出）。 */
 export default function ComputerScreen() {
   const [s, setS] = useState<ComputerStatus | null | undefined>(undefined);
   const [files, setFiles] = useState(false);
@@ -27,6 +28,7 @@ export default function ComputerScreen() {
           </button>
         </div>
       </Section>
+      <BrowserSessionsSection enter={3} />
       {files && <ProjectFiles projectId={PERSONAL_WORKSPACE} onClose={() => setFiles(false)} />}
     </Page>
   );

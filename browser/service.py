@@ -1,6 +1,7 @@
 """云浏览器服务：唯一运行 Chromium 的地方。后端用 token 调它，模型只看到“页面快照”。
 
-- 会话 = 一个浏览器上下文，登录状态持久化到 /state/<name>.json，下次自动带上
+- 会话 = 一个浏览器上下文，按站点命名（后端 app/browser_sessions.py 起名，如 taobao-com），
+  登录状态持久化到 /state/<name>.json，下次同名会话自动带上；GET /sessions 列出、DELETE ?forget=1 = 退出登录
 - 快照：可交互元素编上号（ref），外加页面可见文字（截断），给模型用
 - 截图 + 鼠标/键盘：给你“实时画面 + 接管”用
 - 安全：只允许 http(s)，内网/回环地址的请求一律拦截（防 SSRF 打到你的数据库）
@@ -8,6 +9,7 @@
 """
 import asyncio
 import ipaddress
+import json
 import os
 import re
 import socket
@@ -32,6 +34,7 @@ _pw = None
 _browser: Browser | None = None
 _sessions: dict[str, tuple[BrowserContext, Page]] = {}
 _used: dict[str, float] = {}
+_restored: set[str] = set()  # 这次是从存好的登录状态恢复出来的会话（goto 回报给后端，模型知道“沿用了登录”）
 _lock = asyncio.Lock()
 
 
@@ -78,9 +81,14 @@ async def _session(name: str) -> Page:
         if name not in _sessions:
             while len(_sessions) >= MAX_SESSIONS:
                 await _evict(min(_sessions, key=lambda n: _used.get(n, 0)))
-            path = f"{STATE}/{name}.json"
+            path = _state_path(name)
+            saved = os.path.exists(path)
             ctx = await _browser.new_context(viewport=VIEW, locale="zh-CN", timezone_id="Asia/Shanghai",
-                                             storage_state=path if os.path.exists(path) else None)
+                                             storage_state=path if saved else None)
+            if saved:
+                _restored.add(name)
+            else:
+                _restored.discard(name)
             await ctx.route("**/*", _guard)
             page = await ctx.new_page()
             _sessions[name] = (ctx, page)
@@ -99,10 +107,36 @@ async def _evict(name: str) -> None:
     await ctx.close()
 
 
+def _state_path(name: str) -> str:
+    return f"{STATE}/{name}.json"
+
+
 async def _save(name: str) -> None:
     ctx, _ = _sessions[name]
     os.makedirs(STATE, exist_ok=True)
-    await ctx.storage_state(path=f"{STATE}/{name}.json")
+    await ctx.storage_state(path=_state_path(name))
+
+
+def _summary(name: str) -> dict:
+    """一条会话的概况（给“我的电脑”列表）：只读 cookie 的域名和个数，不回任何 cookie 值。"""
+    path = _state_path(name)
+    domains: list[str] = []
+    cookies = 0
+    saved = os.path.exists(path)
+    if saved:
+        try:
+            with open(path, encoding="utf-8") as f:
+                state = json.load(f)
+            for c in state.get("cookies", []):
+                cookies += 1
+                d = str(c.get("domain", "")).lstrip(".")
+                if d and d not in domains:
+                    domains.append(d)
+        except (OSError, ValueError):
+            pass
+    used = _used.get(name) or (os.path.getmtime(path) if saved else None)
+    return {"name": name, "open": name in _sessions, "saved": saved, "last_used": used,
+            "cookies": cookies, "domains": domains[:5]}
 
 
 SNAPSHOT_JS = """
@@ -175,7 +209,9 @@ async def goto(name: str, body: GotoIn):
     except Exception as e:
         raise HTTPException(502, f"打不开：{e}")
     await _save(name)
-    return await _snapshot(page)
+    snap = await _snapshot(page)
+    snap["restored"] = name in _restored
+    return snap
 
 
 @app.get("/sessions/{name}/snapshot", dependencies=[Depends(auth)])
@@ -261,11 +297,35 @@ async def keyboard(name: str, body: KeysIn):
     return {"ok": True}
 
 
+@app.get("/sessions", dependencies=[Depends(auth)])
+async def sessions():
+    """开着的 + 存过登录状态的会话，最近用过的在前。"""
+    names = set(_sessions)
+    if os.path.isdir(STATE):
+        names |= {f[:-5] for f in os.listdir(STATE) if f.endswith(".json") and re.fullmatch(r"[A-Za-z0-9_-]{1,40}", f[:-5])}
+    out = [_summary(n) for n in names]
+    out.sort(key=lambda x: -(x["last_used"] or 0))
+    return {"sessions": out, "max_open": MAX_SESSIONS}
+
+
 @app.delete("/sessions/{name}", dependencies=[Depends(auth)])
-async def close(name: str):
-    _used.pop(name, None)
-    if s := _sessions.pop(name, None):
-        await s[0].close()
+async def close(name: str, forget: bool = False):
+    """关掉会话。默认先存好登录状态（下次接着用）；forget=1 = 退出登录：连存档一起删。"""
+    _check_name(name)
+    async with _lock:
+        if name in _sessions:
+            if forget:
+                ctx, _ = _sessions.pop(name)
+                _used.pop(name, None)
+                await ctx.close()
+            else:
+                await _evict(name)
+        _restored.discard(name)
+        if forget:
+            try:
+                os.remove(_state_path(name))
+            except FileNotFoundError:
+                pass
     return {"ok": True}
 
 

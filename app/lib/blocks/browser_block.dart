@@ -1,4 +1,5 @@
 // 云浏览器实时画面：可见时每 1.2 秒刷新截图；点“接管”后点画面 = 点网页，底部输入框 = 键盘。
+// 每个请求都带卡上的会话名（v1.26 按网站分会话）；卡头写网站名。block.live = 页面还在打开：没画面时显示“正在打开”并继续刷，不当作浏览器没开。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -44,16 +45,22 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
   }
 
   Api get _api => ref.read(apiProvider);
+  String get _session => widget.block.session;
+
+  /// 还在打开时拿不到画面是正常的：不进“没打开”状态。
+  bool get _opening => widget.block.live;
 
   void _tap(TapUpDetails d, BoxConstraints c) {
     if (!_control) return;
-    _api.post('/api/browser/mouse', {'x': d.localPosition.dx / c.maxWidth, 'y': d.localPosition.dy / (c.maxWidth / _aspect)});
+    _api.post('/api/browser/mouse',
+        {'x': d.localPosition.dx / c.maxWidth, 'y': d.localPosition.dy / (c.maxWidth / _aspect), 'session': _session});
   }
 
   Future<void> _sendKeys() async {
     final text = _keys.text;
     _keys.clear();
-    await _api.post('/api/browser/keyboard', text.isEmpty ? {'key': 'Enter'} : {'text': text, 'key': 'Enter'});
+    await _api.post('/api/browser/keyboard',
+        text.isEmpty ? {'key': 'Enter', 'session': _session} : {'text': text, 'key': 'Enter', 'session': _session});
   }
 
   @override
@@ -69,7 +76,10 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
           child: Row(children: [
             Icon(Icons.public_rounded, size: 18, color: p.text2),
             const SizedBox(width: Sp.x2),
-            Text('云浏览器', style: context.text.labelLarge),
+            Flexible(
+              child: Text(widget.block.site ?? '云浏览器',
+                  style: context.text.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
             const SizedBox(width: Sp.x2),
             if (!_broken) PulseDot(color: p.danger, size: 7),
             const Spacer(),
@@ -96,11 +106,19 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
                       ),
                     )
                   : Image.network(
-                      '${_api.fileUrl('/api/browser/screen')}&t=$_tick',
+                      '${_api.fileUrl('/api/browser/screen')}&session=${Uri.encodeQueryComponent(_session)}&t=$_tick',
                       semanticLabel: _control ? '浏览器实时画面，已接管，点哪里就点网页哪里' : '浏览器实时画面',
                       fit: BoxFit.cover,
                       gaplessPlayback: true, // 刷新时不闪白
                       errorBuilder: (_, _, _) {
+                        if (_opening) {
+                          return Container(
+                            color: context.tileFill,
+                            alignment: Alignment.center,
+                            child: Text('正在打开${widget.block.site == null ? '网页' : ' ${widget.block.site}'}…',
+                                style: context.text.bodySmall),
+                          );
+                        }
                         WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? setState(() => _broken = true) : null);
                         return Container(color: context.tileFill);
                       },

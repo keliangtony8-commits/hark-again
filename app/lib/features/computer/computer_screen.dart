@@ -1,5 +1,6 @@
 // 我的 → 我的电脑（v1.25）：个人工作区（主聊天和定时任务用的那台云端 Linux）的状态页。
-// 页头一句说明 → “状态”一节（ComputerSection：运行/休眠、内存、磁盘、正在跑的后台任务、重启）→ 文件入口。下拉刷新。
+// 页头一句说明 → “状态”一节（ComputerSection：运行/休眠、内存、磁盘、正在跑的后台任务、重启）→ 文件入口
+// → “浏览器登录”（v1.26 BrowserSessionsSection：按网站保存的登录，可退出）。下拉刷新两处一起刷。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +12,7 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sub_page.dart';
 import '../projects/project_files_sheet.dart';
+import 'browser_sessions_section.dart';
 import 'computer_section.dart';
 
 class ComputerScreen extends ConsumerWidget {
@@ -22,7 +24,10 @@ class ComputerScreen extends ConsumerWidget {
     return SubPage(
       title: const Text('我的电脑'),
       body: PullRefresh(
-        onRefresh: () => ref.read(computerProvider(personalWorkspace).notifier).reload(),
+        onRefresh: () => Future.wait([
+          ref.read(computerProvider(personalWorkspace).notifier).reload(),
+          ref.read(browserSessionsProvider.notifier).reload(),
+        ]),
         child: PageBody(children: [
           PageIntro(
             summary: s.value == null ? (s.hasError ? '暂时看不到状态' : '正在查看…') : computerStateLabel(s.value!.state),
@@ -43,6 +48,7 @@ class ComputerScreen extends ConsumerWidget {
               ]),
             ]),
           ),
+          BrowserSessionsSection(delay: Motion.stagger(2)),
         ]),
       ),
     );

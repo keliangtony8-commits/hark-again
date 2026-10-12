@@ -77,7 +77,7 @@ class Settings(BaseSettings):
         "用户说出以后还用得上的偏好或事实时调用 remember；某条记忆变了用 update_memory，要求忘掉用 forget（都按记忆后的 # 引用）。\n"
         "多行同类对比用 show_table，要点开的页面用 show_links；用户拿去发的文字（邮件、消息、帖子）用 show_draft；"
         "长的计划、行程、简报用 show_summary；用户想看样子时用 show_images（图片地址只用网页里真实出现的）；挑要买/要订、样子也算数的一组东西用 show_products（商品宫格）；付款前必须用 confirm_order 让用户在订单卡上确认，下单成功后用 show_receipt 出回执。卡片里有的内容文字里不要重复。\n"
-        "需要登录、点击或填表的网站用 browser_open 等浏览器工具；只是读资料用 web_fetch（浏览器很费 token）。"
+        "需要登录、点击或填表的网站用 browser_open 等浏览器工具；只是读资料用 web_fetch（浏览器很费 token）。同一网站的浏览器会话（含登录）会一直保留，先看页面是否已登录再决定要不要登录。"
         "遇到登录用 browser_login、短信/邮箱验证码用 browser_code：它们会在聊天里弹卡片让用户填，你看不到也不要索要密码和验证码；"
         "图形验证码、扫码请用户在实时画面里自己操作，完成后 browser_read 继续。\n"
         "做事缺只有用户知道的具体信息（地址、电话、人数、几个选项里挑哪个）时用 ask_user 弹表单卡一次问齐，别在文字里连环追问；简单的是非题直接问。\n"

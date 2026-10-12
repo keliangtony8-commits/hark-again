@@ -1,0 +1,57 @@
+import { useCallback, useEffect, useState } from "react";
+import { http } from "../../lib/api";
+import { BROWSER_SESSIONS_EMPTY, BROWSER_SESSIONS_EMPTY_LINE, BROWSER_SESSIONS_PATH, type BrowserSession, type BrowserSessionList,
+  browserSessionDetail, browserSessionHint, browserSessionSemantics, browserSignOutText, sortBrowserSessions } from "../../lib/browserSessions";
+import { confirmDialog, noticeDialog } from "../../ui/dialog";
+import { IconGlobe } from "../../ui/icons";
+import { Section } from "../../ui/kit";
+import "./computer.css";
+
+/** “浏览器登录”一节（v1.26，= App features/computer/browser_sessions_section.dart）：云浏览器按网站保存的会话。
+ *  每行：网站名 · 上次用 · 登录已保存，行尾“正在用” + 退出（确认后关掉那个网站的浏览器并删掉登录）。
+ *  只在“我的电脑”页（浏览器整个账号共用）。加载中 / 服务连不上 → 整节不画。 */
+export default function BrowserSessionsSection({ enter }: { enter?: number }) {
+  const [list, setList] = useState<BrowserSession[] | null>(null);
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+  const load = useCallback(() => http.get<BrowserSessionList>(BROWSER_SESSIONS_PATH)
+    .then((v) => setList(sortBrowserSessions(v.sessions))).catch(() => setList(null)), []);
+  useEffect(() => { void load(); }, [load]);
+  if (!list) return null;
+
+  const signOut = async (s: BrowserSession) => {
+    if (!await confirmDialog({ title: `退出 ${s.label}？`, text: browserSignOutText(s), action: "退出" })) return;
+    setBusy((b) => new Set(b).add(s.name));
+    try {
+      await http.del(`${BROWSER_SESSIONS_PATH}/${encodeURIComponent(s.name)}`);
+      setList((l) => (l ?? []).filter((x) => x.name !== s.name));
+    } catch (e) { void noticeDialog("没能退出", e instanceof Error ? e.message : undefined); }
+    setBusy((b) => { const n = new Set(b); n.delete(s.name); return n; });
+  };
+
+  return (
+    <Section title="浏览器登录" enter={enter}>
+      <div className="list">
+        {list.length === 0 ? (
+          <div className="row">
+            <span className="row-icon"><IconGlobe /></span>
+            <div className="row-body"><div className="row-title">{BROWSER_SESSIONS_EMPTY}</div>
+              <div className="row-sub">{BROWSER_SESSIONS_EMPTY_LINE}</div></div>
+          </div>
+        ) : list.map((s, i) => {
+          const hint = browserSessionHint(s);
+          return (
+            <div key={s.name} className="row browser-session enter" style={{ animationDelay: `calc(var(--stagger) * ${i})` }}
+              role="group" aria-label={browserSessionSemantics(s)}>
+              <span className="row-icon"><IconGlobe /></span>
+              <div className="row-body" aria-hidden><div className="row-title">{s.label}</div>
+                <div className="row-sub">{browserSessionDetail(s)}</div></div>
+              {hint && <span className="row-hint" aria-hidden>{hint}</span>}
+              <button className="btn btn-ghost btn-sm" disabled={busy.has(s.name)} onClick={() => void signOut(s)}>
+                {busy.has(s.name) ? "正在退出" : "退出"}</button>
+            </div>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}

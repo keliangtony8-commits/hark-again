@@ -58,7 +58,7 @@ def _confirm_card(args: dict) -> dict:
       {"type": "object", "properties": {**_ORDER,
           "action": {"type": "string", "description": "按钮上的字，说清买的是什么：确认下单 / 订这间房 / 付款"}},
        "required": ["merchant", "items", "total"]},
-      risk=lambda args: "确认下单", card=_confirm_card)
+      risk=lambda args, ctx=None: "确认下单", card=_confirm_card)
 async def confirm_order(ctx: ToolContext, total: str, merchant: str = "", **_) -> ToolResult:
     # 走到这里说明用户已经在订单卡上点了同意（卡片已由内核更新为 approved）
     return ToolResult(f"用户已在订单卡上确认（{merchant}，合计 {total}）。现在去完成付款；"

@@ -49,3 +49,15 @@ export function startsNewDay(ms: { created_at?: string }[], i: number): boolean 
   }
   return true;
 }
+
+/** 刚刚 / 5 分钟前 / 3 小时前 / 2 天前 / 2026-09-01。同 App formatAgo。 */
+export function formatAgo(iso: string | null, now = new Date()): string {
+  if (!iso) return "";
+  const t = new Date(iso);
+  const m = Math.floor((now.getTime() - t.getTime()) / 60000);
+  if (m < 1) return "刚刚";
+  if (m < 60) return `${m} 分钟前`;
+  if (m < 1440) return `${Math.floor(m / 60)} 小时前`;
+  if (m < 43200) return `${Math.floor(m / 1440)} 天前`;
+  return `${t.getFullYear()}-${two(t.getMonth() + 1)}-${two(t.getDate())}`;
+}
