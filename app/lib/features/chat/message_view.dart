@@ -1,6 +1,7 @@
 // 设计 v2：用户 = 右侧强调色胶囊；助手 = 左侧玻璃卡（假玻璃，不模糊），两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
 // 一条消息：用户 = 右侧气泡（没发出的带“待发送/发送失败”状态行；长按出菜单：复制，最后一条另有“编辑”）；助手 = 全宽块列表 + 工具进度 + 思考动画，
 // 生成完的回复下方一行操作（复制、朗读、存到项目文件；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
+// 操作行只常驻在最后一条（和半截回复）上；更早的回复点一下卡片才露出来（v1.17，ChatView 记住露出的是哪条，同时只露一条）。
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -16,18 +17,24 @@ import '../../theme/tokens.dart';
 import '../../ui/format.dart';
 import '../../ui/glass.dart';
 import '../../ui/kit.dart';
+import '../../ui/markdown.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../projects/save_reply.dart';
 import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
-  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onEdit, this.onSave, this.last = false});
+  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onEdit, this.onSave, this.last = false, this.revealed = false, this.onReveal});
   final Message message;
 
   /// 是不是对话里最后一条回复：只有它常驻“复制 / 重新生成”一排小图标（版面更干净）。
-  /// 更早的回复要复制就长按文字用系统选择（回复是可选中文字；再加长按菜单会和文字选择抢手势）。
   final bool last;
+
+  /// 更早的回复：点一下卡片露出 / 收起操作行（复制 · 朗读 · 存到项目文件）。用点按不用长按——
+  /// 回复是可选中文字，长按归系统选字；点正文经 TextTapScope 传上来，点卡片空白处由外层 GestureDetector 收。
+  /// onReveal 只给已完成、非最后一条的回复（ChatView 决定）；revealed = 现在是不是露着。
+  final bool revealed;
+  final VoidCallback? onReveal;
   final void Function(String id)? onResend, onDiscard;
   final VoidCallback? onRegenerate;
 
@@ -177,19 +184,51 @@ class MessageView extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: RiseSwitcher(child: summary ? ThoughtSummary(key: const ValueKey('summary'), message: message) : null),
       ),
-      AnimatedSize(
-        duration: context.motion(Motion.base),
-        curve: Motion.ease,
-        alignment: Alignment.topLeft,
-        child: AnimatedSwitcher(
-          duration: context.motion(Motion.fast),
-          layoutBuilder: (current, previous) => Stack(alignment: Alignment.topLeft, children: [...previous, ?current]),
-          child: body,
+      _tappable(
+        AnimatedSize(
+          duration: context.motion(Motion.base),
+          curve: Motion.ease,
+          alignment: Alignment.topLeft,
+          child: AnimatedSwitcher(
+            duration: context.motion(Motion.fast),
+            layoutBuilder: (current, previous) => Stack(alignment: Alignment.topLeft, children: [...previous, ?current]),
+            child: body,
+          ),
         ),
       ),
-      if (!message.pending && (last || message.stopped))
-        _ReplyActions(id: message.id, text: copyText(message.blocks), spoken: speakableText(message.blocks), stopped: message.stopped, onRegenerate: onRegenerate, onSave: onSave),
+      // 操作行长出 / 收起都走 RiseSwitcher（回复不再是最后一条时也是平滑收起，不是一跳）
+      RiseSwitcher(
+        child: !message.pending && (last || message.stopped || revealed)
+            ? _ReplyActions(
+                key: const ValueKey('actions'),
+                id: message.id,
+                text: copyText(message.blocks),
+                spoken: speakableText(message.blocks),
+                stopped: message.stopped,
+                onRegenerate: onRegenerate,
+                onSave: onSave,
+              )
+            : null,
+      ),
     ]);
+  }
+
+  /// 较早的回复：整块（正文 + 卡片空白处）点一下切换操作行；卡片里自己的按钮/链接照旧优先。
+  Widget _tappable(Widget child) {
+    final reveal = onReveal;
+    if (reveal == null) return child;
+    void tap() {
+      HapticFeedback.selectionClick();
+      reveal();
+    }
+
+    return TextTapScope(
+      onTap: tap,
+      child: Semantics(
+        onTapHint: revealed ? '收起操作' : '显示复制等操作',
+        child: GestureDetector(onTap: tap, child: child),
+      ),
+    );
   }
 }
 
@@ -239,7 +278,7 @@ class _OutboxStatus extends StatelessWidget {
 /// 回复下方的操作行：低调的小图标（kit QuietAction，不抢内容）。回复完成时逐个错峰浮现；
 /// 复制 → 对勾、朗读 → 停止都是原地 PopSwitcher；“重新生成”随可用状态淡入淡出。
 class _ReplyActions extends StatelessWidget {
-  const _ReplyActions({required this.id, required this.text, required this.spoken, this.stopped = false, this.onRegenerate, this.onSave});
+  const _ReplyActions({super.key, required this.id, required this.text, required this.spoken, this.stopped = false, this.onRegenerate, this.onSave});
   final String id;
   final String text;
   final String spoken; // 只含正文，没有就不给朗读键

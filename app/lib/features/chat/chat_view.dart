@@ -38,6 +38,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   EditDraft? _editing;
   final _anchor = GlobalKey(); // 挂在要定位的那条消息上
   String? _target;
+
+  /// 较早回复里当前露出操作行的那条（点卡片切换，同时只露一条；最后一条本来就常驻，不进这里）。
+  String? _revealed;
   int _flash = 0;
   bool _seeking = false;
   late final SpeechController _speech = ref.read(speechProvider.notifier); // dispose 里不能再用 ref
@@ -171,6 +174,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   onRegenerate: regen ? ctl.regenerate : null,
                                   onSave: m.isUser || m.pending ? null : () => saveReplyToProject(context, ref, messageId: m.id, projectId: widget.projectId),
                                   last: i == 0 && !m.isUser,
+                                  revealed: m.id == _revealed,
+                                  onReveal: i == 0 || m.isUser || m.pending ? null : () => setState(() => _revealed = _revealed == m.id ? null : m.id),
                                   onEdit: m.id == chat.editableId ? () => setState(() => _editing = EditDraft.of(m)) : null),
                             );
                             // 跨天处在消息上方插一行日期（今天 / 昨天 / 10月9日 星期五）

@@ -20,6 +20,8 @@ class AppMarkdown extends StatelessWidget {
       data: data,
       selectable: selectable,
       onTapLink: (_, href, _) => href != null ? openUrl(href) : null,
+      // 可选中文字会吃掉点按手势：外层（聊天回复卡）要知道“点了正文”，就挂一个 TextTapScope
+      onTapText: selectable ? TextTapScope.of(context) : null,
       styleSheet: MarkdownStyleSheet(
         p: base,
         a: base.copyWith(color: p.accent, decoration: TextDecoration.underline, decorationColor: p.accent.withValues(alpha: 0.4)),
@@ -48,4 +50,17 @@ class AppMarkdown extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 给子树里的可选中正文（AppMarkdown）一个“点了文字”的回调。
+/// 可选中文字自己认领点按（放光标/清选区），外层 GestureDetector 收不到；挂这个就能收到，长按选字不受影响。
+/// 现在只有聊天里较早的回复用它：点一下回复卡露出操作行（features/chat/message_view.dart）。
+class TextTapScope extends InheritedWidget {
+  const TextTapScope({super.key, required this.onTap, required super.child});
+  final VoidCallback onTap;
+
+  static VoidCallback? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<TextTapScope>()?.onTap;
+
+  @override
+  bool updateShouldNotify(TextTapScope old) => old.onTap != onTap;
 }
