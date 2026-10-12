@@ -99,6 +99,9 @@ class Tool:
     # 用户填完，值以 form=FormReply 传给 run；取消则不执行。模型传来的 form 参数一律丢弃。
     form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None
     grants: bool = False  # 审批卡带批准范围选项：批准后用户选的范围以 grant= 传给 run（模型传的 grant 一律丢弃）
+    # 能和同一步里别的只读调用同时跑（agent/parallel.py）：True，或 (参数) → bool 按这次参数判断。默认独占。
+    # 前提：不改共享状态、不碰 ctx.db（共用的 AsyncSession 不能并发）、不要审批/表单。
+    parallel: "bool | Callable[[dict], bool]" = False
     quiet: bool = False  # 控制类工具（update_plan）：不进活动时间线、不亮“正在…”，用户看它自己的卡片就够了（Codex 的 builtin control tool）
 
     @property
@@ -127,9 +130,9 @@ REGISTRY: dict[str, Tool] = {}
 def tool(name: str, label: str, description: str, parameters: dict, scope: str = "always",
          risk: "Callable[[dict, ToolContext], str | None] | None" = None, card: Callable[[dict], dict] | None = None,
          form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None, quiet: bool = False,
-         grants: bool = False):
+         grants: bool = False, parallel: "bool | Callable[[dict], bool]" = False):
     def deco(fn):
-        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form, grants, quiet)
+        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form, grants, parallel, quiet)
         return fn
     return deco
 

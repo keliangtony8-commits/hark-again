@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, llm_retry, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, compact, loop_guard, supersede, tool_args, tool_trace
+from . import approvals, compact, loop_guard, parallel, supersede, tool_args, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -348,21 +348,40 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
              "function": {"name": c.name, "arguments": tool_args.wire(parsed[c.id]) or c.arguments}}
             for c in turn.tool_calls]})
         images, browser_only, hit = [], True, 0
-        for call in turn.tool_calls:
-            if hit or streak.stopped:  # 已判定打转 / 连续写错：同一批里剩下的调用不再执行（每个调用仍要有一条结果）
-                messages.append({"role": "tool", "tool_call_id": call.id, "content": SKIPPED if hit else SKIPPED_BAD})
+        calls = turn.tool_calls
+        # 连续的只读调用一组同时跑，其余一个一组按顺序（agent/parallel.py）；结果一律按模型顺序放回
+        for group in parallel.groups([parallel.eligible(c.name, parsed[c.id], ctx) for c in calls]):
+            if hit or streak.stopped:  # 已判定打转 / 连续写错：后面的调用不再执行（每个调用仍要有一条结果）
+                messages += [{"role": "tool", "tool_call_id": calls[i].id, "content": SKIPPED if hit else SKIPPED_BAD}
+                             for i in group]
                 continue
-            result = ToolResult("")
-            async for ev in _call_tool(call, ctx, builder, parsed[call.id], streak):
-                if isinstance(ev, ToolResult):
-                    result = ev
-                else:
-                    yield ev
-            images += result.images
-            browser_only &= not result.images or call.name.startswith("browser_")
-            messages.append({"role": "tool", "tool_call_id": call.id, "content": result.content})
-            seen.note(messages, len(messages) - 1, call.name)
-            hit = guard.tool(call.name, _args(call.arguments), result.content)
+            results: dict[int, ToolResult] = {}
+            if len(group) == 1:
+                call = calls[group[0]]
+                results[group[0]] = ToolResult("")
+                async for ev in _call_tool(call, ctx, builder, parsed[call.id], streak):
+                    if isinstance(ev, ToolResult):
+                        results[group[0]] = ev
+                    else:
+                        yield ev
+            else:
+                def start(k: int, group=group):
+                    c = calls[group[k]]
+                    return _call_tool(c, parallel.isolated(ctx), builder, parsed[c.id], streak)
+                async with aclosing(parallel.pool(len(group), start)) as events:
+                    async for ev in events:
+                        if isinstance(ev, parallel.Settled):
+                            results[group[ev.index]] = ev.result
+                        else:
+                            yield ev
+            for i in group:  # 同一组的都已经真跑过：全部按顺序提交；打转判定只看到第一次命中为止
+                call, result = calls[i], results[i]
+                images += result.images
+                browser_only &= not result.images or call.name.startswith("browser_")
+                messages.append({"role": "tool", "tool_call_id": call.id, "content": result.content})
+                seen.note(messages, len(messages) - 1, call.name)
+                if not hit:
+                    hit = guard.tool(call.name, _args(call.arguments), result.content)
         if images:  # 工具给了图：原图补一条消息，或描述并进最后一个工具结果（vision.for_tool 决定）
             note, msg = await vision.for_tool(images, model or settings.default_model)
             if note:

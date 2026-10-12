@@ -108,3 +108,5 @@
 第三方回调 `GET /api/oauth/callback`（公开，靠签名 state 验真；state 里记着发起端 `client`，只能是 `web` / `app`）。结果统一是同一条路由 `/me/connectors` 加查询参数 `connected=<provider>` 或 `error=<原因>`：
 - `web`：302 到 `/#/me/connectors?…`
 - `app`：返回一个小页面，自动跳 `<APP_SCHEME>://app/me/connectors?…`（默认 scheme `myassistant`），并给“回到 App”按钮兜底（有的浏览器不允许无手势跳自定义 scheme）。App 用系统深链接收，go_router 直接把 path+query 当路由打开。
+
+- v1.60：同一步里的只读工具调用可能并行，`tool.status` 会出现多个同时 `running` 的步骤（按 step id 合并，客户端已支持）；协议无新字段。

@@ -14,7 +14,7 @@ from ..config import settings
 from ..connectors.providers import PROVIDERS
 from ..models import Connection, Conversation, McpServer, Message, Project, Secret
 from ..storage import is_text, project_file, upload_path
-from . import tool_trace
+from . import parallel, tool_trace
 
 ATTACH_CHARS = 6000     # 每个文本附件最多带多少字给模型
 FOLD_TARGET = 0.5       # 需要折叠时，把原文压到预算的这个比例：留出余量，不必每轮都调一次摘要
@@ -27,6 +27,8 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     """query：用户最新一句话，用来挑相关记忆。"""
     now = datetime.now(ZoneInfo(settings.timezone)).strftime("%Y-%m-%d %A %H:%M")
     parts = [settings.system_prompt, f"现在是 {now}（{settings.timezone}）。"]
+    if hint := parallel.prompt():  # 只读查询可以同一步一起发（agent/parallel.py）
+        parts.append(hint)
 
     mems = await memory_store.relevant(db, query)
     if mems:

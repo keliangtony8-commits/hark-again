@@ -10,7 +10,7 @@ MAX_PAGE_CHARS = 8000  # 控制 token 成本
 
 @tool("web_search", "正在搜索",
       "联网搜索。需要最新信息、事实核查、价格、新闻时使用。返回标题、链接和摘要。",
-      {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]})
+      {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}, parallel=True)
 async def web_search(ctx: ToolContext, query: str) -> ToolResult:
     async with httpx.AsyncClient(timeout=15) as c:
         r = await c.get(f"{settings.searxng_url}/search", params={"q": query, "format": "json"})
@@ -24,7 +24,7 @@ async def web_search(ctx: ToolContext, query: str) -> ToolResult:
 
 @tool("web_fetch", "正在读网页",
       "读取一个网页的正文。搜索摘要不够、需要核实具体内容时使用。",
-      {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]})
+      {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}, parallel=True)
 async def web_fetch(ctx: ToolContext, url: str) -> ToolResult:
     async with httpx.AsyncClient(timeout=20, follow_redirects=True,
                                  headers={"User-Agent": "Mozilla/5.0 (assistant)"}) as c:

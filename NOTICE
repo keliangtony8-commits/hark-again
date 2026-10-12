@@ -59,3 +59,5 @@
   移植到 backend/app/reasoning.py（v1.54）
 - openai/codex codex-rs/core/src/context_manager/normalize.rs（ensure_call_outputs_present / remove_orphan_outputs 配对规则）、codex-rs/utils/output-truncation/src/lib.rs（记录时中间截断 + 原长说明）— Apache-2.0, Copyright 2025 OpenAI, modified
   移植到 backend/app/agent/tool_trace.py（v1.55）
+- deepseek-ai/deepseek-harness packages/core/agent-loop/src/tool-calls.ts（独占屏障 + 并行滚动池 + 按模型顺序提交）+ core/tools/src/index.ts executionMode（失败即独占）— MIT License, Copyright (c) 2026 DeepSeek, adapted
+  移植到 backend/app/agent/parallel.py（v1.60）

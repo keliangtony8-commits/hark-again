@@ -21,7 +21,7 @@ _PATH = {"type": "string", "description": "相对工作区根目录的路径"}
 
 
 @tool("list_files", "正在查看文件", "列出工作区里的文件（最多 300 项）。按名字找文件用 glob，按内容找用 grep。",
-      {"type": "object", "properties": {"path": {**_PATH, "default": ""}}})
+      {"type": "object", "properties": {"path": {**_PATH, "default": ""}}}, parallel=True)
 async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
     root = project_dir(ctx.workspace)
     base = safe_join(root, path)
@@ -41,7 +41,7 @@ async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
       {"type": "object", "properties": {
           "pattern": {"type": "string", "description": "文件名模式，如 **/*.py、report*.pdf"},
           "path": {**_PATH, "default": "", "description": "从哪个目录开始找（默认工作区根）"}},
-       "required": ["pattern"]})
+       "required": ["pattern"]}, parallel=True)
 async def glob(ctx: ToolContext, pattern: str, path: str = "") -> ToolResult:
     try:
         return ToolResult(await asyncio.to_thread(workspace_search.glob, ctx.workspace, pattern, path))
@@ -62,7 +62,7 @@ async def glob(ctx: ToolContext, pattern: str, path: str = "") -> ToolResult:
           "fixed": {"type": "boolean", "default": False, "description": "pattern 当普通文字，不当正则"},
           "context": {"type": "integer", "default": 0, "maximum": workspace_search.CONTEXT_MAX,
                       "description": "每处命中前后各带几行"}},
-       "required": ["pattern"]})
+       "required": ["pattern"]}, parallel=True)
 async def grep(ctx: ToolContext, pattern: str, path: str = "", include: str = "", ignore_case: bool = False,
                fixed: bool = False, context: int = 0) -> ToolResult:
     try:
@@ -80,7 +80,7 @@ async def grep(ctx: ToolContext, pattern: str, path: str = "", include: str = ""
           "path": _PATH,
           "offset": {"type": "integer", "default": 0, "description": "从第几个字符开始（负数 = 从结尾倒数）"},
           "limit": {"type": "integer", "default": MAX_READ, "maximum": MAX_READ_LIMIT, "description": "最多读多少字符"}},
-       "required": ["path"]})
+       "required": ["path"]}, parallel=True)
 async def read_file(ctx: ToolContext, path: str, offset: int = 0, limit: int = MAX_READ) -> ToolResult:
     p = safe_join(project_dir(ctx.workspace), path)
     file_seen.observe(_owner(ctx), p)  # 看过（哪怕只读一段 / 不存在）：之后 write_file 才许覆盖，规则在 file_seen.py
