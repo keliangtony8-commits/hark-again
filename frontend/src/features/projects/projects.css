@@ -29,7 +29,7 @@
 
 /* 项目首屏（v1.10，= App ProjectHome）：靠左、从标题栏下往下排，宽度同聊天正文 */
 .project-home { max-width: var(--content-w); width: 100%; margin: 0 auto;
-  padding: var(--thread-top) var(--gutter) calc(var(--footer-h, 88px) + var(--sp-4)); }
+  padding: calc(var(--thread-top) + var(--sp-3)) var(--gutter) calc(var(--footer-h, 88px) + var(--sp-4)); } /* v1.12：首屏标题离浮动标题栏多留一档 */
 .project-home-head { display: flex; align-items: center; gap: var(--sp-4); }
 .project-home-mark { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-tile); background: var(--tile); font-size: 26px; }
 .project-home-titles { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }

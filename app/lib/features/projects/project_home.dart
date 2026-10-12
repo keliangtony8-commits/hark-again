@@ -128,7 +128,6 @@ class ProjectHome extends ConsumerWidget {
               )),
             ],
             if (recent.isNotEmpty) ...[
-              const SizedBox(height: Sp.x3), // SectionTitle 自带上距
               enter(SectionTitle('最近的对话',
                   trailing: all.length > recent.length
                       ? TextButton(
@@ -136,7 +135,6 @@ class ProjectHome extends ConsumerWidget {
                           child: Text('全部 ${all.length} 个'),
                         )
                       : null)),
-              const SizedBox(height: Sp.x2),
               enter(GlassGroup(children: [
                 for (final c in recent)
                   RowTile(
@@ -149,7 +147,6 @@ class ProjectHome extends ConsumerWidget {
               ])),
             ],
             if (files != null) ...[
-              const SizedBox(height: Sp.x3),
               enter(SectionTitle('文件',
                   trailing: files.isEmpty
                       ? null
@@ -157,7 +154,6 @@ class ProjectHome extends ConsumerWidget {
                           onPressed: () => showProjectFiles(context, projectId),
                           child: Text(files.length > projectFilesMax ? '全部 ${files.length} 个' : '管理'),
                         ))),
-              const SizedBox(height: Sp.x2),
               enter(GlassGroup(children: [
                 if (files.isEmpty)
                   RowTile(
@@ -180,9 +176,7 @@ class ProjectHome extends ConsumerWidget {
               ])),
             ],
             if (suggestions.isNotEmpty) ...[
-              const SizedBox(height: Sp.x3),
               enter(SectionTitle(recent.isEmpty ? '从这里开始' : '或者新开一段')),
-              const SizedBox(height: Sp.x2),
               enter(Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [
                 for (final s in suggestions) GlassChip(label: s, onTap: () => onPick(s)),
               ])),

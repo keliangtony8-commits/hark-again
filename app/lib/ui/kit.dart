@@ -41,12 +41,17 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        // 区块之间留 32（v2.1 节奏）；标签本身不加粗：小字 + 字距 + text3
-        padding: const EdgeInsets.fromLTRB(Sp.x1, Layout.sectionGap - Sp.x3, Sp.x1, Sp.x3),
-        child: Row(children: [
-          Expanded(child: Text(title, style: context.text.labelSmall)),
-          trailing ?? (count == null ? null : Text('$count', style: context.text.labelSmall)),
-        ].nonNulls.toList()),
+        // 区块之间留 32（v2.1 节奏）；标签本身不加粗：小字 + 字距 + text3。
+        // v1.12：标题行固定一个触控高（A11y.minTap），有没有行尾按钮（全部已读 / 全部 N 个）节奏都一样——
+        // 以前按钮把行撑高 ~28，带按钮的区块标题离下面的卡明显更远。上距 = 区块间距 − 行内留白。
+        padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x5, Sp.x1, 0),
+        child: SizedBox(
+          height: A11y.minTap,
+          child: Row(children: [
+            Expanded(child: Text(title, style: context.text.labelSmall)),
+            trailing ?? (count == null ? null : Text('$count', style: context.text.labelSmall)),
+          ].nonNulls.toList()),
+        ),
       );
 }
 

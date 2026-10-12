@@ -45,7 +45,7 @@ export default function ProjectScreen() {
           onSend={c.send} onOpen={c.open} onShowAll={c.showAll} onBrief={() => setShowBrief(true)}
           files={files} onFiles={() => setShowFiles(true)} />}
         leading={<button className="icon-btn" onClick={() => nav("/projects")} aria-label="返回"><IconBack /></button>}
-        trailing={<Menu label="项目菜单" trigger={<IconMore />} items={[
+        trailing={<Menu label="项目菜单" trigger={<IconMore size={20} />} items={[
           { label: "项目文件", icon: <IconFile />, onSelect: () => setShowFiles(true) },
           { label: "规则与档案", icon: <IconDoc size={16} />, onSelect: () => setShowBrief(true) },
           { label: "编辑项目", icon: <IconEdit />, onSelect: () => setEditing(true) },

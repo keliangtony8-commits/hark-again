@@ -149,12 +149,13 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
 
 /* 弹出菜单 */
 .menu { position: relative; flex: none; }
-.menu-pop { position: absolute; right: 0; top: calc(100% + var(--sp-1)); z-index: 40; min-width: 148px; padding: var(--sp-1);
-  background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-md); box-shadow: var(--elev-raised);
-  -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost);
-  transform-origin: top right; animation: pop var(--dur) var(--ease); }
+/* v1.12：浮在 body 上（kit Menu 量好位置再显示，量之前 visibility hidden），弹层玻璃 = 压得住底下的字 */
+.menu-pop { position: fixed; z-index: 60; min-width: 148px; max-width: min(320px, calc(100vw - 2 * var(--sp-3))); padding: var(--sp-1);
+  background: var(--glass-sheet); border: 1px solid var(--glass-border); border-radius: var(--r-md); box-shadow: var(--elev-raised);
+  -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); visibility: hidden; }
+.menu-pop.placed { visibility: visible; animation: pop var(--dur) var(--ease); }
 .menu-item { display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm);
-  font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text); text-align: left; }
+  font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text); text-align: left; white-space: nowrap; }
 .menu-item:hover { background: var(--tile); }
 .menu-item.danger { color: var(--danger); }
 

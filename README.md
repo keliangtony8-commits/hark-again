@@ -102,7 +102,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - styles/tokens.css  设计令牌，唯一样式来源（v2.1：字重只写 var(--fw-body/title/strong)，主操作用 --ink 不用 --accent，卡片层次用 inset 0 1px 0 var(--glass-highlight) 不用外投影）；深色只认 <html data-theme="dark">，减少透明度只认 <html data-solid>（玻璃 → 实色、--blur 0）
 - lib/theme.ts       外观偏好（跟随系统/浅色/深色）；index.html 首帧脚本与它同键 appearance
 - lib/look.ts        本机外观偏好（设计 v2）：头像色（--avatar/--on-avatar，4 预设 + 色相环）+ 减少透明度；首帧脚本同键 look.solid
-- ui/                共享原语：Page（可带 footer = 底部浮层）、PageHeader（子页面浮动玻璃标题栏）、FloatingFooter（量高度给内容让位）、Section、Sheet、Toggle、Segmented、Hint、Menu、Highlight、图标；
+- ui/                共享原语：Page（可带 footer = 底部浮层）、PageHeader（子页面浮动玻璃标题栏）、FloatingFooter（量高度给内容让位）、Section、Sheet、Toggle、Segmented、Hint、Menu（v1.12 弹层挂到 body、量位置、放不下往上翻，不会被卡片裁掉）、Highlight、图标；
                      ui/glass.css + glass.tsx 是材质零件（.glass 真玻璃只给浮层 / .glass-card 假玻璃卡 / .tile / .pill / .wide-pill / Avatar / ValueTile），与 App ui/glass.dart 一一对应，页面不自己写 backdrop-filter
 - shell/             骨架（设计 v2）：页面铺满 + 浮动顶栏 TopBar（左 = 页面通过 <ShellLead> 传进来的上下文按钮，中 = 主页/聊天/项目 分段胶囊，右 = 头像 → /me）；
                      只在 / /chat /projects 显示（isShellRoot），“我的”及子页面、项目对话自带标题栏。LaunchComposer = 主页/项目页底部的输入胶囊（发出 = 新对话，聚焦磨砂 + 收起 + 建议）

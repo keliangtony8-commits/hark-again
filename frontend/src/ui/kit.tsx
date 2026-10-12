@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { IconBack, IconClose, IconSearch } from "./icons";
 import "./ui.css";
@@ -159,26 +160,49 @@ export type MenuItem = { label: string; icon?: ReactNode; danger?: boolean; onSe
 /** 小弹出菜单：点触发按钮开，点外面 / Esc / 选中后关。 */
 export function Menu({ trigger, items, label = "更多" }: { trigger: ReactNode; items: MenuItem[]; label?: string }) {
   const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState<CSSProperties | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  // v1.12：菜单浮在 body 上（position: fixed），不再被卡片 / 列表组的 overflow 裁掉；下方放不下就往上翻
+  useLayoutEffect(() => {
+    if (!open) { setPlace(null); return; }
+    const t = ref.current?.getBoundingClientRect();
+    const h = pop.current?.offsetHeight ?? 0;
+    if (!t) return;
+    const gap = 4;
+    const right = Math.max(gap, window.innerWidth - t.right);
+    const below = t.bottom + gap + h <= window.innerHeight - gap;
+    setPlace(below ? { top: t.bottom + gap, right, transformOrigin: "top right" }
+                   : { bottom: window.innerHeight - t.top + gap, right, transformOrigin: "bottom right" });
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+      const inside = (n: EventTarget | null) => !!n && (ref.current?.contains(n as Node) || pop.current?.contains(n as Node));
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !inside(e.target)) setOpen(false);
     };
+    const away = () => setOpen(false); // 页面滚动 / 窗口变化：菜单会和触发键脱节，直接收起
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", close);
-    return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", close); };
+    window.addEventListener("resize", away);
+    document.addEventListener("scroll", away, true);
+    return () => {
+      document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", close);
+      window.removeEventListener("resize", away); document.removeEventListener("scroll", away, true);
+    };
   }, [open]);
   return (
     <div className={`menu ${open ? "open" : ""}`} ref={ref} onClick={(e) => e.stopPropagation()}>
       <button className="icon-btn sm menu-trigger" aria-label={label} aria-expanded={open} onClick={() => setOpen((o) => !o)}>{trigger}</button>
-      {open && (
-        <div className="menu-pop" role="menu">
+      {open && createPortal(
+        <div className={`menu-pop ${place ? "placed" : ""}`} role="menu" aria-label={label} ref={pop} style={place ?? undefined}
+          onClick={(e) => e.stopPropagation()}>
           {items.map((it) => (
             <button key={it.label} role="menuitem" className={`menu-item ${it.danger ? "danger" : ""}`}
               onClick={() => { setOpen(false); it.onSelect(); }}>{it.icon}{it.label}</button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

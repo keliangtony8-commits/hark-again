@@ -242,3 +242,5 @@
 .speak-btn.playing { color: var(--text); }
 .speak-dot { width: 7px; height: 7px; border-radius: var(--r-full); background: currentColor; animation: blink var(--dur-pulse) var(--ease) infinite; }
 @media (prefers-reduced-motion: reduce) { .speak-dot { animation: none; opacity: .6; } }
+/* v1.12：标题栏里的 ⋯ 和返回/历史同一档（40px 触发区、20px 图标），不再比两边小一号 */
+.chat-bar-side .menu-trigger { width: 40px; height: 40px; }

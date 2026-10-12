@@ -21,9 +21,13 @@ OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/shots/web")
 NOW = "2026-10-11T10:30:00+08:00"
 
 TEXT = lambda t: {"type": "text", "text": t}
+INBOX_IDLE = {"unread": 2, "latest": None}
+BANNER_ITEM = {"id": "r9", "kind": "report", "title": "晚间复盘", "conversation_id": "c1", "task_id": "t3",
+               "headline": "今天完成 4 件", "gist": "高数第三章刷完，错题 6 道已进错题本；明早 8 点图书馆抢座。",
+               "created_at": NOW, "updated_at": NOW}
 FIXTURES = {
     "/api/catalog/models": {"default": "fast", "models": [{"id": "fast", "label": "快速"}, {"id": "smart", "label": "深度"}]},
-    "/api/inbox": {"unread": 2, "latest": None},
+    "/api/inbox": {"unread": 2, "latest": None},  # 横幅截图时临时换成 BANNER_ITEM
     "/api/cards": [
         {"id": "a1", "kind": "action", "conversation_id": None, "task_id": None, "title": "本月花费已到预算的 82%",
          "blocks": [TEXT("按现在的速度，月底会超出约 ¥6。")], "action_prompt": None, "target": "usage",
@@ -128,8 +132,10 @@ FIXTURES = {
              "action": "确认下单", "state": "pending"}]},
     ]},
     "/api/projects/pr1/files": [
-        {"path": "真题/2024 数一.pdf", "name": "2024 数一.pdf", "size": 3145728, "mime": "application/pdf", "modified": 1792125600},
-        {"path": "错题本.md", "name": "错题本.md", "size": 9000, "mime": "text/markdown", "modified": 1792040000},
+        {"path": "真题/2024 数一.pdf", "name": "2024 数一.pdf", "size": 3145728, "mime": "application/pdf", "modified": 1791680400},
+        {"path": "错题本.md", "name": "错题本.md", "size": 9000, "mime": "text/markdown", "modified": 1791600000},
+        {"path": "笔记/第三章 中值定理.docx", "name": "第三章 中值定理.docx", "size": 240000, "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "modified": 1791500000},
+        {"path": "背景.png", "name": "背景.png", "size": 820000, "mime": "image/png", "modified": 1790900000},
     ],
     "/api/projects/pr1": {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW},
     "/api/conversations/c1/usage": {"currency": "CNY", "priced": ["fast"], "total": {"calls": 4, "tokens": 5200, "cost": 0.012, "models": []}},
@@ -248,6 +254,20 @@ def main():
                         page.evaluate("document.querySelector('.today-now')?.scrollIntoView({block: 'center'})")
                         page.wait_for_timeout(400)
                         page.screenshot(path=str(OUT / f"{name}-{theme}-home-today.png"))
+                        # v1.12：收件箱行（更多菜单 = 稍后再看 / 标为已读 / 收起）
+                        page.evaluate("document.querySelector('.report-row')?.scrollIntoView({block: 'center'})")
+                        page.wait_for_timeout(400)
+                        page.screenshot(path=str(OUT / f"{name}-{theme}-home-inbox.png"))
+                        page.get_by_label("稍后再看或收起").first.click()
+                        page.wait_for_timeout(400)
+                        page.screenshot(path=str(OUT / f"{name}-{theme}-inbox-menu.png"))
+                        page.keyboard.press("Escape")
+                        # v1.12：新报告横幅——换掉收件箱摘要，再触发一次“页面可见”让它立刻去问
+                        FIXTURES["/api/inbox"] = {"unread": 3, "latest": BANNER_ITEM}
+                        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+                        page.wait_for_timeout(700)
+                        page.screenshot(path=str(OUT / f"{name}-{theme}-banner.png"))
+                        FIXTURES["/api/inbox"] = INBOX_IDLE
                 page.goto(base + "/#/chat")
                 page.wait_for_timeout(500)
                 if name == "desktop":
