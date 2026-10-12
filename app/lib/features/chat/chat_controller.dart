@@ -319,7 +319,8 @@ class ChatController extends Notifier<ChatState> {
       'conversation_id': state.activeId,
       if (projectId.isNotEmpty) 'project_id': projectId,
       'text': plainText(m.blocks),
-      'attachments': [for (final f in m.blocks.whereType<FileBlock>()) f.id],
+      'attachments': [for (final f in m.blocks.whereType<FileBlock>()) if (f.source != 'project') f.id],
+      'project_files': [for (final f in m.blocks.whereType<FileBlock>()) if (f.source == 'project') f.id],
       ..._modelField(),
     });
     if (!ok) {

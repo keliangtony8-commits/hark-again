@@ -1,12 +1,15 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { http } from "../../lib/api";
-import { extOf } from "../../lib/files";
-import type { Upload } from "../../lib/types";
+import { asFileBlock, extOf, MAX_MESSAGE_FILES } from "../../lib/files";
+import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
+import ProjectFilePicker from "../projects/ProjectFilePicker";
 import { useRecorder } from "../../hooks/useRecorder";
-import { IconCheck, IconClip, IconClose, IconEdit, IconMic, IconSend, IconStop } from "../../ui/icons";
+import { IconCheck, IconClip, IconClose, IconEdit, IconFile, IconFolder, IconMic, IconSend, IconStop } from "../../ui/icons";
+import { Menu } from "../../ui/kit";
 import "./chat.css";
 
-type Pending = { key: string; name: string; upload?: Upload; error?: string };
+/** 托盘里的一项：本机文件（上传中 / upload / error）或项目文件引用（ref，现成的文件块）。 */
+type Pending = { key: string; name: string; upload?: Upload; ref?: FileBlock; error?: string };
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -18,15 +21,17 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  *  退出编辑（发出、取消、Esc）后原样回来。输入框为空时按 ↑ = 编辑最后一条（onEditLast）。 */
 export type EditDraft = { id: string; text: string; hasFiles: boolean };
 type Props = {
-  onSend: (t: string, files: Upload[]) => void; disabled: boolean; streaming?: boolean; onStop?: () => void;
+  onSend: (t: string, files: OutgoingFile[]) => void; disabled: boolean; streaming?: boolean; onStop?: () => void;
   editing?: EditDraft | null; onCancelEdit?: () => void; onEditLast?: () => void;
   /** 主按钮左边的插槽（聊天页放模型钮，Composer 不认识它）。 */
   accessory?: ReactNode;
   /** 胶囊左边、胶囊外的圆钮位（一级页面聚焦时的“收起”）。 */
   leading?: ReactNode;
   placeholder?: string;
+  /** 项目对话的项目 id：“添加附件”变成菜单，多一个“项目里的文件”（只带引用，不上传）。 */
+  projectId?: string;
 };
-export default function Composer({ onSend, disabled, streaming = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息" }: Props) {
+export default function Composer({ onSend, disabled, streaming = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息", projectId }: Props) {
   const [text, setText] = useState("");
   const stash = useRef<string | null>(null);   // 进入编辑前的草稿
   const editId = editing?.id ?? null;
@@ -47,6 +52,7 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
   const mic = useRecorder();
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceErr, setVoiceErr] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {  // 自适应高度
     const el = ref.current;
@@ -66,8 +72,13 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
     if (picker.current) picker.current.value = "";
   };
 
-  const uploading = files.some((f) => !f.upload && !f.error);
-  const ready = files.flatMap((f) => (f.upload ? [f.upload] : []));
+  const uploading = files.some((f) => !f.upload && !f.ref && !f.error);
+  const ready: FileBlock[] = files.flatMap((f) => (f.ref ? [f.ref] : f.upload ? [asFileBlock(f.upload)] : []));
+  const takeRefs = (refs: FileBlock[]) => {
+    setFiles((s) => [...s, ...refs.map((r) => ({ key: crypto.randomUUID(), name: r.name, ref: r }))]);
+    setPicking(false);
+    ref.current?.focus();
+  };
   const canSend = !disabled && (editing
     ? !!text.trim() || editing.hasFiles
     : !uploading && (!!text.trim() || ready.length > 0));
@@ -110,8 +121,8 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
         {!editing && files.length > 0 && (
           <div className="attach-row">
             {files.map((f) => (
-              <span key={f.key} className={`attach ${f.error ? "err" : ""} ${!f.upload && !f.error ? "loading" : ""}`} title={f.error ?? f.name}>
-                <span className="attach-ext">{extOf(f.name)}</span>
+              <span key={f.key} className={`attach ${f.error ? "err" : ""} ${!f.upload && !f.ref && !f.error ? "loading" : ""}`} title={f.error ?? (f.ref ? `项目文件 ${f.ref.id}` : f.name)}>
+                <span className="attach-ext">{extOf(f.name)}{f.ref && <i className="attach-from" aria-label="项目文件"><IconFolder size={10} /></i>}</span>
                 <span className="attach-name">{f.name}</span>
                 <button onClick={() => setFiles((s) => s.filter((x) => x.key !== f.key))} aria-label="移除"><IconClose size={14} /></button>
               </span>
@@ -126,7 +137,12 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
           </div>
         ) : (
           <div className="composer-row">
-            <button className="icon-btn" onClick={() => picker.current?.click()} disabled={!!editing} aria-label="添加附件"><IconClip /></button>
+            {projectId && !editing
+              ? <Menu label="添加附件" trigger={<IconClip />} items={[
+                  { label: "从电脑选文件", icon: <IconFile size={16} />, onSelect: () => picker.current?.click() },
+                  { label: "项目里的文件", icon: <IconFolder size={16} />, onSelect: () => setPicking(true) },
+                ]} />
+              : <button className="icon-btn" onClick={() => picker.current?.click()} disabled={!!editing} aria-label="添加附件"><IconClip /></button>}
             <input ref={picker} type="file" multiple hidden onChange={(e) => pick(e.target.files)} />
             <textarea ref={ref} rows={1} value={text} placeholder={voiceBusy ? "正在识别…" : placeholder}
               onChange={(e) => setText(e.target.value)}
@@ -147,6 +163,10 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
         )}
         {voiceErr && <div className="composer-hint err" onClick={() => setVoiceErr(null)}>{voiceErr}</div>}
       </div>
+      {picking && projectId && (
+        <ProjectFilePicker projectId={projectId} onClose={() => setPicking(false)} onPick={takeRefs}
+          taken={new Set(files.flatMap((f) => (f.ref ? [f.ref.id] : [])))} room={MAX_MESSAGE_FILES - files.length} />
+      )}
     </div>
   );
 }

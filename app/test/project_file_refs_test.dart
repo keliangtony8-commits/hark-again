@@ -1,0 +1,138 @@
+// 项目对话里引用项目文件（v1.13）：输入框“添加附件”在项目里多一个“项目文件”（主聊天没有）；
+// 选择器可多选，已在托盘里的显示“已在这条消息里”不能再选；确认后托盘出现带文件夹记号的引用，发出去是 source=project 的文件块；
+// 控制器把上传附件和项目文件分开发（attachments / project_files）。
+import 'package:assistant/core/api.dart';
+import 'package:assistant/core/cache.dart';
+import 'package:assistant/core/chat_socket.dart';
+import 'package:assistant/features/chat/chat_controller.dart';
+import 'package:assistant/features/chat/composer.dart';
+import 'package:assistant/features/projects/project_files_sheet.dart';
+import 'package:assistant/models/block.dart';
+import 'package:assistant/models/resources.dart';
+import 'package:assistant/theme/app_theme.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'chat_controller_test.dart' show FakeSocket;
+
+class _Api implements Api {
+  @override
+  Future<dynamic> get(String path) async {
+    if (path == '/api/projects/p1/files') {
+      return [
+        {'path': 'notes/大纲.md', 'name': '大纲.md', 'size': 2048, 'mime': 'text/markdown'},
+        {'path': '词表.csv', 'name': '词表.csv', 'size': 900, 'mime': 'text/csv'},
+        {'path': '照片.png', 'name': '照片.png', 'size': 5000, 'mime': 'image/png'},
+      ];
+    }
+    if (path.startsWith('/api/conversations')) return <dynamic>[];
+    return null;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => throw UnimplementedError();
+}
+
+Future<void> _settle(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
+Future<List<FileBlock>> _pump(WidgetTester tester, {String? projectId}) async {
+  tester.view.physicalSize = const Size(400, 800);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final sent = <FileBlock>[];
+  await tester.pumpWidget(ProviderScope(
+    overrides: [apiProvider.overrideWithValue(_Api())],
+    child: MaterialApp(
+      theme: buildTheme(Brightness.light),
+      home: Scaffold(
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: Composer(projectId: projectId, busy: false, onSend: (_, files) => sent.addAll(files)),
+        ),
+      ),
+    ),
+  ));
+  await _settle(tester);
+  return sent;
+}
+
+void main() {
+  test('projectFileBlock：source=project，id 是相对路径', () {
+    const f = ProjectFile(path: 'notes/大纲.md', name: '大纲.md', size: 3, mime: 'text/markdown');
+    final b = projectFileBlock('p1', f);
+    expect((b.source, b.id, b.name, b.projectId), ('project', 'notes/大纲.md', '大纲.md', 'p1'));
+    expect(b.path, '/api/projects/p1/files/notes/大纲.md');
+  });
+
+  test('控制器：上传和项目文件分开发', () async {
+    final socket = FakeSocket();
+    final c = ProviderContainer(overrides: [
+      chatSocketProvider.overrideWithValue(socket),
+      apiProvider.overrideWithValue(_Api()),
+      cacheStoreProvider.overrideWithValue(MemoryCacheStore()),
+    ]);
+    addTearDown(c.dispose);
+    final sub = c.listen(chatProvider('p1'), (_, _) {});
+    addTearDown(sub.close);
+    await Future<void>.delayed(Duration.zero);
+    c.read(chatProvider('p1').notifier).send('看看', files: const [
+      FileBlock(source: 'upload', id: 'u1', name: 'a.txt', mime: 'text/plain', size: 1),
+      FileBlock(source: 'project', id: 'notes/大纲.md', name: '大纲.md', mime: 'text/markdown', size: 2, projectId: 'p1'),
+    ]);
+    final e = socket.sent.single;
+    expect(e['project_id'], 'p1');
+    expect(e['attachments'], ['u1']);
+    expect(e['project_files'], ['notes/大纲.md']);
+  });
+
+  testWidgets('主聊天：添加附件里没有“项目文件”', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.byTooltip('添加附件'));
+    await _settle(tester);
+    expect(find.text('相册'), findsOneWidget);
+    expect(find.text('项目文件'), findsNothing);
+  });
+
+  testWidgets('项目对话：选两个文件 → 托盘里是引用 → 发出 source=project；再选时已选的不能重复', (tester) async {
+    final sent = await _pump(tester, projectId: 'p1');
+    await tester.tap(find.byTooltip('添加附件'));
+    await _settle(tester);
+    await tester.tap(find.text('项目文件'));
+    await _settle(tester);
+    expect(find.text('引用项目文件'), findsOneWidget);
+    expect(find.text('选几个文件'), findsOneWidget);
+    await tester.tap(find.text('notes/大纲.md'));
+    await tester.tap(find.text('照片.png'));
+    await _settle(tester);
+    expect(find.text('已选 2'), findsOneWidget);
+    await tester.tap(find.text('照片.png')); // 再点取消
+    await _settle(tester);
+    await tester.tap(find.text('照片.png'));
+    await _settle(tester);
+    await tester.tap(find.text('引用 2 个文件'));
+    await _settle(tester);
+    expect(find.text('引用项目文件'), findsNothing);
+    expect(find.byIcon(Icons.folder_rounded), findsNWidgets(2)); // 托盘缩略图上的文件夹记号
+
+    // 再打开：已在托盘里的两项不可选
+    await tester.tap(find.byTooltip('添加附件'));
+    await _settle(tester);
+    await tester.tap(find.text('项目文件'));
+    await _settle(tester);
+    expect(find.text('已在这条消息里'), findsNWidgets(2));
+    await tester.tap(find.text('照片.png'));
+    await _settle(tester);
+    expect(find.text('选几个文件'), findsOneWidget);
+    await tester.tapAt(const Offset(200, 20)); // 点遮罩关掉
+    await _settle(tester);
+
+    await tester.tap(find.bySemanticsLabel('发送'));
+    await _settle(tester);
+    expect([for (final f in sent) (f.source, f.id)], [('project', 'notes/大纲.md'), ('project', '照片.png')]);
+  });
+}

@@ -49,3 +49,13 @@
 .project-starter:active { transform: scale(.97); transition-duration: var(--dur-fast); }
 @media (min-width: 861px) { .project-home-recent { display: none; } } /* 宽屏历史栏常驻左侧，不重复 */
 @media (prefers-reduced-motion: reduce) { .project-home-line > svg, .project-starter { transition: none; } .project-starter:hover { transform: none; } }
+
+/* v1.13 引用项目文件选择器 */
+.pick-note { margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); transition: color var(--dur-fast) var(--ease); }
+.pick-note.is-warn { color: var(--warning); }
+.pick-row { cursor: pointer; }
+.pick-row.row-off { cursor: default; }
+.pick-check { width: 22px; height: 22px; flex: none; border-radius: var(--r-full); display: grid; place-items: center;
+  box-shadow: inset 0 0 0 1.5px var(--text-3); color: var(--on-ink); transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.pick-check.on { background: var(--ink); box-shadow: none; animation: pop 220ms var(--ease); }
+@media (prefers-reduced-motion: reduce) { .pick-check, .pick-check.on { animation: none; transition: none; } }

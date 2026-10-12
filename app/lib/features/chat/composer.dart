@@ -7,6 +7,7 @@
 // 设计 v2：整条是浮在内容上的玻璃胶囊（真模糊，外面用 ui/kit.dart FloatingFooter 让位）；
 //   leading：胶囊左边、胶囊外的圆钮位（一级页面聚焦时的“收起”），出现/消失用 RiseSwitcher 横向长出；
 //   focusNode：外面要知道聚焦状态时传进来（LaunchComposer 用它开关整页磨砂）。
+// projectId：项目对话里“添加附件”多一个“项目文件”（features/projects pickProjectFiles 选，不上传，只带引用）。
 // 上传、转写走 core/media.dart；这里只管交互状态。
 import 'dart:async';
 import 'dart:io';
@@ -24,6 +25,7 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../projects/project_files_sheet.dart';
 import 'attachment_tray.dart';
 
 /// 正在编辑的那条用户消息。hasFiles：带附件的消息文字清空也能发（只剩附件）。
@@ -47,7 +49,8 @@ class Composer extends ConsumerStatefulWidget {
       this.accessory,
       this.hint = '给助手发消息',
       this.leading,
-      this.focusNode});
+      this.focusNode,
+      this.projectId});
   final void Function(String text, List<FileBlock> files) onSend;
   final bool busy;
   final bool streaming;
@@ -61,11 +64,25 @@ class Composer extends ConsumerStatefulWidget {
   final Widget? leading;
   final FocusNode? focusNode;
 
+  /// 项目对话的项目 id（null = 不在项目里，没有“项目文件”来源）。
+  final String? projectId;
+
   @override
   ConsumerState<Composer> createState() => _ComposerState();
 }
 
 enum _Voice { idle, recording, transcribing }
+
+/// 附件来源：本机三种（交给 core/media.dart）+ 项目文件引用。
+enum _From {
+  gallery(PickSource.gallery),
+  camera(PickSource.camera),
+  file(PickSource.file),
+  project(null);
+
+  const _From(this.device);
+  final PickSource? device;
+}
 
 class _ComposerState extends ConsumerState<Composer> {
   final _c = TextEditingController();
@@ -122,16 +139,18 @@ class _ComposerState extends ConsumerState<Composer> {
 
   // ---- 附件 ----
   Future<void> _pick() async {
-    final source = await showAppSheet<PickSource>(
+    final pid = widget.projectId;
+    final source = await showAppSheet<_From>(
       context,
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x4),
           child: Row(children: [
-            for (final (src, icon, label) in const [
-              (PickSource.gallery, Icons.photo_library_outlined, '相册'),
-              (PickSource.camera, Icons.photo_camera_outlined, '拍照'),
-              (PickSource.file, Icons.insert_drive_file_outlined, '文件'),
+            for (final (src, icon, label) in [
+              (_From.gallery, Icons.photo_library_outlined, '相册'),
+              (_From.camera, Icons.photo_camera_outlined, '拍照'),
+              (_From.file, Icons.insert_drive_file_outlined, '文件'),
+              if (pid != null) (_From.project, Icons.folder_outlined, '项目文件'),
             ])
               Expanded(
                 child: Pressable(
@@ -153,11 +172,22 @@ class _ComposerState extends ConsumerState<Composer> {
         ),
       ),
     );
-    if (source == null) return;
-    final files = await _media.pick(source);
+    if (source == null || !mounted) return;
+    if (source == _From.project) return _pickProject(pid!);
+    final files = await _media.pick(source.device!);
     for (final f in files) {
       _upload(f);
     }
+  }
+
+  Future<void> _pickProject(String pid) async {
+    final taken = {for (final a in _attachments) if (a.fromProject) a.file!.id};
+    final room = maxMessageFiles - _attachments.length;
+    if (room <= 0) return showToast(context, '一条消息最多带 $maxMessageFiles 个文件');
+    final picked = await pickProjectFiles(context, pid, taken: taken, room: room);
+    if (picked == null || picked.isEmpty || !mounted) return;
+    setState(() => _attachments.addAll(picked.map(Attachment.ref)));
+    _focus.requestFocus();
   }
 
   Future<void> _upload(File f) async {

@@ -244,3 +244,9 @@
 @media (prefers-reduced-motion: reduce) { .speak-dot { animation: none; opacity: .6; } }
 /* v1.12：标题栏里的 ⋯ 和返回/历史同一档（40px 触发区、20px 图标），不再比两边小一号 */
 .chat-bar-side .menu-trigger { width: 40px; height: 40px; }
+
+/* v1.13 引用的项目文件：扩展名徽标角上的文件夹记号；项目对话里“添加附件”是菜单，触发键与左右圆钮同尺寸 */
+.attach-ext { position: relative; }
+.attach-from { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: var(--r-full); display: grid; place-items: center;
+  background: var(--glass-sheet); color: var(--text-2); box-shadow: 0 0 0 1px var(--glass-border); }
+.composer-row .menu-trigger { width: 40px; height: 40px; color: var(--text-2); }

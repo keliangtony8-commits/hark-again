@@ -3,7 +3,8 @@ import { http } from "../lib/api";
 import { memoryStore } from "../lib/memoryStore";
 import { OUTBOX_GIVE_UP_MS, outbox } from "../lib/outbox";
 import { ChatSocket, type LinkStatus } from "../lib/socket";
-import type { Block, Message, ServerEvent, TextBlock, Upload } from "../lib/types";
+import type { Block, FileBlock, Message, OutgoingFile, ServerEvent, TextBlock } from "../lib/types";
+import { asFileBlock } from "../lib/files";
 import { useConversations } from "./useConversations";
 
 /** 眼前这段对话：id 和消息总是一起换，持久化发件箱时才不会把 A 的消息写进 B。 */
@@ -191,7 +192,8 @@ export function useChat(projectId?: string) {
     if (!m) { clearGiveUp(); return; }
     const ok = link === "open" && !!socket.current?.send({
       type: "user.message", conversation_id: thread.id, project_id: projectId, text: plainText(m.blocks),
-      attachments: m.blocks.flatMap((b) => (b.type === "file" ? [b.id] : [])),
+      attachments: fileIds(m.blocks, "upload"),
+      project_files: fileIds(m.blocks, "project"),
       ...modelField(),
     });
     if (!ok) {
@@ -290,12 +292,12 @@ export function useChat(projectId?: string) {
     setStopping(true);
   }, [canStop, link, thread.id]);
 
-  const send = useCallback((text: string, files: Upload[] = []) => {
+  const send = useCallback((text: string, files: OutgoingFile[] = []) => {
     if ((!text.trim() && files.length === 0) || busy) return;
     setError(null);
     const blocks: Block[] = [
       ...(text.trim() ? [{ type: "text" as const, text: text.trim() }] : []),
-      ...files.map((f) => ({ type: "file" as const, source: "upload" as const, ...f })),
+      ...files.map(asFileBlock),
     ];
     setMessages((m) => [...m, { id: `local-${crypto.randomUUID()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
   }, [busy]);
@@ -353,3 +355,7 @@ export function useChat(projectId?: string) {
 }
 
 export type Chat = ReturnType<typeof useChat>;
+
+/** 上传附件和项目文件引用分开发（attachments / project_files）。 */
+const fileIds = (blocks: Block[], source: FileBlock["source"]) =>
+  blocks.flatMap((b) => (b.type === "file" && b.source === source ? [b.id] : []));

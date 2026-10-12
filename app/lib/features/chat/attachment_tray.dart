@@ -1,4 +1,5 @@
 // 待发送附件：横向小卡片，上传中显示进度环，可单独移除。新增/移除带尺寸动画。
+// 两种来源：本机文件（先上传，local 有值）；项目文件引用（Attachment.ref，现成的 FileBlock，角上一个文件夹记号）。
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,11 +11,13 @@ import '../../ui/motion.dart';
 import '../../ui/glass.dart';
 
 class Attachment {
-  Attachment({required this.name, required this.local});
+  Attachment({required this.name, required File this.local});
+  Attachment.ref(FileBlock this.file) : name = file.name, local = null;
   final String name;
-  final File local;
-  FileBlock? file; // 上传完成后才有
+  final File? local;
+  FileBlock? file; // 上传完成后才有；引用一开始就有
   bool get uploading => file == null;
+  bool get fromProject => file?.source == 'project';
   bool get isImage => RegExp(r'\.(png|jpe?g|gif|webp|heic)$', caseSensitive: false).hasMatch(name);
 }
 
@@ -74,12 +77,18 @@ class _Thumb extends StatelessWidget {
                 height: _size,
                 color: context.tileFill,
                 alignment: Alignment.center,
-                child: a.isImage
-                    ? Image.file(a.local, width: _size, height: _size, fit: BoxFit.cover, semanticLabel: a.name)
+                child: a.isImage && a.local != null
+                    ? Image.file(a.local!, width: _size, height: _size, fit: BoxFit.cover, semanticLabel: a.name)
                     : Text(ext.length > 4 ? ext.substring(0, 4) : ext,
                         semanticsLabel: a.name, style: TextStyle(color: p.text2, fontSize: 11, fontWeight: Weights.strong)),
               ),
             ),
+            if (a.fromProject)
+              Positioned(
+                left: Sp.x1,
+                bottom: Sp.x1,
+                child: Icon(Icons.folder_rounded, size: 12, color: p.text3, semanticLabel: '项目文件'),
+              ),
             if (a.uploading)
               Positioned.fill(
                 child: Container(

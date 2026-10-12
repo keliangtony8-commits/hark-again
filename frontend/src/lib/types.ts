@@ -96,6 +96,8 @@ export type InboxSummary = { unread: number; latest: InboxItem | null };
  * enabled = false：停用，留在库里但模型看不到（旧服务器没有这个字段 = 启用）。 */
 export type Skill = { id: string; name: string; description: string; body: string; builtin: boolean; customized?: boolean; enabled?: boolean };
 export type Upload = { id: string; name: string; mime: string; size: number };
+/** 一条消息要带的文件：刚上传的（Upload）或引用的项目文件（source=project 的 FileBlock）。 */
+export type OutgoingFile = Upload | FileBlock;
 export type ProjectFile = { path: string; name: string; size: number; mime: string; modified: number };
 export type Connector = { id: string; name: string; desc: string; logo: string; configured: boolean; account: string | null };
 /** problem：还没恢复的问题 "auth"（令牌被拒）| "down"（连不上）| null（规则见后端 connectors/mcp.py）。 */

@@ -13,7 +13,7 @@ from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
 from ..models import Connection, Conversation, McpServer, Message, Project, Secret
-from ..storage import is_text, upload_path
+from ..storage import is_text, project_file, upload_path
 
 ATTACH_CHARS = 6000     # 每个文本附件最多带多少字给模型
 FOLD_TARGET = 0.5       # 需要折叠时，把原文压到预算的这个比例：留出余量，不必每轮都调一次摘要
@@ -62,6 +62,9 @@ def _render(blocks: list[dict]) -> str:
         if vision.is_image(b):
             text += "\n\n" + vision.placeholder(b)
             continue
+        if b.get("source") == "project":
+            text += "\n\n" + _project_ref(b)
+            continue
         path = upload_path(b["id"]) if b.get("source") == "upload" else None
         if path and is_text(b["name"]):
             body = path.read_text(encoding="utf-8", errors="replace")[:ATTACH_CHARS]
@@ -69,6 +72,20 @@ def _render(blocks: list[dict]) -> str:
         else:
             text += f"\n\n[附件 {b['name']}（{b.get('mime')}，{b.get('size', 0)} B，暂不能读取内容）]"
     return text
+
+
+def _project_ref(b: dict) -> str:
+    """用户在消息里点名的项目文件：按当前磁盘内容给（文本内联到 ATTACH_CHARS，其余提示用文件工具）。"""
+    rel = b.get("id", "")
+    path = project_file(b.get("project_id") or "", rel)
+    if path is None:
+        return f"[用户引用的项目文件 {rel}（已不在项目里）]"
+    if is_text(path.name):
+        body = path.read_text(encoding="utf-8", errors="replace")
+        more = "\n…（后面还有，需要时用 read_file 读全文）" if len(body) > ATTACH_CHARS else ""
+        return f"[用户引用的项目文件 {rel}]\n{body[:ATTACH_CHARS]}{more}"
+    kind = "图片" if b.get("mime", "").startswith("image/") else b.get("mime")
+    return f"[用户引用的项目文件 {rel}（{kind}，{path.stat().st_size} B）——要看内容用 read_file]"
 
 
 @dataclass

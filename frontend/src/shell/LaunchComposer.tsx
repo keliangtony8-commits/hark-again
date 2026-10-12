@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Composer from "../features/chat/Composer";
-import type { Upload } from "../lib/types";
+import type { OutgoingFile } from "../lib/types";
 import { IconChevronDown } from "../ui/icons";
 
 export const STARTER_PROMPTS = ["帮我规划这周的学习", "查一下今天的新闻", "把这段话翻译成英文", "每天早上 8 点给我简报"];
@@ -9,7 +9,7 @@ export const STARTER_PROMPTS = ["帮我规划这周的学习", "查一下今天�
 /** 跳到聊天并在新对话里发出（ChatScreen 读路由状态 draft/files）。主页、项目页、新面板都走它。 */
 export function useAskInNewChat() {
   const nav = useNavigate();
-  return (text: string, files: Upload[] = []) => nav("/chat", { state: { draft: text, files } });
+  return (text: string, files: OutgoingFile[] = []) => nav("/chat", { state: { draft: text, files } });
 }
 
 /** 一级页面（主页、项目列表）底部的输入胶囊：和聊天页同一个 Composer、同一位置、同一外观，发出 = 新对话。

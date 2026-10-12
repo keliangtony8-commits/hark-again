@@ -10,8 +10,8 @@ from ..agent.runner import RewindError, apply_model, rewind, run_turn
 from ..auth import verify_token
 from ..blocks import FileBlock, text_to_blocks
 from ..db import SessionLocal
-from ..models import Conversation, Message
-from ..storage import mime_of, upload_path
+from ..models import Conversation, Message, Project
+from ..storage import mime_of, project_file, project_file_root, upload_path
 
 router = APIRouter()
 
@@ -112,13 +112,15 @@ async def _ask(fid: str, form: dict):
 
 async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
     text = (event.get("text") or "").strip()
-    files = _attachments(event.get("attachments") or [])
-    if not text and not files:
-        return
     async with SessionLocal() as db:
         conv = await db.get(Conversation, event.get("conversation_id")) if event.get("conversation_id") else None
+        pid = conv.project_id if conv is not None else event.get("project_id")
+        files = _attachments(event.get("attachments") or [])
+        files += await _project_files(db, pid, event.get("project_files") or [], MAX_FILES - len(files))
+        if not text and not files:
+            return
         if conv is None:
-            conv = Conversation(title=(text or files[0]["name"])[:40], project_id=event.get("project_id"))
+            conv = Conversation(title=(text or files[0]["name"])[:40], project_id=pid)
             db.add(conv)
             await db.flush()
         apply_model(conv, event.get("model"))
@@ -152,11 +154,31 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
         await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
 
 
+MAX_FILES = 10  # 一条消息最多带几个文件（上传 + 项目文件合计）
+
+
 def _attachments(ids: list[str]) -> list[dict]:
     """只接受服务器上真实存在的上传，前端传来的名字/类型一律不信。"""
     out = []
-    for uid in ids[:10]:
+    for uid in ids[:MAX_FILES]:
         if p := upload_path(str(uid)):
             out.append(FileBlock(source="upload", id=str(uid), name=p.name, mime=mime_of(p.name),
                                  size=p.stat().st_size).model_dump())
+    return out
+
+
+async def _project_files(db, pid: str | None, paths: list, room: int) -> list[dict]:
+    """项目对话里“引用项目文件”：只认这个对话所在项目里真实存在的文件（相对路径，去重）。
+    消息里只存引用（source=project，id=相对路径）；内容每轮由 context 从磁盘读，文件改了模型看到的就是新的。"""
+    if not pid or room <= 0 or not isinstance(paths, list) or await db.get(Project, pid) is None:
+        return []
+    out, seen = [], set()
+    for rel in paths:
+        if not isinstance(rel, str) or rel in seen or len(out) >= room:
+            continue
+        seen.add(rel)
+        if p := project_file(pid, rel):
+            rel = str(p.relative_to(project_file_root(pid)))
+            out.append(FileBlock(source="project", id=rel, name=p.name, mime=mime_of(p.name),
+                                 size=p.stat().st_size, project_id=pid).model_dump())
     return out

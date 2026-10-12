@@ -8,7 +8,7 @@ import ChatTitle from "./ChatTitle";
 import ChatView from "./ChatView";
 import ConversationList from "./ConversationList";
 import ModelChip from "./ModelChip";
-import type { ConversationSummary, Upload } from "../../lib/types";
+import type { ConversationSummary, OutgoingFile } from "../../lib/types";
 import "./chat.css";
 
 type Props = {
@@ -37,7 +37,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   // 从 Home 跳过来：带一句话就直接发出（新对话）；带对话 id 就打开那段，同时带话 = 打开后再发（建议卡“开始做”）。
   // 用完清掉路由状态防止重复
   useEffect(() => {
-    const st = location.state as { draft?: string; files?: Upload[]; open?: string } | null;
+    const st = location.state as { draft?: string; files?: OutgoingFile[]; open?: string } | null;
     if (!st || consumed.current) return;
     consumed.current = true;
     if (st.open) chat.open(st.open).then(() => { if (st.draft?.trim()) chat.send(st.draft); });
@@ -77,7 +77,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
             </>
           )}
           <ChatView empty={empty?.({ send: (t) => chat.send(t), open: (id) => open(id), showAll: () => setDrawer(true), conversations: chat.list.items })}
-            messages={chat.messages} busy={chat.busy} error={chat.error} link={chat.link} greeting={emptyGreeting}
+            projectId={projectId} messages={chat.messages} busy={chat.busy} error={chat.error} link={chat.link} greeting={emptyGreeting}
             canRegenerate={chat.canRegenerate} onRegenerate={chat.regenerate}
             editableId={chat.editableId} onEdit={chat.edit}
             streaming={chat.streaming} onStop={chat.canStop ? chat.stop : undefined}

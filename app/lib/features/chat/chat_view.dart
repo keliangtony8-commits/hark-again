@@ -117,6 +117,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         editing: editing,
         onCancelEdit: () => setState(() => _editing = null),
         accessory: ModelChip(scope: widget.projectId),
+        projectId: widget.projectId.isEmpty ? null : widget.projectId,
         onSend: (text, files) {
           if (editing != null) {
             ctl.edit(text);

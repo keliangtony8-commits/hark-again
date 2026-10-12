@@ -27,6 +27,22 @@ def project_dir(pid: str) -> Path:
     return d
 
 
+def project_file_root(pid: str) -> Path:
+    return (PROJECTS / pid).resolve()
+
+
+def project_file(pid: str, rel: str) -> Path | None:
+    """项目里真实存在的一个文件（相对路径；越界、目录、.git 里的一律 None）。不创建项目目录。"""
+    root = PROJECTS / pid
+    if not pid or not rel or not root.is_dir():
+        return None
+    try:
+        p = safe_join(root, rel)
+    except ValueError:
+        return None
+    return p if p.is_file() and ".git" not in p.relative_to(root.resolve()).parts else None
+
+
 def is_text(name: str) -> bool:
     return Path(name).suffix.lower() in TEXT_EXT
 
