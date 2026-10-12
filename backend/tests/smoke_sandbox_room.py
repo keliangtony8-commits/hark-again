@@ -5,6 +5,8 @@
 #    有后台任务的、正在跑前台命令的跳过；都在忙 → 照开（软上限）；已开着的不触发让位；
 #    状态带 stopped_by/stopped_at；它下一条命令把它开起来 → 结果 woke=room，再下一条没有；后台任务开机不带 woke；
 #    空闲回收 → stopped_by=idle；正在用的不被空闲回收；删除容器清掉记录；
+# 2b) v1.76 宿主机内存：mem_available/mem_short 纯函数；剩余内存不够时即使台数没超也停闲容器，停一台看一次，够了就停手；
+#     读不到 meminfo / reserve 0 只按台数；都在忙照开；
 # 3) 后端：sandbox_wire 透传（只在 stopped 时、只认 idle/room）；run_command 结果附“之前前台起的程序已停”。
 # 运行：python tests/smoke_sandbox_room.py
 import os, sys, asyncio, tempfile, json, time, types
@@ -61,6 +63,7 @@ sys.modules.update({"docker": docker_mod, "docker.errors": errors_mod})
 os.environ.update(SANDBOX_TOKEN="t", HOST_PROJECTS_DIR=tmp, SANDBOX_MAX_RUNNING="2")
 sys.path.insert(0, os.path.join(root, "..", "sandbox"))
 import runner
+runner.MEMINFO = os.path.join(tmp, "meminfo")  # 先不存在：读不到 = 只按台数
 runner.PROJECTS_ROOT = tmp
 _makedirs, _chown = runner.os.makedirs, runner.os.chown
 runner.os.chown = lambda *a, **k: None
@@ -70,12 +73,12 @@ runner.os.makedirs = lambda p, exist_ok=False: real_makedirs(p.replace("/project
 # ---- 1. room_order ----
 G = runner.ROOM_GRACE_S
 now = 10_000.0
-assert runner.room_order({"a": now - 999}, set(), 2, now) == (0, [])  # 1 + 1 ≤ 2
+assert runner.room_order({"a": now - 999}, set(), 2, now) == (0, ["a"])  # 1 + 1 ≤ 2：不用停，顺序照给
 need, order = runner.room_order({"a": now - 500, "b": now - 900, "c": now - 10}, set(), 2, now)
 assert need == 2 and order == ["b", "a"], (need, order)  # c 刚用过（宽限期内）不挑
 need, order = runner.room_order({"a": now - 500, "b": now - 900}, {"b"}, 2, now)
 assert need == 1 and order == ["a"], (need, order)
-assert runner.room_order({"a": 0, "b": 0, "c": 0}, set(), 0, now) == (0, [])  # 0 = 不限
+assert runner.room_order({"a": 0, "b": 0, "c": 0}, set(), 0, now) == (0, ["a", "b", "c"])  # 0 = 台数不限，但给顺序（内存不够时用）
 assert runner.room_order({"a": now - G, "b": now - G + 1}, set(), 1, now) == (2, ["a"])
 print("room_order ok")
 
@@ -155,6 +158,55 @@ containers["sbx-old"].status = "exited"; runner.stopped_by["old"] = ("room", t)
 asyncio.run(runner.remove("old"))
 assert "old" not in runner.stopped_by and "old" not in runner.woke
 print("runner room ok")
+
+# ---- 2b. 宿主机内存（v1.76） ----
+MI = "MemTotal:        4015000 kB\nMemFree:          100000 kB\nMemAvailable:    {} kB\n"
+assert runner.mem_available(MI.format(2048)) == 2048 * 1024
+assert runner.mem_available("MemTotal: 1 kB\n") is None
+G1 = 1024 ** 3
+assert runner.mem_short(G1, G1, 256 * 1024 ** 2) and not runner.mem_short(2 * G1, G1, 256 * 1024 ** 2)
+assert not runner.mem_short(None, G1, 1) and not runner.mem_short(0, G1, 0) and not runner.mem_short(0, None, 1)
+assert runner.mem_bytes(runner.HOST_RESERVE) == 256 * 1024 ** 2 and runner.mem_bytes("0") == 0
+containers.clear(); log.clear(); runner.stopped_by.clear(); runner.woke.clear(); runner.last_used.clear(); runner.in_use.clear()
+runner.MAX_RUNNING = 5  # 台数远没超
+t = time.time()
+for n, age in (("m1", 3000), ("m2", 2000), ("m3", 1000)):
+    containers[f"sbx-{n}"] = FakeContainer(f"sbx-{n}"); runner.last_used[n] = t - age
+# 每停一台就多出 600 MB：一开始 800 MB < 1 GB + 256 MB；停一台 1.4 GB 够了
+def write_avail():
+    up = sum(1 for c in containers.values() if c.status == "running")
+    open(runner.MEMINFO, "w").write(MI.format((800 + (3 - up) * 600) * 1024))
+orig_stop = FakeContainer.stop
+def stop_and_free(self, timeout=10):
+    orig_stop(self, timeout); write_avail()
+FakeContainer.stop = stop_and_free
+write_avail()
+runner._container("m4")
+assert [x for x in log if x[0] == "stop"] == [("stop", "sbx-m1")] and ("create", "sbx-m4") in log, log
+assert runner.stopped_by["m1"][0] == "room"
+# 内存一直不够、能停的都停了 → 照开（软上限）；在用的不停
+log.clear(); runner.last_used["m4"] = t - 500
+runner.in_use["m3"] = 1
+open(runner.MEMINFO, "w").write(MI.format(100 * 1024)); FakeContainer.stop = orig_stop
+runner._container("m5")
+stops = [x for x in log if x[0] == "stop"]
+assert stops == [("stop", "sbx-m2"), ("stop", "sbx-m4")] and ("create", "sbx-m5") in log, log
+runner.in_use.clear()
+# reserve 0：只按台数
+log.clear(); runner.HOST_RESERVE = "0"
+runner._container("m6")
+assert not any(a == "stop" for a, _ in log) and ("create", "sbx-m6") in log, log
+# MAX_RUNNING 0 + 内存够：不腾
+runner.HOST_RESERVE = "256m"; runner.MAX_RUNNING = 0
+open(runner.MEMINFO, "w").write(MI.format(3 * 1024 * 1024))
+log.clear(); runner._container("m7")
+assert not any(a == "stop" for a, _ in log), log
+# MAX_RUNNING 0 + 内存不够：仍腾
+open(runner.MEMINFO, "w").write(MI.format(100 * 1024)); runner.last_used.update({"m5": t - 900, "m6": t - 800, "m7": t - 700})
+log.clear(); runner._container("m8")
+assert ("stop", "sbx-m5") in log, log
+os.remove(runner.MEMINFO)
+print("host memory ok")
 
 # ---- 3. 后端 ----
 import subprocess

@@ -9,7 +9,10 @@
 - 空闲超过 IDLE_MINUTES 的容器自动停止，省 VPS 内存（有后台任务在跑的不停）
 - 同时开机的容器最多 MAX_RUNNING 台（v1.74，学 E2B 的容量上限，但满了不拒绝）：要开一台新的时，按最久没用先停
   “闲着的”（ROOM_GRACE_S 内没用过、没有前台命令/预览连接、没有后台任务）；都在忙就照开（软上限）。
-  停机原因（idle 空闲 / room 让位）记在 stopped_by，状态页说清楚；下一条命令把它开起来时结果带 woke，提醒模型之前前台起的程序已停
+  另外看宿主机剩余内存（v1.76，/proc/meminfo 的 MemAvailable，容器里读到的就是宿主机的）：开一台新的前，
+  剩余内存不够 “一台的上限 SANDBOX_MEM + 留给系统的 SANDBOX_HOST_RESERVE” 时，也按同样顺序先停闲容器，停一台看一次；
+  读不到 / 设成 0 就只按台数。4 GB 的 VPS 上后端 + 数据库 + 浏览器已经占一大块，台数上限挡不住各台都吃满的情况
+  停机原因（idle 空闲 / room 让位，内存不够也记 room）记在 stopped_by，状态页说清楚；下一条命令把它开起来时结果带 woke，提醒模型之前前台起的程序已停
 - 端口预览（/sandboxes/<id>/ports、/preview/<id>/<port>/…）：容器都接在专用网络 SANDBOX_NETWORK 上（本服务也在），
   这里能直连容器里起的网页服务；后端带签名链接把用户的请求转进来（见 backend/app/preview.py），容器端口从不对外暴露
 - 后台任务（/jobs/*）：后端把 .jobs/<id>/run.sh 写进工作区（脚本约定见 backend/app/jobs.py），
@@ -44,6 +47,8 @@ MEM = os.environ.get("SANDBOX_MEM", "1g")
 CPUS = float(os.environ.get("SANDBOX_CPUS", "1"))
 IDLE_MINUTES = int(os.environ.get("SANDBOX_IDLE_MINUTES", "30"))
 MAX_RUNNING = int(os.environ.get("SANDBOX_MAX_RUNNING", "3"))  # 同时开机上限；0 = 不限
+HOST_RESERVE = os.environ.get("SANDBOX_HOST_RESERVE", "256m")  # 开新容器时宿主机至少还要剩这么多给系统；0 = 不看内存
+MEMINFO = "/proc/meminfo"
 ROOM_GRACE_S = 60  # 这么久之内用过的不让位：两条命令之间、预览页刚刷新过都算在用
 MAX_OUTPUT = 12000
 SPILL_MARK = "\n…（中间省略）…\n"  # 与 backend/app/spill.py MARK 相同
@@ -254,18 +259,41 @@ def _open(pid: str):
 
 
 def room_order(running: dict[str, float], busy_now: set[str], limit: int, now: float) -> tuple[int, list[str]]:
-    """要再开一台时：还得停几台、按什么顺序挑（最久没用的在前）。running = 已开机的 {pid: 上次用}（不含要开的那台）；
-    busy_now = 正在跑前台命令 / 开着预览的；ROOM_GRACE_S 内用过的也不挑。后台任务要查容器，调用方挑的时候再问。"""
-    need = len(running) + 1 - limit
-    if limit <= 0 or need <= 0:
-        return 0, []
+    """要再开一台时：按台数还得停几台、按什么顺序挑（最久没用的在前）。running = 已开机的 {pid: 上次用}（不含要开的那台）；
+    busy_now = 正在跑前台命令 / 开着预览的；ROOM_GRACE_S 内用过的也不挑。后台任务要查容器，调用方挑的时候再问。
+    limit ≤ 0 时台数不限（need 0），但仍给出顺序，内存不够时用。"""
     order = sorted((t, p) for p, t in running.items() if p not in busy_now and now - t >= ROOM_GRACE_S)
-    return need, [p for _, p in order]
+    need = len(running) + 1 - limit if limit > 0 else 0
+    return max(need, 0), [p for _, p in order]
+
+
+def mem_available(text: str) -> int | None:
+    """/proc/meminfo 文本 → MemAvailable 字节（内核估的“不换页还能给新程序的内存”）；没有这一行就 None。"""
+    m = re.search(r"^MemAvailable:\s+(\d+)\s*kB", text, re.M)
+    return int(m.group(1)) * 1024 if m else None
+
+
+def mem_short(available: int | None, want: int | None, reserve: int | None) -> bool:
+    """再开一台会不会把宿主机挤到 reserve 以下：读不到 / 没设上限 / reserve 为 0 都当够。"""
+    if available is None or not want or not reserve:
+        return False
+    return available < want + reserve
+
+
+def _host_short() -> bool:
+    try:
+        with open(MEMINFO) as f:
+            avail = mem_available(f.read())
+    except OSError:
+        return False
+    return mem_short(avail, mem_bytes(MEM), mem_bytes(HOST_RESERVE))
 
 
 def _make_room(pid: str) -> None:
-    """开机前腾位置（持 _room_lock 调用）：超过 MAX_RUNNING 就停最久没用的闲容器；挑不出就照开（软上限）。"""
-    if MAX_RUNNING <= 0:
+    """开机前腾位置（持 _room_lock 调用）：超过 MAX_RUNNING、或宿主机剩余内存不够再开一台，就停最久没用的闲容器；
+    挑不出就照开（软上限：命令跑不了比慢一点更糟，真打满了还有容器自己的内存上限兜着）。"""
+    short = _host_short()
+    if MAX_RUNNING <= 0 and not short:
         return
     try:
         cs = client.containers.list(filters={"label": "assistant.sandbox=1"})
@@ -275,7 +303,7 @@ def _make_room(pid: str) -> None:
     running = {c.name[4:]: last_used.get(c.name[4:], 0.0) for c in cs if c.name.startswith("sbx-") and c.name[4:] != pid}
     need, order = room_order(running, {p for p, n in in_use.items() if n > 0}, MAX_RUNNING, now)
     for other in order:
-        if need <= 0:
+        if need <= 0 and not short:
             break
         if _busy(other):  # 后台任务在跑：算它在用
             continue
@@ -288,6 +316,7 @@ def _make_room(pid: str) -> None:
         last_used.pop(other, None)
         stopped_by[other] = ("room", now)
         need -= 1
+        short = _host_short()  # 停一台看一次：一台空出来的往往就够了
 
 
 def _woken(pid: str) -> None:
