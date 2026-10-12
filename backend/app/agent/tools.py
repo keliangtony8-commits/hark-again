@@ -5,6 +5,7 @@
 跑得久的工具可在执行中用 ctx.live(block) 推进度块（见 ToolContext.live）。
 """
 import importlib
+import inspect
 import pkgutil
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -97,6 +98,14 @@ class Tool:
     form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None
     grants: bool = False  # 审批卡带批准范围选项：批准后用户选的范围以 grant= 传给 run（模型传的 grant 一律丢弃）
     quiet: bool = False  # 控制类工具（update_plan）：不进活动时间线、不亮“正在…”，用户看它自己的卡片就够了（Codex 的 builtin control tool）
+
+    @property
+    def accepts(self) -> set[str] | None:
+        """run 能收的参数名（agent/tool_args.py 丢掉别的，免得 TypeError）；带 **kwargs = None（全收）。"""
+        ps = inspect.signature(self.run).parameters
+        if any(p.kind is p.VAR_KEYWORD for p in ps.values()):
+            return None
+        return {n for n in ps if n != "ctx"}
 
     def available(self, ctx: ToolContext) -> bool:
         if ctx.allow is not None and self.name not in ctx.allow:

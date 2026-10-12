@@ -94,7 +94,7 @@ assert [i["name"] for i in pr["items"]] == ["A 耳机", "B 耳机", "C 耳机"],
 assert pr["items"][0]["image"] == "https://img.example/a.jpg" and pr["items"][1]["image"] is None and pr["items"][2]["image"] is None
 assert pr["items"][1]["url"] is None and pr["pick"] == "选 A：降噪最好"
 assert len(asked) == 1, asked  # 不全的那次没弹卡
-assert "参数有误" in seen_tool_results[1], seen_tool_results
+assert "参数有误" in seen_tool_results[1] or "参数不对" in seen_tool_results[1], seen_tool_results
 conf, rec = blocks[1], blocks[2]
 assert conf["state"] == "approved" and conf["id"] == asked[0][0] and conf["action"] == "确认下单并付款这句超过了"[:12], conf
 assert conf["total"] == "¥32.00" and conf["items"][0]["note"] == "少冰" and conf["breakdown"][1]["amount"] == "-¥10.00"

@@ -63,6 +63,7 @@ class Turn:
     tool_calls: list[ToolCall] = field(default_factory=list)
     tokens: int = 0  # 这次调用用掉的 token（输入 + 输出；供应商没报用量就是 0）：内核按它管一轮的用量预算
     prompt: int = 0  # 其中输入部分：上文压缩（agent/compact.py）按它量上文有多长
+    cut: bool = False  # finish_reason=length：输出被长度上限截断（工具参数可能是半截 JSON，agent/tool_args.py 据此直说）
 
 
 async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
@@ -85,6 +86,8 @@ async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
                 last_usage = chunk.usage
             if not chunk.choices:
                 continue
+            if getattr(chunk.choices[0], "finish_reason", None) == "length":
+                turn.cut = True
             delta = chunk.choices[0].delta
             if thought := reasoning_of(delta):
                 yield Reasoning(thought)

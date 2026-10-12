@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, llm_retry, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, compact, loop_guard, supersede
+from . import approvals, compact, loop_guard, supersede, tool_args
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -318,8 +318,10 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
             break
 
         builder.break_text()
+        parsed = {c.id: tool_args.parse(c.arguments, turn.cut) for c in turn.tool_calls}
         messages.append({"role": "assistant", "content": turn.text or None, "tool_calls": [
-            {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}
+            {"id": c.id, "type": "function",
+             "function": {"name": c.name, "arguments": tool_args.wire(parsed[c.id]) or c.arguments}}
             for c in turn.tool_calls]})
         images, browser_only, hit = [], True, 0
         for call in turn.tool_calls:
@@ -327,7 +329,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": SKIPPED})
                 continue
             result = ToolResult("")
-            async for ev in _call_tool(call, ctx, builder):
+            async for ev in _call_tool(call, ctx, builder, parsed[call.id]):
                 if isinstance(ev, ToolResult):
                     result = ev
                 else:
@@ -382,26 +384,33 @@ def _args(raw: str) -> object:
         return raw
 
 
-async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
-    """执行一次工具调用：查表 → (需要时)审批 → 执行 → 产出事件，最后产出给模型的 ToolResult（文字 + 图）。"""
+async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: tool_args.Parsed | None = None):
+    """执行一次工具调用：查表 → 参数解析与校验（agent/tool_args.py）→ (需要时)审批 → 执行 → 产出事件，
+    最后产出给模型的 ToolResult（文字 + 图）。参数不对不进审批、不进时间线：直接把原因还给模型改。"""
     t = REGISTRY.get(call.name)
     if not t or not t.available(ctx):
-        yield ToolResult(f"没有可用的工具 {call.name}。")
+        names = [x.name for x in REGISTRY.values() if x.available(ctx)]
+        yield ToolResult(f"没有可用的工具 {call.name}。{tool_args.suggest(call.name, names)}".rstrip())
         return
-    try:
-        args = json.loads(call.arguments or "{}")
-    except json.JSONDecodeError:
-        yield ToolResult("参数不是合法 JSON，请重试。")
+    parsed = parsed or tool_args.parse(call.arguments)
+    if parsed.args is None:
+        yield ToolResult(parsed.error)
         return
-    if not isinstance(args, dict):
-        yield ToolResult("参数要是一个 JSON 对象，请重试。")
+    args = dict(parsed.args)
+    args.pop("grant", None)  # 批准范围只能来自用户在卡上的选择，不能来自模型
+    if t.form:
+        args.pop("form", None)  # 表单值只能来自用户，不能来自模型
+    checked = tool_args.check(t.parameters, args, t.accepts)
+    if checked.error:
+        yield ToolResult(checked.error)
         return
+    args = checked.args
+    notes = ([parsed.repaired] if parsed.repaired else []) + checked.notes
     rec = builder.timeline
 
     def denied(note: str) -> ToolStatus:
         return ToolStatus(call.id, call.name, t.label, "denied", rec.denied(call.id, call.name, t.label, args, note))
 
-    args.pop("grant", None)  # 批准范围只能来自用户在卡上的选择，不能来自模型
     gate = t.risk(args, ctx) if t.risk else None
     if inspect.isawaitable(gate):  # 要查库才知道问不问的（主机命令的已存规则）
         gate = await gate
@@ -426,7 +435,6 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
             args["grant"] = grant
 
     if t.form:
-        args.pop("form", None)  # 表单值只能来自用户，不能来自模型
         reply = None
         async for ev in _ask_form(builder, ctx, t, args):
             if isinstance(ev, Asked):
@@ -442,7 +450,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
 
     if t.quiet:  # 控制类工具：不进时间线，结果块直接上卡（同单例原地换）
         async for ev in _quiet(t, call, ctx, builder, args):
-            yield ev
+            yield ToolResult(_with_notes(ev.content, notes), ev.blocks, ev.images) if isinstance(ev, ToolResult) else ev
         return
     yield ToolStatus(call.id, call.name, t.label, "running", rec.start(call.id, call.name, t.label, args))
     live = _Live(builder)
@@ -467,10 +475,15 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
             yield builder.add(b)
     state = "error" if result.failed else "done"
     yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed, result.change) or {})
-    content = result.content
+    content = _with_notes(result.content, notes)
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）
         content = spill.bound(content, settings.tool_result_max, ctx.workspace, call.name)
     yield ToolResult(content, images=result.images)
+
+def _with_notes(content: str, notes: list[str]) -> str:
+    """参数层（tool_args）做过的修补/丢弃附在结果末尾，模型下次就会写对。"""
+    return f"{content}\n\n（{'；'.join(notes)}）" if notes else content
+
 
 async def _quiet(t, call, ctx: ToolContext, builder: MessageBuilder, args: dict):
     try:
