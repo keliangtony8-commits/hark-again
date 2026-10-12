@@ -221,3 +221,23 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-form-answers dt { font-size: var(--fs-xs); color: var(--text-3); }
 .blk-form-answers dd { margin: 0; color: var(--text); white-space: pre-wrap; user-select: text; }
 .blk-form-actions { display: grid; grid-template-columns: 1fr 2fr; gap: var(--sp-2); margin-top: var(--sp-1); }
+
+/* 后台任务卡（v1.19）：状态点 · 名字 · 用时 / 命令 / 日志尾巴 / 状态词 + 取消或完整日志 */
+.blk-job { max-width: 640px; padding: var(--sp-3) var(--sp-3) var(--sp-1) var(--sp-4); }
+.blk-job-head { display: flex; align-items: center; gap: var(--sp-2); }
+.blk-job-mark { width: 18px; height: 18px; display: grid; place-items: center; color: var(--text-2); animation: icon-pop var(--dur) var(--ease); }
+.blk-job.tone-problem .blk-job-mark { color: var(--warning); }
+.blk-job.tone-quiet .blk-job-mark { color: var(--text-3); }
+.job-dot { width: 8px; height: 8px; border-radius: var(--r-full); background: var(--accent); animation: blink 1.6s infinite; }
+.blk-job-title { flex: 1; min-width: 0; font-weight: var(--fw-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk-job-time { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.blk-job-cmd { margin-top: var(--sp-1); font: var(--fs-xs)/1.5 var(--font-mono); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk-job-log { margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--tile);
+  font: var(--fs-xs)/1.45 var(--font-mono); color: var(--text-2); white-space: pre-wrap; word-break: break-all; max-height: calc(6 * 1.45em + 2 * var(--sp-2)); overflow: hidden; }
+.blk-job-log.is-empty { color: var(--text-3); }
+.blk-job-foot { display: flex; align-items: center; justify-content: space-between; min-height: 40px; }
+.blk-job-state { font-size: var(--fs-xs); color: var(--text-2); animation: fade var(--dur) var(--ease); }
+.blk-job.tone-problem .blk-job-state { color: var(--warning); font-weight: var(--fw-title); }
+.blk-job-sheet-meta { margin: 0 0 var(--sp-3); font-size: var(--fs-xs); color: var(--text-3); }
+.blk-job-full { margin: 0; max-height: 60vh; overflow: auto; font: var(--fs-xs)/1.5 var(--font-mono); color: var(--text-2); white-space: pre-wrap; word-break: break-all; }
+@media (prefers-reduced-motion: reduce) { .job-dot, .blk-job-mark, .blk-job-state { animation: none; } }

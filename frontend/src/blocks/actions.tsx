@@ -5,6 +5,8 @@ import { createContext, useContext } from "react";
 export type BlockActions = {
   replyApproval?: (id: string, approved: boolean) => void;
   replyForm?: (id: string, values: Record<string, string> | null, remember: boolean) => boolean;
+  /** 后台任务卡看着任务结束、服务器也接着说完了：重新拿一次这段对话，把助手的结论显示出来。 */
+  onJobSettled?: () => void;
 };
 export const BlockActionsContext = createContext<BlockActions>({});
 export const useBlockActions = () => useContext(BlockActionsContext);

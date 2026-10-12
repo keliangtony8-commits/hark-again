@@ -9,6 +9,7 @@ import 'commerce_blocks.dart';
 import 'content_blocks.dart';
 import 'form_block.dart';
 import 'interactive_blocks.dart';
+import 'job_block.dart';
 import 'memory_block.dart';
 
 class BlockView extends StatelessWidget {
@@ -33,6 +34,7 @@ class BlockView extends StatelessWidget {
         ProductsBlock b => ProductsBlockView(b),
         OrderBlock b => OrderBlockView(b),
         FormBlock b => FormBlockView(b),
+        JobBlock b => JobBlockView(b),
         UnknownBlock _ => const SizedBox.shrink(), // 新版服务器的新卡片：旧 App 安静忽略
       };
 }

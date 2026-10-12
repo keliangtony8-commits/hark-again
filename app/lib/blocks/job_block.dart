@@ -1,0 +1,253 @@
+// 后台任务卡：助手在项目沙盒里放到后台跑的活（装依赖、训练、爬取）。
+//   [●] 训练模型                         1 分 05 秒
+//   $ python train.py --epochs 20
+//   ┌ 日志最后几行（等宽，实时）┐
+//   运行中                                  取消
+// 运行中每 Timing.jobPoll 问一次 /api/jobs/{id}，用时每秒本地跳；结束后状态点换成结论图标，按钮换成“完整日志”。
+// 结束时服务器会在这段对话里接着说一轮（followup=pending）：卡片继续问到它说完，再让聊天页刷新一次（BlockActions.onJobSettled），
+// 助手的那句结论就自己出现在下面。只有在这张卡上亲眼看着它从“运行中”结束才触发刷新，翻历史不会。
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/api.dart';
+import '../models/block.dart';
+import '../models/job.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import '../ui/glass_mode.dart';
+import '../ui/kit.dart';
+import '../ui/motion.dart';
+import '../ui/sheets.dart';
+import 'block_actions.dart';
+import 'block_frame.dart';
+
+const _mono = 'monospace';
+
+/// 等服务器“接着说”最多等多久（worker 每 5 秒一轮，模型回一句通常十几秒）。
+const _replyWait = Duration(seconds: 90);
+
+class JobBlockView extends ConsumerStatefulWidget {
+  const JobBlockView(this.block, {super.key});
+  final JobBlock block;
+
+  @override
+  ConsumerState<JobBlockView> createState() => _JobBlockViewState();
+}
+
+class _JobBlockViewState extends ConsumerState<JobBlockView> {
+  late JobInfo _job = JobInfo.fromBlock(widget.block);
+  late DateTime _polledAt = DateTime.now();
+  Timer? _poll, _clock;
+  DateTime? _endedAt; // 本卡看着它结束的时刻（等“接着说”的计时起点）
+  bool _sawRunning = false, _settledSent = false, _cancelling = false;
+
+  Api get _api => ref.read(apiProvider);
+
+  @override
+  void initState() {
+    super.initState();
+    if (_job.running) {
+      _sawRunning = true;
+      _poll = Timer.periodic(Timing.jobPoll, (_) => _refresh());
+      _clock = Timer.periodic(Timing.clockTick, (_) => mounted && _job.running ? setState(() {}) : null);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refresh()); // TickerMode 要等 initState 之后才能读
+    }
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    if (!mounted || !TickerMode.valuesOf(context).enabled) return;
+    try {
+      final j = JobInfo.fromJson(await _api.get('/api/jobs/${widget.block.id}') as Map<String, dynamic>);
+      if (mounted) _apply(j);
+    } on ApiError catch (e) {
+      if (e.status == 404) _stop(); // 项目被删了
+    }
+  }
+
+  void _apply(JobInfo j) {
+    setState(() {
+      _job = j;
+      _polledAt = DateTime.now();
+    });
+    if (j.running) return;
+    _clock?.cancel();
+    _endedAt ??= DateTime.now();
+    final waited = DateTime.now().difference(_endedAt!) > _replyWait;
+    if (j.awaitingReply && !waited) return;
+    _stop();
+    if (_sawRunning && !_settledSent) {
+      _settledSent = true;
+      BlockActions.of(context)?.onJobSettled?.call();
+    }
+  }
+
+  void _stop() {
+    _poll?.cancel();
+    _clock?.cancel();
+  }
+
+  Future<void> _cancel() async {
+    setState(() => _cancelling = true);
+    try {
+      _apply(JobInfo.fromJson(await _api.post('/api/jobs/${widget.block.id}/cancel') as Map<String, dynamic>));
+    } on ApiError catch (e) {
+      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能取消' : e.message);
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
+  }
+
+  /// 用时：运行中 = 上次问到的 + 本地流逝（跳秒不用每秒请求）；结束了就是服务器给的。
+  Duration get _elapsed => _job.running ? _job.elapsed + DateTime.now().difference(_polledAt) : _job.elapsed;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final j = _job;
+    final tone = jobTone(j.state);
+    final tail = jobTailLines(j.tail, Layout.jobLogLines);
+    final small = context.text.labelSmall;
+    return Semantics(
+      container: true,
+      label: jobSemantics(JobInfo(id: j.id, title: j.title, command: j.command, state: j.state, exitCode: j.exitCode, elapsed: _elapsed)),
+      child: BlockFrame(
+        padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x2, Sp.x1),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.only(right: Sp.x2),
+            child: Row(children: [
+              SwapSwitcher(child: _StatusMark(tone, key: ValueKey(tone))),
+              const SizedBox(width: Sp.x2),
+              Expanded(child: Text(j.title, style: context.text.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: Sp.x2),
+              ExcludeSemantics(child: Text(jobDuration(_elapsed), style: small?.copyWith(color: p.text3))),
+            ]),
+          ),
+          const SizedBox(height: Sp.x1),
+          Padding(
+            padding: const EdgeInsets.only(right: Sp.x2),
+            child: Text('\$ ${j.command.split('\n').first}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontFamily: _mono, fontSize: Fs.xs, color: p.text3)),
+          ),
+          const SizedBox(height: Sp.x2),
+          Padding(
+            padding: const EdgeInsets.only(right: Sp.x2),
+            child: AnimatedSize(
+              duration: context.motion(Motion.base),
+              curve: Motion.ease,
+              alignment: Alignment.topCenter,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
+                decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+                child: Text(
+                  tail.isEmpty ? (j.running ? '等待输出…' : '（没有输出）') : tail,
+                  maxLines: Layout.jobLogLines,
+                  overflow: TextOverflow.clip,
+                  style: TextStyle(fontFamily: _mono, fontSize: Fs.xs, height: 1.45, color: tail.isEmpty ? p.text3 : p.text2),
+                ),
+              ),
+            ),
+          ),
+          Row(children: [
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SwapSwitcher(
+                  child: Text(
+                    j.awaitingReply ? '${jobStateLabel(j)} · 助手在看结果' : jobStateLabel(j),
+                    key: ValueKey('${j.state}${j.awaitingReply}'),
+                    style: small?.copyWith(
+                        color: tone == JobTone.problem ? p.warning : p.text2,
+                        fontWeight: tone == JobTone.problem ? Weights.title : null),
+                  ),
+                ),
+              ),
+            ),
+            SwapSwitcher(
+              child: j.running
+                  ? TextButton(key: const ValueKey('cancel'), onPressed: _cancelling ? null : _cancel, child: Text(_cancelling ? '正在取消' : '取消'))
+                  : TextButton(key: const ValueKey('log'), onPressed: () => showJobLog(context, ref, j), child: const Text('完整日志')),
+            ),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
+class _StatusMark extends StatelessWidget {
+  const _StatusMark(this.tone, {super.key});
+  final JobTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SizedBox.square(
+      dimension: 18,
+      child: Center(
+        child: switch (tone) {
+          JobTone.running => PulseDot(color: p.accent, size: 8),
+          JobTone.ok => Icon(Icons.check_circle_outline_rounded, size: 18, color: p.text2),
+          JobTone.problem => Icon(Icons.error_outline_rounded, size: 18, color: p.warning),
+          JobTone.quiet => Icon(Icons.do_not_disturb_on_outlined, size: 18, color: p.text3),
+        },
+      ),
+    );
+  }
+}
+
+/// 完整日志（最后 2 万字）：可选中复制。
+Future<void> showJobLog(BuildContext context, WidgetRef ref, JobInfo j) {
+  final full = ref.read(apiProvider).get('/api/jobs/${j.id}?tail=20000');
+  return showAppScrollSheet<void>(
+    context,
+    builder: (ctx) {
+      final p = ctx.palette;
+      return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x3, Sp.x3),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${jobStateLabel(j)} · ${jobDuration(j.elapsed)}', style: ctx.text.labelSmall),
+                const SizedBox(height: Sp.x1),
+                Text(j.title, style: ctx.text.titleLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
+              ]),
+            ),
+            FutureBuilder(
+              future: full,
+              builder: (_, snap) => CopyAction(text: snap.hasData ? '${(snap.data as Map)['tail'] ?? ''}' : j.tail, tooltip: '复制日志'),
+            ),
+          ]),
+        ),
+        FutureBuilder(
+          future: full,
+          builder: (ctx, snap) {
+            final text = snap.hasData ? '${(snap.data as Map)['tail'] ?? ''}' : j.tail;
+            return SheetList(padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x5), children: [
+              FadeSwitcher(
+                child: SelectableText(
+                  text.trim().isEmpty ? '（没有输出）' : text.trimRight(),
+                  key: ValueKey(snap.hasData),
+                  style: TextStyle(fontFamily: _mono, fontSize: Fs.xs, height: 1.5, color: p.text2),
+                ),
+              ),
+            ]);
+          },
+        ),
+      ]);
+    },
+  );
+}

@@ -18,7 +18,7 @@ walk(root);
 const ACCENT = {
   "styles/base.css": 5, // 链接、选中文字、品牌点、焦点环、跳过链接
   "ui/ui.css": 6, // 文字链接、搜索命中×2、预算进度条、图表焦点环、运行中脉冲
-  "blocks/blocks.css": 1, // 浏览器接管中的边框
+  "blocks/blocks.css": 2, // 浏览器接管中的边框；后台任务运行中的进度点
   "features/chat/chat.css": 2, // 跳转闪烁底、工具进行中转圈
   "features/home/home.css": 1, // 收件箱未读点
   "shell/shell.css": 1, // 导航未读点

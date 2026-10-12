@@ -40,7 +40,7 @@ async def list_project_files(pid: str):
     root = storage.project_dir(pid)
     return [{"path": str(p.relative_to(root)), "name": p.name, "size": p.stat().st_size,
              "mime": storage.mime_of(p.name), "modified": p.stat().st_mtime}
-            for p in sorted(root.rglob("*")) if p.is_file() and ".git" not in p.parts][:500]
+            for p in sorted(root.rglob("*")) if p.is_file() and not storage.hidden(p.relative_to(root).parts)][:500]
 
 
 @router.post("/api/projects/{pid}/files", dependencies=auth)
@@ -53,8 +53,8 @@ async def upload_project_file(pid: str, file: UploadFile):
 
 @router.get("/api/projects/{pid}/files/{path:path}", dependencies=[Depends(require_query_token)])
 async def download_project_file(pid: str, path: str):
-    p = storage.safe_join(storage.project_dir(pid), path)
-    if not p.is_file():
+    p = storage.project_file(pid, path)
+    if p is None:
         raise HTTPException(404)
     return FileResponse(p, media_type=storage.mime_of(p.name), filename=p.name)
 

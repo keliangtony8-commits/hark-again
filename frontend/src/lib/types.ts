@@ -35,8 +35,16 @@ export type FormInput = { name: string; label: string; kind?: "text" | "email" |
 export type FormBlock = { type: "form"; id: string; purpose?: "login" | "code" | "info"; title: string; site?: string | null;
   fields: FormInput[]; remember?: boolean; action?: string; state: "pending" | "submitted" | "cancelled" | "expired";
   note?: string | null; answers?: { label: string; value: string }[] | null };
+/** 项目沙盒里的后台任务卡（后端 app/jobs.py）。运行中卡片自己轮询 /api/jobs/{id}（lib/jobs.ts）。 */
+export type JobState = "running" | "done" | "failed" | "timed_out" | "cancelled" | "lost";
+export type JobBlock = { type: "job"; id: string; title: string; command: string; state: JobState;
+  started_at?: string | null; finished_at?: string | null; exit_code?: number | null; tail?: string | null };
+/** /api/jobs/{id} 的快照。followup=pending：结束了，服务器还要在这段对话里接着说一轮。 */
+export type JobInfo = { id: string; title: string; command: string; state: JobState; exit_code?: number | null;
+  followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
+  started_at?: string | null; finished_at?: string | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

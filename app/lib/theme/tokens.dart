@@ -201,6 +201,7 @@ abstract final class Timing {
   static const outboxGiveUp = Duration(seconds: 45); // 待发送的消息等多久没连上就标“发送失败”
   static const copiedHold = Duration(milliseconds: 1500); // 复制键变成对勾停多久再变回去
   static const clockTick = Duration(seconds: 1); // “思考中 · 8 秒”这类计时多久跳一次
+  static const jobPoll = Duration(seconds: 2); // 聊天里的后台任务卡运行中多久问一次进度
 }
 
 /// 玻璃材质（ui/glass.dart 只读这里）。真模糊很贵：只给浮层（顶栏、输入胶囊、弹层），列表里的卡片用“假玻璃”。
@@ -255,6 +256,7 @@ abstract final class Layout {
   static const cardPad = Sp.x5 - Sp.x1; // 卡片内边距 20
   static const headTop = 28.0; // 页面主标题（问候语、“我的”）离顶栏多远
   static const rowIcon = 22.0; // 列表行首的细线图标（不加色块底）
+  static const jobLogLines = 6; // 后台任务卡里日志尾巴显示几行（完整的点“完整日志”）
   static const rowMin = 56.0, rowMinTwoLine = 64.0; // 列表行高：单行 / 带副标题
   static const topBarTop = Sp.x2; // 顶栏离状态栏的距离
   static const shellTop = topBarTop + topBar + Sp.x3; // 一级页面内容要让出的顶部高度（不含状态栏）= 顶栏 + 12

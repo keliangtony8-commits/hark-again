@@ -21,3 +21,25 @@ async def remove(project_id: str) -> None:
                            headers={"Authorization": f"Bearer {settings.sandbox_token}"})
     except httpx.HTTPError:
         pass
+
+
+async def _job(action: str, project_id: str, job_id: str) -> dict:
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.post(f"{settings.sandbox_url}/jobs/{action}",
+                         headers={"Authorization": f"Bearer {settings.sandbox_token}"},
+                         json={"project_id": project_id, "job_id": job_id})
+        r.raise_for_status()
+        return r.json()
+
+
+async def start_job(project_id: str, job_id: str) -> None:
+    """脚本已由 jobs.py 写进工作区 .jobs/<id>/run.sh；这里只叫沙盒脱离启动它。"""
+    await _job("start", project_id, job_id)
+
+
+async def cancel_job(project_id: str, job_id: str) -> None:
+    await _job("cancel", project_id, job_id)
+
+
+async def job_alive(project_id: str, job_id: str) -> bool:
+    return bool((await _job("alive", project_id, job_id)).get("alive"))

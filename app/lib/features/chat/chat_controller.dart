@@ -199,6 +199,12 @@ class ChatController extends Notifier<ChatState> {
     if (id != null && !state.streaming) await _fetch(id, _openSeq);
   }
 
+  /// 服务器在当前对话里自己说了话（后台任务结束后接着说的一轮）：静默拿一次服务器版本。正在生成时不打断。
+  Future<void> refreshActive() async {
+    final id = state.activeId;
+    if (id != null && !state.streaming) await _fetch(id, _openSeq);
+  }
+
   /// 只改正在生成的那条。
   void _patchPending(Message Function(Message) fn) {
     final ms = state.messages;

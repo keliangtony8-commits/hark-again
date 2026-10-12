@@ -40,6 +40,7 @@ sealed class Block {
             items: [for (final i in (j['items'] as List? ?? [])) ProductItem.fromJson(i as Map<String, dynamic>)]),
         'order' => OrderBlock.fromJson(j),
         'form' => FormBlock.fromJson(j),
+        'job' => JobBlock.fromJson(j),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -96,6 +97,25 @@ class ApprovalBlock extends Block {
 class BrowserBlock extends Block {
   const BrowserBlock(this.session);
   final String session;
+}
+
+/// 项目沙盒里的后台任务卡（后端 app/jobs.py）。块里是落库时的状态；运行中由卡片自己轮询 /api/jobs/{id}（models/job.dart）。
+class JobBlock extends Block {
+  const JobBlock({required this.id, required this.title, required this.command, required this.state,
+      this.startedAt, this.finishedAt, this.exitCode, this.tail});
+  factory JobBlock.fromJson(Map<String, dynamic> j) => JobBlock(
+      id: j['id'] as String? ?? '',
+      title: j['title'] as String? ?? '后台任务',
+      command: j['command'] as String? ?? '',
+      state: j['state'] as String? ?? 'running',
+      startedAt: DateTime.tryParse(j['started_at'] as String? ?? '')?.toLocal(),
+      finishedAt: DateTime.tryParse(j['finished_at'] as String? ?? '')?.toLocal(),
+      exitCode: (j['exit_code'] as num?)?.toInt(),
+      tail: j['tail'] as String?);
+  final String id, title, command, state;
+  final DateTime? startedAt, finishedAt;
+  final int? exitCode;
+  final String? tail;
 }
 
 class PageBlock extends Block {
@@ -273,7 +293,7 @@ class ReplySegment {
 }
 
 bool standsAlone(Block b) => switch (b) {
-      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() => true,
+      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() => true,
       _ => false,
     };
 

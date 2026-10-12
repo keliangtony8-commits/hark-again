@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     max_upload_mb: int = 20
     sandbox_url: str = "http://sandbox:9000"
     sandbox_token: str = "change-me"
+    # 后台任务（jobs.py）：单个任务最长秒数、每个项目同时最多跑几个（4GB 小 VPS 默认 2）
+    job_max_seconds: int = 3600
+    job_max_running: int = 2
     stt_model: str = "stt"      # 语音识别别名（gateway 模式走 OpenAI 音频接口）
     embed_model: str = "embed"  # 记忆检索的向量别名
     # 语音供应商：gateway = 识别走网关 stt 别名、朗读用设备自带语音；

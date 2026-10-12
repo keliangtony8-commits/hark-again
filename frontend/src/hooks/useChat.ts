@@ -348,7 +348,14 @@ export function useChat(projectId?: string) {
 
   const reconnect = useCallback(() => socket.current?.reconnectNow(), []);
 
+  /** 服务器在当前对话里自己说了话（后台任务结束后接着说的一轮）：静默拿一次服务器版本；正在生成时不打断。 */
+  const refreshActive = useCallback(() => {
+    const id = threadRef.current.id;
+    if (id && !streamingRef.current) void fetchThread(id, openSeq.current);
+  }, [fetchThread]);
+
   return {
+    refreshActive,
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
     canRegenerate, canStop, editableId, focus, model, setModel, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };

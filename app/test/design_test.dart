@@ -55,6 +55,7 @@ void main() {
       'lib/features/chat/attachment_tray.dart': 1, // 上传进度
       'lib/features/chat/message_view.dart': 1, // 生成中进度
       'lib/features/me/task_detail.dart': 1, // 运行中脉冲
+      'lib/blocks/job_block.dart': 1, // 后台任务运行中脉冲
       'lib/features/projects/project_files_sheet.dart': 1, // 处理中脉冲
       'lib/features/me/usage_screen.dart': 1, // 预算进度条（未超）
     };

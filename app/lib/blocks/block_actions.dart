@@ -3,14 +3,17 @@
 import 'package:flutter/widgets.dart';
 
 class BlockActions extends InheritedWidget {
-  const BlockActions({super.key, required super.child, this.onApproval, this.onForm});
+  const BlockActions({super.key, required super.child, this.onApproval, this.onForm, this.onJobSettled});
   final void Function(String id, bool approved)? onApproval;
 
   /// values = null 表示取消。返回 false = 没发出去（断线），卡片保留输入让用户再点。
   final bool Function(String id, Map<String, String>? values, bool remember)? onForm;
 
+  /// 后台任务卡看着任务结束、服务器也接着说完了：聊天页重新拿一次这段对话，把助手的结论显示出来。
+  final VoidCallback? onJobSettled;
+
   static BlockActions? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<BlockActions>();
 
   @override
-  bool updateShouldNotify(BlockActions old) => old.onApproval != onApproval || old.onForm != onForm;
+  bool updateShouldNotify(BlockActions old) => old.onApproval != onApproval || old.onForm != onForm || old.onJobSettled != onJobSettled;
 }

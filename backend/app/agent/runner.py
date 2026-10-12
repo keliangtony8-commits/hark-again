@@ -85,15 +85,17 @@ async def rewind(db: AsyncSession, conversation_id: str, message_id: str | None,
 
 async def run_turn(db: AsyncSession, conv: Conversation, emit: Emit = _silent,
                    approve: Approver = deny_all, stop: asyncio.Event | None = None,
-                   ask: Asker = nobody, task_id: str | None = None) -> Message | None:
-    """task_id：worker 跑定时任务时传入，工具从 ToolContext.task_id 知道“这是哪个任务在跑”。"""
+                   ask: Asker = nobody, task_id: str | None = None, notice: str | None = None) -> Message | None:
+    """task_id：worker 跑定时任务时传入，工具从 ToolContext.task_id 知道“这是哪个任务在跑”。
+    notice：没有用户发言、由系统事件触发的一轮（后台任务结束，见 jobs.follow_ups）——作为最后一条“用户”消息
+    交给模型，但不落库、不显示；回复照常存为助手消息。"""
     with usage.scope(conv.id):  # 这一轮里所有模型调用（含摘要、记忆向量）都记在这个对话上
-        return await _run_turn(db, conv, emit, approve, stop, ask, task_id)
+        return await _run_turn(db, conv, emit, approve, stop, ask, task_id, notice)
 
 
 async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
                     approve: Approver, stop: asyncio.Event | None, ask: Asker = nobody,
-                    task_id: str | None = None) -> Message | None:
+                    task_id: str | None = None, notice: str | None = None) -> Message | None:
     """跑一轮并落库。被取消时不丢已生成的内容：半截回复以 status=stopped 存下，照常发 message.done；
     一个块都还没有就发 message.stopped。
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
@@ -101,6 +103,8 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     cid, project_id, model = conv.id, conv.project_id, chat_model(conv.model)
     hist = await build_history(db, cid, model)
     history = hist.messages
+    if notice:
+        history = [*history, {"role": "user", "content": notice}]
     last_user = next((m for m in reversed(history) if m["role"] == "user"), None)
     query = vision.text_of(last_user["content"]) if last_user else ""
     system = await build_system_prompt(db, project_id, query)

@@ -14,6 +14,14 @@ CAPTIONS = DATA / "captions"  # 图片描述缓存（vision.py）：captions/<�
 TEXT_EXT = {".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".tsx", ".html", ".css", ".yml", ".yaml", ".toml", ".sql", ".sh", ".log"}
 
 
+# 工作区里不给用户/模型当“文件”看的目录：git 内部、后台任务的脚本和日志（jobs.py）
+HIDDEN_DIRS = frozenset({".git", ".jobs"})
+
+
+def hidden(rel_parts) -> bool:
+    return any(part in HIDDEN_DIRS for part in rel_parts)
+
+
 def safe_join(root: Path, rel: str) -> Path:
     p = (root / rel.lstrip("/")).resolve()
     if p != root.resolve() and root.resolve() not in p.parents:
@@ -32,7 +40,7 @@ def project_file_root(pid: str) -> Path:
 
 
 def project_file(pid: str, rel: str) -> Path | None:
-    """项目里真实存在的一个文件（相对路径；越界、目录、.git 里的一律 None）。不创建项目目录。"""
+    """项目里真实存在的一个文件（相对路径；越界、目录、.git/.jobs 里的一律 None）。不创建项目目录。"""
     root = PROJECTS / pid
     if not pid or not rel or not root.is_dir():
         return None
@@ -40,7 +48,7 @@ def project_file(pid: str, rel: str) -> Path | None:
         p = safe_join(root, rel)
     except ValueError:
         return None
-    return p if p.is_file() and ".git" not in p.relative_to(root.resolve()).parts else None
+    return p if p.is_file() and not hidden(p.relative_to(root.resolve()).parts) else None
 
 
 def is_text(name: str) -> bool:

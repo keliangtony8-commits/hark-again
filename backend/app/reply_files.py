@@ -16,7 +16,7 @@ from .config import settings
 from .models import Conversation, Message, Project
 
 NAME_MAX = 24
-SKIP = {"approval", "form", "memory", "browser"}
+SKIP = {"approval", "form", "memory", "browser", "job"}
 _BAD = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
 
 

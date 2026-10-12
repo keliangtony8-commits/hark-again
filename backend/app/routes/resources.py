@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from sqlalchemy import delete, func, select
 
-from ..models import Conversation, HomeCard, Memory, Project, ScheduledTask
+from ..models import Conversation, HomeCard, Job, Memory, Project, ScheduledTask
 from .. import card_snooze, project_brief, sandbox_client, schedule, task_store
 from ..storage import PROJECTS
 from .crud import crud_router
@@ -97,6 +97,7 @@ def _check_card_patch(card: HomeCard, changes: dict) -> None:
 
 async def _delete_project_conversations(db, project: Project) -> None:
     await db.execute(delete(Conversation).where(Conversation.project_id == project.id))
+    await db.execute(delete(Job).where(Job.project_id == project.id))  # 容器一删，进程也没了
     shutil.rmtree(PROJECTS / project.id, ignore_errors=True)  # 工作区文件一并删除
     await sandbox_client.remove(project.id)
 

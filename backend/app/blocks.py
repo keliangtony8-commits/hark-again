@@ -65,6 +65,19 @@ class BrowserBlock(BaseModel):
     session: str = "main"
 
 
+class JobBlock(BaseModel):
+    """项目沙盒里的后台任务卡（app/jobs.py）。运行中客户端轮询 /api/jobs/{id} 显示进度、可取消；结束时服务器把块改成终态。"""
+    type: Literal["job"] = "job"
+    id: str
+    title: str
+    command: str
+    state: Literal["running", "done", "failed", "timed_out", "cancelled", "lost"] = "running"
+    started_at: str | None = None
+    finished_at: str | None = None
+    exit_code: int | None = None
+    tail: str | None = None  # 结束时日志的最后一段
+
+
 class PageBlock(BaseModel):
     """生成的网页：预览 + 打开 + 复制链接。"""
     type: Literal["page"] = "page"
@@ -210,7 +223,7 @@ class FormBlock(BaseModel):
 
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
-                        OrderBlock, FormBlock],
+                        OrderBlock, FormBlock, JobBlock],
                   Field(discriminator="type")]
 
 
@@ -247,6 +260,12 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[{verb}：" + "；".join(i["content"] for i in b["items"]) + "]")
         elif t == "file":
             parts.append(f"[文件：{b['name']}]")
+        elif t == "job":
+            state = {"running": "运行中（结束时你会收到通知，也可用 job_status 查看）", "done": "已完成", "failed": "失败",
+                     "timed_out": "超时被终止", "cancelled": "已取消", "lost": "中断了"}.get(b.get("state"), "")
+            code = f"，退出码 {b['exit_code']}" if b.get("exit_code") not in (None, 0) else ""
+            tail = f"\n最后的输出：\n{b['tail'][-600:]}" if b.get("tail") else ""
+            parts.append(f"[后台任务 {b['id']}「{b['title']}」——{state}{code}]{tail}")
         elif t == "draft":
             parts.append(f"[草稿「{b['title']}」]\n{b['body']}")
         elif t == "summary":

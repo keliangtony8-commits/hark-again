@@ -70,7 +70,8 @@ docker compose --profile build-only build sandbox-image                      # �
 - project_brief.py 项目档案（活文档）唯一入口：PATCH 钩子盖“谁改的”戳、工具的 edit/write 规则、注入系统提示（超 6000 字截断）
 - storage.py     文件系统唯一入口（项目工作区、附件、技能），路径防越界；project_file(pid, rel) = 项目里真实存在的文件（引用项目文件的唯一校验，v1.13：ws._project_files 存引用，agent/context._project_ref 每轮按磁盘内容给模型）
 - skills_store.py 技能读写：用户目录里与内置同 id 的文件 = 自定义版（就地顶替内置，customized=true，reset 删掉即恢复）；新建 id 永远唯一，绝不覆盖或顶替；内置不能删、不能直接 PUT；停用开关存 data/skills/_disabled.json（按 id，损坏当全启用），系统提示只列 enabled_skills()，use_skill 拒绝停用的
-- sandbox_client.py 调沙盒服务
+- sandbox_client.py 调沙盒服务（前台命令 run；后台任务 start_job/cancel_job/job_alive）
+- jobs.py        后台任务唯一入口（v1.19）：工作区 .jobs/<id>/ 文件约定（run.sh/log/exit/pid/cancelled）、启动/对账/取消/丢失判定、结束后在原对话接着说（worker 每 5 秒 tick + follow_ups）
 - vault.py       保险箱：加解密、按域名匹配（唯一解密点）
 - schedule.py    定时任务时刻计算（due_at/is_due/next_run_at，按用户时区）：worker 判断到点与接口的 next_run_at 共用，保证界面写的就是实际会跑的时间
 - worker.py      定时任务执行器（独立进程）；每次运行经 task_runs.py 记一行（start/finish）
@@ -96,7 +97,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - service.py     唯一运行 Chromium 的服务：快照、点击、输入、截图、人工接管；拦截内网地址
 
 沙盒服务 sandbox/
-- runner.py      唯一接触 Docker 的服务
+- runner.py      唯一接触 Docker 的服务（前台 /exec；后台 /jobs/start|cancel|alive：setsid 脱离启动、整组杀；空闲回收跳过有任务在跑的容器）
 - image/         项目容器镜像（python、node、git）
 
 前端 frontend/src/
