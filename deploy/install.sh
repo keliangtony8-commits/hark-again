@@ -189,7 +189,7 @@ write_env() {
 
 prepare_data() {
   local dir; dir="$(env_get HOST_DATA_DIR)"
-  mkdir -p "$dir/projects" "$dir/browser"
+  mkdir -p "$dir/projects" "$dir/browser" "$dir/sandbox"
   chown -R 1000:1000 "$dir"   # 后端/沙盒容器里都是 uid 1000
 }
 

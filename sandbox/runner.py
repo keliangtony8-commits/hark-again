@@ -13,6 +13,7 @@
   剩余内存不够 “一台的上限 SANDBOX_MEM + 留给系统的 SANDBOX_HOST_RESERVE” 时，也按同样顺序先停闲容器，停一台看一次；
   读不到 / 设成 0 就只按台数。4 GB 的 VPS 上后端 + 数据库 + 浏览器已经占一大块，台数上限挡不住各台都吃满的情况
   停机原因（idle 空闲 / room 让位，内存不够也记 room）记在 stopped_by，状态页说清楚；下一条命令把它开起来时结果带 woke，提醒模型之前前台起的程序已停
+  （v1.78：stopped_by / woke 落盘到 SANDBOX_STATE，本服务重启 / 更新后不丢；只经 _mark_stopped/_woken/_take_woke/_forget 改）
 - 端口预览（/sandboxes/<id>/ports、/preview/<id>/<port>/…）：容器都接在专用网络 SANDBOX_NETWORK 上（本服务也在），
   这里能直连容器里起的网页服务；后端带签名链接把用户的请求转进来（见 backend/app/preview.py），容器端口从不对外暴露
 - 后台任务（/jobs/*）：后端把 .jobs/<id>/run.sh 写进工作区（脚本约定见 backend/app/jobs.py），
@@ -26,6 +27,7 @@ import calendar
 import codecs
 from collections import deque
 import json
+import logging
 import os
 import re
 import stat
@@ -64,12 +66,19 @@ FLUSH_S = 0.5          # 实时输出多久推一批：太密只是白占带宽
 # 沙盒容器接的专用网络（docker-compose.yml 的 sandboxes 网络，本服务也接在上面）：端口预览靠它直连容器。
 # 网络不存在（不在 compose 里跑）就退回 Docker 默认网络，只是预览连不上
 NETWORK = os.environ.get("SANDBOX_NETWORK", "assistant-sandboxes")
+# 停机原因落盘（docker-compose.yml 把 data/sandbox 挂到 /state）：服务重启后状态页和下一条命令仍说得清“为什么停了”
+STATE_FILE = os.environ.get("SANDBOX_STATE", "/state/stopped.json")
+STATE_KEEP_S = 30 * 86400  # 停了这么久的记录就不留了：再开机时只说“电脑开过机”也无妨
+REASONS = ("idle", "room")
+PID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+log = logging.getLogger("sandbox")
 
 client = docker.from_env()
 last_used: dict[str, float] = {}
 in_use: dict[str, int] = {}  # 正在跑前台命令 / 开着预览 WebSocket 的容器（计数），让位时跳过
 stopped_by: dict[str, tuple[str, float]] = {}  # 我们停掉的容器：(idle | room, 何时)；再开机时挪进 woke
 woke: dict[str, str] = {}  # 刚从休眠里开起来、还没告诉过模型的：pid → 当初的停机原因
+_state_lock = threading.Lock()  # 写 STATE_FILE（线程池里的请求和 reaper 都会改）
 _room_lock = threading.Lock()  # 数开机台数 → 停 → 开 要一气呵成，别两条请求同时挤进来都以为有空位
 oom_seen: dict[str, int] = {}  # 每个容器上次看到的 OOM 杀进程次数：前台命令退出 137 时比一比，判断是不是内存打满
 app = FastAPI()
@@ -218,7 +227,7 @@ def _existing(pid: str):
 
 
 def _check_pid(pid: str) -> str:
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", pid):
+    if not PID_RE.fullmatch(pid):
         raise HTTPException(400, "bad project id")
     return pid
 
@@ -314,9 +323,85 @@ def _make_room(pid: str) -> None:
         except Exception:  # noqa: BLE001 — 停不掉就挑下一台
             continue
         last_used.pop(other, None)
-        stopped_by[other] = ("room", now)
+        _mark_stopped(other, "room", now)
         need -= 1
         short = _host_short()  # 停一台看一次：一台空出来的往往就够了
+
+
+def dump_state(stopped: dict[str, tuple[str, float]], waking: dict[str, str]) -> str:
+    """stopped_by + woke → 落盘的 JSON 文本（键排好序，内容不变文件就不变）。"""
+    return json.dumps({"stopped": {p: [r, t] for p, (r, t) in stopped.items()}, "woke": waking},
+                      ensure_ascii=False, sort_keys=True)
+
+
+def load_state(text: str, now: float) -> tuple[dict[str, tuple[str, float]], dict[str, str]]:
+    """落盘文本 → (stopped_by, woke)。坏 JSON / 坏条目一律丢掉（只认合法项目 id 和 REASONS 里的原因）；
+    stopped 里超过 STATE_KEEP_S 的、时间在未来的丢掉；同一台既在 stopped 又在 woke 时以 woke 为准（已经开过机了）。"""
+    try:
+        raw = json.loads(text)
+    except (ValueError, TypeError):
+        return {}, {}
+    if not isinstance(raw, dict):
+        return {}, {}
+    stopped: dict[str, tuple[str, float]] = {}
+    waking: dict[str, str] = {}
+    w = raw.get("woke")
+    for p, r in (w.items() if isinstance(w, dict) else ()):
+        if isinstance(p, str) and PID_RE.fullmatch(p) and r in REASONS:
+            waking[p] = r
+    st = raw.get("stopped")
+    for p, v in (st.items() if isinstance(st, dict) else ()):
+        if not (isinstance(p, str) and PID_RE.fullmatch(p)) or p in waking:
+            continue
+        if not (isinstance(v, list) and len(v) == 2 and v[0] in REASONS):
+            continue
+        t = v[1]
+        if isinstance(t, bool) or not isinstance(t, (int, float)) or not 0 <= now - t <= STATE_KEEP_S:
+            continue
+        stopped[p] = (v[0], float(t))
+    return stopped, waking
+
+
+def _save_state() -> None:
+    """把 stopped_by / woke 原子写盘（先写临时文件再改名）；写不了只记日志——内存里照常用，只是重启后会忘。"""
+    with _state_lock:
+        text = dump_state(dict(stopped_by), dict(woke))
+        tmp = f"{STATE_FILE}.tmp"
+        try:
+            os.makedirs(os.path.dirname(STATE_FILE) or ".", exist_ok=True)
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(text)
+            os.replace(tmp, STATE_FILE)
+        except OSError as e:
+            log.warning("save sandbox state failed: %s", e)
+
+
+def _load_saved() -> None:
+    """启动时读回落盘的停机原因（读不到 = 都不知道，跟以前一样）。"""
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return
+    stopped, waking = load_state(text, time.time())
+    stopped_by.update(stopped)
+    woke.update(waking)
+
+
+def reconcile(stopped: dict[str, tuple[str, float]], waking: dict[str, str],
+              states: dict[str, str]) -> tuple[dict[str, tuple[str, float]], dict[str, str]]:
+    """读回的记录对一遍现在的容器（states = {pid: running | stopped}）：容器没了（被删 / 重建）的都丢掉；
+    记着“我们停的”却在跑（停后被别处开起来、或刚开机还没来得及记就重启了）→ 挪进 woke，下一条命令照样提醒。"""
+    s = {p: v for p, v in stopped.items() if p in states}
+    w = {p: r for p, r in waking.items() if p in states}
+    for p in [p for p in s if states[p] == "running"]:
+        w.setdefault(p, s.pop(p)[0])
+    return s, w
+
+
+def _mark_stopped(pid: str, reason: str, t: float) -> None:
+    stopped_by[pid] = (reason, t)
+    _save_state()
 
 
 def _woken(pid: str) -> None:
@@ -324,6 +409,22 @@ def _woken(pid: str) -> None:
     reason = stopped_by.pop(pid, None)
     if reason:
         woke[pid] = reason[0]
+        _save_state()
+
+
+def _take_woke(pid: str) -> str | None:
+    """取走“刚开机还没告诉模型”的原因（一次性）。"""
+    was = woke.pop(pid, None)
+    if was:
+        _save_state()
+    return was
+
+
+def _forget(pid: str) -> None:
+    """容器删了：停机记录一并忘掉。"""
+    had = stopped_by.pop(pid, None), woke.pop(pid, None)
+    if any(had):
+        _save_state()
 
 
 class _Using:
@@ -411,7 +512,7 @@ def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: s
 def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | None, sink: Sink | None) -> dict:
     c = _container(pid)
     last_used[pid] = time.time()
-    was = woke.pop(pid, None)
+    was = _take_woke(pid)
     if pid not in oom_seen:  # 服务刚重启：先记下现有计数，别把以前的 OOM 算到这条命令头上
         oom_seen[pid] = _oom_count(c) or 0
     tok = tok or os.urandom(6).hex()
@@ -610,7 +711,7 @@ async def job_start(body: JobIn):
     def go():
         c = _container(body.project_id)
         last_used[body.project_id] = time.time()
-        woke.pop(body.project_id, None)  # 任务是新起的，不用提醒“之前的程序停了”
+        _take_woke(body.project_id)  # 任务是新起的，不用提醒“之前的程序停了”
         if c.exec_run(["test", "-f", f".jobs/{jid}/run.sh"], workdir="/workspace").exit_code != 0:
             raise HTTPException(404, "job script missing")
         c.exec_run(["setsid", "-f", "bash", f".jobs/{jid}/run.sh"], workdir="/workspace", detach=True)
@@ -672,8 +773,7 @@ async def remove(pid: str):
             pass
         last_used.pop(pid, None)
         oom_seen.pop(pid, None)
-        stopped_by.pop(pid, None)
-        woke.pop(pid, None)
+        _forget(pid)
     await asyncio.to_thread(go)
     return {"ok": True}
 
@@ -1016,14 +1116,24 @@ async def _reaper():
                 except NotFound:
                     pass
                 last_used.pop(pid, None)
-                stopped_by[pid] = ("idle", now)
+                await asyncio.to_thread(_mark_stopped, pid, "idle", now)
 
 
 def _adopt() -> None:
-    """服务重启后 last_used 是空的：把还在跑的沙盒容器认领回来，否则它们永远不会被回收。"""
-    for c in client.containers.list(filters={"label": "assistant.sandbox=1"}):
+    """服务重启后 last_used 是空的：把还在跑的沙盒容器认领回来，否则它们永远不会被回收；
+    再读回落盘的停机原因，对一遍现有容器。"""
+    states: dict[str, str] = {}
+    for c in client.containers.list(all=True, filters={"label": "assistant.sandbox=1"}):
         if c.name.startswith("sbx-"):
-            last_used.setdefault(c.name[4:], time.time())
+            states[c.name[4:]] = "running" if c.status == "running" else "stopped"
+            if c.status == "running":
+                last_used.setdefault(c.name[4:], time.time())
+    _load_saved()
+    s, w = reconcile(dict(stopped_by), dict(woke), states)
+    if (s, w) != (stopped_by, woke):
+        stopped_by.clear(); stopped_by.update(s)
+        woke.clear(); woke.update(w)
+        _save_state()
 
 
 @app.on_event("startup")

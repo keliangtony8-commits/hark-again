@@ -44,8 +44,8 @@ def get(name):
     if name not in containers:
         raise NotFound(name)
     return containers[name]
-def lst(filters=None, **kw):
-    return [c for c in containers.values() if c.status == "running"]
+def lst(filters=None, all=False, **kw):
+    return [c for c in containers.values() if all or c.status == "running"]
 def run(image, name, **kw):
     log.append(("create", name)); c = FakeContainer(name); containers[name] = c; return c
 execs = {}
@@ -65,6 +65,7 @@ sys.path.insert(0, os.path.join(root, "..", "sandbox"))
 import runner
 runner.MEMINFO = os.path.join(tmp, "meminfo")  # 先不存在：读不到 = 只按台数
 runner.PROJECTS_ROOT = tmp
+runner.STATE_FILE = os.path.join(tmp, "state", "stopped.json")  # 目录先不存在：_save_state 自己建
 _makedirs, _chown = runner.os.makedirs, runner.os.chown
 runner.os.chown = lambda *a, **k: None
 real_makedirs = os.makedirs
@@ -207,6 +208,55 @@ log.clear(); runner._container("m8")
 assert ("stop", "sbx-m5") in log, log
 os.remove(runner.MEMINFO)
 print("host memory ok")
+
+# ---- 2c. 停机原因落盘（v1.78） ----
+import json as _json
+NOW = 2_000_000_000.0
+st = runner.dump_state({"a": ("idle", NOW - 10)}, {"b": "room"})
+assert runner.load_state(st, NOW) == ({"a": ("idle", NOW - 10)}, {"b": "room"})
+assert runner.load_state("not json", NOW) == ({}, {}) and runner.load_state("[1]", NOW) == ({}, {})
+bad = _json.dumps({"stopped": {"ok": ["room", NOW - 5], "weird": ["nap", NOW], "../x": ["idle", NOW],
+                               "old": ["idle", NOW - runner.STATE_KEEP_S - 1], "future": ["idle", NOW + 100],
+                               "boolt": ["idle", True], "short": ["idle"], "dup": ["idle", NOW - 1]},
+                   "woke": {"dup": "room", "w2": "x", "w3": "idle"}})
+assert runner.load_state(bad, NOW) == ({"ok": ("room", NOW - 5)}, {"dup": "room", "w3": "idle"}), runner.load_state(bad, NOW)
+s2, w2 = runner.reconcile({"gone": ("idle", 1.0), "up": ("room", 1.0), "down": ("idle", 1.0)}, {"w": "idle", "wgone": "room"},
+                          {"up": "running", "down": "stopped", "w": "running"})
+assert s2 == {"down": ("idle", 1.0)} and w2 == {"up": "room", "w": "idle"}, (s2, w2)
+# 真流程：让位 / 空闲停 → 文件里有；模拟服务重启（清内存 → _adopt）→ 状态页仍说得清；开机后 woke 也跨重启
+containers.clear(); log.clear(); runner.stopped_by.clear(); runner.woke.clear(); runner.last_used.clear(); runner.in_use.clear()
+runner.MAX_RUNNING = 1
+t = time.time()
+containers["sbx-p1"] = FakeContainer("sbx-p1"); runner.last_used["p1"] = t - 3000
+runner._container("p2")
+assert runner.stopped_by["p1"][0] == "room"
+saved = _json.load(open(runner.STATE_FILE))
+assert saved["stopped"]["p1"][0] == "room", saved
+runner.stopped_by.clear(); runner.woke.clear(); runner.last_used.clear()
+runner._adopt()
+assert runner.stopped_by["p1"][0] == "room" and "p2" in runner.last_used and "p1" not in runner.last_used
+out = asyncio.run(runner.status("p1"))
+assert out["state"] == "stopped" and out["stopped_by"] == "room", out
+runner.MAX_RUNNING = 0
+runner._container("p1")  # 开机 → woke 落盘
+assert _json.load(open(runner.STATE_FILE))["woke"] == {"p1": "room"}
+runner.stopped_by.clear(); runner.woke.clear()
+runner._adopt()
+assert runner.woke == {"p1": "room"}
+assert runner._take_woke("p1") == "room" and runner._take_woke("p1") is None
+assert _json.load(open(runner.STATE_FILE)) == {"stopped": {}, "woke": {}}
+# 删容器 → 记录也删；落盘时容器已被删 → 重启时丢掉
+runner._mark_stopped("p2", "idle", t); asyncio.run(runner.remove("p2"))
+assert "p2" not in _json.load(open(runner.STATE_FILE))["stopped"]
+runner._mark_stopped("p9", "idle", t); runner.stopped_by.clear()
+runner._adopt()
+assert "p9" not in runner.stopped_by and "p9" not in _json.load(open(runner.STATE_FILE))["stopped"]
+# 写不了盘：不抛，内存照用
+good = runner.STATE_FILE; runner.STATE_FILE = "/proc/nope/stopped.json"
+runner._mark_stopped("p3", "idle", t)
+assert runner.stopped_by["p3"][0] == "idle"
+runner.STATE_FILE = good; runner.stopped_by.clear()
+print("persist ok")
 
 # ---- 3. 后端 ----
 import subprocess

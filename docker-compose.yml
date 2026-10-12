@@ -51,6 +51,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOST_DATA_DIR}/projects:/projects
+      - ${HOST_DATA_DIR}/sandbox:/state   # 停机原因（stopped.json），本服务重启不丢
     # sandboxes：每个工作区的容器也接在这个网络上，端口预览从这里直连容器（容器端口从不映射到宿主机）
     networks: [default, sandboxes]
     restart: unless-stopped
