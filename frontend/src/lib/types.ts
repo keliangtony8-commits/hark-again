@@ -64,7 +64,9 @@ export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<S
 
 export type Role = "user" | "assistant";
 /** 活动时间线的一步（v1.28，backend/app/activity.py）：每次工具调用一步，随消息落库（Message.steps）。 */
-export type ActivityStep = { id: string; tool: string; title: string; detail: string; state: "running" | "done" | "error" | "denied" | "stopped"; at?: string; ms?: number; note?: string };
+/** 这一步改了工作区文件（v1.34 write_file / edit_file；形状见 backend/app/file_edit.py）。hidden = 像密钥的文件，不给 diff。 */
+export type FileChange = { path: string; added: number; removed: number; diff: string; created?: boolean; hidden?: boolean };
+export type ActivityStep = { id: string; tool: string; title: string; detail: string; state: "running" | "done" | "error" | "denied" | "stopped"; at?: string; ms?: number; note?: string; change?: FileChange };
 /** WS tool.status：step = 完整的一步（老服务器没有）。 */
 export type ToolRun = { id: string; name: string; label: string; state: ActivityStep["state"]; step?: ActivityStep };
 /** 发件箱状态（只在本机）：queued = 待发送，failed = 发送失败；没有 = 已进服务器。 */

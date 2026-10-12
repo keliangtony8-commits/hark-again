@@ -262,7 +262,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
         else:
             yield builder.add(b)
     state = "error" if result.failed else "done"
-    yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed) or {})
+    yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed, result.change) or {})
     content = result.content
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）
         content = spill.bound(content, settings.tool_result_max, ctx.workspace, call.name)

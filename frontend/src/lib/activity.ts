@@ -1,5 +1,5 @@
 // 活动时间线（v1.28）规则，与 App models/activity.dart 同款；服务器形状见 backend/app/activity.py。
-import type { ActivityStep, ServerEvent } from "./types";
+import type { ActivityStep, FileChange, ServerEvent } from "./types";
 
 type StatusEvent = Extract<ServerEvent, { type: "tool.status" }>;
 
@@ -43,7 +43,20 @@ export const STEP_STATE_LABEL: Record<ActivityStep["state"], string> = {
   running: "进行中", done: "完成", error: "没成功", denied: "没执行", stopped: "被停止",
 };
 
+/** 读屏：“新建，增加 3 行” / “增加 2 行，删除 1 行”（与 App FileChange.semantics 同款）。 */
+export function changeSemantics(c: FileChange): string {
+  return [c.created ? "新建" : "", `增加 ${c.added} 行`, c.removed > 0 ? `删除 ${c.removed} 行` : ""].filter(Boolean).join("，");
+}
+
+export type DiffKind = "hunk" | "add" | "remove" | "context" | "note";
+
+/** diff 文本拆成行并标类型（界面按类型上色）。 */
+export function diffLines(diff: string): [DiffKind, string][] {
+  return diff.split("\n").map((l): [DiffKind, string] => [
+    l.startsWith("@@") ? "hunk" : l.startsWith("+") ? "add" : l.startsWith("-") ? "remove" : l.startsWith("…") ? "note" : "context", l]);
+}
+
 export function stepSemantics(s: ActivityStep): string {
-  return [[s.title, s.detail].filter(Boolean).join(" "), STEP_STATE_LABEL[s.state], s.note,
+  return [[s.title, s.detail].filter(Boolean).join(" "), STEP_STATE_LABEL[s.state], s.note, s.change ? changeSemantics(s.change) : "",
     s.ms != null && s.state !== "running" ? `用时 ${stepDuration(s.ms)}` : ""].filter(Boolean).join("，");
 }

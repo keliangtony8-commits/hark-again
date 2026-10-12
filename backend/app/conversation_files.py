@@ -37,6 +37,9 @@ def _upload_file(uid: str) -> Path | None:
         return None
 
 
+WRITERS = ("write_file", "edit_file")  # 时间线里“写了文件”的工具：detail 就是路径
+
+
 def _locate(item: dict) -> Path | None:
     if item["source"] == "upload":
         return _upload_file(item["id"])
@@ -56,7 +59,7 @@ def _from_message(msg, ws: str) -> list[dict]:
     user = msg.role == "user"
     # 先步骤（过程：写了哪些文件）再块（结果：交付的卡）——写在交之前，倒序后“交给你的”排在“写的”上面
     for s in msg.steps or []:
-        if isinstance(s, dict) and s.get("tool") == "write_file" and s.get("state") == "done" and s.get("detail"):
+        if isinstance(s, dict) and s.get("tool") in WRITERS and s.get("state") == "done" and s.get("detail"):
             path = str(s["detail"]).lstrip("/")
             if not path.endswith("…"):  # 摘要被截断的长路径认不出是哪个文件，不列
                 out.append(_item("project", path, Path(path).name, ws, "written", msg))

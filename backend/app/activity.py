@@ -10,7 +10,9 @@
   browser_type 的 text、run_command 的 stdin、write_file 的 content 这类可能含隐私/很长的值永远不进时间线；
 - state：running | done | error | denied（没批准/没填表）| stopped（这一轮被停掉时还在跑）；
 - at：开始时间（ISO，带时区，经 wire_time）；ms：用时毫秒（running 时没有）；
-- note：只在 error / denied 时带一句原因（≤ NOTE_MAX 字）。
+- note：只在 error / denied 时带一句原因（≤ NOTE_MAX 字）；
+- change：只在工具改了工作区文件时（write_file / edit_file，v1.34）带 {"path","added","removed","diff"[,"created"]}，
+  形状和截断规则在 file_edit.py；两端在这一步上显示 “+3 −1”，点开看 diff。
 """
 import time
 from datetime import datetime, timezone
@@ -58,7 +60,7 @@ class Recorder:
         del self.steps[:-KEEP]
         return dict(step)
 
-    def finish(self, call_id: str, state: str, note: str = "") -> dict | None:
+    def finish(self, call_id: str, state: str, note: str = "", change: dict | None = None) -> dict | None:
         step = next((s for s in self.steps if s["id"] == call_id), None)
         if step is None:
             return None
@@ -67,6 +69,8 @@ class Recorder:
             step["ms"] = int((time.monotonic() - t0) * 1000)
         if note and state in ("error", "denied"):
             step["note"] = _short(note, NOTE_MAX)
+        if change and state == "done":
+            step["change"] = change
         return dict(step)
 
     def denied(self, call_id: str, tool: str, label: str, args: dict, note: str) -> dict:

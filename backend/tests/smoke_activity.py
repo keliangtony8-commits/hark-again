@@ -69,9 +69,10 @@ async def turn(**kw):
         return await run_turn(db, await db.get(Conversation, cid), emit=emit, **kw)
 
 # ---- 1–3. 一轮四步 ----
-SECRET = "我的密码是 hunter2"
+SECRET = "hunter2"
+SECRET_TEXT = f"password = {SECRET}"  # v1.34 起写文件的 diff 进时间线：类似密码的值必须打码
 script.extend([
-    [("run_command", {"command": "ls -la\n  data"}), ("write_file", {"path": "notes/a.md", "content": SECRET})],
+    [("run_command", {"command": "ls -la\n  data"}), ("write_file", {"path": "notes/a.md", "content": SECRET_TEXT})],
     [("run_command", {"command": "false && echo"}), ("run_command", {"command": "rm -rf /"}), ("run_command", {"command": "git push"})],
     "好了。"])
 reply = asyncio.run(turn())

@@ -4,8 +4,53 @@
 
 enum ActivityState { running, done, error, denied, stopped }
 
+/// 这一步改了工作区里的文件（v1.34：write_file / edit_file）：服务器 app/file_edit.py 的 change。
+/// diff = unified diff 去掉文件头（@@ 段头、+ 新增、- 删除、空格开头是上下文）；hidden = 像密钥的文件，不给 diff。
+class FileChange {
+  const FileChange({required this.path, this.added = 0, this.removed = 0, this.diff = '', this.created = false, this.hidden = false});
+
+  static FileChange? fromJson(Object? raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    return FileChange(
+      path: raw['path'] as String? ?? '',
+      added: (raw['added'] as num?)?.toInt() ?? 0,
+      removed: (raw['removed'] as num?)?.toInt() ?? 0,
+      diff: raw['diff'] as String? ?? '',
+      created: raw['created'] == true,
+      hidden: raw['hidden'] == true,
+    );
+  }
+
+  final String path, diff;
+  final int added, removed;
+  final bool created, hidden;
+
+  /// 有 diff 可展开看。
+  bool get expandable => diff.isNotEmpty;
+
+  /// 读屏：“新建，增加 3 行” / “增加 2 行，删除 1 行”。
+  String get semantics => [if (created) '新建', '增加 $added 行', if (removed > 0) '删除 $removed 行'].join('，');
+}
+
+enum DiffKind { hunk, add, remove, context, note }
+
+/// diff 文本拆成行，标出类型（界面按类型上色）。
+List<(DiffKind, String)> diffLines(String diff) => [
+      for (final l in diff.split('\n'))
+        if (l.startsWith('@@'))
+          (DiffKind.hunk, l)
+        else if (l.startsWith('+'))
+          (DiffKind.add, l)
+        else if (l.startsWith('-'))
+          (DiffKind.remove, l)
+        else if (l.startsWith('…'))
+          (DiffKind.note, l)
+        else
+          (DiffKind.context, l),
+    ];
+
 class ActivityStep {
-  const ActivityStep({required this.id, required this.title, this.tool = '', this.detail = '', this.state = ActivityState.running, this.at, this.ms, this.note = ''});
+  const ActivityStep({required this.id, required this.title, this.tool = '', this.detail = '', this.state = ActivityState.running, this.at, this.ms, this.note = '', this.change});
 
   factory ActivityStep.fromJson(Map<String, dynamic> j) => ActivityStep(
         id: j['id'] as String? ?? '',
@@ -16,6 +61,7 @@ class ActivityStep {
         at: DateTime.tryParse(j['at'] as String? ?? '')?.toLocal(),
         ms: (j['ms'] as num?)?.toInt(),
         note: j['note'] as String? ?? '',
+        change: FileChange.fromJson(j['change']),
       );
 
   /// WS tool.status：新服务器带完整 step；老服务器只有 label / state，退化成只有标题的一步。
@@ -34,6 +80,7 @@ class ActivityStep {
   final ActivityState state;
   final DateTime? at;
   final int? ms;
+  final FileChange? change;
 
   bool get running => state == ActivityState.running;
 
@@ -97,5 +144,6 @@ String stepSemantics(ActivityStep s) => [
       [s.title, if (s.detail.isNotEmpty) s.detail].join(' '),
       stepStateLabel(s.state),
       if (s.note.isNotEmpty) s.note,
+      if (s.change case final c?) c.semantics,
       if (s.ms != null && !s.running) '用时 ${stepDuration(s.ms!)}',
     ].join('，');

@@ -13,6 +13,7 @@
   --on-accent: #ffffff;
   --danger: #c43d3d;
   --warning: #b86e00;
+  --success: #2e7d4f; /* v1.34 diff 的新增行与 +N；删除用 --danger */
   --knob: #ffffff;              /* 开关圆钮 */
   --scrim: rgba(0, 0, 0, 0.32); /* 弹层/抽屉背后的遮罩 */
   color-scheme: light;
@@ -127,6 +128,7 @@
   --on-accent: #1a0f0a; /* 亮橙底配深字（6.8:1） */
   --danger: #e06060;
   --warning: #e0a040;
+  --success: #62bd86;
   --knob: #f4f3f1;
   --scrim: rgba(0, 0, 0, 0.55);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);

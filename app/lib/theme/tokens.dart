@@ -19,6 +19,7 @@ class Palette {
     required this.onAccent,
     required this.danger,
     required this.warning,
+    required this.success,
     required this.shadow,
     required this.backdrop,
     required this.glass,
@@ -34,6 +35,9 @@ class Palette {
 
   final Color bg, surface, surface2, border, text, text2, text3;
   final Color accent, accentSoft, onAccent, danger, warning, shadow;
+
+  /// 文件改动里“新增”的绿（v1.34 diff 的 + 行与 +N）；删除用 danger。只给 diff 用，不当第二个强调色。
+  final Color success;
 
   /// 设计 v2 的“壁纸 + 玻璃”：
   /// backdrop = 底层渐变的三个色标（左上 → 中 → 右下），低饱和；
@@ -75,6 +79,7 @@ class Palette {
     onAccent: Color(0xFFFFFFFF),
     danger: Color(0xFFC43D3D),
     warning: Color(0xFFB86E00),
+    success: Color(0xFF2E7D4F),
     shadow: Color(0x141C1B1A),
     backdrop: [Color(0xFFDDE3EB), Color(0xFFEEECEA), Color(0xFFEBE1DC)], // 雾蓝 → 灰白 → 带一点我们赤陶色的暖灰
     glass: Color(0xB3FFFFFF),
@@ -104,6 +109,7 @@ class Palette {
       onAccent: l(a.onAccent, b.onAccent),
       danger: l(a.danger, b.danger),
       warning: l(a.warning, b.warning),
+      success: l(a.success, b.success),
       shadow: l(a.shadow, b.shadow),
       backdrop: [for (var i = 0; i < a.backdrop.length; i++) l(a.backdrop[i], b.backdrop[i])],
       glass: l(a.glass, b.glass),
@@ -132,6 +138,7 @@ class Palette {
     onAccent: Color(0xFF1A0F0A), // 深色下强调色很亮，上面用深字才够对比（6.8:1）
     danger: Color(0xFFE06060),
     warning: Color(0xFFE0A040),
+    success: Color(0xFF62BD86),
     shadow: Color(0x66000000),
     backdrop: [Color(0xFF1B1F2A), Color(0xFF16171C), Color(0xFF221E2B)], // 蓝灰炭 → 近黑 → 灰紫
     glass: Color(0x8C25272F),

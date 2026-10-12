@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from ... import command_guard, deliver, jobs, quota, sandbox_client, spill, vision, workspaces
+from ... import command_guard, deliver, file_edit, jobs, quota, sandbox_client, spill, vision, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -67,19 +67,79 @@ def page(text: str, offset: int = 0, limit: int = MAX_READ) -> str:
     return f"{text[start:end]}\n…（第 {start}–{end} 字符，共 {total} 字符；{more}）"
 
 
-@tool("write_file", "正在写文件", "在工作区里创建或覆盖一个文本文件（用户看不到卡片；要交给用户的用 display_file）。",
+@tool("write_file", "正在写文件",
+      "在工作区里创建或整篇覆盖一个文本文件（用户看不到卡片；要交给用户的用 display_file）。"
+      "改已有文件的一小段用 edit_file，不要整篇重写。",
       {"type": "object", "properties": {"path": _PATH, "content": {"type": "string"}},
        "required": ["path", "content"]})
 async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
     p = safe_join(project_dir(ctx.workspace), path)
-    try:
-        await asyncio.to_thread(quota.check, ctx.workspace, len(content.encode()))
-    except quota.QuotaError as e:
-        return ToolResult(f"没有写入 {path}：{e}", failed="工作区磁盘满了")
+    before = _old_text(p)
+    grow = len(content.encode()) - (p.stat().st_size if p.is_file() else 0)
+    if (full := await _quota_refusal(ctx, path, grow)) is not None:
+        return full
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
     quota.forget(ctx.workspace)
-    return ToolResult(f"已写入 {path}（{len(content)} 字符）。")
+    c = file_edit.change(path, before, content)
+    verb = "新建" if before is None else "覆盖原文件"
+    return ToolResult(f"已写入 {path}（{verb}，{len(content)} 字符，{file_edit.stat(c)}）。", change=c)
+
+
+@tool("edit_file", "正在改文件",
+      "精确修改工作区里已有的文本文件：把 old_string 换成 new_string，其余内容原样不动。"
+      "old_string 要和文件里一字不差（含缩进），并且只出现一处——不唯一时多带几行上下文；"
+      "要把所有出现都换掉设 replace_all=true。删一段就让 new_string 为空。新建文件或整篇重写用 write_file。"
+      "改之前先 read_file 看准原文。",
+      {"type": "object", "properties": {
+          "path": _PATH,
+          "old_string": {"type": "string", "description": "要替换的原文，一字不差"},
+          "new_string": {"type": "string", "description": "替换成的内容"},
+          "replace_all": {"type": "boolean", "default": False, "description": "替换所有出现（默认只允许唯一一处）"}},
+       "required": ["path", "old_string", "new_string"]})
+async def edit_file(ctx: ToolContext, path: str, old_string: str, new_string: str = "",
+                    replace_all: bool = False) -> ToolResult:
+    p = safe_join(project_dir(ctx.workspace), path)
+    if not p.is_file():
+        return ToolResult(f"{path} 不存在：新建文件用 write_file。", failed="文件不存在")
+    if not looks_text(p):
+        return ToolResult(f"{path} 不是文本文件，不能按文字替换；可以用 run_command 处理。", failed="不是文本文件")
+    raw = p.read_bytes()
+    try:
+        before = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return ToolResult(f"{path} 不是 UTF-8 编码，没有改（免得写坏）；可以用 run_command 处理。", failed="不是 UTF-8 文本")
+    try:
+        e = file_edit.apply(before, old_string, new_string, replace_all)
+    except file_edit.EditError as err:
+        return ToolResult(f"没有修改 {path}：{err}", failed=err.short)
+    if (full := await _quota_refusal(ctx, path, len(e.text.encode()) - len(raw))) is not None:
+        return full
+    p.write_bytes(e.text.encode("utf-8"))  # 不经 write_text：保住文件原来的 \r\n
+    quota.forget(ctx.workspace)
+    c = file_edit.change(path, before, e.text)
+    how = "（原文的空白/缩进和文件里略有不同，已按文件里的缩进替换）" if e.loose else ""
+    return ToolResult(f"已修改 {path}：替换了 {e.count} 处，{file_edit.stat(c)}{how}。", change=c)
+
+
+def _old_text(p) -> str | None:
+    """覆盖前的旧内容（拿来算 diff）；不存在 → None（新建）；二进制/读不了 → 空串（diff 只算新增）。"""
+    if not p.is_file():
+        return None
+    try:
+        return p.read_text(encoding="utf-8") if looks_text(p) else ""
+    except (UnicodeDecodeError, OSError):
+        return ""
+
+
+async def _quota_refusal(ctx: ToolContext, path: str, grow: int) -> ToolResult | None:
+    if grow <= 0:
+        return None  # 变小或不变：磁盘满了也允许（清理正是要这样做）
+    try:
+        await asyncio.to_thread(quota.check, ctx.workspace, grow)
+    except quota.QuotaError as e:
+        return ToolResult(f"没有写入 {path}：{e}", failed="工作区磁盘满了")
+    return None
 
 
 @tool("display_file", "正在把文件交给你",
