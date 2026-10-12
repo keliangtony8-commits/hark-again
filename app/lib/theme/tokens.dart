@@ -273,6 +273,7 @@ abstract final class Layout {
   static const chartHeight = 120.0; // 用量页逐日柱状图的绘图区高度
   static const skeletonHero = 148.0, skeletonStat = 104.0, skeletonChart = 200.0; // 用量页骨架：月卡 / 统计格 / 每日图（与内容同高，换态不跳版）
   static const summaryFold = 280.0; // 摘要卡折起时正文露多高（再长就“展开全文”）
+  static const attachThumb = 64.0, attachChip = 184.0; // 输入框附件托盘：图片方缩略图边长 / 文件名片宽（同高 attachThumb）
   static const imageStrip = 176.0, imageTileWidth = 232.0; // 图片卡多张时横排：每张的高 / 宽；单张按 4:3 铺满
   static const productTileMin = 148.0; // 商品宫格每格最窄多宽（手机两列、平板更多列）
   static const offerImageRatio = 2.0; // 主页建议卡顶部配图的宽高比（宽图，不把卡撑太高）

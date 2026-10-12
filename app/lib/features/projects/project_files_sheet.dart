@@ -25,6 +25,12 @@ IconData projectFileIcon(String mime) => switch (mime.split('/').first) {
   _ => mime.contains('pdf') ? Icons.picture_as_pdf_outlined : Icons.insert_drive_file_outlined,
 };
 
+/// 文件行副标题：所在文件夹（根目录不写）· 大小——项目首屏、文件抽屉、引用选择器共用，标题一律用文件名。
+String projectFileLine(ProjectFile f) {
+  final slash = f.path.lastIndexOf('/');
+  return [if (slash > 0) f.path.substring(0, slash), formatSize(f.size)].join(' · ');
+}
+
 /// 打开项目文件（带 token 的下载地址，交给系统）——唯一入口。
 Future<void> openProjectFile(WidgetRef ref, String projectId, ProjectFile f) {
   final path = f.path.split('/').map(Uri.encodeComponent).join('/');
@@ -94,7 +100,7 @@ class _FilePickerState extends ConsumerState<_FilePicker> {
         padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x3),
         child: Align(
           alignment: Alignment.centerLeft,
-          child: Text('我会读到文件现在的内容；文件之后改了，我看到的也是新的。', style: context.text.bodySmall),
+          child: Text('我读的是文件当前的内容，之后改了也会读到新的。', style: context.text.bodySmall),
         ),
       ),
       Expanded(
@@ -160,14 +166,13 @@ class _PickRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final on = taken || chosen;
-    final sub = [formatSize(file.size), if (file.modified != null) formatAgo(file.modified!)].join(' · ');
     return Semantics(
       checked: on,
       enabled: !taken,
       child: RowTile(
         icon: projectFileIcon(file.mime),
-        title: file.path,
-        subtitle: taken ? '已在这条消息里' : sub,
+        title: file.name,
+        subtitle: taken ? '已在这条消息里' : [projectFileLine(file), if (file.modified != null) formatAgo(file.modified!)].join(' · '),
         dimmed: taken,
         onTap: taken ? null : onTap,
         trailing: SwapSwitcher(
@@ -277,8 +282,8 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
                           delay: Motion.stagger(i),
                           child: RowTile(
                             icon: projectFileIcon(f.mime),
-                            title: f.path,
-                            subtitle: formatSize(f.size),
+                            title: f.name,
+                            subtitle: projectFileLine(f),
                             trailing: const Icon(Icons.open_in_new_rounded, size: 18),
                             onTap: () => openProjectFile(ref, widget.projectId, f),
                           ),

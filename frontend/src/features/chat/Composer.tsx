@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { http } from "../../lib/api";
-import { asFileBlock, extOf, MAX_MESSAGE_FILES } from "../../lib/files";
+import { asFileBlock, attachSub, extOf, MAX_MESSAGE_FILES } from "../../lib/files";
 import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
 import ProjectFilePicker from "../projects/ProjectFilePicker";
 import { useRecorder } from "../../hooks/useRecorder";
@@ -123,7 +123,7 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
             {files.map((f) => (
               <span key={f.key} className={`attach ${f.error ? "err" : ""} ${!f.upload && !f.ref && !f.error ? "loading" : ""}`} title={f.error ?? (f.ref ? `项目文件 ${f.ref.id}` : f.name)}>
                 <span className="attach-ext">{extOf(f.name)}{f.ref && <i className="attach-from" aria-label="项目文件"><IconFolder size={10} /></i>}</span>
-                <span className="attach-name">{f.name}</span>
+                <span className="attach-text"><span className="attach-name">{f.name}</span><span className="attach-sub">{attachSub(f)}</span></span>
                 <button onClick={() => setFiles((s) => s.filter((x) => x.key !== f.key))} aria-label="移除"><IconClose size={14} /></button>
               </span>
             ))}

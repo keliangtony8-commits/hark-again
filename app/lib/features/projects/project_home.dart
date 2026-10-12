@@ -23,6 +23,8 @@ import '../../ui/motion.dart';
 import '../chat/chat_controller.dart';
 import 'project_files_sheet.dart';
 
+export 'project_files_sheet.dart' show projectFileLine;
+
 /// 首屏最多列几条最近对话。
 const projectRecentMax = 3;
 
@@ -50,12 +52,6 @@ List<ProjectFile> projectRecentFiles(List<ProjectFile> list, {int max = projectF
       return t != 0 ? t : a.$1.compareTo(b.$1);
     });
   return [for (final e in indexed.take(max)) e.$2];
-}
-
-/// 文件行副标题：在子文件夹里就带上文件夹，再接大小。
-String projectFileLine(ProjectFile f) {
-  final slash = f.path.lastIndexOf('/');
-  return [if (slash > 0) f.path.substring(0, slash), formatSize(f.size)].join(' · ');
 }
 
 /// 名字下面那一行：规则第一行，没有就档案第一行，都没有给一句引导。

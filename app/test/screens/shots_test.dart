@@ -626,6 +626,18 @@ void main() {
       await tester.pump();
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200))); // 项目对话列表先过一遍缓存（真异步）
       await _shot(tester, '$mode-project');
+      // 引用项目文件（v1.14）：+ → 项目文件 → 选两个 → 托盘里两张名片
+      await tester.tap(find.byTooltip('添加附件'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('项目文件'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2024 数一.pdf').last); // 首屏“文件”一节也有同名行，弹层在上面
+      await tester.tap(find.text('单词表.csv').last);
+      await _shot(tester, '$mode-project-picker');
+      await tester.tap(find.text('引用 2 个文件'));
+      await tester.pumpAndSettle();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await _shot(tester, '$mode-project-refs');
       router.go('/projects/p1/brief');
       await _shot(tester, '$mode-brief');
       await container.read(sessionProvider.notifier).signOut(); // 登录页

@@ -4,6 +4,9 @@
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
+import 'dart:io';
+
+import 'package:assistant/features/chat/attachment_tray.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/composer.dart';
 import 'package:assistant/features/projects/project_files_sheet.dart';
@@ -62,6 +65,19 @@ Future<List<FileBlock>> _pump(WidgetTester tester, {String? projectId}) async {
 }
 
 void main() {
+  test('附件名片第二行：上传中 / 大小 / 项目文件 · 大小；本机图片才画缩略图', () {
+    final up = Attachment(name: '课表.pdf', local: File('/tmp/x.pdf'));
+    expect(up.sub, '上传中…');
+    expect(up.ext, 'PDF');
+    up.file = const FileBlock(source: 'upload', id: 'u1', name: '课表.pdf', mime: 'application/pdf', size: 2048);
+    expect(up.sub, '2 KB');
+    final ref = Attachment.ref(const FileBlock(source: 'project', id: 'a/b.png', name: 'b.png', mime: 'image/png', size: 300, projectId: 'p1'));
+    expect(ref.sub, '项目文件 · 300 B');
+    expect(ref.asThumb, isFalse); // 项目里的图片没有本地文件
+    expect(Attachment(name: '照片.jpg', local: File('/tmp/y.jpg')).asThumb, isTrue);
+    expect(Attachment(name: 'archive.tar.gzip', local: File('/tmp/z')).ext, 'GZIP');
+  });
+
   test('projectFileBlock：source=project，id 是相对路径', () {
     const f = ProjectFile(path: 'notes/大纲.md', name: '大纲.md', size: 3, mime: 'text/markdown');
     final b = projectFileBlock('p1', f);
@@ -106,7 +122,8 @@ void main() {
     await _settle(tester);
     expect(find.text('引用项目文件'), findsOneWidget);
     expect(find.text('选几个文件'), findsOneWidget);
-    await tester.tap(find.text('notes/大纲.md'));
+    await tester.tap(find.text('大纲.md'));
+    expect(find.textContaining('notes · 2 KB'), findsOneWidget); // 标题是文件名，文件夹进副标题（v1.14）
     await tester.tap(find.text('照片.png'));
     await _settle(tester);
     expect(find.text('已选 2'), findsOneWidget);
@@ -117,7 +134,8 @@ void main() {
     await tester.tap(find.text('引用 2 个文件'));
     await _settle(tester);
     expect(find.text('引用项目文件'), findsNothing);
-    expect(find.byIcon(Icons.folder_rounded), findsNWidgets(2)); // 托盘缩略图上的文件夹记号
+    expect(find.byIcon(Icons.folder_rounded), findsNWidgets(2)); // 托盘名片角标上的文件夹记号
+    expect(find.textContaining('项目文件 · '), findsNWidgets(2)); // 名片第二行（v1.14）
 
     // 再打开：已在托盘里的两项不可选
     await tester.tap(find.byTooltip('添加附件'));
@@ -125,7 +143,7 @@ void main() {
     await tester.tap(find.text('项目文件'));
     await _settle(tester);
     expect(find.text('已在这条消息里'), findsNWidgets(2));
-    await tester.tap(find.text('照片.png'));
+    await tester.tap(find.text('照片.png').last); // 托盘名片里也有这个名字；弹层在上面
     await _settle(tester);
     expect(find.text('选几个文件'), findsOneWidget);
     await tester.tapAt(const Offset(200, 20)); // 点遮罩关掉

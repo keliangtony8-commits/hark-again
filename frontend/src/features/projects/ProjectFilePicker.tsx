@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { http } from "../../lib/api";
-import { extOf, formatSize, MAX_MESSAGE_FILES, projectFileBlock } from "../../lib/files";
+import { extOf, MAX_MESSAGE_FILES, projectFileBlock } from "../../lib/files";
 import { formatWhen } from "../../lib/format";
 import type { FileBlock, ProjectFile } from "../../lib/types";
+import { projectFileLine } from "./projectHome";
 import { IconCheck, IconFile } from "../../ui/icons";
 import { Hint, Sheet, Skeleton, stagger } from "../../ui/kit";
 
@@ -37,7 +38,7 @@ export default function ProjectFilePicker({ projectId, taken, room, onPick, onCl
       </button>
     }>
       <p className={`pick-note ${full ? "is-warn" : ""}`} aria-live="polite">
-        {full ? `一条消息最多带 ${MAX_MESSAGE_FILES} 个文件` : "我会读到文件现在的内容；文件之后改了，我看到的也是新的。"}
+        {full ? `一条消息最多带 ${MAX_MESSAGE_FILES} 个文件` : "我读的是文件当前的内容，之后改了也会读到新的。"}
       </p>
       {err ? <Hint icon={<IconFile size={26} />} title="加载失败" text={err} />
         : files === null ? <Skeleton />
@@ -52,8 +53,8 @@ export default function ProjectFilePicker({ projectId, taken, room, onPick, onCl
                   role="checkbox" aria-checked={on} aria-disabled={isTaken} onClick={() => toggle(f.path)}>
                   <span className="row-icon file-ext">{extOf(f.name)}</span>
                   <span className="row-body">
-                    <span className="row-title">{f.path}</span>
-                    <span className="row-sub">{isTaken ? "已在这条消息里" : [formatSize(f.size), f.modified ? formatWhen(new Date(f.modified * 1000).toISOString()) : ""].filter(Boolean).join(" · ")}</span>
+                    <span className="row-title">{f.name}</span>
+                    <span className="row-sub">{isTaken ? "已在这条消息里" : [projectFileLine(f), f.modified ? formatWhen(new Date(f.modified * 1000).toISOString()) : ""].filter(Boolean).join(" · ")}</span>
                   </span>
                   <span className={`pick-check ${on ? "on" : ""}`} aria-hidden>{on && <IconCheck size={14} />}</span>
                 </button>

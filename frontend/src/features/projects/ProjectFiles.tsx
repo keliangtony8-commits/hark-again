@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fileUrl, http } from "../../lib/api";
-import { extOf, formatSize } from "../../lib/files";
+import { extOf } from "../../lib/files";
+import { projectFileLine } from "./projectHome";
 import type { ProjectFile } from "../../lib/types";
 import { IconDownload, IconFile, IconTrash, IconUpload } from "../../ui/icons";
 import { Hint, Sheet, Skeleton } from "../../ui/kit";
@@ -35,7 +36,7 @@ export default function ProjectFiles({ projectId, onClose }: { projectId: string
           {files.map((f) => (
             <div key={f.path} className="row">
               <span className="row-icon file-ext">{extOf(f.name)}</span>
-              <div className="row-body"><div className="row-title">{f.path}</div><div className="row-sub">{formatSize(f.size)}</div></div>
+              <div className="row-body"><div className="row-title">{f.name}</div><div className="row-sub">{projectFileLine(f)}</div></div>
               <a className="icon-btn" href={fileUrl(`${base}/${enc(f.path)}`)} download={f.name} aria-label="下载"><IconDownload /></a>
               <button className="icon-btn" onClick={() => remove(f.path)} aria-label="删除"><IconTrash /></button>
             </div>
