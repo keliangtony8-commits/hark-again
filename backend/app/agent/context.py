@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -65,9 +65,12 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     return p
 
 
-def _render(blocks: list[dict]) -> str:
+def _render(blocks: list[dict], current: bool = False) -> str:
     """把一条消息转成给模型的文本：文本附件内联内容，图片给（缓存的）描述，其他文件只给名字；
-    `$技能` 点名的技能给当前正文（skill_mentions.render）。"""
+    `$技能` 点名的技能给当前正文（skill_mentions.render）；`/init` 当前这一问换成提示词、更早的只留一句（init_command）。"""
+    if (note := init_command.of(blocks)) is not None:
+        said = init_command.render(note) if current else init_command.record(note)
+        blocks = [{"type": "text", "text": said}, *blocks[1:]]
     text = blocks_to_text([b for b in blocks if b.get("type") not in ("file", "skill")])
     for b in blocks:
         if b.get("type") == "skill":
@@ -162,7 +165,8 @@ async def _snapshot(db: AsyncSession, conversation_id: str) -> _Snapshot:
     shells = [user_shell.reply_block(m.blocks) if m.role == "assistant" else None for m in rows]
     notes = [turn_journal.history_note(m.status, m.steps) if m.role == "assistant" and not shells[i] else ""
              for i, m in enumerate(rows)]  # 被打断/停下的回复附说明
-    plain = [_render(m.blocks) + notes[i] for i, m in enumerate(rows)]
+    last_user = next((i for i in range(len(rows) - 1, -1, -1) if rows[i].role == "user"), len(rows) - 1)
+    plain = [_render(m.blocks, i == last_user) + notes[i] for i, m in enumerate(rows)]
     roles = [m.role for m in rows]
     skip = [False] * len(rows)
     for i, b in enumerate(shells):  # 用户自己跑的命令（!命令）：命令 + 结果合成一条“用户那边发生的事”（Codex <user_shell_command>）
@@ -174,7 +178,6 @@ async def _snapshot(db: AsyncSession, conversation_id: str) -> _Snapshot:
     digests = [tool_trace.digest(m.steps) if m.role == "assistant" else "" for m in rows]
     texts = [p + d for p, d in zip(plain, digests)]
     traces = _traces(rows)
-    last_user = next((i for i in range(len(rows) - 1, -1, -1) if rows[i].role == "user"), len(rows) - 1)
     ids = [m.id for m in rows]  # 先取出来：失败时 rollback 会让 ORM 对象过期
     summary = conv.summary if conv else ""
     upto = conv.summary_upto if conv else None
@@ -241,7 +244,7 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
     if any(vision.is_image(b) for b in need):
         await vision.describe_missing(need)
         for i in range(first, n):
-            plain[i] = _render(blocks[i]) + notes[i]
+            plain[i] = _render(blocks[i], i == last_user) + notes[i]
             texts[i] = plain[i] + snap.digests[i]
     out: list[dict] = []
     for i in range(first, n):

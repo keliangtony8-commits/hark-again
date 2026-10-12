@@ -5,7 +5,7 @@ import { asFileBlock, attachSub, extOf, MAX_MESSAGE_FILES } from "../../lib/file
 import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
 import ProjectFilePicker from "../projects/ProjectFilePicker";
 import { useRecorder } from "../../hooks/useRecorder";
-import { IconCheck, IconClip, IconClose, IconEdit, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconStop, IconTerminal } from "../../ui/icons";
+import { IconCheck, IconClip, IconClose, IconDoc, IconEdit, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconStop, IconTerminal } from "../../ui/icons";
 import { shellCommandOf } from "../../lib/shell";
 import { Menu } from "../../ui/kit";
 import { applyMention, mentionAt, rankMentions, rankSkills, type MentionQuery, type Sigil } from "../../lib/mentions";
@@ -13,6 +13,7 @@ import type { ProjectFile, Skill } from "../../lib/types";
 import { projectFileLine } from "../projects/projectHome";
 import MentionList, { type MentionItem } from "./MentionList";
 import { STEER_HINT, steerable } from "../../lib/steer";
+import { applySlash, initBarText, initNoteOf, rankSlash, slashQueryAt, slashToken, SLASH_COMMANDS } from "../../lib/slash";
 import "./chat.css";
 
 /** 托盘里的一项：本机文件（上传中 / upload / error）或项目文件引用（ref，现成的文件块）。 */
@@ -27,6 +28,7 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  *  编辑态（editing 不为空）：顶部“编辑消息”条 + 原文字填进来；原附件随消息保留，这里的附件和草稿先收起，
  *  退出编辑（发出、取消、Esc）后原样回来。输入框为空时按 ↑ = 编辑最后一条（onEditLast）。
  *  打 @ → 顶部列出工作区文件（lib/mentions.ts）：↑↓ 选、Enter/Tab 补成 `@路径 `、Esc 收起；服务器发出时解析成引用。
+ *  开头打 / → 列出斜杠命令（lib/slash.ts；目前 /init 生成 AGENTS.md），补成 `/init `。
  *  打 $ → 列出启用的技能（没有工作区也行），补成 `$id `；服务器 app/skill_mentions.py 把技能正文直接给模型。 */
 export type EditDraft = { id: string; text: string; hasFiles: boolean };
 type Props = {
@@ -100,7 +102,11 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
   const shell = !editing && files.length === 0 && shellCommandOf(text) !== null;
   const sigils: Sigil[] = workspace ? ["$", "@"] : ["$"];
   const found: MentionQuery | null = shellCommandOf(text) === null ? mentionAt(text, caret, sigils) : null;
-  const mention = found && found.start !== closedAt ? found : null;
+  const slashQ = editing ? null : slashQueryAt(text, caret);
+  const slash = slashQ !== null && closedAt !== 0 && rankSlash(slashQ).length ? rankSlash(slashQ) : null;
+  /** 整条是 `/init`：补充要求（可能是 ""）；不是 → null。 */
+  const init = editing ? null : initNoteOf(text);
+  const mention = !slash && found && found.start !== closedAt ? found : null;
   const wantSkills = mention?.sigil === "$" && skills === null;
   useEffect(() => {   // 第一次打 $ 时才读技能
     if (!wantSkills) return;
@@ -115,14 +121,16 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
       .catch(() => setWsFiles({ ws: workspace, files: [] }));
   }, [mention, workspace, wsFiles?.ws]);
   const loaded = wsFiles && wsFiles.ws === workspace ? wsFiles.files : null;
-  const items: MentionItem[] | null = !mention ? null
+  const items: MentionItem[] | null = slash
+    ? slash.map((c) => ({ key: c.name, icon: <IconDoc size={14} />, title: slashToken(c), sub: c.title }))
+    : !mention ? null
     : mention.sigil === "$"
       ? skills && rankSkills(skills, mention.query).map((s) => ({ key: s.id, icon: <IconSpark size={14} />, title: s.name, sub: s.description }))
       : loaded && rankMentions(loaded, mention.query).map((f) => ({ key: f.path, icon: <IconFile size={14} />, title: f.name, sub: projectFileLine(f) }));
   const choice = Math.min(active, Math.max((items?.length ?? 1) - 1, 0));
   const pickMention = (key: string) => {
-    if (!mention) return;
-    const [next, at] = applyMention(text, mention, key);
+    if (!mention && !slash) return;
+    const [next, at] = slash ? applySlash(SLASH_COMMANDS.find((c) => c.name === key)!) : applyMention(text, mention!, key);
     setText(next);
     setCaret(at);
     setActive(0);
@@ -167,11 +175,18 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
     <div className="composer-wrap">
       {leading}
       <div className={`composer glass ${editing ? "editing" : ""}`}>
+        {slash && <MentionList items={items} active={choice} onPick={pickMention} onHover={setActive} label="命令" empty="" loading="" />}
         {mention && (mention.sigil === "$"
           ? <MentionList items={items} active={choice} onPick={pickMention} onHover={setActive} label="用技能"
               empty="没有对得上的技能 · 可以在“我的 › 技能”里新建" loading="正在读技能…" />
           : <MentionList items={items} active={choice} onPick={pickMention} onHover={setActive} label="引用文件"
               empty="没有对得上的文件 · 发出去我也会按名字再找一次" loading="正在找文件…" />)}
+        {!mention && !slash && !shell && init !== null && (
+          <div className="edit-bar shell-bar">
+            <IconDoc size={14} />
+            <span>{initBarText(init)}</span>
+          </div>
+        )}
         {!mention && editing && (
           <div className="edit-bar">
             <IconEdit size={14} />
@@ -212,16 +227,16 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
               : <button className="icon-btn" onClick={() => picker.current?.click()} disabled={!!editing} aria-label="添加附件"><IconClip /></button>}
             <input ref={picker} type="file" multiple hidden onChange={(e) => pick(e.target.files)} />
             <textarea ref={ref} rows={1} value={text} placeholder={voiceBusy ? "正在识别…" : streaming && canSteer && !editing ? STEER_HINT : placeholder}
-              onChange={(e) => { setText(e.target.value); track(e.target); setActive(0); if (closedAt !== null && !"@$".includes(e.target.value[closedAt] ?? "x")) setClosedAt(null); }}
+              onChange={(e) => { setText(e.target.value); track(e.target); setActive(0); if (closedAt !== null && !"@$/".includes(e.target.value[closedAt] ?? "x")) setClosedAt(null); }}
               onSelect={(e) => track(e.currentTarget)}
               onPaste={(e) => !editing && e.clipboardData.files.length && pick(e.clipboardData.files)}
               onKeyDown={(e) => {
-                if (mention && !e.nativeEvent.isComposing) {
+                if ((mention || slash) && !e.nativeEvent.isComposing) {
                   const n = items?.length ?? 0;
                   if (e.key === "ArrowDown" && n) { e.preventDefault(); setActive((choice + 1) % n); return; }
                   if (e.key === "ArrowUp" && n) { e.preventDefault(); setActive((choice - 1 + n) % n); return; }
                   if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && n) { e.preventDefault(); pickMention(items![choice].key); return; }
-                  if (e.key === "Escape") { e.preventDefault(); setClosedAt(mention.start); return; }
+                  if (e.key === "Escape") { e.preventDefault(); setClosedAt(slash ? 0 : mention!.start); return; }
                 }
                 if (e.key === "Escape" && streaming) { e.preventDefault(); onStop?.(); }
                 else if (e.key === "Escape" && editing) { e.preventDefault(); onCancelEdit?.(); }

@@ -10,6 +10,7 @@
 // workspace：这段对话的工作区（core/workspace.dart；项目 = 项目文件，主聊天 = 我的文件）。“添加附件”多一个从它选
 // （features/projects pickProjectFiles，不上传，只带引用）；null = 没有这个来源（如首页的快捷输入框）。
 // 打 $ → 顶部列出启用的技能，点一下补成 `$id `（服务器 app/skill_mentions.py 把正文给模型）。
+// 开头打 / → 顶部列出斜杠命令（models/slash.dart；目前 /init 生成 AGENTS.md），点一下补成 `/init `。
 // 打 @ → 顶部列出工作区文件（features/chat/mentions.dart），点一下补成 `@路径 `；服务器发出时解析成引用（app/file_mentions.py）。
 // 上传、转写走 core/media.dart；这里只管交互状态。
 import 'dart:async';
@@ -23,6 +24,7 @@ import '../../core/media.dart';
 import '../../models/block.dart';
 import '../../models/message.dart';
 import '../../models/shell.dart';
+import '../../models/slash.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/glass.dart';
@@ -108,6 +110,7 @@ class _ComposerState extends ConsumerState<Composer> {
   Timer? _ticker;
   int _seconds = 0;
   MentionQuery? _mention; // 光标前正在打的 @xxx（没有工作区 / 在打命令时不算）
+  String? _slash; // 开头正在打的 /xxx（编辑消息时不弹）
 
   Media get _media => ref.read(mediaProvider);
 
@@ -123,7 +126,19 @@ class _ComposerState extends ConsumerState<Composer> {
     final m = !sel.isValid || !sel.isCollapsed || shellCommandOf(_c.text) != null
         ? null
         : mentionAt(_c.text, sel.baseOffset, sigils: {skillSigil, if (widget.workspace != null) fileSigil});
-    if (m != _mention && mounted) setState(() => _mention = m);
+    final s = !sel.isValid || !sel.isCollapsed || _editing ? null : slashQueryAt(_c.text, sel.baseOffset);
+    if ((m != _mention || s != _slash) && mounted) {
+      setState(() {
+        _mention = m;
+        _slash = s;
+      });
+    }
+  }
+
+  void _pickSlash(String name) {
+    final (text, caret) = applySlash(slashCommands.firstWhere((c) => c.name == name));
+    _c.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: caret));
+    _focus.requestFocus();
   }
 
   void _pickMention(String key) {
@@ -167,10 +182,13 @@ class _ComposerState extends ConsumerState<Composer> {
 
   /// 生成中打了纯文字：发出去是补充给这一轮（不带附件 / 不是命令 / 不在编辑），否则仍只能停止。
   bool get _steering =>
-      widget.streaming && widget.canSteer && !_editing && _attachments.isEmpty && !_shell && _c.text.trim().isNotEmpty;
+      widget.streaming && widget.canSteer && !_editing && _attachments.isEmpty && !_shell && _init == null && _c.text.trim().isNotEmpty;
 
   /// 整条是 `!命令`（且没带附件）：发出去不问助手，直接在这段对话的电脑上跑（后端 user_shell）。
   bool get _shell => !_editing && _attachments.isEmpty && shellCommandOf(_c.text) != null;
+
+  /// 整条是 `/init`：补充要求（可能是 ''）；不是 → null。生成中发出去排成下一轮（不插进正在进行的回答）。
+  String? get _init => _editing ? null : initNoteOf(_c.text);
 
   void _send() {
     if (!_canSend) return;
@@ -317,12 +335,16 @@ class _ComposerState extends ConsumerState<Composer> {
             duration: context.motion(Motion.base),
             curve: Motion.ease,
             alignment: Alignment.topCenter,
-            child: _mention != null
+            child: _slash != null && rankSlash(_slash!).isNotEmpty
+                ? _slashList()
+                : _mention != null
                 ? _mentionList()
                 : _editing
                 ? _EditBar(onCancel: widget.onCancelEdit)
                 : _shell
-                ? const _ShellBar(key: ValueKey('shell'))
+                ? const _HintBar(key: ValueKey('shell'), icon: Icons.terminal_rounded, text: '直接在电脑上运行 · 不经过助手，结果它下次能看到')
+                : _init != null
+                ? _HintBar(key: const ValueKey('init'), icon: initCommand.icon, text: initBarText(_init!))
                 : const SizedBox(width: double.infinity),
           ),
           AttachmentTray(items: _editing ? const [] : _attachments, onRemove: (a) => setState(() => _attachments.remove(a))),
@@ -333,6 +355,16 @@ class _ComposerState extends ConsumerState<Composer> {
             child: _voice == _Voice.idle ? _inputRow(p) : _voiceRow(p),
           ),
         ]),
+      );
+
+  Widget _slashList() => MentionList(
+        key: const ValueKey('slash'),
+        items: [
+          for (final c in rankSlash(_slash!))
+            MentionItem(key: c.name, icon: c.icon, title: c.token, subtitle: c.title, semantic: '命令 ${c.token}：${c.title}'),
+        ],
+        empty: '',
+        onPick: _pickSlash,
       );
 
   Widget _mentionList() {
@@ -462,8 +494,11 @@ class _EditBar extends StatelessWidget {
 }
 
 /// `!命令` 的顶条：说明这条不问助手、直接在电脑上跑（和编辑条同一个位置、同一种出场）。
-class _ShellBar extends StatelessWidget {
-  const _ShellBar({super.key});
+/// 输入胶囊顶部的一行说明（!命令、/init 共用）。
+class _HintBar extends StatelessWidget {
+  const _HintBar({super.key, required this.icon, required this.text});
+  final IconData icon;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -472,10 +507,10 @@ class _ShellBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x2, Sp.x4, 0),
         child: Row(children: [
-          Icon(Icons.terminal_rounded, size: 16, color: p.text2),
+          Icon(icon, size: 16, color: p.text2),
           const SizedBox(width: Sp.x2),
           Expanded(
-            child: Text('直接在电脑上运行 · 不经过助手，结果它下次能看到',
+            child: Text(text,
                 style: context.text.bodySmall?.copyWith(color: p.text2), maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
         ]),

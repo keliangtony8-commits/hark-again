@@ -8,7 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 import logging
 
-from .. import conversation_title, file_mentions, live_turns, skill_mentions, steering, user_shell, workspaces
+from .. import conversation_title, file_mentions, init_command, live_turns, skill_mentions, steering, user_shell, workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -108,7 +108,8 @@ async def _steer(event: dict) -> bool:
     if not isinstance(cid, str) or not steering.active(cid):
         return False
     if steering.reason(text, files=bool(event.get("attachments") or event.get("project_files")),
-                       skills=bool(_skills(text)), command=user_shell.parse(text) is not None):
+                       skills=bool(_skills(text)),
+                       command=user_shell.parse(text) is not None or init_command.parse(text) is not None):
         return False
     async with SessionLocal() as db:
         conv = await db.get(Conversation, cid)
@@ -172,6 +173,9 @@ async def _answer(db, conv: Conversation, user_msg: Message, emit, stop: asyncio
     if (command := user_shell.command_of(user_msg.blocks)) is not None:
         await user_shell.run(db, conv.id, conv.project_id, command, emit, stop)
         return
+    if init_command.of(user_msg.blocks) is not None and init_command.existing(workspaces.of(conv.project_id)):
+        await _say(db, conv.id, init_command.DECLINE, emit)  # Gemini：已有就不调模型，直接回一句
+        return
     cid = conv.id
     inbox = steering.open_inbox(cid)  # 这一轮跑模型期间，用户补充的话插得进来（steering.py）
     try:
@@ -182,6 +186,14 @@ async def _answer(db, conv: Conversation, user_msg: Message, emit, stop: asyncio
         live_turns.follow(cid, _handle_pending, {"conversation_id": cid, "message_id": left[-1].message_id})
     if reply is not None and reply.status != "stopped":
         conversation_title.schedule(cid, emit)  # 后台起标题，不挡排队的下一轮
+
+
+async def _say(db, cid: str, text: str, emit) -> None:
+    """不调模型的一句回复（/init 已有 AGENTS.md 时）：落库一条助手消息，推 message.done。"""
+    reply = Message(conversation_id=cid, role="assistant", blocks=text_to_blocks(text), status="done")
+    db.add(reply)
+    await db.commit()
+    await emit({"type": "message.done", "message": reply.to_wire()})
 
 
 MAX_FILES = 10  # 一条消息最多带几个文件（上传 + 项目文件合计）
