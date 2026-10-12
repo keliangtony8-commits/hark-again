@@ -96,6 +96,16 @@ async def ports(project_id: str) -> dict:
         return r.json()
 
 
+async def groups(project_id: str, pgids: list[int]) -> dict:
+    """这些进程组现在占多少 {state: running|off, groups:[{pgid, cpu, cpu_seconds, memory, processes}]}（v1.90，只看不开机）。
+    沙盒那边要采样 0.5 秒。连不上抛 httpx.HTTPError。"""
+    async with httpx.AsyncClient(timeout=10) as c:
+        r = await c.get(f"{settings.sandbox_url}/sandboxes/{project_id}/groups", params=[("pgid", g) for g in pgids],
+                        headers={"Authorization": f"Bearer {settings.sandbox_token}"})
+        r.raise_for_status()
+        return r.json()
+
+
 _preview = httpx.AsyncClient(timeout=httpx.Timeout(60, connect=5))
 
 

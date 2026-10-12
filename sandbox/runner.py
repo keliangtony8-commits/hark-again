@@ -37,7 +37,7 @@ import time
 import docker
 import httpx
 from docker.errors import NotFound
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel
@@ -998,6 +998,97 @@ async def ports(pid: str):
             return {"state": "off", "ports": []}
         out = (c.exec_run(["python3", "-c", PORTS_PY]).output or b"").decode("utf-8", "replace")
         return {"state": "running", "ports": parse_ports(out)}
+    return await asyncio.to_thread(go)
+
+
+# v1.90 每个后台任务占多少 CPU / 内存：任务 = run.sh 记下的进程组（timeout 是组长，见 backend/app/jobs.py script）。
+# 容器里跑一小段 Python：读 /proc/<pid>/stat 两次（相隔 GROUP_SAMPLE_S），按进程组累加
+#   CPU 节拍 utime+stime+cutime+cstime（含已被父进程收走的子进程，所以中途有子进程退出也不会算多/算少）；
+#   内存 = smaps_rollup 的 Pss（共享页按份摊，fork 出来的 worker 不会重复算），读不到退回 RSS。
+# 自己 setsid 脱离进程组的（守护进程化）算不进来——那就不归这个任务管了。
+GROUP_SAMPLE_S = 0.5
+GROUPS_MAX = 20
+GROUPS_PY = r"""
+import json, os, sys, time
+want = {int(a) for a in sys.argv[2:]}
+gap = float(sys.argv[1])
+tck = os.sysconf("SC_CLK_TCK")
+page = os.sysconf("SC_PAGE_SIZE")
+def snap():
+    out = {}
+    for p in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            f = open(f"/proc/{p}/stat").read().rsplit(")", 1)[1].split()
+            g = int(f[2])
+            if g in want:
+                out[int(p)] = (g, int(f[11]) + int(f[12]) + int(f[13]) + int(f[14]), int(f[21]) * page)
+        except (OSError, ValueError, IndexError):
+            pass
+    return out, time.monotonic()
+def pss(p, rss):
+    try:
+        for line in open(f"/proc/{p}/smaps_rollup"):
+            if line.startswith("Pss:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return rss
+a, t0 = snap()
+time.sleep(gap)
+b, t1 = snap()
+groups = {}
+for p, (g, ticks, rss) in b.items():
+    e = groups.setdefault(g, {"pgid": g, "delta": 0, "ticks": 0, "memory": 0, "processes": 0})
+    e["delta"] += max(0, ticks - a[p][1]) if p in a and a[p][0] == g else ticks
+    e["ticks"] += ticks
+    e["memory"] += pss(p, rss)
+    e["processes"] += 1
+print(json.dumps({"tck": tck, "seconds": t1 - t0, "groups": list(groups.values())}))
+"""
+
+
+def group_usage(text: str, cpus: float = CPUS) -> list[dict]:
+    """GROUPS_PY 的输出 → [{pgid, cpu（占本沙盒 CPU 配额的百分比 0–100，和电脑卡的 CPU 一个口径）, cpu_seconds, memory, processes}]。
+    输出不对 → 空列表（看不到用量不影响任务本身）。"""
+    try:
+        raw = json.loads(text.strip().splitlines()[-1])
+        tck, secs = float(raw["tck"]), float(raw["seconds"])
+        rows = raw["groups"]
+    except (ValueError, IndexError, KeyError, TypeError):
+        return []
+    if tck <= 0 or secs <= 0 or not isinstance(rows, list):
+        return []
+    out = []
+    for r in rows:
+        try:
+            pg, delta, ticks, mem, n = (int(r[k]) for k in ("pgid", "delta", "ticks", "memory", "processes"))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if pg <= 0 or n <= 0 or min(delta, ticks, mem) < 0:
+            continue
+        cpu = min(100.0, delta / tck / secs * 100 / max(cpus, 0.01))
+        out.append({"pgid": pg, "cpu": round(cpu, 1), "cpu_seconds": round(ticks / tck, 1), "memory": mem, "processes": n})
+    return out[:GROUPS_MAX]
+
+
+@app.get("/sandboxes/{pid}/groups", dependencies=[Depends(auth)])
+async def groups(pid: str, pgid: list[int] = Query(default=[])):
+    """这些进程组现在占多少（后台任务卡、“这台电脑”里的任务行用）。没在跑 → state off、空列表（不为看用量开机）。"""
+    _check_pid(pid)
+    want = sorted({g for g in pgid if 0 < g < 2 ** 31})[:GROUPS_MAX]
+
+    def go() -> dict:
+        c = _existing(pid)
+        if c is None:
+            return {"state": "off", "groups": []}
+        if not want:
+            return {"state": "running", "groups": []}
+        try:
+            cmd = ["python3", "-c", GROUPS_PY, str(GROUP_SAMPLE_S), *map(str, want)]
+            out = (c.exec_run(cmd).output or b"").decode("utf-8", "replace")
+        except Exception:  # noqa: BLE001
+            return {"state": "running", "groups": []}
+        return {"state": "running", "groups": group_usage(out)}
     return await asyncio.to_thread(go)
 
 

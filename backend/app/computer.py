@@ -25,7 +25,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import jobs, preview, quota, sandbox_client, services, workspaces
+from . import job_usage, jobs, preview, quota, sandbox_client, services, workspaces
 from .models import Job
 from .storage import project_dir
 from .wire_time import iso
@@ -157,17 +157,19 @@ async def status(db: AsyncSession, ws: str) -> dict:
     used = sum(parts[k] for k in ("files", "installed", "logs", "spill", "cache"))
     q = quota.remember(ws, used, parts["partial"])  # 刚数过的就是最新的：顺手喂给配额缓存
     ports: list[dict] = []
+    usage: dict[str, dict] = {}
     if raw is not None and raw.get("state") == "running":
         try:
             ports = (await preview.listening(ws))["ports"]
         except preview.PreviewError:
             pass
+        usage = await job_usage.for_jobs(running)  # v1.90 每个任务占多少（一次沙盒请求问齐）
     return {**q.wire(), "ports": ports, "workspace": ws, "name": name, "sandbox": sandbox_wire(raw), "disk_used": used,
             "disk_partial": parts.pop("partial"), "storage": parts,
             "tools": await asyncio.to_thread(installed_tools, root),
             # v1.82 常驻服务单独一节（services.py：健康、端口、手动重启），running_jobs 只剩普通后台任务
-            "running_jobs": [jobs.wire(j, chars=600) for j in running if not j.keep_alive],
-            "services": await services.listing(db, ws, running, ports)}
+            "running_jobs": [{**jobs.wire(j, chars=600), "usage": usage.get(j.id)} for j in running if not j.keep_alive],
+            "services": await services.listing(db, ws, running, ports, usage)}
 
 
 def _remove(p: Path) -> int:
@@ -218,6 +220,7 @@ async def restart(db: AsyncSession, ws: str) -> dict:
         await sandbox_client.restart(ws)
     except httpx.HTTPError as e:
         raise ComputerError("沙盒服务没响应，没能重启") from e
+    job_usage.forget(ws)
     for job in await running_jobs(db, ws):  # 容器删了，进程肯定没了
         if job.keep_alive:
             await jobs.after_restart(db, job)

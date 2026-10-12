@@ -4,7 +4,7 @@ import time
 
 from sqlalchemy import select
 
-from ... import jobs, services
+from ... import job_usage, jobs, services
 from ...models import Job
 from ..tools import ToolContext, ToolResult, tool
 
@@ -33,7 +33,8 @@ async def job_status(ctx: ToolContext, job_id: str = "", chars: int = 3000, wait
                                      .order_by(Job.created_at.desc()).limit(10))).all()
         for job in rows:
             await jobs.refresh(ctx.db, job)
-        return ToolResult("\n".join(jobs.describe(j) for j in rows) or "这个工作区还没有后台任务。")
+        usage = await job_usage.for_jobs(list(rows))  # v1.90 在跑的顺带说占多少，好判断哪个在吃资源
+        return ToolResult("\n".join(_line(j, usage.get(j.id)) for j in rows) or "这个工作区还没有后台任务。")
     job = await _own(ctx, job_id)
     if job is None:
         return ToolResult("没有这个后台任务（只能看本工作区的）。")
@@ -60,7 +61,13 @@ async def job_status(ctx: ToolContext, job_id: str = "", chars: int = 3000, wait
     if dropped:  # render.ts：被丢掉的部分要说清完整输出在哪
         more = (f"\n（前面还有约 {dropped} 字节没显示。完整日志：{jobs.log_path(job)}，"
                 "用 read_file 按 offset 分段读）")
-    return ToolResult(f"{jobs.describe(job)}\n命令：{job.command[:300]}\n{label}：\n{body}{more}")
+    use = await job_usage.of(job) if job.state == "running" else None
+    return ToolResult(f"{_line(job, use)}\n命令：{job.command[:300]}\n{label}：\n{body}{more}")
+
+
+def _line(job: Job, use: dict | None) -> str:
+    u = job_usage.text(use)
+    return f"{jobs.describe(job)}；{u}" if u else jobs.describe(job)
 
 
 @tool("cancel_job", "正在取消后台任务", "取消本工作区里一个还在运行的后台任务（整组进程杀掉）。",

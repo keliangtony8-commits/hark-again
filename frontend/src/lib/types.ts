@@ -92,7 +92,10 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
   started_at?: string | null; finished_at?: string | null; stop_reason?: string | null;
   /** v1.80 常驻：restart_at 不为空 = 进程刚退出、等这个时刻重启（state 仍是 running）。老服务器没有这三个字段。 */
-  keep_alive?: boolean; restarts?: number; restart_at?: string | null };
+  keep_alive?: boolean; restarts?: number; restart_at?: string | null;
+  /** v1.90 现在占多少（后端 app/job_usage.py）：进程确实在跑、问得到沙盒才有；null/缺 = 不知道（不是 0）。cpu = 占配额 %。 */
+  usage?: JobUsage | null };
+export type JobUsage = { cpu: number; cpu_seconds: number; memory: number; processes: number };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
   | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的

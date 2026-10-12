@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "../lib/api";
-import { JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobAwaitingReply, jobDuration, jobFootLabel, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
+import { JOB_CPU_HOT, JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobCpuLabel, jobMemoryLabel, jobUsage, jobAwaitingReply, jobDuration, jobFootLabel, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
 import type { JobBlock as T, JobInfo } from "../lib/types";
 import { Sheet } from "../ui/kit";
 import { IconAlert, IconCheck, IconCopy, IconStop } from "../ui/icons";
@@ -57,6 +57,7 @@ export default function JobBlock({ block }: { block: T }) {
   const elapsed = running ? job.elapsed + (Date.now() - polledAt) / 1000 : job.elapsed;
   const tail = jobTailLines(job.tail);
   const label = jobFootLabel(job);
+  const usage = running ? jobUsage(job.usage) : null;
   return (
     <div className={`card blk-job tone-${tone}`} role="group" aria-label={jobSemantics(job, elapsed)}>
       <div className="blk-job-head">
@@ -69,6 +70,13 @@ export default function JobBlock({ block }: { block: T }) {
       <div className="blk-job-cmd">$ {job.command.split("\n")[0]}</div>
       <pre className={`blk-job-log ${tail ? "" : "is-empty"}`}>{tail || (running ? "等待输出…" : "（没有输出）")}</pre>
       {stopped && <p className="blk-job-reason" aria-hidden>{job.stop_reason}</p>}
+      {usage && (  /* v1.90 在跑时它占多少：问不到就不出现（不画成 0）；读屏句子已在卡片 aria-label 里 */
+        <div className={`blk-job-usage ${usage.cpu >= JOB_CPU_HOT ? "is-hot" : ""}`} aria-hidden>
+          <span className="blk-job-cpu">CPU {jobCpuLabel(usage.cpu)}</span>
+          <div className="meter blk-job-meter"><span style={{ transform: `scaleX(${Math.min(1, usage.cpu / 100)})` }} /></div>
+          <span className="blk-job-mem">{jobMemoryLabel(usage)}</span>
+        </div>
+      )}
       <div className="blk-job-foot">
         <span key={label} className="blk-job-state">{label}</span>
         {running

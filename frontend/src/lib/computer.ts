@@ -2,7 +2,7 @@
 // v1.27 CPU、内存打满警示、程序行、磁盘拆分、清理、装过的工具；v1.82 常驻服务健康。
 import { formatSize } from "./files";
 import type { ListeningPort } from "./preview";
-import { jobDuration } from "./jobs";
+import { jobDuration, jobUsage, jobUsageLabel } from "./jobs";
 import type { JobInfo } from "./types";
 
 export type ComputerState = "running" | "stopped" | "none" | "unreachable";
@@ -118,7 +118,11 @@ export function serviceLine(v: ServiceInfo, now = Date.now()): string {
   const restarted = (v.restarts ?? 0) > 0 ? `已重启 ${v.restarts} 次` : "";
   switch (v.health) {
     case "up":
-      return [`运行 ${jobDuration(v.uptime ?? v.elapsed)}`, v.ports.length ? `端口 ${v.ports.join("、")}` : "", restarted].filter(Boolean).join(" · ");
+    {
+      const u = jobUsage(v.usage);
+      return [`运行 ${jobDuration(v.uptime ?? v.elapsed)}`, v.ports.length ? `端口 ${v.ports.join("、")}` : "", u ? jobUsageLabel(u) : "", restarted]
+        .filter(Boolean).join(" · ");
+    }
     case "restarting": {
       const s = v.restart_at ? Math.floor((Date.parse(v.restart_at) - now) / 1000) : 0;
       return [s <= 1 ? "马上重启" : `${jobDuration(s)}后重启`, v.exit_code != null ? `上次退出码 ${v.exit_code}` : "", restarted].filter(Boolean).join(" · ");

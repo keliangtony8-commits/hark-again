@@ -172,6 +172,16 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
                   )
                 : const SizedBox.shrink(key: ValueKey('none')),
           ),
+          // v1.90 在跑时它占多少：CPU 条（平滑过渡）+ 内存 / 进程数；问不到就不出现（不画成 0）
+          RiseSwitcher(
+            child: j.running && j.usage != null
+                ? Padding(
+                    key: const ValueKey('usage'),
+                    padding: const EdgeInsets.only(top: Sp.x2, right: Sp.x2),
+                    child: _UsageLine(j.usage!),
+                  )
+                : const SizedBox.shrink(key: ValueKey('nousage')),
+          ),
           Row(children: [
             Expanded(
               child: Align(
@@ -195,6 +205,28 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
           ]),
         ]),
       ),
+    );
+  }
+}
+
+/// CPU 35%  ▬▬▬▬▭▭▭▭  内存 120.0 MB · 3 个进程
+class _UsageLine extends StatelessWidget {
+  const _UsageLine(this.u);
+  final JobUsage u;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final small = context.text.labelSmall?.copyWith(color: p.text3, fontFeatures: const [FontFeature.tabularFigures()]);
+    final hot = u.cpu >= jobCpuHot;
+    return ExcludeSemantics(// 整张卡的读屏句子（jobSemantics）已经带上占用
+        child: Row(children: [
+          Text('CPU ${jobCpuLabel(u.cpu)}', style: hot ? small?.copyWith(color: p.warning) : small),
+          const SizedBox(width: Sp.x2),
+          Expanded(child: MeterBar(value: u.cpu / 100, height: Sp.x1, color: hot ? p.warning : p.text2)),
+          const SizedBox(width: Sp.x2),
+          Flexible(child: Text(jobMemoryLabel(u), style: small, maxLines: 1, overflow: TextOverflow.ellipsis)),
+        ]),
     );
   }
 }

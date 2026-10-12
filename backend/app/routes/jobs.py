@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from .. import jobs, services
+from .. import job_usage, jobs, services
 from ..auth import require_user
 from ..db import get_session
 from ..models import Job
@@ -33,7 +33,8 @@ async def _get(db, job_id: str) -> Job:
 @router.get("/{job_id}")
 async def get_job(job_id: str, tail: int = jobs.TAIL_CHARS, db=Depends(get_session)):
     job = await jobs.refresh(db, await _get(db, job_id))
-    return jobs.wire(job, chars=max(200, min(tail, 20000)))
+    # v1.90 运行中的任务卡顺带看到它占多少 CPU / 内存（job_usage 有缓存，卡片轮询不会每次都去采样）
+    return {**jobs.wire(job, chars=max(200, min(tail, 20000))), "usage": await job_usage.of(job)}
 
 
 @router.post("/{job_id}/cancel")

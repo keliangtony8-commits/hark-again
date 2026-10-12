@@ -1,5 +1,6 @@
 // 后台任务卡的纯规则（App models/job.dart 同一套）：状态文案、语气、用时、日志尾巴、何时停止轮询。
-import type { JobBlock, JobInfo, JobState } from "./types";
+import { formatSize } from "./files";
+import type { JobBlock, JobInfo, JobState, JobUsage } from "./types";
 
 export const JOB_FINAL: ReadonlySet<JobState> = new Set(["done", "failed", "timed_out", "cancelled", "lost"]);
 export const JOB_POLL_MS = 2000;     // 运行中多久问一次进度
@@ -32,11 +33,30 @@ export const jobFootLabel = (j: JobInfo) => [jobStateLabel(j),
   ...(j.keep_alive && j.restarts ? [`已自动重启 ${j.restarts} 次`] : []),
   ...(jobAwaitingReply(j) ? ["助手在看结果"] : [])].join(" · ");
 
-/** “电脑”一节运行中任务那行的副标题：常驻的先说清，再是用时和命令。 */
-export const jobRowSubtitle = (j: JobInfo) => [
-  ...(j.keep_alive ? [j.restart_at ? "重启中" : "常驻"] : []),
-  ...(j.keep_alive && j.restarts ? [`已重启 ${j.restarts} 次`] : []),
-  `运行 ${jobDuration(j.elapsed)}`, `$ ${j.command.split("\n")[0]}`].join(" · ");
+/** v1.90 占用（App models/job.dart 同一套）。解析宁缺毋错：字段缺 / 类型不对 / 负数 / 0 个进程 → null。 */
+export function jobUsage(raw: unknown): JobUsage | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { cpu, cpu_seconds, memory, processes } = raw as Record<string, unknown>;
+  if (![cpu, cpu_seconds, memory, processes].every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+  const u = { cpu, cpu_seconds, memory, processes } as JobUsage;
+  return u.cpu < 0 || u.cpu_seconds < 0 || u.memory < 0 || u.processes < 1 ? null : u;
+}
+/** CPU 到这么高（占配额 %）卡片上的条变警示色。 */
+export const JOB_CPU_HOT = 90;
+export const jobCpuLabel = (cpu: number) => (cpu >= 10 || cpu === 0 ? `${Math.round(cpu)}%` : `${cpu.toFixed(1)}%`);
+export const jobMemoryLabel = (u: JobUsage) => [`内存 ${formatSize(u.memory)}`, ...(u.processes > 1 ? [`${u.processes} 个进程`] : [])].join(" · ");
+export const jobUsageLabel = (u: JobUsage) => `CPU ${jobCpuLabel(u.cpu)} · ${jobMemoryLabel(u)}`;
+export const jobUsageSemantics = (u: JobUsage) =>
+  `占用 CPU ${jobCpuLabel(u.cpu)}，内存 ${formatSize(u.memory)}${u.processes > 1 ? `，${u.processes} 个进程` : ""}`;
+
+/** “电脑”一节运行中任务那行的副标题：常驻的先说清，再是用时、占用和命令。 */
+export const jobRowSubtitle = (j: JobInfo) => {
+  const u = jobUsage(j.usage);
+  return [
+    ...(j.keep_alive ? [j.restart_at ? "重启中" : "常驻"] : []),
+    ...(j.keep_alive && j.restarts ? [`已重启 ${j.restarts} 次`] : []),
+    `运行 ${jobDuration(j.elapsed)}`, ...(u ? [jobUsageLabel(u)] : []), `$ ${j.command.split("\n")[0]}`].join(" · ");
+};
 
 const two = (n: number) => String(n).padStart(2, "0");
 export function jobDuration(seconds: number): string {
@@ -49,7 +69,8 @@ export function jobDuration(seconds: number): string {
 /** 读屏：一句话说清这张卡。 */
 export const jobSemantics = (j: JobInfo, elapsed = j.elapsed) =>
   `${j.keep_alive ? "常驻任务" : "后台任务"} ${j.title}，${jobStateLabel(j)}${jobAutoStopped(j) ? `：${j.stop_reason}` : ""}` +
-  `${j.keep_alive && j.restarts ? `，已自动重启 ${j.restarts} 次` : ""}，用时 ${jobDuration(elapsed)}`;
+  `${j.keep_alive && j.restarts ? `，已自动重启 ${j.restarts} 次` : ""}，用时 ${jobDuration(elapsed)}` +
+  `${jobRunning(j) && jobUsage(j.usage) ? `，${jobUsageSemantics(jobUsage(j.usage)!)}` : ""}`;
 
 export function jobTailLines(tail: string, lines = JOB_LOG_LINES): string {
   const all = tail.replace(/\s+$/, "").split("\n");

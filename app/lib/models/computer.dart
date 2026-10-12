@@ -118,6 +118,7 @@ String serviceLine(ServiceInfo v, {DateTime? now}) {
     ServiceHealth.up => [
         '运行 ${jobDuration(v.uptime ?? j.elapsed)}',
         if (v.ports.isNotEmpty) '端口 ${v.ports.join('、')}',
+        if (j.usage != null) jobUsageLabel(j.usage!),
         ?restarted,
       ].join(' · '),
     ServiceHealth.restarting => [

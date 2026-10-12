@@ -1,5 +1,6 @@
 // 后台任务（后端 app/jobs.py，接口 /api/jobs）：聊天里的任务卡用的纯规则——状态文案、用时、日志尾巴、轮询何时停。
 // 网页版 frontend/src/lib/jobs.ts 同一套规则。
+import '../ui/format.dart';
 import 'block.dart';
 
 const jobFinal = {'done', 'failed', 'timed_out', 'cancelled', 'lost'};
@@ -8,7 +9,7 @@ const jobFinal = {'done', 'failed', 'timed_out', 'cancelled', 'lost'};
 class JobInfo {
   const JobInfo({required this.id, required this.title, required this.command, required this.state,
       this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt,
-      this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt});
+      this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage});
 
   factory JobInfo.fromJson(Map<String, dynamic> j) => JobInfo(
       id: j['id'] as String? ?? '',
@@ -24,7 +25,8 @@ class JobInfo {
       stopReason: j['stop_reason'] as String?,
       keepAlive: j['keep_alive'] as bool? ?? false,
       restarts: (j['restarts'] as num?)?.toInt() ?? 0,
-      restartAt: DateTime.tryParse(j['restart_at'] as String? ?? '')?.toLocal());
+      restartAt: DateTime.tryParse(j['restart_at'] as String? ?? '')?.toLocal(),
+      usage: JobUsage.tryParse(j['usage']));
 
   /// 还没问过服务器时，用消息里落库的块先画出来。
   factory JobInfo.fromBlock(JobBlock b) => JobInfo(
@@ -45,7 +47,7 @@ class JobInfo {
   JobInfo withElapsed(Duration d) => JobInfo(
       id: id, title: title, command: command, state: state, exitCode: exitCode, followup: followup, elapsed: d,
       tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason, keepAlive: keepAlive,
-      restarts: restarts, restartAt: restartAt);
+      restarts: restarts, restartAt: restartAt, usage: usage);
 
   final String id, title, command, state, followup, tail;
   final String? stopReason;
@@ -59,6 +61,9 @@ class JobInfo {
   final int restarts;
   final DateTime? restartAt;
 
+  /// v1.90 现在占多少（后端 app/job_usage.py）：只有进程确实在跑、问得到沙盒时才有；null = 不知道（不是 0）。
+  final JobUsage? usage;
+
   bool get running => !jobFinal.contains(state);
 
   /// 服务器护栏停的（连续没输出判定卡住 / 输出过大）：算出了问题，不是“已取消”。
@@ -67,6 +72,50 @@ class JobInfo {
   /// 结束了，服务器还要在这段对话里接着说一轮（worker 几秒内跑）：卡片继续问，等它说完再刷新对话。
   bool get awaitingReply => !running && followup == 'pending';
 }
+
+/// 一个后台任务（整个进程组）此刻的资源占用。cpu = 占这台电脑 CPU 配额的百分比（和电脑卡的 CPU 一个口径）。
+class JobUsage {
+  const JobUsage({required this.cpu, required this.cpuSeconds, required this.memory, required this.processes});
+
+  /// 字段缺 / 类型不对 / 负数 / 0 个进程 → null（宁可不显示也不显示错的）。
+  static JobUsage? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final cpu = raw['cpu'], secs = raw['cpu_seconds'], mem = raw['memory'], n = raw['processes'];
+    if (cpu is! num || secs is! num || mem is! num || n is! num) return null;
+    if (cpu < 0 || secs < 0 || mem < 0 || n < 1) return null;
+    return JobUsage(cpu: cpu.toDouble(), cpuSeconds: secs.toDouble(), memory: mem.toInt(), processes: n.toInt());
+  }
+
+  final double cpu, cpuSeconds;
+  final int memory, processes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is JobUsage && other.cpu == cpu && other.cpuSeconds == cpuSeconds && other.memory == memory && other.processes == processes;
+
+  @override
+  int get hashCode => Object.hash(cpu, cpuSeconds, memory, processes);
+}
+
+/// CPU 到这么高（占配额 %）卡片上的条变成警示色：基本吃满了，别的命令会跟着变慢。
+const jobCpuHot = 90.0;
+
+/// CPU 百分比：≥10 取整，<10 留一位（0.4%），0 写 0%。
+String jobCpuLabel(double cpu) => cpu >= 10 || cpu == 0 ? '${cpu.round()}%' : '${cpu.toStringAsFixed(1)}%';
+
+/// 卡片 / 任务行上的一段：CPU 35% · 内存 120.0 MB · 3 个进程（只有 1 个进程时不写）。
+String jobUsageLabel(JobUsage u) => [
+      'CPU ${jobCpuLabel(u.cpu)}',
+      '内存 ${formatSize(u.memory)}',
+      if (u.processes > 1) '${u.processes} 个进程',
+    ].join(' · ');
+
+/// 任务卡 CPU 条右边那段：内存 120.0 MB · 3 个进程。
+String jobMemoryLabel(JobUsage u) => ['内存 ${formatSize(u.memory)}', if (u.processes > 1) '${u.processes} 个进程'].join(' · ');
+
+/// 读屏：占用 CPU 35%，内存 120.0 MB，3 个进程。
+String jobUsageSemantics(JobUsage u) =>
+    '占用 CPU ${jobCpuLabel(u.cpu)}，内存 ${formatSize(u.memory)}${u.processes > 1 ? '，${u.processes} 个进程' : ''}';
 
 enum JobTone { running, ok, problem, quiet }
 
@@ -102,6 +151,7 @@ String jobRowSubtitle(JobInfo j) => [
       if (j.keepAlive) j.restartAt != null ? '重启中' : '常驻',
       if (j.keepAlive && j.restarts > 0) '已重启 ${j.restarts} 次',
       '运行 ${jobDuration(j.elapsed)}',
+      if (j.usage != null) jobUsageLabel(j.usage!),
       '\$ ${j.command.split('\n').first}',
     ].join(' · ');
 
@@ -123,4 +173,5 @@ String jobTailLines(String tail, int lines) {
 /// 读屏：一句话说清这张卡。
 String jobSemantics(JobInfo j) =>
     '${j.keepAlive ? '常驻任务' : '后台任务'} ${j.title}，${jobStateLabel(j)}${j.autoStopped ? '：${j.stopReason}' : ''}'
-    '${j.keepAlive && j.restarts > 0 ? '，已自动重启 ${j.restarts} 次' : ''}，用时 ${jobDuration(j.elapsed)}';
+    '${j.keepAlive && j.restarts > 0 ? '，已自动重启 ${j.restarts} 次' : ''}，用时 ${jobDuration(j.elapsed)}'
+    '${j.running && j.usage != null ? '，${jobUsageSemantics(j.usage!)}' : ''}';

@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import jobs, quota, sandbox_client
+from . import job_usage, jobs, quota, sandbox_client
 from .config import settings
 from .models import Job
 
@@ -36,34 +36,29 @@ def health(job: Job) -> str:
     return "gave_up"
 
 
-def _pgid(job: Job) -> int | None:
-    try:
-        return int((jobs.job_dir(job) / "pid").read_text().strip())
-    except (OSError, ValueError):
-        return None
-
-
 def owned_ports(job: Job, ports: list[dict]) -> list[int]:
     """这个服务在监听的端口：端口进程的进程组 = 任务的组长 pid。等重启中的不算（进程已经没了，pid 可能被复用）。"""
-    if health(job) != "up" or (g := _pgid(job)) is None:
+    if health(job) != "up" or (g := job_usage.pgid(job)) is None:
         return []
     return sorted({p["port"] for p in ports if p.get("pgid") == g})
 
 
-def wire(job: Job, ports: list[dict], now: datetime | None = None) -> dict:
+def wire(job: Job, ports: list[dict], now: datetime | None = None, usage: dict | None = None) -> dict:
     h = health(job)
-    return {**jobs.wire(job, chars=600), "health": h, "ports": owned_ports(job, ports),
+    return {**jobs.wire(job, chars=600), "health": h, "ports": owned_ports(job, ports), "usage": usage,
             "uptime": int(jobs.run_seconds(job, now)) if h == "up" else None, "crash_streak": job.crash_streak or 0}
 
 
-async def listing(db: AsyncSession, ws: str, running: list[Job], ports: list[dict]) -> list[dict]:
-    """running = computer.running_jobs 刚对过的运行中任务（省一次查询）。在跑的在前（新的在前），再是意外结束的。"""
+async def listing(db: AsyncSession, ws: str, running: list[Job], ports: list[dict],
+                  usage: dict[str, dict] | None = None) -> list[dict]:
+    """running = computer.running_jobs 刚对过的运行中任务（省一次查询）。在跑的在前（新的在前），再是意外结束的。
+    usage = job_usage.for_jobs 的结果（v1.90，computer.status 一次问齐）。"""
     since = datetime.now(timezone.utc) - timedelta(hours=GONE_HOURS)
     gone = (await db.scalars(select(Job).where(Job.project_id == ws, Job.keep_alive.is_(True),
                                                Job.state.in_(GONE_STATES), Job.finished_at >= since)
                              .order_by(Job.finished_at.desc()).limit(LIST_MAX))).all()
     rows = [j for j in running if j.keep_alive] + list(gone)
-    return [wire(j, ports) for j in rows[:LIST_MAX]]
+    return [wire(j, ports, usage=(usage or {}).get(j.id)) for j in rows[:LIST_MAX]]
 
 
 async def restart(db: AsyncSession, job: Job) -> Job:
