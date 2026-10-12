@@ -39,6 +39,7 @@ class Limits:
 
 
 SKIPPED = "没有执行：同一批里前面的调用已被判定为原地打转。"
+SKIPPED_BAD = "没有执行：前面已经连续多次写错参数，这一轮先停下。"
 SELF_PAGED = {"read_file"}  # 自己按 offset 分页的工具，结果不再落盘截断
 
 
@@ -246,6 +247,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     tools = schemas(ctx)
     seen = supersede.Tracker()  # 旧页面快照 / 截图只留最新一份（supersede.py）
 
+    streak = tool_args.Streak()  # 连续写错参数：第 3 次附完整签名，第 6 次停下（tool_args.py）
     guard = loop_guard.LoopGuard()  # 原地打转：第一次提醒模型，第二次停下（loop_guard.py）
     squeeze = compact.Compactor(len(messages), model, tools,
                                 pinned=lambda: plan.pinned(builder.blocks), effort=ctx.effort)  # 上文快满：剪长工具结果 / 压成检查点（compact.py）
@@ -347,11 +349,11 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
             for c in turn.tool_calls]})
         images, browser_only, hit = [], True, 0
         for call in turn.tool_calls:
-            if hit:  # 已判定打转：同一批里剩下的调用不再执行（每个调用仍要有一条结果）
-                messages.append({"role": "tool", "tool_call_id": call.id, "content": SKIPPED})
+            if hit or streak.stopped:  # 已判定打转 / 连续写错：同一批里剩下的调用不再执行（每个调用仍要有一条结果）
+                messages.append({"role": "tool", "tool_call_id": call.id, "content": SKIPPED if hit else SKIPPED_BAD})
                 continue
             result = ToolResult("")
-            async for ev in _call_tool(call, ctx, builder, parsed[call.id]):
+            async for ev in _call_tool(call, ctx, builder, parsed[call.id], streak):
                 if isinstance(ev, ToolResult):
                     result = ev
                 else:
@@ -369,8 +371,8 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                 messages.append(msg)
                 if browser_only:
                     seen.note_image(len(messages) - 1)
-        if hit > 1:
-            for ev in builder.text(loop_guard.STOP_NOTE):
+        if hit > 1 or streak.stopped:
+            for ev in builder.text(loop_guard.STOP_NOTE if hit > 1 else tool_args.STOP_NOTE):
                 yield ev
             ended = "looped"
             break
@@ -409,17 +411,20 @@ def _args(raw: str) -> object:
         return raw
 
 
-async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: tool_args.Parsed | None = None):
+async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: tool_args.Parsed | None = None,
+                     streak: tool_args.Streak | None = None):
     """执行一次工具调用：查表 → 参数解析与校验（agent/tool_args.py）→ (需要时)审批 → 执行 → 产出事件，
     最后产出给模型的 ToolResult（文字 + 图）。参数不对不进审批、不进时间线：直接把原因还给模型改。"""
     t = REGISTRY.get(call.name)
     if not t or not t.available(ctx):
         names = [x.name for x in REGISTRY.values() if x.available(ctx)]
-        yield ToolResult(f"没有可用的工具 {call.name}。{tool_args.suggest(call.name, names)}".rstrip())
+        hint = streak.fail(call.name, names=names) if streak else ""
+        yield ToolResult(f"没有可用的工具 {call.name}。{tool_args.suggest(call.name, names)}".rstrip() + hint)
         return
+    streak = streak or tool_args.Streak()
     parsed = parsed or tool_args.parse(call.arguments)
     if parsed.args is None:
-        yield ToolResult(parsed.error)
+        yield ToolResult(parsed.error + streak.fail(call.name, t.parameters))
         return
     args = dict(parsed.args)
     args.pop("grant", None)  # 批准范围只能来自用户在卡上的选择，不能来自模型
@@ -427,8 +432,9 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
         args.pop("form", None)  # 表单值只能来自用户，不能来自模型
     checked = tool_args.check(t.parameters, args, t.accepts)
     if checked.error:
-        yield ToolResult(checked.error)
+        yield ToolResult(checked.error + streak.fail(call.name, t.parameters))
         return
+    streak.ok(call.name)
     args = checked.args
     notes = ([parsed.repaired] if parsed.repaired else []) + checked.notes
     rec = builder.timeline

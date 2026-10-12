@@ -17,6 +17,10 @@ check(schema, args, accepts)：安全的类型修正（"5"→5、"true"→true�
   有违规就整次不执行，把逐条原因（带路径）还给模型改。
 suggest(name, names)：工具名写错时给最像的三个（Gemini Did you mean）。
 wire(parsed)：写回给模型的历史里的参数——坏 JSON 不能原样回传（有的供应商下一轮直接 400）。
+Streak：一轮里连续写错参数的计数（ours——三家参考都没有：Gemini loopDetection 只抓“同一调用重复”，
+  每次写错的方式不同它抓不到）。同一工具连续错 HINT_AT 次 → 在报错后附上它的完整参数签名（signature）+ 换思路建议；
+  连着调不存在的工具 HINT_AT 次 → 列出全部可用工具名；不分工具连续错 STOP_AT 次 → 这一轮停下（loop 记 looped）。
+  任何一次参数通过校验就清零。
 """
 import json
 import re
@@ -25,7 +29,13 @@ from dataclasses import dataclass, field
 MAX_DEPTH = 32       # 再深就不往下查（只查到这里也不算错）
 VIOLATIONS_MAX = 8   # 给模型看的违规条数上限，多了只说“还有 N 处”
 SUGGEST_MAX = 3      # Gemini topN = 3
-SUGGEST_DISTANCE = 0.5  # 编辑距离超过名字长度的一半就不算“像”（ours：免得给出风马牛的建议）
+SUGGEST_DISTANCE = 0.5
+HINT_AT = 3          # 同一工具连续写错第 3 次起附完整签名
+STOP_AT = 6          # 不分工具连续写错 6 次就停下这一轮
+SIG_ENUM_MAX = 6     # 签名里 enum 最多列几个值
+SIG_DESC_MAX = 60    # 签名里每个参数说明截到多少字
+SIG_PARAMS_MAX = 16  # 签名最多列几个参数
+NAMES_MAX = 60       # 列可用工具名最多几个  # 编辑距离超过名字长度的一半就不算“像”（ours：免得给出风马牛的建议）
 
 _FENCE = re.compile(r"^\s*```[a-zA-Z0-9_-]*\s*\n?(.*?)\n?\s*```\s*$", re.S)
 _INT = re.compile(r"^[+-]?\d+$")
@@ -320,3 +330,82 @@ def wire(parsed: Parsed) -> str | None:
     if parsed.repaired:
         return json.dumps(parsed.args, ensure_ascii=False)
     return None
+
+
+# —— 连续写错参数（ours） ——
+
+def _kind(node) -> str:
+    if not isinstance(node, dict):
+        return "任意"
+    if isinstance(node.get("enum"), list) and node["enum"]:
+        vals = node["enum"][:SIG_ENUM_MAX]
+        more = "|…" if len(node["enum"]) > len(vals) else ""
+        return "|".join(json.dumps(v, ensure_ascii=False) for v in vals) + more
+    if "const" in node:
+        return json.dumps(node["const"], ensure_ascii=False)
+    for key in ("oneOf", "anyOf"):
+        if isinstance(node.get(key), list) and node[key]:
+            return " 或 ".join(_kind(x) for x in node[key][:3])
+    kinds = _types(node) or ["任意"]
+    out = []
+    for k in kinds:
+        if k == "array":
+            out.append(f"array<{_kind(node.get('items'))}>" if isinstance(node.get("items"), dict) else "array")
+        else:
+            out.append(k)
+    return "|".join(out)
+
+
+def signature(name: str, schema: dict) -> str:
+    """给模型看的完整参数签名：每个参数一行“- 名（类型，必填）：说明”。没有参数 → 一句话。"""
+    props = schema.get("properties") if isinstance(schema, dict) and isinstance(schema.get("properties"), dict) else {}
+    required = schema.get("required") if isinstance(schema, dict) and isinstance(schema.get("required"), list) else []
+    if not props:
+        return f"{name} 不需要参数，传 {{}} 即可。"
+    keys = [k for k in props if k in required] + [k for k in props if k not in required]
+    lines = []
+    for k in keys[:SIG_PARAMS_MAX]:
+        node = props[k]
+        desc = " ".join(str(node.get("description", "")).split()) if isinstance(node, dict) else ""
+        if len(desc) > SIG_DESC_MAX:
+            desc = desc[:SIG_DESC_MAX] + "…"
+        tag = "必填" if k in required else "可选"
+        lines.append(f"- {k}（{_kind(node)}，{tag}）" + (f"：{desc}" if desc else ""))
+    if len(keys) > SIG_PARAMS_MAX:
+        lines.append(f"- 还有 {len(keys) - SIG_PARAMS_MAX} 个可选参数")
+    return f"{name} 的参数：\n" + "\n".join(lines)
+
+
+class Streak:
+    """一轮一个。fail(tool, schema | names) 返回要附在报错后面的提醒（可能为空）；ok(tool) 清零。"""
+
+    def __init__(self):
+        self.per: dict[str, int] = {}
+        self.total = 0
+
+    @property
+    def stopped(self) -> bool:
+        return self.total >= STOP_AT
+
+    def ok(self, tool: str) -> None:
+        self.per.clear()
+        self.total = 0
+
+    def fail(self, tool: str, schema: dict | None = None, names: list[str] | None = None) -> str:
+        """tool = 写错参数的工具名；names 非 None = 调了不存在的工具（按“未知工具”一起计数）。"""
+        key = "" if names is not None else tool
+        n = self.per[key] = self.per.get(key, 0) + 1
+        self.total += 1
+        if self.stopped or n < HINT_AT:
+            return ""
+        if names is not None:
+            shown = sorted(names)[:NAMES_MAX]
+            more = f" 等 {len(names)} 个" if len(names) > len(shown) else ""
+            return (f"\n\n你已经连续 {n} 次调用了不存在的工具。能用的只有：" + "、".join(shown) + more
+                    + "。只从里面选；都不合适就直接回答或问用户。")
+        return (f"\n\n这是你连续第 {n} 次没把 {tool} 的参数写对。" + signature(tool, schema or {})
+                + "\n照着签名完整重写一次（字段名、类型、必填项都对上）；内容太长就拆成几次；"
+                f"再写不对就换个工具或直接问用户，连续写错 {STOP_AT} 次这一轮会停下。")
+
+
+STOP_NOTE = "（我连着几次没把工具参数写对，先停在这里，免得白白耗用量。可以换个说法告诉我要做什么，或者让我换个办法。）"
