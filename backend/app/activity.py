@@ -60,11 +60,15 @@ class Recorder:
         del self.steps[:-KEEP]
         return dict(step)
 
-    def finish(self, call_id: str, state: str, note: str = "", change: dict | None = None) -> dict | None:
+    def finish(self, call_id: str, state: str, note: str = "", change: dict | None = None,
+               detail: str | None = None) -> dict | None:
+        """detail：结束时才知道的摘要（如上文压缩的结果）替换开始时的。"""
         step = next((s for s in self.steps if s["id"] == call_id), None)
         if step is None:
             return None
         step["state"] = state
+        if detail is not None:
+            step["detail"] = _short(detail, DETAIL_MAX)
         if (t0 := self._t0.pop(call_id, None)) is not None:
             step["ms"] = int((time.monotonic() - t0) * 1000)
         if note and state in ("error", "denied"):

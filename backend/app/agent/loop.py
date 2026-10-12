@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import loop_guard, supersede
+from . import compact, loop_guard, supersede
 from .tools import REGISTRY, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -155,26 +155,46 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     seen = supersede.Tracker()  # 旧页面快照 / 截图只留最新一份（supersede.py）
 
     guard = loop_guard.LoopGuard()  # 原地打转：第一次提醒模型，第二次停下（loop_guard.py）
+    squeeze = compact.Compactor(len(messages), model, tools)  # 上文快满：剪长工具结果 / 压成检查点（compact.py）
+    overflowed = False  # 供应商报“上文超长”时强制压一次再重试；成功调用一次后复位
     max_steps, spent, step = max(1, settings.agent_max_steps), 0, 0
     while True:
         over = step >= max_steps - 1 or 0 < settings.agent_turn_tokens <= spent
         if over and step:  # 预算到了：最后一步不给工具，让模型交代进度（第一步就是最后一步时不用交代）
             messages.append({"role": "user", "content": WRAP_UP})
         seen.apply(messages)
+        if squeeze.due(messages):
+            async for ev in _compact(squeeze, messages, seen, builder):
+                yield ev
         turn: Turn | None = None
         said, chant = "", 0
-        async with aclosing(stream_turn(messages, None if over else tools, model)) as items:
-            async for item in items:
-                if isinstance(item, Turn):
-                    turn = item
-                elif isinstance(item, Reasoning):
-                    yield Thinking(item.text)
-                else:
-                    said += item
-                    for ev in builder.text(item):
-                        yield ev
-                    if chant := guard.content(item):
-                        break  # 复读：不等它说完（关闭流，已花的 token 照记）
+        at = len(messages)
+        try:
+            async with aclosing(stream_turn(messages, None if over else tools, model)) as items:
+                async for item in items:
+                    if isinstance(item, Turn):
+                        turn = item
+                    elif isinstance(item, Reasoning):
+                        yield Thinking(item.text)
+                    else:
+                        said += item
+                        for ev in builder.text(item):
+                            yield ev
+                        if chant := guard.content(item):
+                            break  # 复读：不等它说完（关闭流，已花的 token 照记）
+        except Exception as e:
+            if overflowed or said or not compact.is_overflow(e):
+                raise
+            overflowed = True  # 上文超长：强制压一次，压动了就重试这一步（deepseek-harness overflow recovery）
+            out: dict = {}
+            async for ev in _compact(squeeze, messages, seen, builder, force=True, out=out):
+                yield ev
+            if not out.get("changed"):
+                raise
+            if over and step:
+                messages.pop()  # WRAP_UP 下一圈会重新加
+            continue
+        overflowed = False
         step += 1
         if chant:
             builder.break_text()
@@ -188,6 +208,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
             continue
         assert turn is not None
         spent += turn.tokens
+        squeeze.observe(turn.prompt, at)
         if not turn.tool_calls or over:
             break
 
@@ -229,6 +250,22 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
 
     yield Done(builder.blocks)
 
+
+
+async def _compact(squeeze: compact.Compactor, messages: list[dict], seen: supersede.Tracker,
+                   builder: MessageBuilder, force: bool = False, out: dict | None = None):
+    """压一次上文；时间线上一步“整理上文”（写摘要要十几秒，先亮 running）。out["changed"] = 是否真的压动了。"""
+    sid = f"compact-{uuid.uuid4().hex[:8]}"
+    rec = builder.timeline
+    yield ToolStatus(sid, "compact_context", "正在整理上文", "running",
+                     rec.start(sid, "compact_context", "正在整理上文", {"reason": "上文快满了，整理较早的步骤"}))
+    info = await squeeze.maybe(messages, force=force)
+    if info and info["folded"]:
+        seen.splice(info["start"], info["end"])
+    if out is not None:
+        out["changed"] = info is not None
+    detail = compact.describe(info) if info else "上文已经很精简，没有可整理的"
+    yield ToolStatus(sid, "compact_context", "正在整理上文", "done", rec.finish(sid, "done", detail=detail) or {})
 
 
 def _args(raw: str) -> object:

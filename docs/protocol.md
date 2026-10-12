@@ -33,7 +33,7 @@
 | `block.start` | `index`, `block` | 新增第 index 个块 |
 | `block.delta` | `index`, `text` | 追加文字到第 index 个 text 块 |
 | `block.update` | `index`, `block` | 整块替换（审批卡状态变化） |
-| `tool.status` | `id`, `name`, `label`, `state: running\|done\|error\|denied`, `step?` | 工具进度条 + 活动时间线（v1.28）：`step = {id, tool, title, detail, state, at, ms?, note?, change?}`（v1.34 `change = {path, added, removed, diff, created?, hidden?}`：write_file / edit_file 成功时带，diff 为去掉文件头的 unified diff，≤120 行/6000 字，hidden = 密钥类文件不给 diff）（backend/app/activity.py；detail 只取命令/路径/网址/搜索模式（v1.35 glob/grep 的 pattern）等白名单参数；denied = 没批准/没填表，不经过 running）。客户端按 `id` 合并进 pending 消息的 steps |
+| `tool.status` | `id`, `name`, `label`, `state: running\|done\|error\|denied`, `step?` | 工具进度条 + 活动时间线（v1.28）：`step = {id, tool, title, detail, state, at, ms?, note?, change?}`（v1.34 `change = {path, added, removed, diff, created?, hidden?}`：write_file / edit_file 成功时带，diff 为去掉文件头的 unified diff，≤120 行/6000 字，hidden = 密钥类文件不给 diff）（backend/app/activity.py；detail 只取命令/路径/网址/搜索模式（v1.35 glob/grep 的 pattern）等白名单参数；denied = 没批准/没填表，不经过 running；v1.46 `name = compact_context`（标题“整理上文”）= 一轮之内上文快满时的压缩，不是模型调的工具，done 时 detail 换成结果说明）。客户端按 `id` 合并进 pending 消息的 steps |
 | `thinking.delta` | `text` | 推理模型的思考片段（v0.65）：追加到生成中的占位消息上临时展示（客户端只留尾部 2000 字），**不属于任何块、服务器不存、`message.done` 里没有**；老服务器/非推理模型不发 |
 | `message.done` | `message: {id, role, blocks, status?, created_at?, steps?}` | 一轮结束，以它为准落盘。`status: "stopped"` = 被停止的半截回复（等待中的审批卡变 `expired`） |
 | `message.stopped` | `conversation_id` | 还没产出任何内容就被停止：不存回复，用户消息留着（可“重试”） |

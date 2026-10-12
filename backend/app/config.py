@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # 步数至少按 1 算；token 设 0 = 不按 token 管。
     agent_max_steps: int = 40
     agent_turn_tokens: int = 600_000
+    # 上文窗口（token）：一轮里上文过窗口的 80% 就先剪长工具结果、不够再把较早的步骤压成摘要（agent/compact.py）。
+    # context_tokens = 默认；model_context = 按别名覆盖，如 {"smart": 256000}。窗口填小于真实值只会早点压，不会出错
+    context_tokens: int = 128_000
+    model_context: dict[str, int] = {}
     stt_model: str = "stt"      # 语音识别别名（gateway 模式走 OpenAI 音频接口）
     embed_model: str = "embed"  # 记忆检索的向量别名
     # 语音供应商：gateway = 识别走网关 stt 别名、朗读用设备自带语音；

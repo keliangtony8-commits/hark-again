@@ -56,6 +56,12 @@ class Tracker:
     def note_image(self, index: int) -> None:
         self.images.append(index)
 
+    def splice(self, start: int, end: int) -> None:
+        """compact.py 把 [start, end) 换成了一条检查点：区间里的记录作废，后面的下标前移。"""
+        def move(xs: list[int]) -> list[int]:
+            return [i if i < start else i - (end - start) + 1 for i in xs if not start <= i < end]
+        self.snapshots, self.images = move(self.snapshots), move(self.images)
+
     def apply(self, messages: list[dict]) -> int:
         """除最新一份外全部换成占位；返回这次换掉了几份（已换过的不算）。"""
         replaced = 0

@@ -38,3 +38,7 @@
   移植到 sandbox/runner.py（preview_ws、ws_relay）、backend/app/preview.py、backend/app/routes/preview.py（v1.44）
 - google-gemini/gemini-cli packages/core/src/services/loopDetectionService.ts（及其测试）、core/client.ts 的 _recoverFromLoop — Apache-2.0, Copyright 2025 Google LLC, modified
   移植到 backend/app/agent/loop_guard.py、backend/tests/smoke_loop_guard.py（v1.45）
+- deepseek-ai/deepseek-harness packages/compaction（compaction-tool-result-pruner index/config、compaction-basic region.ts selectCompactableRange 与 summarizer.ts 指令/检查点格式、compaction tool-pairing.ts）— MIT License, Copyright (c) 2026 DeepSeek, modified
+  移植到 backend/app/agent/compact.py、backend/tests/smoke_turn_compact.py（v1.46）
+- google-gemini/gemini-cli packages/core/src/context/chatCompressionService.ts（RECENT_TURNS_PROTECTED、膨胀即拒、失败后只截断）— Apache-2.0, Copyright 2025 Google LLC, modified；openai/codex codex-rs/core/src/compact.rs（approx token、摘要请求超长丢最旧一项重试）— Apache-2.0, Copyright OpenAI, modified
+  嫁接到 backend/app/agent/compact.py（v1.46）

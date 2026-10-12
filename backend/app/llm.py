@@ -56,6 +56,7 @@ class Turn:
     text: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
     tokens: int = 0  # 这次调用用掉的 token（输入 + 输出；供应商没报用量就是 0）：内核按它管一轮的用量预算
+    prompt: int = 0  # 其中输入部分：上文压缩（agent/compact.py）按它量上文有多长
 
 
 async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
@@ -95,16 +96,29 @@ async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
             await usage.record(model, "chat", last_usage.prompt_tokens or 0, last_usage.completion_tokens or 0)
     turn.tool_calls = [calls[i] for i in sorted(calls)]
     if last_usage is not None:
-        turn.tokens = (last_usage.prompt_tokens or 0) + (last_usage.completion_tokens or 0)
+        turn.prompt = last_usage.prompt_tokens or 0
+        turn.tokens = turn.prompt + (last_usage.completion_tokens or 0)
     yield turn
 
 
-async def complete(messages: list[dict], model: str | None = None, kind: str = "summary") -> str:
-    """一次性（非流式）补全：后台小活用，比如滚动摘要。kind 只用于记账分类。"""
+class Truncated(RuntimeError):
+    """strict 模式下输出被 max_tokens 截断（半截摘要不能用）。"""
+
+
+async def complete(messages: list[dict], model: str | None = None, kind: str = "summary",
+                   tools: list[dict] | None = None, max_tokens: int | None = None, strict: bool = False) -> str:
+    """一次性（非流式）补全：后台小活用，比如滚动摘要、上文压缩。kind 只用于记账分类。
+    tools：重放带工具调用的上文时照带工具定义（tool_choice=none，只要文字；前缀和对话请求一致，缓存能命中）。
+    strict：被截断（finish_reason=length）就抛 Truncated。"""
     model = model or settings.default_model
-    r = await client.chat.completions.create(model=upstream(model), messages=messages)
+    kwargs: dict = {"tools": tools, "tool_choice": "none"} if tools else {}
+    if max_tokens:
+        kwargs["max_tokens"] = max_tokens
+    r = await client.chat.completions.create(model=upstream(model), messages=messages, **kwargs)
     if r.usage:
         await usage.record(model, kind, r.usage.prompt_tokens or 0, r.usage.completion_tokens or 0)
+    if strict and r.choices and getattr(r.choices[0], "finish_reason", None) == "length":
+        raise Truncated("输出被截断")
     return (r.choices[0].message.content or "").strip()
 
 
