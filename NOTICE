@@ -31,3 +31,5 @@
   移植到 backend/app/file_seen.py（v1.41）
 - openai/codex codex-rs/apply-patch/src/seek_sequence.rs — Apache-2.0, Copyright OpenAI, modified
   移植到 backend/app/file_edit.py（seek_sequence、normalise）、backend/tests/smoke_file_seen.py（单测）（v1.41）
+- google-gemini/gemini-cli packages/core/src/agents/browser/snapshotSuperseder.ts — Apache-2.0, Copyright Google LLC, modified
+  移植到 backend/app/agent/supersede.py、backend/tests/smoke_supersede.py（单测）（v1.42）

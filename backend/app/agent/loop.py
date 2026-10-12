@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
+from . import supersede
 from .tools import REGISTRY, ToolContext, ToolResult, no_live, schemas
 
 MAX_STEPS = 6  # 防止工具死循环烧钱
@@ -148,8 +149,10 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     messages = [{"role": "system", "content": system}, *history]
     builder = builder if builder is not None else MessageBuilder()
     tools = schemas(ctx)
+    seen = supersede.Tracker()  # 旧页面快照 / 截图只留最新一份（supersede.py）
 
     for step in range(MAX_STEPS):
+        seen.apply(messages)
         turn: Turn | None = None
         # 最后一步不给工具，强制模型收尾作答
         async for item in stream_turn(messages, tools if step < MAX_STEPS - 1 else None, model):
@@ -168,7 +171,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         messages.append({"role": "assistant", "content": turn.text or None, "tool_calls": [
             {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}
             for c in turn.tool_calls]})
-        images = []
+        images, browser_only = [], True
         for call in turn.tool_calls:
             result = ToolResult("")
             async for ev in _call_tool(call, ctx, builder):
@@ -177,13 +180,17 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                 else:
                     yield ev
             images += result.images
+            browser_only &= not result.images or call.name.startswith("browser_")
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result.content})
+            seen.note(messages, len(messages) - 1, call.name)
         if images:  # 工具给了图：原图补一条消息，或描述并进最后一个工具结果（vision.for_tool 决定）
             note, msg = await vision.for_tool(images, model or settings.default_model)
             if note:
                 messages[-1]["content"] += "\n\n" + note
             if msg:
                 messages.append(msg)
+                if browser_only:
+                    seen.note_image(len(messages) - 1)
 
     yield Done(builder.blocks)
 

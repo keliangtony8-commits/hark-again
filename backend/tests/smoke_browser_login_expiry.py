@@ -93,7 +93,7 @@ def chunk(text=None, tool=None, u=None):
         return NS(choices=[], usage=u)
     return NS(choices=[NS(delta=NS(content=text, tool_calls=tool))], usage=u)
 async def fake_create(model, messages, stream=False, stream_options=None, tools=None, **kw):
-    model_saw.append(messages)
+    model_saw.append(list(messages))  # 拷一份：loop 之后会把旧快照换成占位
     step = script.pop(0)
     async def gen():
         if isinstance(step, tuple):
@@ -132,7 +132,8 @@ async def turns():
     await run("c1", None, answer(FormReply({"username": "me", "password": "pw"})),
               ("browser_open", {"url": "https://www.taobao.com/"}),
               ("browser_login", {"user_ref": "1", "pass_ref": "2"}), "好了")
-    first = [m for m in model_saw[-1] if m.get("role") == "tool"][0]["content"]
+    first = [m for m in model_saw[-2] if m.get("role") == "tool"][0]["content"]  # 最后一次调模型时它已被换成占位（v1.42）
+    assert "登录已过期" in [m for m in model_saw[-1] if m.get("role") == "tool"][0]["content"]  # 说明保留
     assert "登录已过期" in first and "browser_login（会在聊天里弹登录卡" in first and "browser_handoff" in first, first
     assert first.index("登录已过期") < first.index("可操作元素"), first
     assert ("taobao-com", "expired") in marks and marks[-1] == ("taobao-com", "signed_in"), marks
