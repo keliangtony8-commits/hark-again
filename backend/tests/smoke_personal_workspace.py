@@ -111,7 +111,7 @@ assert (storage.PROJECTS / ME / "算" / "结果.txt").read_text() == "42"
 assert not any(b["type"] == "file" for b in reply.blocks), reply.blocks  # v1.22：写文件不再出卡，交付走 display_file
 async def proj_prompt():
     async with SessionLocal() as db:
-        return await context.build_system_prompt(db, pid)
+        return (await context.build_system_prompt(db, pid)).text()
 assert "个人工作区" not in run(proj_prompt()) and "项目工作区" in run(proj_prompt())
 
 # ---- 2. 前台命令把 "me" 交给沙盒；项目对话交项目 id ----

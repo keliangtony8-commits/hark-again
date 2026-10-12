@@ -33,7 +33,7 @@ ctx = ToolContext(db=None)
 def prompt() -> str:
     async def go():
         async with SessionLocal() as db:
-            return await context.build_system_prompt(db, None, "")
+            return (await context.build_system_prompt(db, None, "")).text()
     return asyncio.run(go())
 
 def use(sid): return asyncio.run(tool_skills.use_skill(ctx, id=sid)).content

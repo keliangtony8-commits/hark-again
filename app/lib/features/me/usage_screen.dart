@@ -181,7 +181,12 @@ class ModelUsageList extends StatelessWidget {
         RowTile(
           icon: Icons.memory_rounded,
           title: m.model,
-          subtitle: '输入 ${formatTokens(m.promptTokens)} · 输出 ${formatTokens(m.completionTokens)} · ${m.calls} 次',
+          subtitle: [
+            '输入 ${formatTokens(m.promptTokens)}',
+            '输出 ${formatTokens(m.completionTokens)}',
+            '${m.calls} 次',
+            ?m.cacheHit,
+          ].join(' · '),
           trailing: Text(priced.contains(m.model) ? formatMoney(m.cost, currency) : '未定价',
               style: context.text.titleMedium?.copyWith(color: priced.contains(m.model) ? p.text : p.text3)),
         ),

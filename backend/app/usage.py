@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import system_alerts
+from . import prompt_cache, system_alerts
 from .config import settings
 from .db import SessionLocal
 from .models import Conversation, HomeCard, UsageRecord
@@ -42,22 +42,26 @@ def scope(conversation_id: str | None):
         _conversation.reset(token)
 
 
-def cost_of(model: str, prompt: int, completion: int) -> float:
-    p = settings.model_prices.get(model)
-    if not p:
-        return 0.0
-    inp, out = (list(p) + [0.0, 0.0])[:2]
-    return (prompt * inp + completion * out) / 1_000_000
+def current() -> str | None:
+    """当前 scope 里的对话 id（llm._create 拿它做 prompt_cache_key）。"""
+    return _conversation.get()
 
 
-async def record(model: str, kind: str, prompt: int, completion: int) -> None:
+def cost_of(model: str, prompt: int, completion: int, cached: int = 0) -> float:
+    """单价 [输入, 输出, 命中输入?]，规则在 prompt_cache.cost。"""
+    return prompt_cache.cost(settings.model_prices.get(model), prompt, completion, cached)
+
+
+async def record(model: str, kind: str, prompt: int, completion: int, cached: int = 0) -> None:
+    """prompt = 输入总数（含命中，OpenAI 口径）；cached = 其中命中缓存的部分（prompt_cache.cached_of）。"""
     if not prompt and not completion:
         return
+    cached = min(max(cached, 0), prompt)
     try:
         async with SessionLocal() as db:
             db.add(UsageRecord(model=model, kind=kind, conversation_id=_conversation.get(),
-                               prompt_tokens=prompt, completion_tokens=completion,
-                               cost=cost_of(model, prompt, completion)))
+                               prompt_tokens=prompt, completion_tokens=completion, cached_tokens=cached,
+                               cost=cost_of(model, prompt, completion, cached)))
             await db.commit()
     except Exception:  # 记账永远不能打断正事
         log.exception("usage record failed")
@@ -120,15 +124,18 @@ async def _aggregate(db: AsyncSession, *where) -> dict:
     """按模型汇总一组用量行：报表的“今天/本月”和单个对话共用这一个形状。"""
     rows = (await db.execute(
         select(UsageRecord.model, func.count(), func.sum(UsageRecord.prompt_tokens),
-               func.sum(UsageRecord.completion_tokens), func.sum(UsageRecord.cost))
+               func.sum(UsageRecord.completion_tokens), func.sum(UsageRecord.cost), func.sum(UsageRecord.cached_tokens))
         .where(*where)
         .group_by(UsageRecord.model)
     )).all()
     models = sorted(({"model": m, "calls": n, "prompt_tokens": int(p or 0), "completion_tokens": int(c or 0),
-                      "cost": round(float(k or 0), 4)} for m, n, p, c, k in rows),
+                      "cached_tokens": int(h or 0), "cost": round(float(k or 0), 4)} for m, n, p, c, k, h in rows),
                     key=lambda r: (-r["cost"], -(r["prompt_tokens"] + r["completion_tokens"])))
     return {"calls": sum(r["calls"] for r in models),
             "tokens": sum(r["prompt_tokens"] + r["completion_tokens"] for r in models),
+            # 命中率 = cached_tokens / prompt_tokens（客户端算；供应商没报命中的调用记 0）
+            "prompt_tokens": sum(r["prompt_tokens"] for r in models),
+            "cached_tokens": sum(r["cached_tokens"] for r in models),
             "cost": round(sum(r["cost"] for r in models), 4), "models": models}
 
 

@@ -19,7 +19,7 @@ Map<String, dynamic> report({double? budget, List<String> priced = const ['fast'
         'tokens': 2500000,
         'cost': month,
         'models': [
-          {'model': 'fast', 'calls': 38, 'prompt_tokens': 2000000, 'completion_tokens': 480000, 'cost': month},
+          {'model': 'fast', 'calls': 38, 'prompt_tokens': 2000000, 'completion_tokens': 480000, 'cached_tokens': 1240000, 'cost': month},
           {'model': 'embed', 'calls': 2, 'prompt_tokens': 20000, 'completion_tokens': 0, 'cost': 0},
         ],
       },
@@ -50,6 +50,24 @@ Future<void> pump(WidgetTester tester, FakeApi api) async {
 }
 
 void main() {
+  test('prompt cache hit label', () {
+    expect(cacheHitLabel(0, 100), isNull);
+    expect(cacheHitLabel(10, 0), isNull);
+    expect(cacheHitLabel(62, 100), '缓存命中 62%');
+    expect(cacheHitLabel(1, 1000), '缓存命中 <1%');
+    expect(cacheHitLabel(200, 100), '缓存命中 100%');
+    final r = UsageReport.fromJson(report());
+    expect(r.month.models.first.cacheHit, '缓存命中 62%');
+    expect(r.month.models.last.cacheHit, isNull); // 老服务器 / 没命中：不显示
+    expect(UsagePeriod.fromJson({'prompt_tokens': 400, 'cached_tokens': 100}).cacheHit, '缓存命中 25%');
+    expect(UsagePeriod.fromJson({'calls': 1}).cacheHit, isNull);
+  });
+
+  testWidgets('screen: model row shows the cache hit rate', (tester) async {
+    await pump(tester, FakeApi(report(budget: 30)));
+    expect(find.textContaining('缓存命中 62%'), findsOneWidget);
+  });
+
   test('budget levels and unpriced detection', () {
     expect(UsageReport.fromJson(report()).budgetRatio, isNull);
     expect(UsageReport.fromJson(report()).level, BudgetLevel.ok);

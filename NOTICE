@@ -67,3 +67,7 @@
   移植到 backend/app/live_turns.py（v1.61）
 - deepseek-ai/deepseek-harness packages/context/agent-instructions/src/{files,render,digest,config}.ts + tests/agent-instructions.spec.ts（工作区规则文件发现、按字节预算渲染、子目录增量）— MIT License, Copyright (c) 2026 DeepSeek, modified
   移植到 backend/app/workspace_instructions.py（v1.62）
+- deepseek-ai/deepseek-harness packages/llm/token-meter/src/turn-usage.ts normalizeUsage + packages/llm/llm/src/types.ts TokenUsage（命中计数只认安全非负整数、命中不超过输入）— MIT License, Copyright (c) 2026 DeepSeek, adapted
+  移植到 backend/app/prompt_cache.py（v1.63）
+- openai/codex codex-rs/core/src/client.rs prompt_cache_key（按会话做缓存亲和，子代理沿用父会话）— Apache License 2.0, modified
+  移植到 backend/app/prompt_cache.py（v1.63）

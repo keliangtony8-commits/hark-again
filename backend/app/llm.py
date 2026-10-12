@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import httpx
 from openai import AsyncOpenAI
 
-from . import llm_retry, reasoning, usage
+from . import llm_retry, prompt_cache, reasoning, usage
 from .config import settings
 from .llm_retry import EmptyResponse
 
@@ -38,14 +38,22 @@ def chat_models() -> dict:
 
 
 async def _create(alias: str, effort: str | None, **params):
-    """发请求的唯一一处：带上思考强度；供应商回 400 说不认这个参数 → 记住这个别名不支持，去掉参数重发一次。"""
-    try:
-        return await client.chat.completions.create(model=upstream(alias), **params, **reasoning.kwargs(effort))
-    except Exception as e:  # noqa: BLE001 — 只认“参数被拒”，其它原样抛
-        if not effort or not reasoning.rejected(e):
-            raise
-        reasoning.mark_unsupported(alias)
-        return await client.chat.completions.create(model=upstream(alias), **params)
+    """发请求的唯一一处：带上思考强度和（开了的话）按对话的 prompt_cache_key（prompt_cache.kwargs）；
+    供应商回 400 说不认其中某个参数 → 记住这个别名不支持，去掉那个参数重发（每个参数最多一次）。"""
+    extra = {**reasoning.kwargs(effort), **prompt_cache.kwargs(alias, usage.current())}
+    for _ in range(3):
+        try:
+            return await client.chat.completions.create(model=upstream(alias), **params, **extra)
+        except Exception as e:  # noqa: BLE001 — 只认“参数被拒”，其它原样抛
+            if reasoning.PARAM in extra and reasoning.rejected(e):
+                reasoning.mark_unsupported(alias)
+                extra.pop(reasoning.PARAM)
+            elif "extra_body" in extra and prompt_cache.rejected(e):
+                prompt_cache.mark_unsupported(alias)
+                extra.pop("extra_body")
+            else:
+                raise
+    return await client.chat.completions.create(model=upstream(alias), **params, **extra)
 
 
 @dataclass
@@ -115,7 +123,8 @@ async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
                     call.arguments += tc.function.arguments
     finally:  # 用户点停止（生成器被关闭）也要把已经花掉的 token 记上
         if last_usage is not None:
-            await usage.record(model, "chat", last_usage.prompt_tokens or 0, last_usage.completion_tokens or 0)
+            await usage.record(model, "chat", last_usage.prompt_tokens or 0, last_usage.completion_tokens or 0,
+                               cached=prompt_cache.cached_of(last_usage))
     turn.tool_calls = [calls[i] for i in sorted(calls)]
     if not turn.text.strip() and not turn.tool_calls:
         raise EmptyResponse("模型回了个空答复")
@@ -144,7 +153,8 @@ async def complete(messages: list[dict], model: str | None = None, kind: str = "
     r = await llm_retry.retry_call(  # 限流 / 服务器错 / 断网按 llm_retry 的策略重试；超长等原样抛给调用方
         lambda: _create(model, level, messages=messages, **kwargs))
     if r.usage:
-        await usage.record(model, kind, r.usage.prompt_tokens or 0, r.usage.completion_tokens or 0)
+        await usage.record(model, kind, r.usage.prompt_tokens or 0, r.usage.completion_tokens or 0,
+                           cached=prompt_cache.cached_of(r.usage))
     if strict and r.choices and getattr(r.choices[0], "finish_reason", None) == "length":
         raise Truncated("输出被截断")
     return (r.choices[0].message.content or "").strip()

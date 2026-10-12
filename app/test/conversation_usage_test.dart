@@ -23,7 +23,7 @@ Map<String, dynamic> usage({double cost = 0.012, int calls = 2, List<String> pri
         'cost': cost,
         'models': [
           if (calls > 0) {'model': 'smart', 'calls': 1, 'prompt_tokens': 1500, 'completion_tokens': 500, 'cost': cost},
-          if (calls > 1) {'model': 'fast', 'calls': calls - 1, 'prompt_tokens': 1200, 'completion_tokens': 200, 'cost': 0},
+          if (calls > 1) {'model': 'fast', 'calls': calls - 1, 'prompt_tokens': 1200, 'completion_tokens': 200, 'cached_tokens': 1080, 'cost': 0},
         ],
       },
     };
@@ -106,7 +106,8 @@ void main() {
     await tester.tap(find.text('¥0.020 · 3.4K token'));
     await tester.pumpAndSettle();
     expect(find.text('本对话用量'), findsOneWidget);
-    expect(find.text('3 次调用 · 输入 2.7K · 输出 700'), findsOneWidget);
+    expect(find.text('3 次调用 · 输入 2.7K · 输出 700 · 缓存命中 40%'), findsOneWidget); // 1080 / 2700
+    expect(find.textContaining('缓存命中 90%'), findsOneWidget); // fast 那一行
     expect(find.text('smart'), findsOneWidget);
     expect(find.text('fast'), findsOneWidget);
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useConversationUsage } from "../../hooks/useConversationUsage";
-import { formatMoney, formatTokens, type ConversationUsage, usageLine } from "../../lib/usage";
+import { cacheHitLabel, formatMoney, formatTokens, type ConversationUsage, usageLine } from "../../lib/usage";
 import { Sheet } from "../../ui/kit";
 import ModelUsageList from "../me/ModelUsageList";
 import ConversationFilesSheet from "./ConversationFilesSheet";
@@ -34,6 +34,7 @@ function UsageSheet({ usage: u, conversationId, onClose, onShare, onFiles }: { u
   const money = u.priced.length > 0;
   const prompt = t.models.reduce((s, m) => s + m.prompt_tokens, 0);
   const completion = t.models.reduce((s, m) => s + m.completion_tokens, 0);
+  const hit = cacheHitLabel(t.models.reduce((s, m) => s + (m.cached_tokens ?? 0), 0), prompt);
   const unpriced = t.models.some((m) => !u.priced.includes(m.model));
   return (
     <Sheet title="本对话用量" onClose={onClose} actions={<>
@@ -43,7 +44,7 @@ function UsageSheet({ usage: u, conversationId, onClose, onShare, onFiles }: { u
       <div className="usage">
         <div className="usage-hero list">
           <div className="usage-big">{money ? formatMoney(t.cost, u.currency) : `${formatTokens(t.tokens)} token`}</div>
-          <div className="usage-note">{t.calls} 次调用 · 输入 {formatTokens(prompt)} · 输出 {formatTokens(completion)}</div>
+          <div className="usage-note">{t.calls} 次调用 · 输入 {formatTokens(prompt)} · 输出 {formatTokens(completion)}{hit ? ` · ${hit}` : ""}</div>
         </div>
         <ModelUsageList models={t.models} priced={u.priced} currency={u.currency} />
         <p className="usage-hint">

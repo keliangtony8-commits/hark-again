@@ -255,9 +255,9 @@ reply = run([[("slow_read", a("o1")), ("slow_read", a("o2"))], "好"])
 assert peak[0] == 1 and reply.status == "done"
 async def prompts():
     async with SessionLocal() as db:
-        off = await build_system_prompt(db, None)
+        off = (await build_system_prompt(db, None)).text()
         settings.agent_parallel_tools = 8
-        on = await build_system_prompt(db, None)
+        on = (await build_system_prompt(db, None)).text()
     assert parallel.PROMPT not in off and parallel.PROMPT in on
 asyncio.run(prompts())
 print("ok: off + prompt")

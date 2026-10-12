@@ -150,5 +150,6 @@ def schemas(ctx: ToolContext) -> list[dict]:
 
 def load_builtin() -> None:
     from . import builtin
-    for m in pkgutil.iter_modules(builtin.__path__):
+    # 按模块名排序导入：工具定义的顺序固定（目录列举顺序不保证），每次请求的 tools 段逐字相同才能命中提示缓存
+    for m in sorted(pkgutil.iter_modules(builtin.__path__), key=lambda m: m.name):
         importlib.import_module(f"{builtin.__name__}.{m.name}")

@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     history_trace_turns: int = 2
     history_trace_chars: int = 6000
     # 用量与花费（usage.py）：别名 → [输入单价, 输出单价]，单位 currency / 百万 token；没写的别名只记 token 不算钱
+    # 单价（每百万 token）：别名 → [输入, 输出, 命中缓存的输入?]；第三个不填 = 命中也按输入价算（prompt_cache.cost）
     model_prices: dict[str, list[float]] = {}
+    # 按对话发 prompt_cache_key（OpenAI 等认；不认的供应商回 400 会自动去掉，见 prompt_cache.py）
+    prompt_cache_key: bool = False
     currency: str = "CNY"
     monthly_budget: float = 0.0     # 每月预算，0 = 不设；只用于提示，不拦截调用
     budget_alerts: list[float] = [0.8, 1.0]  # 本月花费跨过预算的这些比例时，在 Home 放一张提醒卡（每月每档一次）

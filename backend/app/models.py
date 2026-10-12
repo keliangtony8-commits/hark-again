@@ -237,6 +237,7 @@ class UsageRecord(Base):
     conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cached_tokens: Mapped[int] = mapped_column(Integer, default=0)  # prompt_tokens 里命中提示缓存的部分（prompt_cache.cached_of）
     cost: Mapped[float] = mapped_column(Float, default=0.0)        # settings.currency
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 

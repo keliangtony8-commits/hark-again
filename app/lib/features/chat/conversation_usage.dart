@@ -166,7 +166,15 @@ class _Detail extends StatelessWidget {
               child: Text(hero, style: context.text.headlineMedium?.copyWith(color: p.text)),
             ),
             const SizedBox(height: Sp.x1),
-            Text('${t.calls} 次调用 · 输入 ${formatTokens(prompt)} · 输出 ${formatTokens(completion)}', style: context.text.bodySmall),
+            Text(
+              [
+                '${t.calls} 次调用',
+                '输入 ${formatTokens(prompt)}',
+                '输出 ${formatTokens(completion)}',
+                ?cacheHitLabel(t.models.fold(0, (s, m) => s + m.cachedTokens), prompt),
+              ].join(' · '),
+              style: context.text.bodySmall,
+            ),
           ]),
         ),
       ),

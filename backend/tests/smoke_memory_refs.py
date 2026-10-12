@@ -44,7 +44,7 @@ async def main():
                     Memory(id="bbbb3333" + "0" * 24, category="work", content="学计算机")])
         await db.commit()
 
-        sp = await build_system_prompt(db, None, "")
+        sp = (await build_system_prompt(db, None, "")).text()
         assert "- [food] 不吃辣 (#aaaa1111)" in sp and "update_memory" in sp, sp
 
         # 按引用改

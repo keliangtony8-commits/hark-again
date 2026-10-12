@@ -13,6 +13,7 @@ from ..blocks import text_to_blocks
 from ..config import settings
 from ..models import Conversation, Message
 from . import loop
+from ..prompt_cache import STABLE, VOLATILE
 from .context import build_history, build_system_prompt
 from .tools import Approver, Asker, ToolContext, deny_all, nobody
 
@@ -122,14 +123,15 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         history = [*history, {"role": "user", "content": notice}]
     last_user = next((m for m in reversed(history) if m["role"] == "user"), None)
     query = vision.text_of(last_user["content"]) if last_user else ""
-    system = await build_system_prompt(db, project_id, query)
-    if hist.summary:
-        system += f"\n\n这段对话更早的内容（摘要，原文已不在下面）：\n{hist.summary}"
-    if not notice and (held := await jobs.take_held(db, cid)):  # 叫醒轮数到上限时压下的任务结论（jobs.follow_ups）
-        system += f"\n\n{held}"
+    prompt = await build_system_prompt(db, project_id, query)  # 稳定段在前、易变段在后（app/prompt_cache.py）
     host = await host_mode.enabled(db)  # 服务器主机模式：每轮读一次，用户在“我的电脑”里关掉后下一轮就没有 host_command
     if host:
-        system += f"\n\n{host_mode.PROMPT}"
+        prompt.add(STABLE, host_mode.PROMPT)
+    if hist.summary:  # 滚动摘要隔几轮就重写一次：放易变段
+        prompt.add(VOLATILE, f"这段对话更早的内容（摘要，原文已不在下面）：\n{hist.summary}")
+    if not notice and (held := await jobs.take_held(db, cid)):  # 叫醒轮数到上限时压下的任务结论（jobs.follow_ups）
+        prompt.add(VOLATILE, held)
+    system = prompt.text()
     builder = loop.MessageBuilder()
     journal = turn_journal.Journal(cid, task_id)  # 进程被杀时这一轮的进度还在（turn_journal.py）
     await journal.open()

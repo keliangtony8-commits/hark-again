@@ -225,7 +225,7 @@ proot = project_dir(pid).resolve()
 (proot / "AGENTS.md").write_text("项目规则：中文注释")
 async def prompts():
     async with SessionLocal() as db:
-        return await build_system_prompt(db, pid, "x"), await build_system_prompt(db, None, "x")
+        return (await build_system_prompt(db, pid, "x")).text(), (await build_system_prompt(db, None, "x")).text()
 ps, me = asyncio.run(prompts())
 assert "项目规则：中文注释" in ps and "根规则" not in ps and "根规则" in me and "项目规则" not in me
 # 子助手的系统提示也带根规则（同一个 build_system_prompt）

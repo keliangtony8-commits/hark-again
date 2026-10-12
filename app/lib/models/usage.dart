@@ -1,30 +1,46 @@
 // 用量与花费（GET /api/usage）。只读报表：记账在后端 app/usage.py，客户端不算钱。
+
+/// 提示缓存命中（后端 app/prompt_cache.py）：输入里有多少是供应商缓存命中的（按便宜很多的价格计）。
+/// 没有命中（供应商不报 / 老服务器 / 真没命中）→ null，界面上不显示这一项。
+String? cacheHitLabel(int cached, int prompt) {
+  if (cached <= 0 || prompt <= 0) return null;
+  final pct = (cached / prompt * 100).clamp(0, 100);
+  return '缓存命中 ${pct < 1 ? '<1' : pct.round()}%';
+}
+
 class ModelUsage {
-  const ModelUsage({required this.model, required this.calls, required this.promptTokens, required this.completionTokens, required this.cost});
+  const ModelUsage({required this.model, required this.calls, required this.promptTokens, required this.completionTokens, this.cachedTokens = 0, required this.cost});
   factory ModelUsage.fromJson(Map<String, dynamic> j) => ModelUsage(
       model: j['model'] as String? ?? '',
       calls: (j['calls'] as num?)?.toInt() ?? 0,
       promptTokens: (j['prompt_tokens'] as num?)?.toInt() ?? 0,
       completionTokens: (j['completion_tokens'] as num?)?.toInt() ?? 0,
+      cachedTokens: (j['cached_tokens'] as num?)?.toInt() ?? 0,
       cost: (j['cost'] as num?)?.toDouble() ?? 0);
   final String model;
   final int calls, promptTokens, completionTokens;
+  final int cachedTokens; // promptTokens 里命中提示缓存的部分（老服务器 → 0）
   final double cost;
   int get tokens => promptTokens + completionTokens;
+  String? get cacheHit => cacheHitLabel(cachedTokens, promptTokens);
 }
 
 class UsagePeriod {
-  const UsagePeriod({this.calls = 0, this.tokens = 0, this.cost = 0, this.models = const []});
+  const UsagePeriod({this.calls = 0, this.tokens = 0, this.promptTokens = 0, this.cachedTokens = 0, this.cost = 0, this.models = const []});
   factory UsagePeriod.fromJson(Map<String, dynamic>? j) => j == null
       ? const UsagePeriod()
       : UsagePeriod(
           calls: (j['calls'] as num?)?.toInt() ?? 0,
           tokens: (j['tokens'] as num?)?.toInt() ?? 0,
+          promptTokens: (j['prompt_tokens'] as num?)?.toInt() ?? 0,
+          cachedTokens: (j['cached_tokens'] as num?)?.toInt() ?? 0,
           cost: (j['cost'] as num?)?.toDouble() ?? 0,
           models: [for (final m in (j['models'] as List? ?? const [])) ModelUsage.fromJson((m as Map).cast<String, dynamic>())]);
   final int calls, tokens;
+  final int promptTokens, cachedTokens; // 输入合计与其中命中缓存的部分（老服务器 / 没按模型拆的合计 → 0）
   final double cost;
   final List<ModelUsage> models;
+  String? get cacheHit => cacheHitLabel(cachedTokens, promptTokens);
 }
 
 /// 本月某一天的用量（报表的 daily 序列，日期是服务器 TIMEZONE 的本地日期）。

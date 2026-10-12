@@ -99,7 +99,7 @@ async def main():
     assert [x["model"] for x in m["models"]] == ["fast", "smart"] and m["models"][0]["cost"] == 10.0, m
     async with SessionLocal() as db:                 # 第二天：今天空，本月照算
         rep = await usage.report(db, now=datetime(2026, 10, 1, 17, 0, tzinfo=timezone.utc))
-    assert rep["today"] == {"calls": 0, "tokens": 0, "cost": 0, "models": []} and rep["month"]["cost"] == 12.0, rep
+    assert rep["today"] == {"calls": 0, "tokens": 0, "prompt_tokens": 0, "cached_tokens": 0, "cost": 0, "models": []} and rep["month"]["cost"] == 12.0, rep
 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

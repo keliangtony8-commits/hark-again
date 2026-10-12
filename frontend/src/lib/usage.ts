@@ -1,6 +1,14 @@
 // 用量与花费（GET /api/usage）：类型 + 展示格式。和 App 的 models/usage.dart、ui/format.dart 同一套规则。
-export type ModelUsage = { model: string; calls: number; prompt_tokens: number; completion_tokens: number; cost: number };
-export type UsagePeriod = { calls: number; tokens: number; cost: number; models: ModelUsage[] };
+/** cached_tokens = prompt_tokens 里命中提示缓存的部分（后端 app/prompt_cache.py；老服务器没有这个字段）。 */
+export type ModelUsage = { model: string; calls: number; prompt_tokens: number; completion_tokens: number; cached_tokens?: number; cost: number };
+export type UsagePeriod = { calls: number; tokens: number; cost: number; models: ModelUsage[]; prompt_tokens?: number; cached_tokens?: number };
+
+/** “缓存命中 62%”；没有命中（供应商不报 / 老服务器）→ null，不显示。和 App 的 cacheHitLabel 同一规则。 */
+export function cacheHitLabel(cached: number | undefined, prompt: number): string | null {
+  if (!cached || cached <= 0 || prompt <= 0) return null;
+  const pct = Math.min(100, (cached / prompt) * 100);
+  return `缓存命中 ${pct < 1 ? "<1" : Math.round(pct)}%`;
+}
 /** 本月某一天（服务器 TIMEZONE 的本地日期 "YYYY-MM-DD"）。 */
 export type UsageDay = { date: string; calls: number; tokens: number; cost: number };
 /** 本月最花钱的对话之一；title 为 null = 对话已删（用量还在）。 */

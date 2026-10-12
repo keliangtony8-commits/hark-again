@@ -71,7 +71,7 @@ async def main():
     assert by["smart"]["calls"] == 1 and abs(by["smart"]["cost"] - round(smart, 4)) < 1e-9, by
     assert abs(t["cost"] - round(round(fast, 4) + round(smart, 4), 4)) < 1e-9, t
     assert rb["total"]["calls"] == 1 and rb["total"]["tokens"] == 1500, rb
-    assert re["total"] == {"calls": 0, "tokens": 0, "cost": 0, "models": []}, re
+    assert re["total"] == {"calls": 0, "tokens": 0, "prompt_tokens": 0, "cached_tokens": 0, "cost": 0, "models": []}, re
 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

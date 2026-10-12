@@ -23,7 +23,7 @@ U = lambda m, p, c, t, cid=None: UsageRecord(model=m, kind="chat", prompt_tokens
 async def main():
     async with SessionLocal() as db:
         empty = await usage.day_report(db, date(2026, 10, 2))
-        assert empty["date"] == "2026-10-02" and empty["total"] == {"calls": 0, "tokens": 0, "cost": 0, "models": []}, empty
+        assert empty["date"] == "2026-10-02" and empty["total"] == {"calls": 0, "tokens": 0, "prompt_tokens": 0, "cached_tokens": 0, "cost": 0, "models": []}, empty
         assert empty["conversations"] == []
         db.add_all([Conversation(id="a", title="写论文"), Conversation(id="b", title="查资料")])
         assert empty["currency"] and empty["priced"] == ["fast", "smart"]

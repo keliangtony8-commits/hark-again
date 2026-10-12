@@ -145,7 +145,7 @@ assert "非 root" in desc and "留在工作区" in desc, desc
 # ---- 3. 系统提示：项目和个人工作区都告诉模型环境 ----
 async def prompts():
     async with SessionLocal() as db:
-        return await build_system_prompt(db, pid), await build_system_prompt(db, None)
+        return (await build_system_prompt(db, pid)).text(), (await build_system_prompt(db, None)).text()
 proj, me = run(prompts())
 for ptxt in (proj, me):
     assert workspaces.ENVIRONMENT in ptxt and "没有 sudo/apt" in ptxt, ptxt[-500:]

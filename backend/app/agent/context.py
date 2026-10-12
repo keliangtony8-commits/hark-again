@@ -8,12 +8,13 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import llm, memory_store, project_brief, skills_store, turn_journal, vision, workspace_instructions, workspaces
+from .. import llm, memory_store, project_brief, prompt_cache, skills_store, turn_journal, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
 from ..models import Connection, Conversation, McpServer, Message, Project, Secret
 from ..storage import is_text, project_file, upload_path
+from ..prompt_cache import STABLE, VOLATILE
 from . import parallel, tool_trace
 
 ATTACH_CHARS = 6000     # 每个文本附件最多带多少字给模型
@@ -23,42 +24,45 @@ SUMMARY_MSG_CHARS = 3000  # 喂给摘要模型的每条旧消息最多多少字�
 log = logging.getLogger(__name__)
 
 
-async def build_system_prompt(db: AsyncSession, project_id: str | None, query: str = "") -> str:
-    """query：用户最新一句话，用来挑相关记忆。"""
-    now = datetime.now(ZoneInfo(settings.timezone)).strftime("%Y-%m-%d %A %H:%M")
-    parts = [settings.system_prompt, f"现在是 {now}（{settings.timezone}）。"]
-    if hint := parallel.prompt():  # 只读查询可以同一步一起发（agent/parallel.py）
-        parts.append(hint)
-
-    mems = await memory_store.relevant(db, query)
-    if mems:
-        parts.append("关于用户你已知道（# 后是引用，改/删时传给 update_memory / forget）：\n"
-                     + "\n".join(memory_store.context_line(m) for m in mems))
+async def build_system_prompt(db: AsyncSession, project_id: str | None, query: str = "") -> prompt_cache.Prompt:
+    """query：用户最新一句话，用来挑相关记忆。
+    返回 Prompt：稳定段在前、每轮会变的段（时间、相关记忆）在后，前缀逐字不变才能命中供应商的提示缓存
+    （规则在 app/prompt_cache.py）。调用方要加段用 .add(STABLE|VOLATILE, text)，最后 .text()。"""
+    p = prompt_cache.Prompt()
+    p.add(STABLE, settings.system_prompt)
+    p.add(STABLE, parallel.prompt())  # 只读查询可以同一步一起发（agent/parallel.py）
 
     skills = skills_store.enabled_skills()
     if skills:  # 只放启用的目录，正文按需 use_skill 读取
-        parts.append("可用技能：\n" + "\n".join(f"- {s.id}：{s.name}——{s.description}" for s in skills))
+        p.add(STABLE, "可用技能：\n" + "\n".join(f"- {s.id}：{s.name}——{s.description}" for s in skills))
 
-    # 只告诉模型“能调哪些服务”，不给任何凭证内容
-    access = [f"- {PROVIDERS[c.provider].name}（{c.account}）：{', '.join(PROVIDERS[c.provider].api_hosts)}"
-              for c in (await db.scalars(select(Connection))).all() if c.provider in PROVIDERS]
-    access += [f"- {s.name}：{', '.join(s.hosts)}" for s in (await db.scalars(select(Secret))).all()]
+    # 只告诉模型“能调哪些服务”，不给任何凭证内容（按名字排序：库里的返回顺序不保证，乱序会打掉缓存）
+    access = sorted(f"- {PROVIDERS[c.provider].name}（{c.account}）：{', '.join(PROVIDERS[c.provider].api_hosts)}"
+                    for c in (await db.scalars(select(Connection))).all() if c.provider in PROVIDERS)
+    access += sorted(f"- {s.name}：{', '.join(s.hosts)}" for s in (await db.scalars(select(Secret))).all())
     if access:
-        parts.append("这些服务已授权，用 api_request 直接调用（认证自动附加；具体用法先看对应技能）：\n" + "\n".join(access))
-    servers = (await db.scalars(select(McpServer))).all()
+        p.add(STABLE, "这些服务已授权，用 api_request 直接调用（认证自动附加；具体用法先看对应技能）：\n" + "\n".join(access))
+    servers = sorted(s.name for s in (await db.scalars(select(McpServer))).all())
     if servers:
-        parts.append("用户的 MCP 服务器（先 mcp_tools 再 mcp_call）：" + "、".join(s.name for s in servers))
+        p.add(STABLE, "用户的 MCP 服务器（先 mcp_tools 再 mcp_call）：" + "、".join(servers))
 
-    if project_id and (p := await db.get(Project, project_id)):
-        parts.append(f"当前在项目「{p.name}」中，{workspaces.prompt_line(p.id)}"
-                     + (f"\n项目规则：\n{p.rules}" if p.rules.strip() else ""))
-        parts.append(project_brief.prompt_section(p))
+    if project_id and (proj := await db.get(Project, project_id)):
+        p.add(STABLE, f"当前在项目「{proj.name}」中，{workspaces.prompt_line(proj.id)}"
+              + (f"\n项目规则：\n{proj.rules}" if proj.rules.strip() else ""))
+        p.add(STABLE, project_brief.prompt_section(proj))
     else:
-        parts.append(workspaces.prompt_line(workspaces.PERSONAL))
+        p.add(STABLE, workspaces.prompt_line(workspaces.PERSONAL))
     # 工作区根目录的 AGENTS.md 一类规则文件（子目录的由文件工具碰到时追加）；规则在 app/workspace_instructions.py
-    if rules := workspace_instructions.baseline(workspaces.of(project_id)).text:
-        parts.append(rules)
-    return "\n\n".join(parts)
+    p.add(STABLE, workspace_instructions.baseline(workspaces.of(project_id)).text)
+
+    # —— 以下每轮都可能变：放最后 ——
+    now = datetime.now(ZoneInfo(settings.timezone)).strftime("%Y-%m-%d %A %H:%M")
+    p.add(VOLATILE, f"现在是 {now}（{settings.timezone}）。")
+    mems = await memory_store.relevant(db, query)
+    if mems:
+        p.add(VOLATILE, "关于用户你已知道（# 后是引用，改/删时传给 update_memory / forget）：\n"
+              + "\n".join(memory_store.context_line(m) for m in mems))
+    return p
 
 
 def _render(blocks: list[dict]) -> str:
