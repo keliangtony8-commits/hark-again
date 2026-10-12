@@ -6,20 +6,42 @@
   unsupported  沙盒里根本做不到、跑了只会白白报错一轮的：sudo / su、apt / dnf / yum / apk 装系统软件
          （容器非 root）。不执行，直接告诉模型能怎么装（pip / npm 落到工作区，系统软件看预装清单）。
   ask    执行前在聊天里弹审批卡等用户点头：推送/提交代码、递归删除、发布软件包、curl | sh……
-做法参考了 OpenAI Codex CLI（Apache-2.0）的命令安全分类：先把一整条 shell 拆成一段段简单命令
-（; && || | 换行），去掉 sudo / env / nohup 这类前缀再逐段看程序名和参数，而不是对整串做正则——
-`echo "rm -rf /"` 不会误伤，`cd x && rm -rf ~` 也逃不掉。拆不开（引号不配对）就退回整串正则。
+
+v1.37 起解析移植自 OpenAI Codex CLI（Apache-2.0）的 is_dangerous_command.rs + bash.rs：
+  - shell_parse 用 tree-sitter-bash 拆出整段脚本里每条简单命令的字面词：管道、if/for/while 体、
+    $( ) / 反引号（含双引号里的）都看得到；单引号里的是数据（`echo 'rm -rf /'` 不误伤）。
+  - 包装命令递归看里面那条：sudo、env（-i / -u / A=B / --）、trap 的动作、bash/sh -c/-lc 的脚本，
+    外加 Codex 没有、云端常见的 eval、timeout/nice/nohup/watch/xargs 的参数、find -exec / -delete、
+    git -C x 这类全局选项。递归超过 MAX_DEPTH 层按 Codex 的 fail closed → ask。
+  - 和 Codex 的分歧：Codex 把任何 rm -f 都当危险；云端工作区里删单个文件很常见，这里只拦递归删除
+    （系统目录 → block，其余 → ask）。
+  语法树有错或没装 tree-sitter → 退回 shlex 分词（剥掉 if/then/do 这类关键字），引号不配对再退回整串正则。
 """
 import re
 import shlex
 from dataclasses import dataclass
 
+from . import shell_parse
+from .shell_parse import Word
+
+MAX_DEPTH = 8  # Codex MAX_DANGEROUS_COMMAND_WRAPPER_DEPTH
 SEPARATORS = {";", "&&", "||", "|", "&", "\n", "(", ")", "|&"}
-PREFIXES = {"sudo", "nohup", "time", "command", "exec", "nice", "ionice", "stdbuf", "xargs", "busybox"}
+KEYWORDS = {"if", "then", "else", "elif", "fi", "do", "done", "while", "until", "!", "{", "}", "case", "esac", "time"}
+# 只是改一下运行方式、真正的命令在后面的包装：值 = 带一个参数值的选项
+WRAPPERS = {
+    "nohup": set(), "command": set(), "exec": set(), "builtin": set(), "busybox": set(),
+    "nice": {"-n", "--adjustment"}, "ionice": {"-c", "-n", "-p", "--class", "--classdata"},
+    "stdbuf": {"-i", "-o", "-e"}, "time": {"-f", "-o", "--format", "--output"},
+    "watch": {"-n", "--interval", "-d"}, "setsid": set(), "chrt": set(), "taskset": set(), "unbuffer": set(),
+    "xargs": {"-I", "-n", "-P", "-d", "-L", "-a", "-E", "-s", "--max-args", "--max-procs", "--delimiter",
+              "--arg-file", "--replace"},
+    "timeout": {"-s", "-k", "--signal", "--kill-after"},
+}
+SHELLS = {"bash", "sh", "zsh", "dash", "ash", "ksh"}
 # 删了就等于毁掉系统或整个家目录的目标
-SYSTEM_PATHS = {"/", "/*", "~", "~/", "~/*", "$HOME", "${HOME}", "$HOME/", "$HOME/*", "/home", "/root", "/etc",
-                "/usr", "/var", "/bin", "/sbin", "/boot", "/lib", "/lib64", "/opt", "/srv", "/proc", "/sys", "/dev",
-                "/workspace", "/workspace/"}
+SYSTEM_PATHS = {"/", "/*", "~", "~/", "~/*", "$HOME", "${HOME}", "$HOME/", "$HOME/*", "${HOME}/*", "/home", "/root",
+                "/etc", "/usr", "/var", "/bin", "/sbin", "/boot", "/lib", "/lib64", "/opt", "/srv", "/proc", "/sys",
+                "/dev", "/workspace", "/workspace/", "/workspace/*", "$WORKSPACE", "${WORKSPACE}", "$WORKSPACE/*"}
 NO_ROOT = {"sudo", "su", "doas"}
 SYSTEM_PKG = {"apt", "apt-get", "aptitude", "dpkg", "dnf", "yum", "apk", "pacman", "zypper", "snap"}
 POWER = {"shutdown", "reboot", "halt", "poweroff"}
@@ -27,6 +49,8 @@ DISK = re.compile(r"^(mkfs(\.\w+)?|mke2fs|wipefs|fdisk|sfdisk|parted|mkswap)$")
 FORK_BOMB = re.compile(r":\s*\(\s*\)\s*\{[^}]*:\s*\|\s*:[^}]*&[^}]*\}")
 RAW_DEVICE = re.compile(r">\s*/dev/(sd|nvme|vd|xvd|hd|mmcblk)\w*")
 PIPE_TO_SHELL = re.compile(r"\b(curl|wget)\b[^|;&]*\|\s*(sudo\s+)?(ba|z|da)?sh\b")
+ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+TOO_DEEP = "命令套了太多层包装，看不清到底要做什么"
 
 
 @dataclass(frozen=True)
@@ -36,6 +60,7 @@ class Verdict:
 
 
 def _segments(command: str) -> list[list[str]] | None:
+    """兜底分词（tree-sitter 不可用或语法树有错时）。"""
     try:
         lex = shlex.shlex(command.replace("\n", " ; "), posix=True, punctuation_chars=";&|()")
         lex.whitespace_split = True
@@ -48,6 +73,8 @@ def _segments(command: str) -> list[list[str]] | None:
             if cur:
                 out.append(cur)
             cur = []
+        elif not cur and (t in KEYWORDS or ASSIGN.fullmatch(t)):
+            continue  # if / then / do / A=B 前缀
         else:
             cur.append(t)
     if cur:
@@ -55,21 +82,21 @@ def _segments(command: str) -> list[list[str]] | None:
     return out
 
 
-def _strip(words: list[str]) -> list[str]:
-    """去掉 sudo / env A=B / nohup 这类前缀，留下真正的程序和参数。"""
-    i = 0
-    while i < len(words):
-        w = words[i]
-        if w in PREFIXES or w == "env" or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", w):
-            i += 1
-        elif words[i - 1:i] == ["sudo"] and w.startswith("-"):  # sudo -u x
-            i += 2 if w in ("-u", "-g") else 1
-        else:
-            break
-    words = words[i:]
-    if words:
-        words = [words[0].rsplit("/", 1)[-1], *words[1:]]  # /bin/rm → rm
-    return words
+def _parse(script: str) -> list[list[Word]] | None:
+    """整段脚本 → 每条命令的词。None = 连兜底分词都拆不开（引号不配对）。"""
+    cmds = shell_parse.commands(script)
+    if cmds is not None:
+        return cmds
+    segs = _segments(script)
+    return None if segs is None else [[Word(t, t) for t in s] for s in segs]
+
+
+def _name(w: Word) -> str:
+    return (w.text or "").rsplit("/", 1)[-1]  # /bin/rm → rm
+
+
+def _arg(w: Word) -> str:
+    return w.text if w.text is not None else w.raw
 
 
 def flags_only_query(prog: str, args: list[str]) -> bool:
@@ -82,6 +109,8 @@ def flags_only_query(prog: str, args: list[str]) -> bool:
 def _flags(args: list[str]) -> set[str]:
     out = set()
     for a in args:
+        if a == "--":
+            break  # Codex rm_args_include_force_option：-- 之后都是文件名
         if a.startswith("--"):
             out.add(a)
         elif a.startswith("-") and len(a) > 1:
@@ -89,31 +118,130 @@ def _flags(args: list[str]) -> set[str]:
     return out
 
 
+def _targets(args: list[str]) -> list[str]:
+    out, after = [], False
+    for a in args:
+        if a == "--" and not after:
+            after = True
+        elif after or not a.startswith("-"):
+            out.append(a)
+    return out
+
+
 def _system(target: str) -> bool:
     return target in SYSTEM_PATHS or (target.rstrip("/") or "/") in SYSTEM_PATHS
 
 
-def _segment(words: list[str]) -> Verdict | None:
-    """一段简单命令：毁系统的照样 block（sudo rm -rf / 也是 block）；其次是沙盒做不到的；再其次 ask。"""
-    first = next((w for w in words if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", w)), "")
-    stripped = _strip(words)
-    v = _rules(stripped)
-    if v is not None and v.level == "block":
-        return v
-    prog = stripped[0] if stripped else ""
-    if first.rsplit("/", 1)[-1] in NO_ROOT or prog in NO_ROOT:
-        return Verdict("unsupported", "沙盒里没有 root 权限（sudo / su 用不了）")
-    if prog in SYSTEM_PKG and not flags_only_query(prog, stripped[1:]):
-        return Verdict("unsupported", "沙盒里不能装系统软件包（没有 root，apt 这类包管理器用不了）")
-    return v
+def _skip_options(words: list[Word], with_value: set[str]) -> list[Word]:
+    """跳过包装命令自己的选项（-n 5、-oL、--signal=KILL），返回真正要跑的那条。"""
+    i = 0
+    while i < len(words):
+        a = _arg(words[i])
+        if a == "--":
+            return words[i + 1:]
+        if not a.startswith("-") or a == "-":
+            break
+        i += 2 if a in with_value else 1
+    return words[i:]
 
 
-def _rules(words: list[str]) -> Verdict | None:
-    if not words:
-        return None
-    prog, args = words[0], words[1:]
+def _script(script: str, depth: int) -> list[Verdict]:
+    cmds = _parse(script)
+    if cmds is None:
+        return [Verdict("ask", "递归删除文件")] if re.search(r"\brm\s+-[a-zA-Z]*[rR]", script) else []
+    return [v for c in cmds for v in _exec(c, depth + 1)]
+
+
+def _exec(words: list[Word], depth: int) -> list[Verdict]:
+    """一条简单命令（可能是包装）：返回它和它包着的命令命中的全部规则。"""
+    if depth > MAX_DEPTH:
+        return [Verdict("ask", TOO_DEEP)]
+    while words and words[0].text is not None and ASSIGN.fullmatch(words[0].text):
+        words = words[1:]  # 兜底分词里的 A=B 前缀
+    if not words or words[0].text is None:
+        return []
+    prog, rest = _name(words[0]), words[1:]
+    args = [_arg(w) for w in rest]
+
+    if prog in ("sudo", "doas"):
+        inner = _skip_options(rest, {"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "--user", "--group"})
+        return [Verdict("unsupported", "沙盒里没有 root 权限（sudo / su 用不了）"), *_exec(inner, depth + 1)]
+    if prog == "su":
+        found = [Verdict("unsupported", "沙盒里没有 root 权限（sudo / su 用不了）")]
+        for i, a in enumerate(args[:-1]):
+            if a in ("-c", "--command"):
+                found += _script(args[i + 1], depth)
+        return found
+    if prog == "env":  # Codex dangerous_command_match_for_env，加上 -u NAME
+        i = 0
+        while i < len(args):
+            a = args[i]
+            if a == "--":
+                i += 1
+                break
+            if a in ("-i", "--ignore-environment", "-0", "--null") or (ASSIGN.fullmatch(a) and not a.startswith("-")):
+                i += 1
+            elif a in ("-u", "--unset", "-C", "--chdir", "-S", "--split-string"):
+                if a in ("-S", "--split-string") and i + 1 < len(args):
+                    return _script(args[i + 1], depth)
+                i += 2
+            else:
+                break
+        return _exec(rest[i:], depth + 1)
+    if prog == "timeout":
+        inner = _skip_options(rest, WRAPPERS["timeout"])
+        return _exec(inner[1:], depth + 1)  # 第一个是时长
+    if prog in WRAPPERS:
+        return _exec(_skip_options(rest, WRAPPERS[prog]), depth + 1)
+    if prog == "trap":  # Codex dangerous_command_match_for_trap：动作是一段 shell 源码
+        i = 1 if args[:1] == ["--"] else 0
+        return _script(args[i], depth) if i < len(args) and not args[i].startswith("-") else []
+    if prog == "eval":
+        return _script(" ".join(args), depth) if args else []
+    if prog in SHELLS:
+        for i, a in enumerate(args):
+            if a.startswith("-") and not a.startswith("--") and "c" in a[1:]:
+                return _script(args[i + 1], depth) if i + 1 < len(args) else []
+            if not a.startswith("-"):
+                break
+        return []
+    if prog == "find":
+        return _find(rest, depth)
+    v = _rules(prog, args)
+    if v is not None:
+        return [v]
+    if prog in SYSTEM_PKG and not flags_only_query(prog, args):
+        return [Verdict("unsupported", "沙盒里不能装系统软件包（没有 root，apt 这类包管理器用不了）")]
+    return []
+
+
+def _find(rest: list[Word], depth: int) -> list[Verdict]:
+    args = [_arg(w) for w in rest]
+    paths = []
+    for a in args:
+        if a.startswith("-") or a in ("(", "!", ")"):
+            break
+        paths.append(a)
+    found: list[Verdict] = []
+    if "-delete" in args:
+        found.append(Verdict("block", "删除系统目录、整个工作区或家目录") if any(_system(p) for p in paths)
+                     else Verdict("ask", "递归删除文件"))
+    i = 0
+    while i < len(args):
+        if args[i] in ("-exec", "-execdir", "-ok", "-okdir"):
+            j = i + 1
+            while j < len(args) and args[j] not in (";", "+", "\\;"):
+                j += 1
+            inner = [w for w in rest[i + 1:j] if _arg(w) != "{}"]
+            found += _exec(inner, depth + 1)
+            i = j
+        i += 1
+    return found
+
+
+def _rules(prog: str, args: list[str]) -> Verdict | None:
     flags = _flags(args)
-    targets = [a for a in args if not a.startswith("-")]
+    targets = _targets(args)
     if prog == "rm":
         recursive = flags & {"-r", "-R", "--recursive"}
         if "--no-preserve-root" in flags or (recursive and any(_system(t) for t in targets)):
@@ -131,19 +259,30 @@ def _rules(words: list[str]) -> Verdict | None:
         return Verdict("block", "直接写磁盘设备")
     if prog in ("kill", "pkill", "killall") and ("-1" in args[1:] or args[-1:] == ["-1"]):
         return Verdict("block", "杀掉所有进程")
-    if prog == "git" and targets:
-        sub = targets[0]
-        if sub == "push":
-            return Verdict("ask", "强制推送，会覆盖远端历史" if flags & {"-f", "--force", "--force-with-lease"} or
-                           any(t.startswith("+") for t in targets[1:]) else "推送代码到远端仓库")
-        if sub == "commit":
-            return Verdict("ask", "提交代码")
-        if sub == "reset" and "--hard" in flags:
-            return Verdict("ask", "丢弃未提交的改动（git reset --hard）")
-        if sub == "clean" and flags & {"-f", "--force"}:
-            return Verdict("ask", "删除未跟踪的文件（git clean）")
+    if prog == "git":
+        return _git(args)
     if prog in ("npm", "pnpm", "yarn") and targets[:1] == ["publish"] or prog == "twine" and targets[:1] == ["upload"]:
         return Verdict("ask", "发布软件包")
+    return None
+
+
+def _git(args: list[str]) -> Verdict | None:
+    i = 0
+    while i < len(args) and args[i].startswith("-"):  # git -C repo / -c k=v / --no-pager push
+        i += 2 if args[i] in ("-C", "-c", "--git-dir", "--work-tree", "--namespace") else 1
+    if i >= len(args):
+        return None
+    sub, rest = args[i], args[i + 1:]
+    flags, targets = _flags(rest), _targets(rest)
+    if sub == "push":
+        forced = flags & {"-f", "--force", "--force-with-lease"} or any(t.startswith("+") for t in targets)
+        return Verdict("ask", "强制推送，会覆盖远端历史" if forced else "推送代码到远端仓库")
+    if sub == "commit":
+        return Verdict("ask", "提交代码")
+    if sub == "reset" and "--hard" in flags:
+        return Verdict("ask", "丢弃未提交的改动（git reset --hard）")
+    if sub == "clean" and flags & {"-f", "--force"}:
+        return Verdict("ask", "删除未跟踪的文件（git clean）")
     return None
 
 
@@ -153,10 +292,7 @@ def verdict(command: str) -> Verdict | None:
         return Verdict("block", "fork 炸弹")
     if RAW_DEVICE.search(command):
         return Verdict("block", "直接写磁盘设备")
-    segs = _segments(command)
-    found = [v for s in segs for v in [_segment(s)] if v] if segs is not None else []
-    if segs is None and re.search(r"\brm\s+-[a-zA-Z]*[rR]", command):
-        found.append(Verdict("ask", "递归删除文件"))
+    found = _script(command, -1)
     if PIPE_TO_SHELL.search(command):
         found.append(Verdict("ask", "下载并直接执行脚本"))
     for level in ("block", "unsupported"):

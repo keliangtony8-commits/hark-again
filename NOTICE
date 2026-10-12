@@ -9,3 +9,8 @@
 - openai/codex（Codex CLI）— Apache License 2.0
   https://github.com/openai/codex
   参考：命令安全分类（拆分 shell 为简单命令逐段判断）→ backend/app/command_guard.py
+  移植（modified）：codex-rs/shell-command/src/bash.rs 字面词解析 → backend/app/shell_parse.py；
+        command_safety/is_dangerous_command.rs 的包装递归（sudo/env/trap/bash -c、深度上限 fail closed）与测试用例 → command_guard.py、tests/smoke_command_guard_port.py
+- tree-sitter / tree-sitter-bash（py-tree-sitter）— MIT License
+  https://github.com/tree-sitter/tree-sitter-bash
+  依赖：后端解析 shell 语法树（requirements.txt）

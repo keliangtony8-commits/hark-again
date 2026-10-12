@@ -12,3 +12,5 @@ python-multipart==0.0.*
 croniter==3.*
 cryptography==43.*
 pillow==11.*
+tree-sitter==0.25.*
+tree-sitter-bash==0.25.*
