@@ -225,6 +225,7 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .edit-bar > svg { color: var(--text-2); flex: none; }
 .edit-bar span { flex: 1; min-width: 0; }
 .edit-bar .icon-btn { color: var(--text-3); }
+.shell-bar { min-height: 28px; } /* !命令 提示条：和编辑条同位置、同一个 rise 出场 */
 .composer.editing { border-color: color-mix(in srgb, var(--text) 30%, var(--glass-border)); }
 
 /* 模型钮（快速 / 深度）：输入框主按钮左边的小胶囊；非默认模型用强调色，换值时标签从下方浮入 */

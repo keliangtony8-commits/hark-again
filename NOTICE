@@ -89,3 +89,5 @@
   移植到 backend/app/readonly_command.py（v1.71）
 - google-gemini/gemini-cli packages/core/src/tools/exit-plan-mode.ts、policy/policies/plan.toml、prompts/snippets.ts 计划模式段；openai/codex codex-rs/collaboration-mode-templates/templates/plan.md — Apache License 2.0, modified；deepseek-ai/deepseek-harness packages/plan/plan-mode/src/index.ts — MIT
   移植到 backend/app/plan_mode.py、backend/app/agent/builtin/plan_mode.py（v1.71）；v1.72 批准的方案存文件嫁接 Gemini config.ts approvedPlanPath 与 snippets renderApprovedPlanSection（Apache-2.0, modified）；v1.73 批准方案后种进度清单参考 Gemini exit-plan-mode 转场提示与 Codex plan.md（Apache-2.0, modified）
+- openai/codex codex-rs/core/src/tasks/user_shell.rs、core/src/context/user_shell_command.rs — Apache License 2.0, modified；google-gemini/gemini-cli packages/cli/src/ui/hooks/useExecutionLifecycle.ts — Apache License 2.0, modified
+  移植到 backend/app/user_shell.py（v1.77）

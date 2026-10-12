@@ -9,6 +9,7 @@ export function copyText(blocks: Block[]): string {
     switch (b.type) {
       case "text": return b.text.trim();
       case "code": return "```" + (b.language ?? "") + "\n" + b.source + "\n```";
+      case "shell": return "```bash\n$ " + b.command + "\n" + b.output.replace(/\s+$/, "") + "\n```";
       case "table": return [
         ...(b.title ? [`**${b.title}**`] : []),
         `| ${b.columns.join(" | ")} |`,

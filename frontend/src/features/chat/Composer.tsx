@@ -5,7 +5,8 @@ import { asFileBlock, attachSub, extOf, MAX_MESSAGE_FILES } from "../../lib/file
 import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
 import ProjectFilePicker from "../projects/ProjectFilePicker";
 import { useRecorder } from "../../hooks/useRecorder";
-import { IconCheck, IconClip, IconClose, IconEdit, IconFile, IconFolder, IconMic, IconSend, IconStop } from "../../ui/icons";
+import { IconCheck, IconClip, IconClose, IconEdit, IconFile, IconFolder, IconMic, IconSend, IconStop, IconTerminal } from "../../ui/icons";
+import { shellCommandOf } from "../../lib/shell";
 import { Menu } from "../../ui/kit";
 import "./chat.css";
 
@@ -81,6 +82,8 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
     setPicking(false);
     ref.current?.focus();
   };
+  /** 整条是 `!命令`（且没带附件）：发出去不问助手，直接在这段对话的电脑上跑（后端 user_shell）。 */
+  const shell = !editing && files.length === 0 && shellCommandOf(text) !== null;
   const canSend = !disabled && (editing
     ? !!text.trim() || editing.hasFiles
     : !uploading && (!!text.trim() || ready.length > 0));
@@ -118,6 +121,12 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
             <IconEdit size={14} />
             <span>编辑消息 · 发送后重新回答</span>
             <button className="icon-btn sm" onClick={onCancelEdit} aria-label="取消编辑" title="取消编辑（Esc）"><IconClose size={14} /></button>
+          </div>
+        )}
+        {shell && (
+          <div className="edit-bar shell-bar">
+            <IconTerminal size={14} />
+            <span>直接在电脑上运行 · 不经过助手，结果它下次能看到</span>
           </div>
         )}
         {!editing && files.length > 0 && (
@@ -159,7 +168,9 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
             {streaming
               ? <button key="stop" className="send-btn stop" onClick={onStop} disabled={!onStop} aria-label="停止生成" title="停止生成（Esc）"><IconStop /></button>
               : canSend || !mic.supported
-              ? <button className="send-btn" onClick={submit} disabled={!canSend} aria-label={editing ? "保存并重新回答" : "发送"}><IconSend /></button>
+              ? <button key={shell ? "run" : "send"} className="send-btn" onClick={submit} disabled={!canSend}
+                  aria-label={editing ? "保存并重新回答" : shell ? "在电脑上运行" : "发送"} title={shell ? "在电脑上运行（Enter）" : undefined}>
+                  {shell ? <IconTerminal /> : <IconSend />}</button>
               : <button className="send-btn ghost" onClick={startVoice} disabled={disabled || voiceBusy} aria-label="说话"><IconMic /></button>}
           </div>
         )}

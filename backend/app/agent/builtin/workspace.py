@@ -2,9 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-import httpx
-
-from ... import apply_patch as patching, command_guard, computer, deliver, file_edit, file_seen, jobs, quota, sandbox_client, spill, term_text, vision, workspace_search, workspaces
+from ... import apply_patch as patching, command_guard, computer, deliver, file_edit, file_seen, foreground, jobs, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -370,42 +368,18 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     if stdin is not None and len(stdin.encode()) > sandbox_client.STDIN_MAX:
         return ToolResult(f"stdin 太长（上限 {sandbox_client.STDIN_MAX // 1024} KB）：先写进工作区文件，命令里用 < 文件 读。")
     title = f"$ {command[:80]}"
-    tail, r = "", None
-    try:
-        async for ev in sandbox_client.stream(ctx.workspace, command, min(timeout or 60, 120), stdin):
-            if ev["type"] == "out":
-                tail = term_text.tail(tail + ev["data"])
-                ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True})
-            elif ev["type"] == "exit":
-                r = ev
-            elif ev["type"] == "error":
-                return ToolResult(f"沙盒出错（{ev.get('error', '')}），命令的结果不确定。", failed="沙盒出错")
-    except httpx.HTTPError as e:
-        return ToolResult(f"沙盒没响应（{type(e).__name__}），命令没有执行。", failed="沙盒没响应")
-    if r is None:
-        return ToolResult("沙盒连接中断，命令的结果不确定。", failed="沙盒连接中断")
-    timed_out = r.get("timed_out")
-    status = "超时被终止" if timed_out else f"退出码 {r['exit_code']}"
-    if r.get("oom"):  # 沙盒比过 cgroup 的 OOM 计数：确实是内存超上限被内核杀的
-        status = f"{jobs.OOM_REASON}（退出码 {r['exit_code']}）"
-    # 终端文本统一洗一遍（颜色转义、\r 进度帧）；二进制输出沙盒已换成一句说明
-    out = shown = term_text.clean(r.get("output", ""))
-    if r.get("binary") is not None:
-        out, shown = term_text.binary_note(r["binary"]), f"（二进制输出，{r['binary']} 字节，不显示）"
-    if spill.MARK in out:  # 沙盒那边输出太长：中间段省略，完整输出（能存下时）写进了工作区 .spill/
-        omitted = r.get("omitted", 0)
-        note = spill.notice(omitted, r.get("spill"), r.get("total", 0))
-        if r.get("spill_truncated"):  # 沙盒只存了前 64 MB
-            note += "（完整输出太大，文件里只存了开头一部分）"
-        out = out.replace(spill.MARK, note)
-        shown = shown.replace(spill.MARK, f"\n…（中间省略 {omitted} 字符）…\n")
+    r = await foreground.run(ctx.workspace, command, timeout or 60, stdin,
+                             lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}))
+    if r.failed:
+        return ToolResult(r.message, failed=r.failed)
+    timed_out, status, out, shown = r.timed_out, r.status, r.out, r.shown
     hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
-    if r.get("oom"):
-        hint = f"\n（{jobs.oom_hint(r.get('memory_limit'))}）"
-    hint += computer.wake_note(r.get("woke"))
+    if r.oom:
+        hint = f"\n（{jobs.oom_hint(r.memory_limit)}）"
+    hint += computer.wake_note(r.woke)
     # 命令可能刚写了大东西：重数一遍（线程里跑，最多数 20 万项），满了 / 快满了才有一句
     hint += await asyncio.to_thread(quota.model_note, ctx.workspace, True)
     return ToolResult(f"{status}\n{out}{hint}", [
         {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}],
-        failed="" if r.get("exit_code") == 0 and not timed_out else status)
+        failed="" if r.ok else status)
 

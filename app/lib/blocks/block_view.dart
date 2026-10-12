@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'plan_review_block.dart';
 import 'plan_block.dart';
 import 'preview_block.dart';
+import 'shell_block.dart';
 
 class BlockView extends StatelessWidget {
   const BlockView(this.block, {super.key});
@@ -42,6 +43,7 @@ class BlockView extends StatelessWidget {
         OrderBlock b => OrderBlockView(b),
         FormBlock b => FormBlockView(b),
         JobBlock b => JobBlockView(b),
+        ShellBlock b => ShellBlockView(b),
         PreviewBlock b => PreviewBlockView(b),
         PlanBlock b => PlanBlockView(b),
         DelegateBlock b => DelegateBlockView(b),

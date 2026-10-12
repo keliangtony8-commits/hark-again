@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     router_complex: str = "smart"
     router_model: str = ""
     router_default: bool = False
+    user_shell: bool = True         # 输入框里 !命令 直接在工作区电脑上跑、不经过模型（app/user_shell.py）；false = 当普通消息发给助手
+    user_shell_seconds: int = 120   # 用户命令前台最长秒数（沙盒前台上限也是 120）
     auto_title: bool = True         # 第一轮回复后用 summary_model 给新对话起短标题（app/conversation_title.py；每段对话约一次小调用）
     # 看图（vision.py）：能直接收图片的别名（阶跃 step-3.7-flash = fast、step-5-preview = smart 实测都能看图；lite 不能）；其余别名看到的是图片的文字描述。
     # vision_model = 写描述用的看图别名（每张图只描述一次并缓存）；image_max_side = 发给模型前缩到的最长边（省 token）

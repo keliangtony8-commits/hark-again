@@ -125,7 +125,7 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
           Padding(
             padding: const EdgeInsets.only(right: Sp.x2),
             child: Row(children: [
-              SwapSwitcher(child: _StatusMark(tone, key: ValueKey(tone))),
+              SwapSwitcher(child: JobStatusMark(tone, key: ValueKey(tone))),
               const SizedBox(width: Sp.x2),
               Expanded(child: Text(j.title, style: context.text.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis)),
               const SizedBox(width: Sp.x2),
@@ -199,8 +199,9 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
   }
 }
 
-class _StatusMark extends StatelessWidget {
-  const _StatusMark(this.tone, {super.key});
+/// 卡头的状态点 / 结论图标（后台任务卡和用户命令卡共用）。
+class JobStatusMark extends StatelessWidget {
+  const JobStatusMark(this.tone, {super.key});
   final JobTone tone;
 
   @override

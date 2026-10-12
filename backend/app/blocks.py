@@ -41,6 +41,18 @@ class CodeBlock(BaseModel):
     live: bool = False
 
 
+class ShellBlock(BaseModel):
+    """用户在输入框里打 `!命令` 自己跑的结果（app/user_shell.py；不经过模型）。一条助手消息里只有它一张。
+    state：running（运行中，output 是最近的终端尾巴）/ done / failed（退出码非 0 或内存超限）/ timeout / stopped / refused（被拦下）/ error（沙盒没给结果）。"""
+    type: Literal["shell"] = "shell"
+    command: str
+    state: Literal["running", "done", "failed", "timeout", "stopped", "refused", "error"] = "running"
+    output: str = ""
+    exit_code: int | None = None
+    seconds: float | None = None
+    note: str | None = None
+
+
 class FileBlock(BaseModel):
     """文件卡片。source=upload：聊天附件（id 为上传 id）；source=project：项目文件（id 为相对路径）。"""
     type: Literal["file"] = "file"
@@ -335,7 +347,7 @@ class FormBlock(BaseModel):
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
                         OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock, ChangesBlock,
-                        PlanReviewBlock],
+                        PlanReviewBlock, ShellBlock],
                   Field(discriminator="type")]
 
 
@@ -357,6 +369,9 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(b["text"])
         elif t == "code":
             parts.append(f"```{b.get('language','')}\n{b['source']}\n```")
+        elif t == "shell":
+            from .user_shell import summary  # 规则只在 user_shell.py
+            parts.append(summary(b))
         elif t == "table":
             parts.append(" | ".join(b["columns"]) + "\n" + "\n".join(" | ".join(r) for r in b["rows"]))
         elif t == "stats":

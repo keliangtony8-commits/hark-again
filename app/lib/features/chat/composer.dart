@@ -20,6 +20,7 @@ import '../../core/api.dart';
 import '../../core/media.dart';
 import '../../models/block.dart';
 import '../../models/message.dart';
+import '../../models/shell.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/glass.dart';
@@ -127,6 +128,9 @@ class _ComposerState extends ConsumerState<Composer> {
   bool get _hasContent =>
       _c.text.trim().isNotEmpty || (_editing ? widget.editing!.hasFiles : _attachments.any((a) => a.file != null));
   bool get _canSend => !widget.busy && !_uploading && _hasContent;
+
+  /// 整条是 `!命令`（且没带附件）：发出去不问助手，直接在这段对话的电脑上跑（后端 user_shell）。
+  bool get _shell => !_editing && _attachments.isEmpty && shellCommandOf(_c.text) != null;
 
   void _send() {
     if (!_canSend) return;
@@ -273,7 +277,11 @@ class _ComposerState extends ConsumerState<Composer> {
             duration: context.motion(Motion.base),
             curve: Motion.ease,
             alignment: Alignment.topCenter,
-            child: _editing ? _EditBar(onCancel: widget.onCancelEdit) : const SizedBox(width: double.infinity),
+            child: _editing
+                ? _EditBar(onCancel: widget.onCancelEdit)
+                : _shell
+                ? const _ShellBar(key: ValueKey('shell'))
+                : const SizedBox(width: double.infinity),
           ),
           AttachmentTray(items: _editing ? const [] : _attachments, onRemove: (a) => setState(() => _attachments.remove(a))),
           AnimatedSwitcher(
@@ -324,9 +332,9 @@ class _ComposerState extends ConsumerState<Composer> {
                 )
               : _hasContent || widget.busy
               ? _RoundButton(
-                  key: const ValueKey('send'),
-                  icon: Icons.arrow_upward_rounded,
-                  label: _editing ? '保存并重新回答' : '发送',
+                  key: ValueKey(_shell ? 'run' : 'send'),
+                  icon: _shell ? Icons.terminal_rounded : Icons.arrow_upward_rounded,
+                  label: _editing ? '保存并重新回答' : (_shell ? '在电脑上运行' : '发送'),
                   filled: _canSend,
                   onTap: _canSend ? _send : null,
                 )
@@ -383,6 +391,29 @@ class _EditBar extends StatelessWidget {
             iconSize: 18,
             visualDensity: VisualDensity.compact,
             icon: Icon(Icons.close_rounded, color: p.text3),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// `!命令` 的顶条：说明这条不问助手、直接在电脑上跑（和编辑条同一个位置、同一种出场）。
+class _ShellBar extends StatelessWidget {
+  const _ShellBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return FadeSlideIn(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x2, Sp.x4, 0),
+        child: Row(children: [
+          Icon(Icons.terminal_rounded, size: 16, color: p.text2),
+          const SizedBox(width: Sp.x2),
+          Expanded(
+            child: Text('直接在电脑上运行 · 不经过助手，结果它下次能看到',
+                style: context.text.bodySmall?.copyWith(color: p.text2), maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
         ]),
       ),

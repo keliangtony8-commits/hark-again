@@ -59,6 +59,7 @@ sealed class Block {
         'order' => OrderBlock.fromJson(j),
         'form' => FormBlock.fromJson(j),
         'job' => JobBlock.fromJson(j),
+        'shell' => ShellBlock.fromJson(j),
         'preview' => PreviewBlock.fromJson(j),
         'plan' => PlanBlock.fromJson(j),
         'delegate' => DelegateBlock.fromJson(j),
@@ -215,6 +216,23 @@ class JobBlock extends Block {
 
   /// 被服务器护栏自动停掉的原因（卡住没输出 / 输出过大）；用户或助手取消的没有。
   final String? stopReason;
+}
+
+/// 用户自己跑的命令（输入框 !命令，后端 ShellBlock）：一条回复里只有它一张。规则在 models/shell.dart。
+class ShellBlock extends Block {
+  const ShellBlock({required this.command, this.state = 'running', this.output = '', this.exitCode, this.seconds, this.note});
+  factory ShellBlock.fromJson(Map<String, dynamic> j) => ShellBlock(
+      command: j['command'] as String? ?? '',
+      state: j['state'] as String? ?? 'running',
+      output: j['output'] as String? ?? '',
+      exitCode: (j['exit_code'] as num?)?.toInt(),
+      seconds: (j['seconds'] as num?)?.toDouble(),
+      note: j['note'] as String?);
+  final String command, state, output;
+  final int? exitCode;
+  final double? seconds;
+  final String? note;
+  bool get running => state == 'running';
 }
 
 class PageBlock extends Block {
@@ -486,7 +504,7 @@ class ReplySegment {
 }
 
 bool standsAlone(Block b) => switch (b) {
-      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || PlanBlock() || DelegateBlock() || ChangesBlock() || PlanReviewBlock() => true,
+      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || ShellBlock() || PlanBlock() || DelegateBlock() || ChangesBlock() || PlanReviewBlock() => true,
       _ => false,
     };
 
@@ -582,6 +600,7 @@ String copyText(List<Block> blocks) => [
         switch (b) {
           TextBlock(:final text) => text.trim(),
           CodeBlock(:final language, :final source) => '```$language\n$source\n```',
+          ShellBlock(:final command, :final output) => '```bash\n\$ $command\n${output.trimRight()}\n```',
           TableBlock(:final title, :final columns, :final rows, :final note) => [
               if (title != null && title.isNotEmpty) '**$title**',
               '| ${columns.join(' | ')} |',

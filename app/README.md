@@ -138,3 +138,4 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v1.72：批准的方案存成文件：PlanReviewBlock.workspace/path；models/plan_review.dart planReviewSaved/FileName/FilePath/FileSemantics；卡头下 RiseSwitcher 露“已存为 …”一行（_SavedFile，tileFill，点开工作区文件，收起时也在）；测试在 test/plan_mode_test.dart。
 - v1.73：后端批准时种计划清单卡（现有 PlanBlock 原样显示）；存文件失败时 path 被清空 → “已存为”一行收起（plan_mode_test 覆盖）。
 - v1.74：ComputerStatus.stoppedBy（ComputerStopReason idle/room）；休眠说明行 room → “给正在用的其它工作区腾内存，先休眠了，用到时自动开机”（computer_test 覆盖）。网页版 lib/computer.ts 同一句。
+- v1.77 用户命令：models/shell.dart（shellCommandOf/状态词/用时/读屏）、blocks/shell_block.dart（沿用后台任务卡样子，JobStatusMark 公开共用，完整输出 sheet + 复制）、composer `!命令` 提示条 + 发送钮换终端图标“在电脑上运行”。测试 test/user_shell_test.dart。

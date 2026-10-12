@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import llm, memory_store, project_brief, prompt_cache, skills_store, turn_journal, vision, workspace_instructions, workspaces
+from .. import llm, memory_store, project_brief, prompt_cache, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -148,14 +148,25 @@ class _Snapshot:
     summary: str
     covered: int  # 摘要已覆盖前多少条
     stale: bool   # 摘要指向的消息没了（被重答删掉）：作废
+    skip: list[bool]  # 不单独给模型的消息（用户命令 “!ls” 本身：已并进后面那条结果记录）
 
 
 async def _snapshot(db: AsyncSession, conversation_id: str) -> _Snapshot:
     conv = await db.get(Conversation, conversation_id)
     rows = (await db.scalars(select(Message).where(Message.conversation_id == conversation_id)
                              .order_by(Message.created_at))).all()
-    notes = [turn_journal.history_note(m.status, m.steps) if m.role == "assistant" else "" for m in rows]  # 被打断/停下的回复附说明
+    shells = [user_shell.reply_block(m.blocks) if m.role == "assistant" else None for m in rows]
+    notes = [turn_journal.history_note(m.status, m.steps) if m.role == "assistant" and not shells[i] else ""
+             for i, m in enumerate(rows)]  # 被打断/停下的回复附说明
     plain = [_render(m.blocks) + notes[i] for i, m in enumerate(rows)]
+    roles = [m.role for m in rows]
+    skip = [False] * len(rows)
+    for i, b in enumerate(shells):  # 用户自己跑的命令（!命令）：命令 + 结果合成一条“用户那边发生的事”（Codex <user_shell_command>）
+        if b is None:
+            continue
+        plain[i], roles[i] = user_shell.record(b), "user"
+        if i > 0 and rows[i - 1].role == "user" and user_shell.command_of(rows[i - 1].blocks):
+            plain[i - 1], skip[i - 1] = "", True  # 那条 “!ls” 本身不再单独给模型
     digests = [tool_trace.digest(m.steps) if m.role == "assistant" else "" for m in rows]
     texts = [p + d for p, d in zip(plain, digests)]
     traces = _traces(rows)
@@ -164,8 +175,8 @@ async def _snapshot(db: AsyncSession, conversation_id: str) -> _Snapshot:
     summary = conv.summary if conv else ""
     upto = conv.summary_upto if conv else None
     covered = ids.index(upto) + 1 if upto in ids else 0
-    return _Snapshot(conv, ids, [m.role for m in rows], [m.blocks for m in rows], notes, texts, plain, digests, traces, last_user,
-                     summary if covered else "", covered, bool(upto) and covered == 0)
+    return _Snapshot(conv, ids, roles, [m.blocks for m in rows], notes, texts, plain, digests, traces, last_user,
+                     summary if covered else "", covered, bool(upto) and covered == 0, skip)
 
 
 def _traces(rows) -> list[list[dict]]:
@@ -203,7 +214,7 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
     if start > covered and conv is not None:  # 摘要和原文窗口之间有缺口：折叠
         target = max(start, _window_start(sizes, int(budget * FOLD_TARGET), last_user))
         try:
-            summary = await _fold(summary, [(roles[i], texts[i]) for i in range(covered, target)])
+            summary = await _fold(summary, [(roles[i], texts[i]) for i in range(covered, target) if not snap.skip[i]])
             conv.summary, conv.summary_upto = summary, ids[target - 1]
             await db.commit()
             covered = target
@@ -230,6 +241,8 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
             texts[i] = plain[i] + snap.digests[i]
     out: list[dict] = []
     for i in range(first, n):
+        if snap.skip[i]:
+            continue
         if traces[i]:  # 最近几条回复：工具调用 + 结果原样放回，接着是回复文字
             out += tool_trace.replay(traces[i], plain[i])
         else:
@@ -281,7 +294,7 @@ async def compact_now(db: AsyncSession, conversation_id: str) -> dict:
     if target - snap.covered < 1:
         return {**_state(snap), "status": "noop", "before": before, "after": before}
     folded = snap.texts[snap.covered:target]
-    summary = await _fold(snap.summary, [(snap.roles[i], snap.texts[i]) for i in range(snap.covered, target)])
+    summary = await _fold(snap.summary, [(snap.roles[i], snap.texts[i]) for i in range(snap.covered, target) if not snap.skip[i]])
     if len(summary) >= len(snap.summary) + sum(len(t) for t in folded):
         return {**_state(snap), "status": "inflated", "before": before, "after": before}
     snap.conv.summary, snap.conv.summary_upto = summary, snap.ids[target - 1]

@@ -5,7 +5,7 @@ import contextlib
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .. import conversation_title, live_turns, workspaces
+from .. import conversation_title, live_turns, user_shell, workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -86,9 +86,7 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
         await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title})
-        reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
-        if reply is not None and reply.status != "stopped":  # 停掉的半截不起名，下一轮再试
-            conversation_title.schedule(conv.id, emit)  # 后台起标题，不挡排队的下一轮
+        await _answer(db, conv, user_msg, emit, stop)
 
 
 async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
@@ -109,9 +107,18 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title, "replaced": replaced,
                     **({"user_message": user_msg.to_wire()} if isinstance(text, str) else {})})
-        reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
-        if reply is not None and reply.status != "stopped":  # 第一轮失败后点“重试”：也起一次
-            conversation_title.schedule(conv.id, emit)
+        await _answer(db, conv, user_msg, emit, stop)
+
+
+async def _answer(db, conv: Conversation, user_msg: Message, emit, stop: asyncio.Event) -> None:
+    """回答一条用户消息：`!命令` 直接在工作区电脑上跑（user_shell，不调模型；重新生成 = 再跑一次），
+    其余交给模型（run_turn）。停掉的半截不起名，下一轮再试；第一轮失败后点“重试”也起一次。"""
+    if (command := user_shell.command_of(user_msg.blocks)) is not None:
+        await user_shell.run(db, conv.id, conv.project_id, command, emit, stop)
+        return
+    reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
+    if reply is not None and reply.status != "stopped":
+        conversation_title.schedule(conv.id, emit)  # 后台起标题，不挡排队的下一轮
 
 
 MAX_FILES = 10  # 一条消息最多带几个文件（上传 + 项目文件合计）
