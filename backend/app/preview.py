@@ -88,14 +88,14 @@ def link(token: str, path: str = "", root: str | None = None) -> str:
 
 # ---- 端口 ----
 async def listening(ws: str) -> dict:
-    """{running: bool, ports: [{port, loopback, pid, command}]}。沙盒连不上抛 PreviewError。"""
+    """{running: bool, ports: [{port, loopback, pid, pgid, command}]}（pgid v1.82：端口归哪个常驻服务）。沙盒连不上抛 PreviewError。"""
     try:
         raw = await sandbox_client.ports(ws)
     except httpx.HTTPError as e:
         raise PreviewError("沙盒服务连不上，没法看端口") from e
     rows = [p for p in (raw.get("ports") or []) if isinstance(p, dict) and isinstance(p.get("port"), int)]
     return {"running": raw.get("state") == "running",
-            "ports": [{"port": p["port"], "loopback": bool(p.get("loopback")), "pid": p.get("pid"),
+            "ports": [{"port": p["port"], "loopback": bool(p.get("loopback")), "pid": p.get("pid"), "pgid": p.get("pgid"),
                        "command": str(p.get("command") or "")[:200]} for p in rows]}
 
 

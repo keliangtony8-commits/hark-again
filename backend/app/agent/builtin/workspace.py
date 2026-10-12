@@ -370,7 +370,7 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
             return ToolResult(f"没有启动：{e}", failed=f"没有启动：{e}")
         if job.keep_alive:
             return ToolResult(f"已在后台启动常驻任务 {job.id}「{job.title}」：不限时，意外退出或电脑重启后会自动拉起。"
-                              "它监听端口的话可用 preview_port 给用户预览链接；用 job_status 看日志，cancel_job 停。"
+                              "它监听端口的话可用 preview_port 给用户预览链接；用 job_status 看日志，改了代码用 restart_service 重启，cancel_job 停。"
                               "现在简短告诉用户它在跑什么。", [jobs.block(job)])
         idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
         return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（最长 {jobs.duration_text(job.timeout)}{idle}）。"

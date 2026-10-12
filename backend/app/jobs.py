@@ -23,7 +23,7 @@ v1.39 移植自 deepseek-harness tool-jobs（MIT）：job_status 只给上次看
 用户下次说话时并进那一轮（take_held）。
 v1.80 常驻任务（keep_alive，对标 Manus Cloud Computer 的“常开进程 / 24 小时 bot”）：不限时（timeout 0）、不判卡住；
 进程意外退出（非零 / OOM / 容器重启进程没了）→ job_restart.decide 给出等待秒数，restart_at 到点由 worker 的 tick 重新叫沙盒
-跑同一个 run.sh（日志追加，中间插一行“第 N 次自动重启”）；正常退出（0）照普通任务结算；连续很快就崩到上限 → 结算为失败并通知助手。
+跑同一个 run.sh（日志追加，中间插一行“第 N 次重启”）；正常退出（0）照普通任务结算；连续很快就崩到上限 → 结算为失败并通知助手。
 整个监护期间 state 一直是 running（占运行名额、电脑不会因空闲被停）；日志超过上限不停服务，而是轮转（留尾巴进 log.1）。
 “这台电脑”重启时常驻任务不停，删完容器立刻排队重启（after_restart）。
 """
@@ -352,7 +352,7 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     return job
 
 
-async def _patch_blocks(db: AsyncSession, job: Job) -> None:
+async def patch_blocks(db: AsyncSession, job: Job) -> None:
     """把对话里这张任务卡改成当前状态（重开对话、换设备看到的就是结论，不用再轮询）。"""
     if not job.conversation_id:
         return
@@ -376,7 +376,7 @@ async def settle(db: AsyncSession, job: Job, state: str, exit_code: int | None) 
     by_agent = state == "cancelled" and _read(job_dir(job) / "cancelled") == "agent"
     if job.followup == "none" and not by_agent and job.conversation_id and await db.get(Conversation, job.conversation_id):
         job.followup = "pending"
-    await _patch_blocks(db, job)
+    await patch_blocks(db, job)
     await db.commit()
     return True
 
@@ -430,7 +430,7 @@ def _relaunch_files(job: Job) -> None:
     for name in ("exit", "exit.tmp", "oom", "pid"):
         (d / name).unlink(missing_ok=True)
     with (d / "log").open("a", encoding="utf-8") as f:
-        f.write(f"\n—— 第 {job.restarts + 1} 次自动重启 ——\n")
+        f.write(f"\n—— 第 {job.restarts + 1} 次重启 ——\n")
 
 
 async def _relaunch(db: AsyncSession, job: Job) -> None:
@@ -603,7 +603,7 @@ async def follow_ups(db: AsyncSession) -> int:
             continue
         now = datetime.now(timezone.utc)
         for job in group:
-            await _patch_blocks(db, job)  # 任务比那一轮先结束时，卡片是那一轮结束才落库的
+            await patch_blocks(db, job)  # 任务比那一轮先结束时，卡片是那一轮结束才落库的
             _done(job, now)
         await db.commit()
         await run_turn(db, conv, notice=notice(group), task_id=next((j.task_id for j in group if j.task_id), None))

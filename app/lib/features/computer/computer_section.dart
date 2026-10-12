@@ -10,6 +10,9 @@
 // 数据只在 computerProvider(工作区 id)；文案规则在 models/computer.dart。
 // v1.27：说明行带 CPU；内存打满被系统杀过程序 → 状态块里一行警示；[onOpen] 给了（项目首屏）→ 状态块可点、进电脑详情页；
 // [pollAlways]（详情页）→ 运行中就一直刷新（看进程、CPU），不只在有后台任务时。
+// v1.82 常驻服务排在任务前面（后端 app/services.py）：健康点（在跑脉冲 / 等重启警示脉冲 / 停了警示图标）、
+//   副标题“运行 3 小时 · 端口 8000 · 已重启 2 次”，行尾 重启 / 立即重启 / 重新启动（POST /api/jobs/{id}/restart，不用确认：
+//   不丢文件，日志接着写）；点行看完整日志。停了的服务留 24 小时，行尾小字“1 个服务停了”变警示色。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -67,6 +70,12 @@ class ComputerNotifier extends AsyncNotifier<ComputerStatus> {
     await _api.post('/api/jobs/$id/cancel');
     await reload();
   }
+
+  /// 常驻服务手动重启（在跑 → 杀了重起；等重启 → 马上起；停了 → 重新拉起）。不行 → ApiError（409，原因写好了）。
+  Future<void> restartService(String id) async {
+    await _api.post('/api/jobs/$id/restart');
+    await reload();
+  }
 }
 
 final computerProvider =
@@ -95,6 +104,7 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
   Timer? _poll;
   bool _restarting = false;
   final _cancelling = <String>{};
+  final _bouncing = <String>{}; // 正在重启的服务
 
   ComputerNotifier get _ctl => ref.read(computerProvider(widget.ws).notifier);
 
@@ -113,7 +123,7 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
   void _tick() {
     if (!mounted || !TickerMode.valuesOf(context).enabled) return;
     final s = ref.read(computerProvider(widget.ws)).value;
-    if (s != null && (s.jobs.isNotEmpty || (widget.pollAlways && s.running))) _ctl.reload().ignore();
+    if (s != null && (s.busy || (widget.pollAlways && s.running))) _ctl.reload().ignore();
   }
 
   Future<void> _restart(ComputerStatus s) async {
@@ -140,6 +150,18 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
     }
   }
 
+  Future<void> _restartService(ServiceInfo v) async {
+    setState(() => _bouncing.add(v.job.id));
+    try {
+      await _ctl.restartService(v.job.id);
+      if (mounted) showToast(context, '「${v.job.title}」几秒内重新跑起来');
+    } on ApiError catch (e) {
+      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能重启' : e.message);
+    } finally {
+      if (mounted) setState(() => _bouncing.remove(v.job.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(computerProvider(widget.ws)).value; // 加载中 / 失败 → 不画这一节（和“文件”一样）
@@ -156,6 +178,13 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
                         : null),
                 GlassGroup(children: [
                   _StatusTile(s, onOpen: widget.onOpen),
+                  for (final v in s.services)
+                    _ServiceRow(
+                      key: ValueKey('svc-${v.job.id}'),
+                      service: v,
+                      busy: _bouncing.contains(v.job.id),
+                      onRestart: () => _restartService(v),
+                    ),
                   for (final j in s.jobs)
                     _JobRow(
                       key: ValueKey('job-${j.id}'),
@@ -203,7 +232,7 @@ class _StatusTile extends StatelessWidget {
                         style: context.text.titleMedium?.copyWith(color: problem ? p.warning : null)),
                   ),
                 ),
-                if (hint != null) SwapSwitcher(child: RowHint(hint, key: ValueKey(hint), warn: s.diskFull)),
+                if (hint != null) SwapSwitcher(child: RowHint(hint, key: ValueKey(hint), warn: computerHintWarn(s))),
                 if (onOpen != null) Icon(Icons.chevron_right_rounded, color: p.text3, size: Layout.rowIcon),
               ]),
               const SizedBox(height: Sp.x1),
@@ -253,6 +282,39 @@ class _JobRow extends ConsumerWidget {
       subtitle: jobRowSubtitle(job),
       trailing: TextButton(onPressed: cancelling ? null : onCancel, child: Text(cancelling ? '正在取消' : '取消')),
       onTap: () => showJobLog(context, ref, job),
+    );
+  }
+}
+
+/// 常驻服务一行（v1.82）。健康点：在跑 = 任务卡同款脉冲（JobStatusMark），等重启 = 警示色脉冲，停了 = 警示图标。
+class _ServiceRow extends ConsumerWidget {
+  const _ServiceRow({super.key, required this.service, required this.busy, required this.onRestart});
+  final ServiceInfo service;
+  final bool busy;
+  final VoidCallback onRestart;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final v = service;
+    final mark = switch (v.health) {
+      ServiceHealth.up => const JobStatusMark(JobTone.running),
+      ServiceHealth.restarting => PulseDot(color: p.warning, size: 8),
+      ServiceHealth.gaveUp => const JobStatusMark(JobTone.problem),
+    };
+    return Semantics(
+      label: serviceSemantics(v),
+      child: RowTile(
+        leading: SizedBox.square(
+          dimension: Layout.rowIcon,
+          child: Center(child: SwapSwitcher(child: KeyedSubtree(key: ValueKey(v.health), child: mark))),
+        ),
+        title: v.job.title,
+        problem: v.health == ServiceHealth.gaveUp ? '已停止' : null,
+        subtitle: serviceLine(v),
+        trailing: TextButton(onPressed: busy ? null : onRestart, child: Text(busy ? '正在重启' : serviceAction(v.health))),
+        onTap: () => showJobLog(context, ref, v.job),
+      ),
     );
   }
 }

@@ -39,7 +39,7 @@ GRACE_SECONDS = 60      # 截止时间之后再等多久（最后一步在写结
 CHILD_TOOLS = frozenset({
     "web_search", "web_fetch",
     "list_files", "glob", "grep", "read_file", "write_file", "edit_file", "apply_patch",
-    "run_command", "job_status", "cancel_job",
+    "run_command", "job_status", "cancel_job", "restart_service",
     "api_request", "mcp_tools", "mcp_call", "use_skill",
 })
 

@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { JobLog } from "../../blocks/JobBlock";
 import { http } from "../../lib/api";
-import { COMPUTER_MEMORY_TIGHT, type ComputerStatus, computerDetail, computerHint, computerMemoryRatio, computerOomNote, computerPath,
-  computerRestartText, computerSemantics, computerStateLabel, diskFull } from "../../lib/computer";
+import { COMPUTER_MEMORY_TIGHT, type ComputerStatus, type ServiceInfo, computerDetail, computerHint, computerHintWarn, computerMemoryRatio,
+  computerOomNote, computerPath, computerRestartText, computerSemantics, computerStateLabel, serviceAction, serviceLine,
+  serviceSemantics } from "../../lib/computer";
 import { jobDuration, jobRowSubtitle } from "../../lib/jobs";
 import type { JobInfo } from "../../lib/types";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
@@ -15,7 +16,9 @@ import { type ComputerCtl, useComputer } from "./useComputer";
 /** “电脑”一节（v1.25，= App features/computer/computer_section.dart）：项目首屏和“我的电脑”页共用。
  *  状态行（运行/休眠/没开机/连不上 + 内存 · 文件 + 内存条）→ 正在跑的后台任务（点开完整日志、可取消）；标题右边“重启”只在运行中给。
  *  数据：给了 ctl（电脑页，几节共用一份）就用它，否则自己 useComputer(ws)（项目首屏）。加载中 / 失败 → 整节不画。
- *  v1.27：说明行带 CPU；内存打满被系统杀过 → 一行警示；to 给了（项目首屏）→ 状态行是链接，进这台电脑的详情页。 */
+ *  v1.27：说明行带 CPU；内存打满被系统杀过 → 一行警示；to 给了（项目首屏）→ 状态行是链接，进这台电脑的详情页。
+ *  v1.82：常驻服务排在任务前（服务器 app/services.py）：健康点（在跑闪点 / 等重启警示闪点 / 停了警示点）、副标题、
+ *  行尾 重启 / 立即重启 / 重新启动（POST /api/jobs/{id}/restart，不用确认：不丢文件，日志接着写）；点行看完整日志。 */
 export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }:
   { ws: string; title?: string; enter?: number; ctl?: ComputerCtl; to?: string }) {
   const own = useComputer(ws, false);
@@ -23,6 +26,7 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
   const [restarting, setRestarting] = useState(false);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [log, setLog] = useState<JobInfo | null>(null);
+  const [bouncing, setBouncing] = useState<Set<string>>(new Set());
 
   if (!s) return null;
   const restart = async () => {
@@ -36,6 +40,12 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
     setCancelling((c) => new Set(c).add(j.id));
     try { await http.post(`/api/jobs/${j.id}/cancel`, {}); await load(true); } catch { /* 下一次刷新会告诉真实状态 */ }
     setCancelling((c) => { const n = new Set(c); n.delete(j.id); return n; });
+  };
+  const bounce = async (v: ServiceInfo) => {
+    setBouncing((b) => new Set(b).add(v.id));
+    try { await http.post(`/api/jobs/${v.id}/restart`, {}); await load(true); }
+    catch (e) { void noticeDialog("没能重启", e instanceof Error ? e.message : undefined); }
+    setBouncing((b) => { const n = new Set(b); n.delete(v.id); return n; });
   };
   const ratio = computerMemoryRatio(s);
   const hint = computerHint(s);
@@ -54,7 +64,7 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
         )}
         {oom && <div key={s.sandbox.oom_kills} className="computer-oom">{oom}</div>}
       </div>
-      {hint && <span key={hint} className={`row-hint computer-hint${diskFull(s) ? " is-warn" : ""}`} aria-hidden>{hint}</span>}
+      {hint && <span key={hint} className={`row-hint computer-hint${computerHintWarn(s) ? " is-warn" : ""}`} aria-hidden>{hint}</span>}
       {to && <span className="row-trail" aria-hidden><IconChevron /></span>}
     </>
   );
@@ -66,6 +76,17 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
         {to
           ? <Link to={to} className={`row computer-status${down ? " is-down" : ""}`} aria-label={label}>{status}</Link>
           : <div className={`row computer-status${down ? " is-down" : ""}`} role="group" aria-label={label}>{status}</div>}
+        {(s.services ?? []).map((v) => (
+          <div key={v.id} className={`row computer-job computer-svc is-${v.health}`}>
+            <button className="computer-job-open" onClick={() => setLog(v)} aria-label={`${serviceSemantics(v)}，看日志`}>
+              <span className="row-icon"><i key={v.health} className={`job-dot svc-dot is-${v.health}`} /></span>
+              <div className="row-body"><div className="row-title">{v.title}</div>
+                <div className="row-sub">{v.health === "gave_up" && <span className="svc-problem">已停止 · </span>}{serviceLine(v)}</div></div>
+            </button>
+            <button className="btn btn-ghost btn-sm" disabled={bouncing.has(v.id)} onClick={() => void bounce(v)}>
+              {bouncing.has(v.id) ? "正在重启" : serviceAction(v.health)}</button>
+          </div>
+        ))}
         {s.running_jobs.map((j) => (
           <div key={j.id} className="row computer-job">
             <button className="computer-job-open" onClick={() => setLog(j)} aria-label={`${j.title}，运行 ${jobDuration(j.elapsed)}，看日志`}>

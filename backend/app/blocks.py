@@ -411,7 +411,7 @@ def blocks_to_text(blocks: list[dict]) -> str:
             if b.get("stop_reason"):
                 state = f"被自动停止（{b['stop_reason']}）"
             if b.get("keep_alive"):
-                state = ("常驻运行中（意外退出会自动重启，要停用 cancel_job）" if b.get("state") == "running"
+                state = ("常驻运行中（意外退出会自动重启，要停用 cancel_job，改了代码要生效用 restart_service）" if b.get("state") == "running"
                          else f"常驻任务，{state}")
                 if b.get("restarts"):
                     state += f"，已自动重启 {b['restarts']} 次"

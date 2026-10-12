@@ -1,10 +1,10 @@
-"""后台任务的查看与取消（启动走 run_command background=true）。规则都在 app/jobs.py。"""
+"""后台任务的查看、取消和常驻服务重启（启动走 run_command background=true）。规则在 app/jobs.py、app/services.py。"""
 import asyncio
 import time
 
 from sqlalchemy import select
 
-from ... import jobs
+from ... import jobs, services
 from ...models import Job
 from ..tools import ToolContext, ToolResult, tool
 
@@ -76,3 +76,18 @@ async def cancel_job(ctx: ToolContext, job_id: str) -> ToolResult:
     if not ok:
         return ToolResult(f"它已经结束了：{jobs.describe(job)}")
     return ToolResult(f"已取消：{jobs.describe(job)}")
+
+
+@tool("restart_service", "正在重启常驻服务",
+      "重启本工作区一个常驻服务（run_command keep_alive=true 起的）：改了它的代码或配置要生效时用（整组杀掉马上重起，"
+      "日志接着写），或者它连续崩溃、已停止自动重启，你修好原因后用它重新拉起。普通后台任务不能重启。",
+      {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]})
+async def restart_service(ctx: ToolContext, job_id: str) -> ToolResult:
+    job = await _own(ctx, job_id)
+    if job is None:
+        return ToolResult("没有这个后台任务（只能重启本工作区的）。")
+    try:
+        await services.restart(ctx.db, job)
+    except services.ServiceError as e:
+        return ToolResult(str(e))
+    return ToolResult(f"已安排重启，几秒内重新跑起来；用 job_status 看新输出。{jobs.describe(job)}")

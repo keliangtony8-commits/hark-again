@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from .. import jobs
+from .. import jobs, services
 from ..auth import require_user
 from ..db import get_session
 from ..models import Job
@@ -43,4 +43,15 @@ async def cancel_job(job_id: str, db=Depends(get_session)):
         await jobs.cancel(db, job)
     except jobs.JobError as e:
         raise HTTPException(503, str(e))
+    return jobs.wire(job)
+
+
+@router.post("/{job_id}/restart")
+async def restart_job(job_id: str, db=Depends(get_session)):
+    """常驻服务手动重启（v1.82，规则在 app/services.py）：在跑的杀掉重起、等重启的马上起、放弃了的重新拉起。"""
+    job = await _get(db, job_id)
+    try:
+        await services.restart(db, job)
+    except services.ServiceError as e:
+        raise HTTPException(409, str(e))
     return jobs.wire(job)

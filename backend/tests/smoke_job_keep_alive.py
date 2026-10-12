@@ -182,7 +182,7 @@ j = run(job(k1))
 assert j.restarts == 1 and j.restart_at is None and not (jd(k1) / "exit").exists() or j.restarts == 1, j.restarts
 wait_exit(k1)
 log = (jd(k1) / "log").read_text()
-assert "第0次" in log and "第 1 次自动重启" in log and "第1次" in log, log
+assert "第0次" in log and "第 1 次重启" in log and "第1次" in log, log
 assert (storage.project_dir(pid) / "runs.txt").read_text().count("x") == 2
 j = wait_restart_planned(k1)
 assert j.crash_streak == 2 and (j.restart_at - j.run_started_at.replace(tzinfo=timezone.utc) if j.restart_at.tzinfo else True)
@@ -202,14 +202,14 @@ async def stored_block(jid):
             for b in m.blocks:
                 if b.get("type") == "job" and b.get("id") == jid:
                     return b
-# 工具直接调用没落库消息：手动放一条再让 _patch_blocks 生效
+# 工具直接调用没落库消息：手动放一条再让 patch_blocks 生效
 async def put_msg(b):
     async with SessionLocal() as db:
         db.add(Message(conversation_id=cid, role="assistant", blocks=[b])); await db.commit()
 run(put_msg(blk))
 async def repatch(jid):
     async with SessionLocal() as db:
-        await jobs._patch_blocks(db, await db.get(Job, jid)); await db.commit()
+        await jobs.patch_blocks(db, await db.get(Job, jid)); await db.commit()
 run(repatch(k1))
 sb = run(stored_block(k1))
 assert sb["state"] == "failed" and sb["keep_alive"] and sb["restarts"] == 2, sb
@@ -323,7 +323,7 @@ run(tick())  # restart_at = 现在：立刻重启
 j = run(job(k6))
 assert j.restarts == 1 and j.restart_at is None and j.crash_streak == 0, (j.restarts, j.crash_streak)
 time.sleep(0.3)
-assert "第 1 次自动重启" in (jd(k6) / "log").read_text()
+assert "第 1 次重启" in (jd(k6) / "log").read_text()
 c.post(f"/api/jobs/{k6}/cancel")
 assert run(job(k6)).state == "cancelled"
 

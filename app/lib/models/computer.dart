@@ -1,5 +1,5 @@
 // 工作区的“电脑”（后端 app/computer.py，接口 GET/POST /api/projects/{ws}/computer[/restart]）：
-// 容器状态、CPU/内存、磁盘（按用途拆开）、正在跑的程序和后台任务、装过的工具、内存打满被杀过几次（v1.27）。纯规则——状态词、说明行、内存比例、读屏句子；网页版 lib/computer.ts 同一套。
+// 容器状态、CPU/内存、磁盘（按用途拆开）、正在跑的程序和后台任务、装过的工具、内存打满被杀过几次（v1.27）、常驻服务健康（v1.82）。纯规则——状态词、说明行、内存比例、读屏句子；网页版 lib/computer.ts 同一套。
 import '../ui/format.dart';
 import 'job.dart';
 import 'preview.dart';
@@ -7,7 +7,7 @@ import 'preview.dart';
 class ComputerStatus {
   const ComputerStatus({required this.workspace, required this.state, this.memoryUsed, this.memoryLimit, this.startedAt,
       this.idleMinutes, this.outdated = false, this.diskUsed = 0, this.diskPartial = false, this.jobs = const [],
-      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy});
+      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy, this.services = const []});
 
   factory ComputerStatus.fromJson(Map<String, dynamic> j) {
     final sb = (j['sandbox'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -25,6 +25,10 @@ class ComputerStatus {
       diskLimit: (j['disk_limit'] as num?)?.toInt(),
       diskLevel: j['disk_level'] as String? ?? 'off',
       jobs: [for (final x in (j['running_jobs'] as List? ?? const [])) JobInfo.fromJson((x as Map).cast<String, dynamic>())],
+      services: [
+        for (final x in (j['services'] as List? ?? const []))
+          if (x is Map) ServiceInfo.fromJson(x.cast<String, dynamic>())
+      ],
       cpuPercent: (sb['cpu_percent'] as num?)?.toDouble(),
       oomKills: (sb['oom_kills'] as num?)?.toInt() ?? 0,
       processes: [
@@ -54,7 +58,11 @@ class ComputerStatus {
   final DateTime? startedAt;
   final bool outdated, diskPartial;
   final int diskUsed;
+  /// 正在跑的普通后台任务（常驻服务不在这里，见 [services]）。
   final List<JobInfo> jobs;
+
+  /// v1.82 常驻服务（后端 app/services.py）：在跑的 + 最近 24 小时意外结束的（放弃自动重启了不该悄悄消失）。
+  final List<ServiceInfo> services;
   final double? cpuPercent;
 
   /// 这次开机以来内存超上限、被系统强制结束的程序个数（容器 cgroup 的 oom_kill）。
@@ -75,7 +83,69 @@ class ComputerStatus {
 
   bool get running => state == 'running';
   bool get reachable => state != 'unreachable';
+
+  /// 还活着（在跑或等自动重启）的常驻服务个数 / 已经停了（放弃自动重启）的个数。
+  int get liveServices => services.where((v) => v.health != ServiceHealth.gaveUp).length;
+  int get deadServices => services.length - liveServices;
+
+  /// 状态会自己变（有任务在跑、服务在跑或等重启）：该轮询。
+  bool get busy => jobs.isNotEmpty || liveServices > 0;
 }
+
+/// 常驻服务的健康：up 在跑 / restarting 进程退出了、等自动重启 / gaveUp 连续崩溃已停止自动重启（或别的意外结束）。
+enum ServiceHealth { up, restarting, gaveUp }
+
+/// 一个常驻服务（keep_alive 后台任务）：任务本身 + 健康、本次运行多久、它在监听的端口。
+class ServiceInfo {
+  const ServiceInfo({required this.job, required this.health, this.ports = const [], this.uptime});
+  factory ServiceInfo.fromJson(Map<String, dynamic> j) => ServiceInfo(
+        job: JobInfo.fromJson(j),
+        health: switch (j['health']) { 'up' => ServiceHealth.up, 'restarting' => ServiceHealth.restarting, _ => ServiceHealth.gaveUp },
+        ports: [for (final x in (j['ports'] as List? ?? const [])) if (x is num) x.toInt()],
+        uptime: j['uptime'] is num ? Duration(seconds: (j['uptime'] as num).toInt()) : null,
+      );
+  final JobInfo job;
+  final ServiceHealth health;
+  final List<int> ports;
+  final Duration? uptime;
+}
+
+/// 服务行的副标题：在跑 → 运行多久 · 端口 · 重启过几次；等重启 → 几秒后重启 · 上次退出码；停了 → 原因。
+String serviceLine(ServiceInfo v, {DateTime? now}) {
+  final j = v.job;
+  final restarted = j.restarts > 0 ? '已重启 ${j.restarts} 次' : null;
+  return switch (v.health) {
+    ServiceHealth.up => [
+        '运行 ${jobDuration(v.uptime ?? j.elapsed)}',
+        if (v.ports.isNotEmpty) '端口 ${v.ports.join('、')}',
+        ?restarted,
+      ].join(' · '),
+    ServiceHealth.restarting => [
+        _restartIn(j.restartAt, now ?? DateTime.now()),
+        if (j.exitCode != null) '上次退出码 ${j.exitCode}',
+        ?restarted,
+      ].join(' · '),
+    ServiceHealth.gaveUp =>
+      (j.stopReason ?? '').isNotEmpty ? j.stopReason! : '意外退出${j.exitCode != null ? '（退出码 ${j.exitCode}）' : ''}',
+  };
+}
+
+String _restartIn(DateTime? at, DateTime now) {
+  final s = at == null ? 0 : at.difference(now).inSeconds;
+  return s <= 1 ? '马上重启' : '${jobDuration(Duration(seconds: s))}后重启';
+}
+
+/// 行尾按钮：在跑 → 重启（改了代码要生效）；等重启 → 立即重启；停了 → 重新启动。
+String serviceAction(ServiceHealth h) => switch (h) {
+      ServiceHealth.up => '重启',
+      ServiceHealth.restarting => '立即重启',
+      ServiceHealth.gaveUp => '重新启动',
+    };
+
+/// 读屏一句：名字，健康，副标题。
+String serviceSemantics(ServiceInfo v) => '常驻服务 ${v.job.title}，'
+    '${switch (v.health) { ServiceHealth.up => '运行中', ServiceHealth.restarting => '等待自动重启', ServiceHealth.gaveUp => '已停止' }}，'
+    '${serviceLine(v)}';
 
 /// 电脑为什么休眠：idle 空闲太久；room 同时开机的电脑到上限，给正在用的其它工作区腾内存（sandbox/runner.py MAX_RUNNING）。
 enum ComputerStopReason { idle, room }
@@ -158,10 +228,15 @@ String _sleepReason(ComputerStatus s) => switch (s.stoppedBy) {
       _ => '',
     };
 
-/// 行尾小字：有任务在跑说几个；在跑但空闲说“空闲”；镜像更新过说“下次用到时更新”。
+/// 行尾小字是不是警示（磁盘满、服务停了）。
+bool computerHintWarn(ComputerStatus s) => s.diskFull || s.deadServices > 0;
+
+/// 行尾小字：服务停了先说（v1.82）；有任务在跑说几个；在跑但空闲说“空闲”；镜像更新过说“下次用到时更新”。
 String? computerHint(ComputerStatus s) {
   if (s.diskFull) return '磁盘满了';
+  if (s.deadServices > 0) return '${s.deadServices} 个服务停了';
   if (s.jobs.isNotEmpty) return '${s.jobs.length} 个任务在跑';
+  if (s.liveServices > 0) return '${s.liveServices} 个服务在跑';
   if (s.outdated && s.reachable) return '下次用到时更新';
   if (s.running) return '空闲';
   return null;
@@ -170,12 +245,14 @@ String? computerHint(ComputerStatus s) {
 /// 重启确认里的说明。
 String computerRestartText(ComputerStatus s) => [
       if (s.jobs.isNotEmpty) '会停掉 ${s.jobs.length} 个正在跑的后台任务。',
+      if (s.liveServices > 0) '${s.liveServices} 个常驻服务会马上重新拉起。',
       '文件和装过的软件都在，下次用到时自动开机。',
     ].join();
 
 /// 读屏一句话。
 String computerSemantics(ComputerStatus s) => '电脑${computerStateLabel(s.state)}，${computerDetail(s)}'
-    '${s.jobs.isEmpty ? '' : '，${s.jobs.length} 个后台任务在跑'}';
+    '${s.jobs.isEmpty ? '' : '，${s.jobs.length} 个后台任务在跑'}'
+    '${s.liveServices == 0 ? '' : '，${s.liveServices} 个常驻服务'}${s.deadServices == 0 ? '' : '，${s.deadServices} 个服务停了'}';
 
 /// 内存打满被杀过：状态块里的一行警示。没有 → null。
 String? computerOomNote(ComputerStatus s) {

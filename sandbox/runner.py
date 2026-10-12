@@ -936,7 +936,13 @@ for port in sorted(ports):
             cmd = open(f"/proc/{pid}/cmdline", "rb").read().replace(b"\0", b" ").decode("utf-8", "replace").strip()
         except OSError:
             pass
-    out.append({"port": port, "loopback": e["loopback"], "pid": int(pid) if pid else None, "command": cmd[:200]})
+    pgid = None
+    if pid:
+        try:
+            pgid = int(open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[2])  # 字段 5：进程组（v1.82 端口归哪个常驻服务）
+        except (OSError, ValueError, IndexError):
+            pass
+    out.append({"port": port, "loopback": e["loopback"], "pid": int(pid) if pid else None, "pgid": pgid, "command": cmd[:200]})
 print(json.dumps(out))
 """
 PORTS_MAX = 20

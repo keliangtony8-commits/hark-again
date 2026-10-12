@@ -1,5 +1,5 @@
 // 工作区的“电脑”（服务器 app/computer.py；App models/computer.dart 同一套规则）：状态词、说明行、内存比例、行尾小字、重启说明；
-// v1.27 CPU、内存打满警示、程序行、磁盘拆分、清理、装过的工具。
+// v1.27 CPU、内存打满警示、程序行、磁盘拆分、清理、装过的工具；v1.82 常驻服务健康。
 import { formatSize } from "./files";
 import type { ListeningPort } from "./preview";
 import { jobDuration } from "./jobs";
@@ -15,12 +15,16 @@ export type ComputerStatus = {
     stopped_by?: ComputerStopReason | null; stopped_at?: string | null;
     cpu_percent?: number | null; oom_kills?: number; processes?: ComputerProcess[] };
   disk_used: number; disk_partial: boolean; running_jobs: JobInfo[];
+  services?: ServiceInfo[]; // v1.82 常驻服务（服务器 app/services.py）：在跑的 + 最近 24 小时意外结束的
   storage?: ComputerStorage; tools?: InstalledTool[];
   ports?: ListeningPort[]; // v1.30 在监听的端口（只在运行中时有）
   // v1.31 磁盘配额（服务器 app/quota.py）：上限字节（null = 不限）；ok / tight ≥85% / full 满了（新文件写不进、后台任务会被停）/ off
   disk_limit?: number | null; disk_level?: DiskLevel;
 };
 export type DiskLevel = "ok" | "tight" | "full" | "off";
+/** 常驻服务的健康：up 在跑 / restarting 进程退出了、等自动重启 / gave_up 已停止自动重启（或别的意外结束）。 */
+export type ServiceHealth = "up" | "restarting" | "gave_up";
+export type ServiceInfo = JobInfo & { health: ServiceHealth; ports: number[]; uptime: number | null };
 export type ComputerProcess = { pid: number; cpu: number; memory: number; elapsed: number; command: string };
 export type ComputerStorage = { files: number; installed: number; logs: number; spill: number; cache: number; cleanable: number };
 export type InstalledTool = { kind: "pip" | "npm" | string; name: string; version: string };
@@ -65,9 +69,17 @@ function sleepReason(c: ComputerStatus): string {
   return sb.idle_minutes != null ? `空闲 ${sb.idle_minutes} 分钟自动休眠，` : "";
 }
 
+export const liveServices = (c: ComputerStatus) => (c.services ?? []).filter((v) => v.health !== "gave_up").length;
+export const deadServices = (c: ComputerStatus) => (c.services ?? []).length - liveServices(c);
+/** 状态会自己变（有任务在跑、服务在跑或等重启）：该轮询。 */
+export const computerBusy = (c: ComputerStatus) => c.running_jobs.length > 0 || liveServices(c) > 0;
+export const computerHintWarn = (c: ComputerStatus) => diskFull(c) || deadServices(c) > 0;
+
 export function computerHint(c: ComputerStatus): string | null {
   if (diskFull(c)) return "磁盘满了";
+  if (deadServices(c)) return `${deadServices(c)} 个服务停了`;
   if (c.running_jobs.length) return `${c.running_jobs.length} 个任务在跑`;
+  if (liveServices(c)) return `${liveServices(c)} 个服务在跑`;
   if (c.sandbox.outdated && c.sandbox.state !== "unreachable") return "下次用到时更新";
   return c.sandbox.state === "running" ? "空闲" : null;
 }
@@ -94,10 +106,32 @@ export function computerDiskNote(c: ComputerStatus): string | null {
 }
 
 export const computerRestartText = (c: ComputerStatus) =>
-  (c.running_jobs.length ? `会停掉 ${c.running_jobs.length} 个正在跑的后台任务。` : "") + "文件和装过的软件都在，下次用到时自动开机。";
+  (c.running_jobs.length ? `会停掉 ${c.running_jobs.length} 个正在跑的后台任务。` : "")
+  + (liveServices(c) ? `${liveServices(c)} 个常驻服务会马上重新拉起。` : "") + "文件和装过的软件都在，下次用到时自动开机。";
 
 export const computerSemantics = (c: ComputerStatus) =>
-  `电脑${computerStateLabel(c.sandbox.state)}，${computerDetail(c)}${c.running_jobs.length ? `，${c.running_jobs.length} 个后台任务在跑` : ""}`;
+  `电脑${computerStateLabel(c.sandbox.state)}，${computerDetail(c)}${c.running_jobs.length ? `，${c.running_jobs.length} 个后台任务在跑` : ""}`
+  + `${liveServices(c) ? `，${liveServices(c)} 个常驻服务` : ""}${deadServices(c) ? `，${deadServices(c)} 个服务停了` : ""}`;
+
+/** 服务行的副标题（= App serviceLine）：在跑 → 运行多久 · 端口 · 重启过几次；等重启 → 几秒后重启 · 上次退出码；停了 → 原因。 */
+export function serviceLine(v: ServiceInfo, now = Date.now()): string {
+  const restarted = (v.restarts ?? 0) > 0 ? `已重启 ${v.restarts} 次` : "";
+  switch (v.health) {
+    case "up":
+      return [`运行 ${jobDuration(v.uptime ?? v.elapsed)}`, v.ports.length ? `端口 ${v.ports.join("、")}` : "", restarted].filter(Boolean).join(" · ");
+    case "restarting": {
+      const s = v.restart_at ? Math.floor((Date.parse(v.restart_at) - now) / 1000) : 0;
+      return [s <= 1 ? "马上重启" : `${jobDuration(s)}后重启`, v.exit_code != null ? `上次退出码 ${v.exit_code}` : "", restarted].filter(Boolean).join(" · ");
+    }
+    default:
+      return v.stop_reason || `意外退出${v.exit_code != null ? `（退出码 ${v.exit_code}）` : ""}`;
+  }
+}
+
+export const serviceAction = (h: ServiceHealth) => (h === "up" ? "重启" : h === "restarting" ? "立即重启" : "重新启动");
+
+export const serviceSemantics = (v: ServiceInfo) =>
+  `常驻服务 ${v.title}，${v.health === "up" ? "运行中" : v.health === "restarting" ? "等待自动重启" : "已停止"}，${serviceLine(v)}`;
 
 export function computerOomNote(c: ComputerStatus): string | null {
   const n = c.sandbox.oom_kills ?? 0;

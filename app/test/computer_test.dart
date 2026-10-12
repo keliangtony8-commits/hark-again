@@ -10,7 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, dynamic> _status({String state = 'running', bool job = true, int used = 300 << 20}) => {
+Map<String, dynamic> _status({String state = 'running', bool job = true, int used = 300 << 20, List<Map<String, dynamic>> services = const []}) => {
+      'services': services,
       'workspace': 'me',
       'name': '我的文件',
       'sandbox': state == 'unreachable'
@@ -23,6 +24,13 @@ Map<String, dynamic> _status({String state = 'running', bool job = true, int use
         if (job)
           {'id': 'j1', 'title': '训练模型', 'command': 'python train.py\nmore', 'state': 'running', 'elapsed': 185, 'tail': 'epoch 3'},
       ],
+    };
+
+Map<String, dynamic> _svc(String health, {int restarts = 0, List<int> ports = const [8000], String? reason, String? at}) => {
+      'id': 's1', 'title': '机器人', 'command': 'python bot.py', 'keep_alive': true, 'restarts': restarts,
+      'state': health == 'gave_up' ? 'failed' : 'running', 'exit_code': health == 'up' ? null : 1, 'elapsed': 4000,
+      'health': health, 'ports': health == 'up' ? ports : <int>[], 'uptime': health == 'up' ? 3720 : null,
+      'stop_reason': reason, 'restart_at': at,
     };
 
 class _Api implements Api {
@@ -38,6 +46,10 @@ class _Api implements Api {
   @override
   Future<dynamic> post(String path, [Object? body]) async {
     calls.add('POST $path');
+    if (path.startsWith('/api/jobs/') && path.endsWith('/restart')) {
+      status = _status(job: false, services: [_svc('up', restarts: 1)]);
+      return {'id': 's1', 'state': 'running'};
+    }
     status = _status(job: false);
     return path.endsWith('/restart') ? status : {'id': 'j1', 'state': 'cancelled'};
   }
@@ -124,6 +136,52 @@ void main() {
     expect(api.calls, containsAllInOrder(['POST /api/jobs/j1/cancel', 'GET /api/projects/me/computer']));
     expect(find.text('训练模型'), findsNothing);
     expect(find.text('空闲'), findsOneWidget);
+  });
+
+  test('v1.82 常驻服务：健康、副标题、按钮字、行尾小字、重启说明', () {
+    final up = ServiceInfo.fromJson(_svc('up', restarts: 2, ports: [8000, 3000]));
+    expect(up.health, ServiceHealth.up);
+    expect(serviceLine(up), '运行 1 小时 02 分 · 端口 8000、3000 · 已重启 2 次');
+    expect(serviceAction(up.health), '重启');
+    final now = DateTime.now();
+    final wait = ServiceInfo.fromJson(_svc('restarting', at: now.add(const Duration(seconds: 40)).toUtc().toIso8601String()));
+    expect(serviceLine(wait, now: now), anyOf('40 秒后重启 · 上次退出码 1', '39 秒后重启 · 上次退出码 1'));
+    expect(serviceAction(wait.health), '立即重启');
+    expect(serviceLine(ServiceInfo.fromJson(_svc('restarting')), now: now), '马上重启 · 上次退出码 1');
+    final dead = ServiceInfo.fromJson(_svc('gave_up', reason: '连续 6 次启动后不到 1 分钟就退出，已停止自动重启'));
+    expect(serviceLine(dead), '连续 6 次启动后不到 1 分钟就退出，已停止自动重启');
+    expect(serviceLine(ServiceInfo.fromJson(_svc('gave_up'))), '意外退出（退出码 1）');
+    expect(serviceAction(dead.health), '重新启动');
+    expect(serviceSemantics(dead), startsWith('常驻服务 机器人，已停止，'));
+
+    final s = ComputerStatus.fromJson(_status(job: false, services: [_svc('up')]));
+    expect(s.liveServices, 1);
+    expect(s.busy, isTrue);
+    expect(computerHint(s), '1 个服务在跑');
+    expect(computerHintWarn(s), isFalse);
+    expect(computerRestartText(s), '1 个常驻服务会马上重新拉起。文件和装过的软件都在，下次用到时自动开机。');
+    final bad = ComputerStatus.fromJson(_status(services: [_svc('gave_up')]));
+    expect(computerHint(bad), '1 个服务停了');
+    expect(computerHintWarn(bad), isTrue);
+    expect(bad.busy, isTrue); // 普通任务在跑
+    expect(ComputerStatus.fromJson(_status(job: false, services: [_svc('gave_up')])).busy, isFalse);
+    expect(computerSemantics(bad), endsWith('1 个服务停了'));
+  });
+
+  testWidgets('常驻服务：停了的行警示 + 重新启动 → POST /api/jobs/{id}/restart 后刷新成在跑', (tester) async {
+    final api = await _pump(tester, _status(job: false, services: [_svc('gave_up', reason: '已停止自动重启')]));
+    expect(find.text('机器人'), findsOneWidget);
+    expect(find.text('1 个服务停了'), findsOneWidget);
+    expect(find.textContaining('已停止自动重启'), findsOneWidget);
+    await tester.tap(find.text('重新启动'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(api.calls, containsAllInOrder(['POST /api/jobs/s1/restart', 'GET /api/projects/me/computer']));
+    expect(find.text('运行 1 小时 02 分 · 端口 8000 · 已重启 1 次'), findsOneWidget);
+    expect(find.text('1 个服务在跑'), findsOneWidget);
+    expect(find.text('重新启动'), findsNothing);
+    await tester.pump(const Duration(seconds: 4)); // 吐司走完
   });
 
   testWidgets('重启：先确认，确认后 POST restart', (tester) async {

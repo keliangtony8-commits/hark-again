@@ -24,3 +24,9 @@ a.computer-status { color: inherit; text-decoration: none; }
 .computer-host-hint { margin: var(--sp-2) var(--sp-4) 0; font-size: var(--fs-xs); color: var(--text-3); }
 .computer-host-rules { margin-top: var(--sp-3); }
 .computer-host-rule { font-family: var(--font-mono); font-size: var(--fs-sm); }
+/* v1.82 常驻服务行：在跑 = 任务同款闪点；等重启 = 警示色闪点；停了 = 警示色实点（不闪）。换状态时点弹一下（icon-pop） */
+.svc-dot { animation: icon-pop var(--dur-fast) var(--ease), blink 1.6s infinite; }
+.svc-dot.is-restarting { background: var(--warning); }
+.svc-dot.is-gave_up { background: var(--warning); animation: icon-pop var(--dur-fast) var(--ease); }
+.svc-problem { color: var(--warning); }
+@media (prefers-reduced-motion: reduce) { .svc-dot, .svc-dot.is-gave_up { animation: none; } }

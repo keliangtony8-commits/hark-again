@@ -25,7 +25,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import jobs, preview, quota, sandbox_client, workspaces
+from . import jobs, preview, quota, sandbox_client, services, workspaces
 from .models import Job
 from .storage import project_dir
 from .wire_time import iso
@@ -165,7 +165,9 @@ async def status(db: AsyncSession, ws: str) -> dict:
     return {**q.wire(), "ports": ports, "workspace": ws, "name": name, "sandbox": sandbox_wire(raw), "disk_used": used,
             "disk_partial": parts.pop("partial"), "storage": parts,
             "tools": await asyncio.to_thread(installed_tools, root),
-            "running_jobs": [jobs.wire(j, chars=600) for j in running]}
+            # v1.82 常驻服务单独一节（services.py：健康、端口、手动重启），running_jobs 只剩普通后台任务
+            "running_jobs": [jobs.wire(j, chars=600) for j in running if not j.keep_alive],
+            "services": await services.listing(db, ws, running, ports)}
 
 
 def _remove(p: Path) -> int:
