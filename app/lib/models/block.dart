@@ -26,7 +26,8 @@ sealed class Block {
             projectId: j['project_id'] as String?),
         'approval' => ApprovalBlock(
             id: j['id'] as String, title: j['title'] as String? ?? '', detail: j['detail'] as String? ?? '', state: j['state'] as String? ?? 'pending'),
-        'browser' => BrowserBlock(j['session'] as String? ?? 'main', site: j['site'] as String?, live: j['live'] == true),
+        'browser' => BrowserBlock(j['session'] as String? ?? 'main',
+            site: j['site'] as String?, live: j['live'] == true, handoff: BrowserHandoff.fromJson(j['handoff'])),
         'page' => PageBlock(slug: j['slug'] as String, title: j['title'] as String? ?? '', url: j['url'] as String? ?? ''),
         'stats' => StatsBlock([for (final i in (j['items'] as List? ?? [])) StatItem.fromJson(i as Map<String, dynamic>)]),
         'memory' => MemoryBlock(
@@ -104,10 +105,21 @@ class ApprovalBlock extends Block {
 /// 云浏览器实时画面卡。session = 按网站起的会话名（后端 app/browser_sessions.py；旧卡 main），
 /// site = 打开的网站（卡头显示），live = 页面还在打开（还没画面时显示“正在打开”，不当作浏览器没开）。
 class BrowserBlock extends Block {
-  const BrowserBlock(this.session, {this.site, this.live = false});
+  const BrowserBlock(this.session, {this.site, this.live = false, this.handoff});
   final String session;
   final String? site;
   final bool live;
+  final BrowserHandoff? handoff; // v1.29 助手请你接管（验证码、滑块、扫码），规则在 models/browser_view.dart
+}
+
+/// 助手请你接管浏览器的那一步（后端 browser_handoff）：pending → done / cancelled / expired。交还 = form.reply（id 即它）。
+class BrowserHandoff {
+  const BrowserHandoff({required this.id, required this.reason, this.state = 'pending'});
+  static BrowserHandoff? fromJson(Object? j) => j is Map<String, dynamic> && j['id'] is String
+      ? BrowserHandoff(id: j['id'] as String, reason: j['reason'] as String? ?? '', state: j['state'] as String? ?? 'pending')
+      : null;
+  final String id, reason, state;
+  bool get pending => state == 'pending';
 }
 
 /// 项目沙盒里的后台任务卡（后端 app/jobs.py）。块里是落库时的状态；运行中由卡片自己轮询 /api/jobs/{id}（models/job.dart）。

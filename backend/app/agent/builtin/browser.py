@@ -4,17 +4,25 @@
 
 会话（v1.26，规则在 app/browser_sessions.py）：browser_open 按网站起会话名（taobao.com → taobao-com），
 同一网站的所有任务共用它，登录一次以后都在；也可显式传 session 接着某个会话。之后的点击/输入/截图
-都作用于这段对话“当前”的会话（Tab）。打开网页期间先推一张实时画面卡（ctx.live），页面打开后换成最终卡。"""
+都作用于这段对话“当前”的会话（Tab）。打开网页期间先推一张实时画面卡（ctx.live），页面打开后换成最终卡。
+
+接管（v1.29）：图形验证码、滑块、扫码、人机验证、要手机批准的登录，模型调 browser_handoff(reason)：
+同会话的画面卡上出“需要你来”条（handoff pending），这一步挂起等用户在画面里弄完点“交还”（复用表单通道 form.reply），
+交还后重新读页面接着做；点“做不了”/ 10 分钟没人回 → 告诉模型别再弹。定时任务里没人能接管，直接说明。"""
 import re
+import time
+import uuid
 
 from ... import browser_client, browser_sessions, vault
 from ...browser_sessions import Tab
 from ...config import settings
+from .. import approvals
 from ..approvals import FormReply
-from ..tools import ToolContext, ToolImage, ToolResult, tool
+from ..tools import ToolContext, ToolImage, ToolResult, nobody, tool
 
 RISKY_BUTTON = re.compile(r"支付|付款|购买|下单|提交订单|确认订单|发送|发布|删除|pay|buy|purchase|checkout|place order|send|post|delete", re.I)
 NOT_OPEN = "这段对话还没打开浏览器，先用 browser_open。"
+REASON_MAX = 60
 
 
 def _tab(ctx: ToolContext) -> Tab:
@@ -161,8 +169,7 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
     else:
         secret = await vault.find_for_url(ctx.db, tab.url, kind="login")
         if not secret:
-            return ToolResult("没有可用的登录信息。请用户在实时画面里点“接管”自己登录，完成后用 browser_read 继续。",
-                              [_card(tab)])
+            return ToolResult("没有可用的登录信息。用 browser_handoff 请用户在实时画面里自己登录。", [_card(tab)])
         username, password, source = secret.username or "", vault.reveal(secret), f"保险箱「{secret.name}」"
     snap = await browser_client.snapshot_call(tab.session, "POST", "/login", {
         "user_ref": user_ref, "pass_ref": pass_ref, "username": username, "password": password})
@@ -180,7 +187,7 @@ async def _code_form(ctx: ToolContext, args: dict) -> dict | None:
 
 @tool("browser_code", "正在填验证码",
       "网站要短信/邮箱/两步验证码时用：在聊天里给用户弹验证码卡，用户填完自动填进编号为 ref 的输入框"
-      "（submit=true 随后按回车）。label 写清是哪种码，如“短信验证码（发到尾号 1234）”。图形验证码让用户在实时画面里自己点。",
+      "（submit=true 随后按回车）。label 写清是哪种码，如“短信验证码（发到尾号 1234）”。图形验证码、滑块、扫码不能用它，用 browser_handoff。",
       {"type": "object", "properties": {"ref": {"type": "string"}, "label": {"type": "string"},
                                         "submit": {"type": "boolean", "default": True}},
        "required": ["ref"]}, form=_code_form)
@@ -195,3 +202,41 @@ async def browser_code(ctx: ToolContext, ref: str, label: str = "", submit: bool
     snap = await browser_client.snapshot_call(tab.session, "POST", "/act",
                                               {"action": "type", "ref": ref, "text": code, "submit": submit})
     return ToolResult("已把用户填的验证码填进去。\n" + _render(snap, tab))
+
+
+def handoff_reason(reason: str) -> str:
+    """接管条上的那句话：压成一行、截到 REASON_MAX；空 → 通用说法。"""
+    text = " ".join((reason or "").split())
+    return (text[:REASON_MAX - 1] + "…") if len(text) > REASON_MAX else (text or "需要你在画面里操作一下")
+
+
+@tool("browser_handoff", "正在等你接管",
+      "遇到你过不去、只有用户能做的一步时用：图形验证码、滑块、人机验证、扫码登录、要在手机上点批准、"
+      "保险箱里没有登录且不适合弹登录卡。会在当前会话的实时画面卡上请用户接管，用户在画面里弄完点“交还”你就接着做，"
+      "结果里带交还后的新快照。reason 用一句话告诉用户要做什么，如“拖动滑块完成验证”“用淘宝 App 扫码登录”。"
+      "短信/邮箱验证码用 browser_code，账号密码用 browser_login，不要用它。",
+      {"type": "object", "properties": {"reason": {"type": "string"}}, "required": ["reason"]})
+async def browser_handoff(ctx: ToolContext, reason: str) -> ToolResult:
+    tab = _tab(ctx)
+    if not tab.session:
+        return ToolResult(NOT_OPEN)
+    if ctx.ask is nobody:  # 定时任务：没人在看，不挂一张等不到人的条
+        return ToolResult("现在是定时任务在跑，用户不在，没法接管。如实说明卡在哪一步；需要他之后处理就用 offer_on_home。",
+                          failed="用户不在，没法接管")
+    hid, why = uuid.uuid4().hex, handoff_reason(reason)
+    card = _card(tab)
+    ctx.live({**card, "handoff": {"id": hid, "reason": why, "state": "pending"}})
+    started = time.monotonic()
+    reply = await ctx.ask(hid, {"type": "handoff", "id": hid, "reason": why, "fields": []})
+    if reply is None:
+        expired = time.monotonic() - started >= approvals.TIMEOUT_SECONDS - 1
+        state = "expired" if expired else "cancelled"
+        why_not = "等了 10 分钟没人交还" if expired else "用户点了做不了"
+        return ToolResult(f"用户没有完成接管（{why_not}）。别再弹接管，告诉用户卡在哪一步、问他想怎么办。",
+                          [{**card, "handoff": {"id": hid, "reason": why, "state": state}}], failed=why_not)
+    try:
+        text = _render(await browser_client.snapshot_call(tab.session, "GET", "/snapshot"), tab)
+    except Exception as e:  # 浏览器在接管期间关了等：交还本身成功，让模型重开
+        text = f"（重新读页面失败：{e}；用 browser_open 重新打开）"
+    final = {**_card(tab), "handoff": {"id": hid, "reason": why, "state": "done"}}
+    return ToolResult("用户完成了接管，把浏览器交还给你了。先看新快照确认那一步过了，再接着做。\n" + text, [final])

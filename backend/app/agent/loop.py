@@ -110,13 +110,15 @@ class MessageBuilder:
 
     def partial(self) -> list[dict]:
         """被打断时能落库的块：去掉空文字块，还在等的审批卡（含订单卡）标为 expired（它再也等不到答复了），
-        还在跑的实时块去掉 live（命令已随这一轮被停掉）。"""
+        还在跑的实时块去掉 live（命令已随这一轮被停掉），浏览器卡上还在等的接管条标 expired。"""
         out = []
         for b in self.blocks:
             if b["type"] == "text" and not b["text"].strip():
                 continue
             if b.get("live"):
                 b = {k: v for k, v in b.items() if k != "live"}
+            if isinstance(h := b.get("handoff"), dict) and h.get("state") == "pending":
+                b = {**b, "handoff": {**h, "state": "expired"}}  # 等用户接管的条：这一轮停了，再也等不到交还
             out.append({**b, "state": "expired"} if b.get("state") == "pending" and "id" in b else b)
         return out
 

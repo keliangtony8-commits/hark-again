@@ -61,12 +61,21 @@ class ApprovalBlock(BaseModel):
     state: Literal["pending", "approved", "rejected", "expired"] = "pending"
 
 
+class Handoff(BaseModel):
+    """助手请用户接管浏览器（browser_handoff）：卡上出“需要你来”条，用户在画面里弄完点“交还”（form.reply，id 即它）。
+    pending → done（交还了）/ cancelled（点了做不了）/ expired（没人回或这一轮被停）。"""
+    id: str
+    reason: str
+    state: Literal["pending", "done", "cancelled", "expired"] = "pending"
+
+
 class BrowserBlock(BaseModel):
     """云浏览器实时画面卡：显示截图，用户可点击/打字接管。"""
     type: Literal["browser"] = "browser"
     session: str = "main"  # 会话名（按网站起名，app/browser_sessions.py）；旧卡 main
     site: str | None = None  # 打开的网站主域名（卡头显示）
     live: bool = False  # browser_open 正在打开页面（还没画面时客户端显示“正在打开”，不当作没开）
+    handoff: Handoff | None = None  # v1.29 助手在等用户接管（验证码、滑块、扫码、MFA）
 
 
 class JobBlock(BaseModel):

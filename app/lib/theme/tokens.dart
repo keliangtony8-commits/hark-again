@@ -203,6 +203,10 @@ abstract final class Timing {
   static const clockTick = Duration(seconds: 1); // “思考中 · 8 秒”这类计时多久跳一次
   static const jobPoll = Duration(seconds: 2); // 聊天里的后台任务卡运行中多久问一次进度
   static const computerPoll = Duration(seconds: 5); // 电脑状态块：有后台任务在跑时多久刷新一次（每次要问 Docker，别太密）
+  static const screenFast = Duration(milliseconds: 600); // 浏览器画面：你在接管/助手在等你时多久刷一帧（要跟手）
+  static const screenOpening = Duration(milliseconds: 1000); // 页面正在打开
+  static const screenIdle = Duration(milliseconds: 1500); // 只是看着
+  static const screenPauseAfter = Duration(minutes: 2); // 只是看着超过这么久就暂停刷新（省流量），点一下继续
 }
 
 /// 玻璃材质（ui/glass.dart 只读这里）。真模糊很贵：只给浮层（顶栏、输入胶囊、弹层），列表里的卡片用“假玻璃”。
