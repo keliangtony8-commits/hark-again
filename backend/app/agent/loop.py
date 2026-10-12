@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, llm_retry, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, compact, loop_guard, next_speaker, parallel, supersede, tool_args, tool_trace
+from . import approvals, compact, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -263,6 +263,8 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
             messages.append({"role": "user", "content": limits.wrap_up})
             limits.wrapped = True
         seen.apply(messages)
+        if tool_mask.enabled():  # 较早的大块工具结果 → 预览 + 全文文件（tool_mask.py，无损；攒够一批才动）
+            tool_mask.mask(messages, ctx.workspace, builder.base)
         if squeeze.due(messages):
             async for ev in _compact(squeeze, messages, seen, builder):
                 yield ev

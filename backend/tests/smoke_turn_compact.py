@@ -19,6 +19,7 @@ assert r.returncode == 0, r.stderr
 
 from app import llm
 from app.config import settings
+settings.tool_mask_min_tokens = 0  # 只测压缩本身：旧输出遮盖（v1.65，tool_mask.py）在压缩之前跑，会先把长结果换掉
 from app.agent import loop, compact, supersede
 from app.agent.compact import (PRUNE_THRESHOLD as TH, PRUNE_HEAD as H, PRUNE_TAIL as TL, PRUNE_MARKER as MK,
                                CHECKPOINT_PREAMBLE, INSTRUCTION, SUMMARY_OPEN)

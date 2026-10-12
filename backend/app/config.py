@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     model_fallbacks: dict[str, str] = {}
     context_tokens: int = 128_000
     model_context: dict[str, int] = {}
+    # 旧工具结果遮盖（agent/tool_mask.py，移植自 Gemini CLI toolOutputMaskingService）：每次调模型前，最新一批和最近
+    # tool_mask_protect_tokens 的工具输出原样；更早的累计 ≥ tool_mask_min_tokens 才成批换成预览 + 全文文件路径（无损）。
+    # tool_mask_min_tokens=0 关闭
+    tool_mask_protect_tokens: int = 24_000
+    tool_mask_min_tokens: int = 12_000
     # 思考强度（app/reasoning.py）：按别名配可选档 + 默认，如 {"smart": {"levels": ["low", "medium", "high"], "default": "medium"}}；
     # 没配的别名不发 reasoning_effort（供应商自己的默认）。客户端在输入框模型钮旁边给“思考”档位
     model_reasoning: dict = {}
