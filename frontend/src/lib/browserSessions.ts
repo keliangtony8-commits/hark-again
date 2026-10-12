@@ -4,6 +4,8 @@ import { formatAgo } from "./format";
 
 export type BrowserSession = {
   name: string; label: string; open: boolean; saved: boolean; last_used: string | null; cookies: number; domains: string[];
+  /** v1.36：服务端判定的登录成功 / 登录过期时刻（再登录成功会清掉过期）；旧服务端没有这两个字段。 */
+  signed_in_at?: string | null; expired_at?: string | null;
 };
 export type BrowserSessionList = { sessions: BrowserSession[]; max_open: number };
 
@@ -20,16 +22,21 @@ export function sortBrowserSessions(list: BrowserSession[]): BrowserSession[] {
   }).map(([s]) => s);
 }
 
-export const browserSessionHint = (s: BrowserSession) => (s.open ? "正在用" : null);
+export const BROWSER_SESSION_EXPIRED_LINE = "登录过期了，用到时会请你重新登录";
+export const browserSessionExpired = (s: BrowserSession) => !!s.expired_at;
+
+/** 行尾：登录过期 → 已过期（警示色）；开着 → 正在用。 */
+export const browserSessionHint = (s: BrowserSession) => (browserSessionExpired(s) ? "已过期" : s.open ? "正在用" : null);
 
 export function browserSessionDetail(s: BrowserSession, now = new Date()): string {
   const when = s.last_used ? `上次用 ${formatAgo(s.last_used, now)}` : null;
-  const kept = s.saved && s.cookies > 0 ? "登录已保存" : "还没有保存的登录";
+  const kept = browserSessionExpired(s) ? BROWSER_SESSION_EXPIRED_LINE
+    : s.saved && s.cookies > 0 ? "登录已保存" : "还没有保存的登录";
   return [when, kept].filter(Boolean).join(" · ");
 }
 
 export const browserSessionSemantics = (s: BrowserSession, now = new Date()) =>
-  `${s.label}，${browserSessionDetail(s, now)}${s.open ? "，正在用" : ""}`;
+  `${s.label}，${browserSessionDetail(s, now)}${!browserSessionExpired(s) && s.open ? "，正在用" : ""}`;
 
 export const browserSignOutText = (s: BrowserSession) =>
   `会关掉这个网站的浏览器，并删掉保存的登录。下次要用 ${s.label} 时需要重新登录。`;

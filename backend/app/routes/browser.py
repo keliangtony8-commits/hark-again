@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from .. import browser_client, browser_sessions
+from .. import browser_client, browser_sessions, system_alerts
+from ..db import get_session
 from ..auth import require_query_token, require_user
 
 router = APIRouter(prefix="/api/browser")
@@ -52,11 +53,13 @@ async def sessions():
 
 
 @router.delete("/sessions/{name}", dependencies=[Depends(require_user)])
-async def sign_out(name: str):
+async def sign_out(name: str, db=Depends(get_session)):
     try:
         await browser_sessions.sign_out(name)
     except ValueError as e:
         raise HTTPException(400, str(e))
     except RuntimeError as e:
         raise HTTPException(503, str(e))
+    await system_alerts.clear(db, browser_sessions.alert_subject(name))  # 退出了，“登录过期”的提醒也没意义了
+    await db.commit()
     return {"ok": True}

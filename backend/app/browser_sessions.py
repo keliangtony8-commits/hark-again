@@ -5,6 +5,11 @@
 - 模型也可以显式给会话名（继续之前那个会话、或同站点开第二个账号），clean() 规整成合法名字。
 - 当前会话：每段对话（定时任务按任务）一份 Tab 状态：会话名 + 最后的网址 + 快照里元素编号对应的名字
   （点击风险判断用）。只在本进程内存里（单用户单进程）；进程重启后模型再 browser_open 一次即可。
+- 登录过期（v1.36）：login_page(snap) 认登录页（可见的密码框 / 登录类网址 / “请重新登录”类字样）；
+  observe(tab, snap, auth) 是唯一判定：之前登录过（服务端标记 signed_in）的会话又出现登录页 → "expired"
+  （服务端记 expired，“我的电脑”显示登录已过期；每次打开只提醒模型一次）；在这个 tab 里见过登录页、随后一次
+  登录类动作（browser_login / browser_code / 接管交还，auth=True）之后不再是登录页 → "signed_in"（清掉过期）。
+  只看 auth 动作：用户点“返回”离开登录页不算登录成功。
 - 旧版本只有一个会话 "main"，它的登录存档照常列出（标成“早先的浏览器会话”），可以退出。
 """
 import re
@@ -58,12 +63,45 @@ def label(name: str, domains: list[str] | None = None) -> str:
     return name.replace("-", ".") if re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)+", name) else name
 
 
+# 登录页的网址：路径里的 login/signin/passport/sso…，或 login./passport./sso./accounts./auth. 开头的主机
+LOGIN_URL = re.compile(r"(^|[/._-])(log-?in|sign-?in|sign_in|signon|passport|sso|auth|oauth|account/login|user/login)"
+                       r"([/._?#-]|$)", re.I)
+LOGIN_HOST = re.compile(r"^(login|signin|passport|sso|accounts?|auth|id|uc|cas)\.", re.I)
+# 页面开头的“登录过期”字样（只看前 EXPIRED_SCAN 字，正文里讨论“登录”的文章不算）
+EXPIRED_TEXT = re.compile(r"登录(已|状态)?(过期|失效|超时)|请(先|重新)登录|会话(已)?(过期|失效)|"
+                          r"session (has )?(expired|timed out)|please (log|sign) ?in( again)?|you have been (logged|signed) out",
+                          re.I)
+EXPIRED_SCAN = 600
+
+
+def login_page(snap: dict) -> bool:
+    """快照像登录页吗：可见的密码框，或登录类网址，或页面开头写着要重新登录。"""
+    if any(e.get("tag") == "input" and e.get("type") == "password" for e in snap.get("elements", [])):
+        return True
+    u = urlparse(snap.get("url") or "")
+    if u.hostname and LOGIN_HOST.match(u.hostname):
+        return True
+    if LOGIN_URL.search(u.path or ""):
+        return True
+    return bool(EXPIRED_TEXT.search((snap.get("text") or "")[:EXPIRED_SCAN]))
+
+
 @dataclass
 class Tab:
     """一段对话（或一次定时任务）此刻在用的浏览器会话。"""
     session: str = ""
     url: str = ""
     names: dict[str, str] = field(default_factory=dict)  # 快照元素 ref → 名字
+    signed_in: bool = False   # 这个会话登录过（服务端标记）
+    expired: bool = False     # 已判定过期（服务端标记过）
+    login_seen: bool = False  # 这次打开后见过登录页（之后的 auth 动作成功 → signed_in）
+    noted: bool = False       # 这次打开已经提醒过模型“登录过期”
+
+    def opened(self, login: dict | None) -> None:
+        """browser_open 之后：按服务端的登录标记重置这次打开的状态。"""
+        login = login or {}
+        self.signed_in, self.expired = bool(login.get("signed_in")), bool(login.get("expired"))
+        self.login_seen = self.noted = False
 
     @property
     def host(self) -> str:
@@ -87,12 +125,42 @@ def tab(conversation_id: str | None, task_id: str | None = None) -> Tab:
     return _tabs[k]
 
 
+async def _mark(session: str, state: str) -> None:
+    try:
+        await browser_client.login_state(session, state)
+    except RuntimeError:  # 标记只是给“我的电脑”看的，记不上不影响任务
+        pass
+
+
+async def observe(tab: Tab, snap: dict, auth: bool = False) -> str | None:
+    """每张快照之后调一次 → "expired"（该提醒模型重登）/ "signed_in"（刚登录成功）/ None。"""
+    if login_page(snap):
+        tab.login_seen = True
+        if (tab.signed_in or tab.expired) and not tab.noted:
+            tab.noted = True
+            if not tab.expired:
+                tab.expired = True
+                await _mark(tab.session, "expired")
+            return "expired"
+        return None
+    if auth and tab.login_seen:
+        tab.signed_in, tab.expired, tab.login_seen, tab.noted = True, False, False, False
+        await _mark(tab.session, "signed_in")
+        return "signed_in"
+    return None
+
+
+def alert_subject(session: str) -> str:
+    return f"browser:{session}"
+
+
 def forget_tabs(session: str) -> None:
     """会话被退出登录后，正在用它的对话下次要先重新打开。"""
     for t in _tabs.values():
         if t.session == session:
             t.session, t.url = "", ""
             t.names.clear()
+            t.opened(None)
 
 
 def _when(ts) -> str | None:
@@ -100,7 +168,7 @@ def _when(ts) -> str | None:
 
 
 async def listing() -> dict:
-    """给客户端的会话列表：{sessions: [{name, label, open, saved, last_used, cookies, domains}], max_open}。
+    """给客户端的会话列表：{sessions: [{name, label, open, saved, last_used, cookies, domains, signed_in_at, expired_at}], max_open}。
     浏览器服务连不上 → RuntimeError（路由回 503）。"""
     data = await browser_client.sessions()
     out = []
@@ -108,7 +176,8 @@ async def listing() -> dict:
         domains = [str(d) for d in s.get("domains", [])][:5]
         out.append({"name": s["name"], "label": label(s["name"], domains), "open": bool(s.get("open")),
                     "saved": bool(s.get("saved")), "last_used": _when(s.get("last_used")),
-                    "cookies": int(s.get("cookies") or 0), "domains": domains})
+                    "cookies": int(s.get("cookies") or 0), "domains": domains,
+                    "signed_in_at": _when(s.get("signed_in")), "expired_at": _when(s.get("expired"))})
     return {"sessions": out, "max_open": int(data.get("max_open") or 1)}
 
 

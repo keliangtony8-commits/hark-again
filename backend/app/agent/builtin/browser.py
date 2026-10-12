@@ -11,12 +11,16 @@
 交还后重新读页面接着做；点“做不了”/ 10 分钟没人回 → 告诉模型别再弹。定时任务里没人能接管，直接说明。
 
 文件（v1.32，规则在 app/browser_files.py）：browser_upload 把工作区文件放进网页的文件框；页面触发的下载在每个动作之后
-自动搬进工作区 downloads/（_after），模型被告知路径；搬过的文件记在画面卡的 files 上（用户点了能打开）。"""
+自动搬进工作区 downloads/（_after），模型被告知路径；搬过的文件记在画面卡的 files 上（用户点了能打开）。
+
+登录过期（v1.36，判定在 browser_sessions.observe）：每张快照都经 _view：之前登录过的会话又是登录页 → 在快照前
+告诉模型“登录过期了”和怎么重登（保险箱有 → browser_login 直接重登；没有 → 登录卡 / 接管；定时任务里没人 →
+如实说明，并在 Home 上发一张系统提醒“X 的登录过期了”，带“去做”让用户在聊天里一键重登）。重登成功 → 收起提醒。"""
 import re
 import time
 import uuid
 
-from ... import browser_client, browser_files, browser_sessions, vault
+from ... import browser_client, browser_files, browser_sessions, system_alerts, vault
 from ...browser_sessions import Tab
 from ...config import settings
 from .. import approvals
@@ -53,6 +57,53 @@ def _card(tab: Tab, live: bool = False, files: list[dict] | None = None, ws: str
     return {k: v for k, v in block.items() if v is not None}
 
 
+def expired_note(tab: Tab, has_vault: bool, unattended: bool) -> str:
+    """登录过期时放在快照前面给模型看的话。"""
+    site = browser_sessions.site_of(tab.url) or tab.host
+    head = f"⚠ 会话 {tab.session} 之前登录过 {site}，现在出现的是登录页：登录已过期（已记下）。"
+    if has_vault:
+        return head + "保险箱里有这个网站的登录：直接用 browser_login（填快照里的用户名框、密码框编号）重新登录，不用问用户。"
+    if unattended:
+        return head + ("现在是定时任务，用户不在，保险箱里也没有登录，没法自己重登：别硬试，如实说明这一步做不了；"
+                       "已经在用户的 Home 上放了一张提醒，请他在聊天里让你重新登录。")
+    return head + ("保险箱里没有登录：有账号密码框就用 browser_login（会在聊天里弹登录卡给用户填）；"
+                   "扫码、滑块、手机批准这类用 browser_handoff 请用户接管。登好后接着做原来的事。")
+
+
+async def _view(ctx: ToolContext, tab: Tab, snap: dict, auth: bool = False) -> str:
+    """快照 → 给模型的文字，顺带判定登录过期 / 登录成功（只此一处调 browser_sessions.observe）。"""
+    text = _render(snap, tab)
+    event = await browser_sessions.observe(tab, snap, auth)
+    subject = browser_sessions.alert_subject(tab.session)
+    if event == "expired":
+        has_vault = bool(await vault.find_for_url(ctx.db, tab.url, kind="login"))
+        unattended = ctx.ask is nobody
+        if unattended and not has_vault:
+            await _alert(ctx, tab, subject)
+        return expired_note(tab, has_vault, unattended) + "\n" + text
+    if event == "signed_in":
+        try:
+            await system_alerts.clear(ctx.db, subject)
+            await ctx.db.commit()  # 0 张也要提交：DELETE 已经拿了写锁
+        except Exception:
+            await ctx.db.rollback()
+    return text
+
+
+async def _alert(ctx: ToolContext, tab: Tab, subject: str) -> None:
+    """定时任务碰到登录过期、自己重登不了：Home 上发一张系统提醒（同一会话同一次过期只发一次）。"""
+    site = browser_sessions.site_of(tab.url) or tab.host
+    try:
+        await system_alerts.post(
+            ctx.db, subject=subject, once="expired", title=f"{site} 的登录过期了",
+            text=f"定时任务要用 {site}，但云浏览器里的登录已经失效，保险箱里也没有它的账号，只能你来登一次。",
+            open=f"task:{ctx.task_id}" if ctx.task_id else "vault",
+            prompt=f"帮我在云浏览器里重新登录 {site}（会话 {tab.session}）。")
+        await ctx.db.commit()
+    except Exception:  # 提醒发不出去不影响任务本身
+        await ctx.db.rollback()
+
+
 async def _after(ctx: ToolContext, tab: Tab, text: str, card: bool = False) -> ToolResult:
     """每个浏览器动作之后：把页面触发的下载搬进工作区。有搬到的 → 告诉模型并在画面卡上记一笔。"""
     moved = await browser_files.collect(ctx.workspace, tab.session)
@@ -72,7 +123,7 @@ async def _snap(ctx: ToolContext, method: str, path: str, json: dict | None = No
     tab = _tab(ctx)
     if not tab.session:
         return NOT_OPEN
-    return _render(await browser_client.snapshot_call(tab.session, method, path, json), tab), tab
+    return await _view(ctx, tab, await browser_client.snapshot_call(tab.session, method, path, json)), tab
 
 
 def _click_risk(args: dict, ctx: ToolContext | None = None) -> str | None:
@@ -95,7 +146,8 @@ async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolRes
     tab.names.clear()
     ctx.live(_card(tab, live=True))  # 打开要几秒到几十秒：先让用户看到画面卡
     snap = await browser_client.snapshot_call(name, "POST", "/goto", {"url": url})
-    text = _render(snap, tab)
+    tab.opened(snap.get("login"))
+    text = await _view(ctx, tab, snap)
     note = ("沿用了这个会话之前保存的登录，先看页面是否已经登录，已登录就别再登录。" if snap.get("restored")
             else "这是新会话（没有保存过的登录）。")
     if switched:
@@ -189,7 +241,7 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
     snap = await browser_client.snapshot_call(tab.session, "POST", "/login", {
         "user_ref": user_ref, "pass_ref": pass_ref, "username": username, "password": password})
     return await _after(ctx, tab, f"已用{source}代填登录（你看不到密码）。登录状态存在会话 {tab.session}，"
-                        f"以后打开这个网站会接着用。{note}\n" + _render(snap, tab))
+                        f"以后打开这个网站会接着用。{note}\n" + await _view(ctx, tab, snap, auth=True))
 
 
 async def _code_form(ctx: ToolContext, args: dict) -> dict | None:
@@ -216,7 +268,7 @@ async def browser_code(ctx: ToolContext, ref: str, label: str = "", submit: bool
         return ToolResult("用户没有填验证码，没填进去。")
     snap = await browser_client.snapshot_call(tab.session, "POST", "/act",
                                               {"action": "type", "ref": ref, "text": code, "submit": submit})
-    return await _after(ctx, tab, "已把用户填的验证码填进去。\n" + _render(snap, tab))
+    return await _after(ctx, tab, "已把用户填的验证码填进去。\n" + await _view(ctx, tab, snap, auth=True))
 
 
 def handoff_reason(reason: str) -> str:
@@ -250,7 +302,7 @@ async def browser_handoff(ctx: ToolContext, reason: str) -> ToolResult:
         return ToolResult(f"用户没有完成接管（{why_not}）。别再弹接管，告诉用户卡在哪一步、问他想怎么办。",
                           [{**card, "handoff": {"id": hid, "reason": why, "state": state}}], failed=why_not)
     try:
-        text = _render(await browser_client.snapshot_call(tab.session, "GET", "/snapshot"), tab)
+        text = await _view(ctx, tab, await browser_client.snapshot_call(tab.session, "GET", "/snapshot"), auth=True)
     except Exception as e:  # 浏览器在接管期间关了等：交还本身成功，让模型重开
         text = f"（重新读页面失败：{e}；用 browser_open 重新打开）"
     moved = await browser_files.collect(ctx.workspace, tab.session)  # 用户接管时点出来的下载
@@ -274,7 +326,7 @@ async def browser_upload(ctx: ToolContext, ref: str, paths: list[str]) -> ToolRe
         snap, moved = await browser_files.upload(ctx.workspace, tab.session, ref, paths)
     except browser_files.BrowserFileError as e:
         return ToolResult(str(e), failed=str(e))
-    r = await _after(ctx, tab, f"{moved.note}\n" + _render(snap, tab))
+    r = await _after(ctx, tab, f"{moved.note}\n" + await _view(ctx, tab, snap))
     card = _card(tab, files=browser_files.card_files(moved.files, (r.blocks[0].get("files") if r.blocks else None)),
                  ws=ctx.workspace)
     return ToolResult(r.content, [card])

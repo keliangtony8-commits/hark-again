@@ -76,3 +76,13 @@ async def drop_download(session: str, did: str) -> None:
     r = await call(session, "DELETE", f"/downloads/{did}")
     if r.status_code >= 400:
         raise RuntimeError(_detail(r))
+
+
+async def login_state(session: str, state: str) -> None:
+    """记登录标记 signed_in / expired（服务端 /state/<name>.meta.json）。尽力而为：连不上 → RuntimeError，调用方吞掉。"""
+    try:
+        r = await call(session, "PUT", "/login-state", {"state": state})
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"云浏览器没连上：{e}") from e
+    if r.status_code >= 400:
+        raise RuntimeError(_detail(r))

@@ -1,6 +1,7 @@
 // “浏览器登录”一节（v1.26）：云浏览器按网站保存的会话（后端 app/browser_sessions.py）。
 //   [🌐] taobao.com                                 正在用   退出
 //        上次用 3 分钟前 · 登录已保存
+//   登录过期（v1.36，服务端判定）：行尾“已过期”警示色，说明行“登录过期了，用到时会请你重新登录”，图标换成 public_off。
 // 在某个网站登录一次，之后的任务都接着用；“退出”= 关掉那个网站的浏览器并删掉保存的登录（确认后）。
 // 只在“我的 → 我的电脑”（浏览器是整个账号共用的，不属于某个项目）。加载中 / 浏览器服务连不上 → 不画这一节。
 // 数据只在 browserSessionsProvider；文案规则在 models/browser_session.dart。
@@ -108,11 +109,11 @@ class _SessionRow extends StatelessWidget {
     return Semantics(
       label: browserSessionSemantics(session),
       child: RowTile(
-        icon: Icons.public_rounded,
+        icon: session.expired ? Icons.public_off_rounded : Icons.public_rounded,
         title: session.label,
         subtitle: browserSessionDetail(session),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (hint != null) ...[RowHint(hint), const SizedBox(width: Sp.x2)],
+          if (hint != null) ...[RowHint(hint, warn: session.expired), const SizedBox(width: Sp.x2)],
           TextButton(onPressed: busy ? null : onSignOut, child: Text(busy ? '正在退出' : '退出')),
         ]),
       ),

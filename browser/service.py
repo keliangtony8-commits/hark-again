@@ -6,6 +6,8 @@
 - 截图 + 鼠标/键盘：给你“实时画面 + 接管”用
 - 安全：只允许 http(s)，内网/回环地址的请求一律拦截（防 SSRF 打到你的数据库）
 - 空闲 15 分钟自动关闭会话
+- 登录状态标记（v1.36）：/state/<name>.meta.json 记 {signed_in, expired}（unix 秒）——后端看到“登录成功”/“登录页又出来了”
+  就 PUT /login-state 记一笔；goto 回报给后端（之前登录过的会话现在是登录页 = 登录过期），GET /sessions 列出给“我的电脑”
 - 文件（v1.32）：POST /upload 把后端传来的工作区文件放进网页的文件框（<input type=file> 直接设；
   别的按钮先等“选文件”对话框再设）；页面触发的下载存到 DOWNLOADS/<会话>/，GET /downloads 列出、
   取走后 DELETE——后端把它搬进工作区 downloads/（app/browser_files.py），这里只是中转，关会话就清掉
@@ -160,6 +162,34 @@ def _state_path(name: str) -> str:
     return f"{STATE}/{name}.json"
 
 
+def _meta_path(name: str) -> str:
+    return f"{STATE}/{name}.meta.json"
+
+
+def _meta(name: str) -> dict:
+    """登录标记 {signed_in, expired}（unix 秒或 None）；没有 / 坏了 → 全 None。"""
+    try:
+        with open(_meta_path(name), encoding="utf-8") as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        m = {}
+    return {k: m.get(k) if isinstance(m.get(k), (int, float)) else None for k in ("signed_in", "expired")}
+
+
+def _set_meta(name: str, state: str) -> dict:
+    m = _meta(name)
+    if state == "signed_in":
+        m = {"signed_in": time.time(), "expired": None}
+    elif state == "expired" and m["signed_in"] and not m["expired"]:
+        m["expired"] = time.time()
+    os.makedirs(STATE, exist_ok=True)
+    tmp = _meta_path(name) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(m, f)
+    os.replace(tmp, _meta_path(name))
+    return m
+
+
 async def _save(name: str) -> None:
     ctx, _ = _sessions[name]
     os.makedirs(STATE, exist_ok=True)
@@ -185,7 +215,7 @@ def _summary(name: str) -> dict:
             pass
     used = _used.get(name) or (os.path.getmtime(path) if saved else None)
     return {"name": name, "open": name in _sessions, "saved": saved, "last_used": used,
-            "cookies": cookies, "domains": domains[:5]}
+            "cookies": cookies, "domains": domains[:5], **_meta(name)}
 
 
 SNAPSHOT_JS = """
@@ -252,6 +282,10 @@ class UploadIn(BaseModel):
     files: list[UploadFile]
 
 
+class LoginStateIn(BaseModel):
+    state: str              # signed_in | expired
+
+
 class PointIn(BaseModel):
     x: float                # 0..1，相对截图宽度
     y: float
@@ -276,7 +310,16 @@ async def goto(name: str, body: GotoIn):
     await _save(name)
     snap = await _snapshot(page)
     snap["restored"] = name in _restored
+    snap["login"] = _meta(name)
     return snap
+
+
+@app.put("/sessions/{name}/login-state", dependencies=[Depends(auth)])
+async def login_state(name: str, body: LoginStateIn):
+    """后端判定的登录状态：signed_in（登录成功，清掉过期）/ expired（之前登录过、现在又是登录页；没登录过就不记）。"""
+    if body.state not in ("signed_in", "expired"):
+        raise HTTPException(400, "state 只能是 signed_in / expired")
+    return _set_meta(_check_name(name), body.state)
 
 
 @app.get("/sessions/{name}/snapshot", dependencies=[Depends(auth)])
@@ -452,10 +495,11 @@ async def close(name: str, forget: bool = False):
                 await _evict(name)
         _restored.discard(name)
         if forget:
-            try:
-                os.remove(_state_path(name))
-            except FileNotFoundError:
-                pass
+            for path in (_state_path(name), _meta_path(name)):
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
     return {"ok": True}
 
 

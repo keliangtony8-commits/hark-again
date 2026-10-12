@@ -38,6 +38,7 @@ export const IconDownload = (p: P) => <S size={16} {...p} d="M12 4v11M7 10l5 5 5
 export const IconUpload = (p: P) => <S {...p} d="M12 20V9M7 14l5-5 5 5M5 4h14" />;
 export const IconInbox = (p: P) => <S {...p} d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5M5.5 5h13l2 8.5V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-4.5z" />;
 export const IconPlay = (p: P) => <S size={16} {...p} d="M7 5l12 7-12 7z" />;
+export const IconGlobeOff = (p: P) => <S {...p} d="M4 4l16 16M20.4 15.2A9 9 0 0 0 8.8 3.6M6.3 6.3A9 9 0 0 0 17.7 17.7M3 12h9M12 3c1.3 1.4 2.3 2.9 2.9 4.6M8.2 12c0 3.3 1.3 6.3 3.8 9" />;
 export const IconGlobe = (p: P) => <S {...p} d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z" />;
 export const IconHand = (p: P) => <S size={16} {...p} d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1V4.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15.5a1.5 1.5 0 0 1 2.5-1.7L8 16" />;
 export const IconLayout = (p: P) => <S {...p} d="M4 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9h16M10 9v11" />;

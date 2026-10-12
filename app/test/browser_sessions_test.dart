@@ -101,6 +101,33 @@ void main() {
     expect(find.text('早先的浏览器会话'), findsOneWidget);
   });
 
+  test('登录过期（v1.36）：已过期优先于正在用、说明行、读屏', () {
+    final s = BrowserSession.fromJson({
+      'name': 'jd-com', 'label': 'jd.com', 'open': true, 'saved': true, 'cookies': 2,
+      'last_used': _now.subtract(const Duration(minutes: 3)).toUtc().toIso8601String(),
+      'signed_in_at': '2026-10-01T08:00:00+00:00', 'expired_at': '2026-10-10T08:00:00+00:00',
+    });
+    expect(s.expired, isTrue);
+    expect(s.signedInAt, isNotNull);
+    expect(browserSessionHint(s), '已过期');
+    expect(browserSessionDetail(s, now: _now), '上次用 3 分钟前 · $browserSessionExpiredLine');
+    expect(browserSessionSemantics(s, now: _now), 'jd.com，上次用 3 分钟前 · $browserSessionExpiredLine');
+    final ok = BrowserSession.fromJson({'name': 'a', 'label': 'a', 'signed_in_at': '2026-10-01T08:00:00+00:00', 'expired_at': null});
+    expect(ok.expired, isFalse);
+  });
+
+  testWidgets('过期的会话：行尾“已过期”警示色、图标换成 public_off', (tester) async {
+    final body = _list();
+    (body['sessions'] as List).first['expired_at'] = _now.toUtc().toIso8601String();
+    await _pump(tester, _Api(body));
+    final hint = tester.widget<Text>(find.text('已过期'));
+    final ctx = tester.element(find.text('已过期'));
+    expect(hint.style?.color, ctx.palette.warning);
+    expect(find.text('正在用'), findsNothing);
+    expect(find.byIcon(Icons.public_off_rounded), findsOneWidget);
+    expect(find.textContaining(browserSessionExpiredLine), findsOneWidget);
+  });
+
   testWidgets('空列表 → 一行说明', (tester) async {
     await _pump(tester, _Api({'sessions': [], 'max_open': 1}));
     expect(find.text(browserSessionsEmpty), findsOneWidget);
