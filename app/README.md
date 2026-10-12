@@ -45,6 +45,7 @@ lib/
 - 深浅色只靠 Palette 切换，组件里不判断 brightness；新颜色要在 light/dark 两套里都给值（lerp 会自动带上）
 - 未读数只认 `inboxProvider`；它的摘要一变会让 `cardsProvider` 重拉，页面不各自轮询
 - 网络请求只经过 `core/api.dart` / `core/chat_socket.dart`
+- 工作区规则（v1.62，`test/conversation_memory_test.dart` 兜底）：对话记忆卡下方列出工作区根目录的 AGENTS.md 一类文件（`models/conversation_context.dart` WorkspaceRules；`ruleStatus` 大小 / 超出上限警示色；没有文件给一句引导，budget 0 不显示），行用 FadeSlideIn + Motion.stagger
 - 断线续传（v1.61，`test/live_turns_test.dart` 兜底）：续传状态（turn_id / seq / reattach / probe）只在 `chat_controller`；事件按 (turn_id, seq) 去重；回复中途断线且服务器带 turn_id → 生成中的那条留着、连上 `turn.resume` 补；`turn.snapshot` 整份替换；`live:false` → 丢半截以 GET 为准；打开对话 / 重连时问 `turn.resume {conversation_id}` 接上别处正在写的回答；老服务器（不带 turn_id）走旧规则
 - 离线（`test/offline_cache_test.dart` 兜底）：缓存只存服务器原样 JSON，不给模型写 toJson；只有 `chat_controller`（经 `chat_cache.dart`）和 `resource.dart`（cacheKey）碰缓存，页面不碰；先显示缓存再静默刷新，`ApiError.isNetwork` 时保留缓存、标 offline，其它错误照常报；缓存读写失败一律吞掉；退出登录清空
 - 发件箱（`test/outbox_test.dart` 兜底）：消息的发送状态（`Message.outbox`：待发送/失败）只归 `chat_controller` 管，`chat_socket` 只报连接状态、`send()` 写不出去就返回 false；一次只在飞/排队一条；审批回复不排队（服务器在等），断线直接提示；未发出的消息不进对话缓存，而是按对话存进 `chat_cache` 的发件箱（`outbox.<对话id>` / `outbox.new.<范围>`），写入只在 `chat_controller` 的 `listenSelf(_saveOutbox)` 一处；切回/重启后一律以“发送失败”恢复，不自动补发（`test/outbox_persist_test.dart` 兜底）

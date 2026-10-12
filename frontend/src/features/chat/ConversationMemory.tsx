@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { http } from "../../lib/api";
 import {
-  compactToast, contextFill, contextLine, contextTight, summaryLine,
+  compactToast, contextFill, contextLine, contextTight, RULES_HINT, ruleCut, rulesEnabled, ruleStatus, summaryLine,
   type CompactResult, type ConversationContext,
 } from "../../lib/conversationContext";
+import { IconRule } from "../../ui/icons";
 
 /** 对话记忆卡（本对话用量 Sheet 里）：原文占预算多少、较早多少条已压成摘要（可展开）、“整理上文”手动压缩。
  *  与 App 的 ConversationMemoryCard 同规则；正在回复时后端 409，原因原样显示在卡片下方。 */
@@ -58,6 +59,23 @@ export default function ConversationMemory({ conversationId }: { conversationId:
         </div>
       )}
       {open && ctx.summary && <div key={ctx.summary.length} className="ctx-summary">{ctx.summary}</div>}
+      {rulesEnabled(ctx) && (
+        <div className="ctx-rules">
+          <span className="ctx-rules-title">工作区规则</span>
+          {(ctx.instructions?.files ?? []).length === 0 ? (
+            <span className="ctx-hint">{RULES_HINT}</span>
+          ) : (
+            ctx.instructions!.files.map((r, i) => (
+              <div key={r.path} className={`ctx-rule${ruleCut(r) ? " is-warn" : ""}`} style={{ animationDelay: `calc(var(--stagger) * ${i})` }}
+                aria-label={`规则文件 ${r.path}，${ruleStatus(r)}`}>
+                <IconRule size={16} />
+                <span className="ctx-rule-path">{r.path}</span>
+                <span className="ctx-rule-status">{ruleStatus(r)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
       <div className="ctx-foot">
         <span className="ctx-hint">
           {ctx.compactable > 0 ? `把最后一问之前的 ${ctx.compactable} 条并进摘要，之后每轮更省 token` : "已经很精简"}

@@ -65,3 +65,5 @@
   移植到 backend/app/live_turns.py、app/lib/core/chat_socket.dart、frontend/src/lib/socket.ts（v1.61）
 - deepseek-ai/deepseek-harness packages/api/session-controller/src/assistant-stream.ts（进程内重连基线快照）— MIT License, Copyright (c) 2026 DeepSeek, adapted
   移植到 backend/app/live_turns.py（v1.61）
+- deepseek-ai/deepseek-harness packages/context/agent-instructions/src/{files,render,digest,config}.ts + tests/agent-instructions.spec.ts（工作区规则文件发现、按字节预算渲染、子目录增量）— MIT License, Copyright (c) 2026 DeepSeek, modified
+  移植到 backend/app/workspace_instructions.py（v1.62）

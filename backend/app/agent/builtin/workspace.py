@@ -29,7 +29,7 @@ async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
         return ToolResult("目录不存在。")
     items = [p for p in sorted(base.rglob("*")) if not hidden(p.relative_to(root).parts)][:300]
     lines = [f"{p.relative_to(root)}{'/' if p.is_dir() else f'  ({p.stat().st_size} B)'}" for p in items]
-    return ToolResult("\n".join(lines) or "（空）")
+    return _with_rules(ctx, base, ToolResult("\n".join(lines) or "（空）"), is_dir=True)
 
 
 @tool("glob", "正在找文件",
@@ -83,6 +83,10 @@ async def grep(ctx: ToolContext, pattern: str, path: str = "", include: str = ""
        "required": ["path"]}, parallel=True)
 async def read_file(ctx: ToolContext, path: str, offset: int = 0, limit: int = MAX_READ) -> ToolResult:
     p = safe_join(project_dir(ctx.workspace), path)
+    return _with_rules(ctx, p, _read_file(ctx, p, path, offset, limit))
+
+
+def _read_file(ctx: ToolContext, p, path: str, offset: int, limit: int) -> ToolResult:
     file_seen.observe(_owner(ctx), p)  # 看过（哪怕只读一段 / 不存在）：之后 write_file 才许覆盖，规则在 file_seen.py
     if not p.is_file():
         return ToolResult("文件不存在。")
@@ -131,7 +135,7 @@ async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
     quota.forget(ctx.workspace)
     c = file_edit.change(path, before, content)
     verb = "新建" if before is None else "覆盖原文件"
-    return ToolResult(f"已写入 {path}（{verb}，{len(content)} 字符，{file_edit.stat(c)}）。", change=c)
+    return _with_rules(ctx, p, ToolResult(f"已写入 {path}（{verb}，{len(content)} 字符，{file_edit.stat(c)}）。", change=c))
 
 
 @tool("edit_file", "正在改文件",
@@ -172,7 +176,15 @@ async def edit_file(ctx: ToolContext, path: str, old_string: str, new_string: st
     quota.forget(ctx.workspace)
     c = file_edit.change(path, before, e.text)
     how = "（原文的空白/缩进或标点和文件里略有不同，已按文件里的缩进替换）" if e.loose else ""
-    return ToolResult(f"已修改 {path}：替换了 {e.count} 处，{file_edit.stat(c)}{how}。", change=c)
+    return _with_rules(ctx, p, ToolResult(f"已修改 {path}：替换了 {e.count} 处，{file_edit.stat(c)}{how}。", change=c))
+
+
+def _with_rules(ctx: ToolContext, p, r: ToolResult, is_dir: bool = False) -> ToolResult:
+    """碰到子目录里的文件：把根到那里之间新出现 / 改过 / 删掉的 AGENTS.md 一类规则追加给模型（这一轮只说一次）。
+    规则在 app/workspace_instructions.py（移植自 deepseek-harness agent-instructions，思路同 Gemini CLI 的 JIT context）。"""
+    if note := ctx.instructions.note(ctx.workspace, p, is_dir):
+        r.content = f"{r.content}\n\n{note}"
+    return r
 
 
 def _owner(ctx: ToolContext) -> str | None:

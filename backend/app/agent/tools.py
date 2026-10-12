@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..workspace_instructions import Tracker
 from ..workspaces import of as workspace_of
 from .approvals import FormReply
 
@@ -51,6 +52,8 @@ class ToolContext:
     # 只许用这些工具（None = 不限）：子助手的工具白名单（agent/subagent.py CHILD_TOOLS），不在名单里的不给模型、也不执行
     allow: frozenset[str] | None = None
     depth: int = 0  # 0 = 主助手；1 = 子助手（不能再派，Codex DEFAULT_AGENT_MAX_DEPTH = 1）
+    # 这一轮已告知模型的子目录规则文件（app/workspace_instructions.py）；每个 ToolContext 一个，并行调用的副本共用同一个
+    instructions: Tracker = field(default_factory=Tracker)
     host: bool = False  # 服务器主机模式开着（run_turn 每轮从 host_mode.enabled 读）：scope="host" 的工具才出现
 
     @property

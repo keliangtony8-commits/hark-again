@@ -24,6 +24,16 @@ String contextLine(ConversationContext c) =>
 /// 卡片第三行：摘要覆盖了多少（没有摘要 → null）。
 String? summaryLine(ConversationContext c) => c.summarized > 0 ? '更早的 ${c.summarized} 条已压成摘要' : null;
 
+/// 工作区规则一行的右侧：整份读 → 大小；截断 / 省掉 → 说清超了上限（警示色）。
+String ruleStatus(WorkspaceRule r) => switch (r.status) {
+      'truncated' => '超出上限，只读了 ${formatSize(r.used)} / ${formatSize(r.bytes)}',
+      'omitted' => '超出上限，没有读',
+      _ => formatSize(r.bytes),
+    };
+
+/// 还没有规则文件时的一句引导。
+const rulesHint = '在工作区根目录放 AGENTS.md，写上约定（怎么跑测试、代码风格、别动哪些文件），助手每轮都会先读';
+
 /// 整理完的提示条。[before] = 整理前的状态（算这次并进去几条）。
 String compactToast(ConversationContext before, CompactResult r) => switch (r.status) {
       'compressed' => '已把 ${r.state.summarized - before.summarized} 条较早消息压成摘要（约 ${formatChars(r.before)} → ${formatChars(r.after)}）',
@@ -105,6 +115,7 @@ class _ConversationMemoryCardState extends ConsumerState<ConversationMemoryCard>
                 )
               : null,
         ),
+        if (c.rules.enabled) _RulesSection(rules: c.rules),
         const SizedBox(height: Sp.x2),
         Row(children: [
           Expanded(
@@ -125,6 +136,55 @@ class _ConversationMemoryCardState extends ConsumerState<ConversationMemoryCard>
             label: Text(_busy ? '整理中' : '整理上文'),
           ),
         ]),
+      ]),
+    );
+  }
+}
+
+/// 工作区规则：根目录的 AGENTS.md 一类文件，每轮都进系统提示（子目录的在助手碰到那里的文件时才读）。
+class _RulesSection extends StatelessWidget {
+  const _RulesSection({required this.rules});
+  final WorkspaceRules rules;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final small = context.text.bodySmall;
+    return Padding(
+      padding: const EdgeInsets.only(top: Sp.x3),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('工作区规则', style: context.text.labelMedium?.copyWith(color: p.text2)),
+        const SizedBox(height: Sp.x1),
+        if (rules.files.isEmpty)
+          Text(rulesHint, style: small?.copyWith(color: p.text3))
+        else
+          for (final (i, r) in rules.files.indexed)
+            FadeSlideIn(
+              key: ValueKey('rule-${r.path}'),
+              delay: Motion.stagger(i),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Sp.x1),
+                child: Semantics(
+                  label: '规则文件 ${r.path}，${ruleStatus(r)}',
+                  excludeSemantics: true,
+                  child: Row(children: [
+                    Icon(Icons.rule_folder_outlined, size: Sp.x4, color: r.cut ? p.warning : p.text2),
+                    const SizedBox(width: Sp.x2),
+                    Expanded(
+                      child: Text(r.path, maxLines: 1, overflow: TextOverflow.ellipsis, style: small?.copyWith(color: p.text)),
+                    ),
+                    const SizedBox(width: Sp.x2),
+                    Flexible(
+                      child: Text(ruleStatus(r),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: small?.copyWith(color: r.cut ? p.warning : p.text3)),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
       ]),
     );
   }

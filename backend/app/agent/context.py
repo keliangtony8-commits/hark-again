@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import llm, memory_store, project_brief, skills_store, turn_journal, vision, workspaces
+from .. import llm, memory_store, project_brief, skills_store, turn_journal, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -55,6 +55,9 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
         parts.append(project_brief.prompt_section(p))
     else:
         parts.append(workspaces.prompt_line(workspaces.PERSONAL))
+    # 工作区根目录的 AGENTS.md 一类规则文件（子目录的由文件工具碰到时追加）；规则在 app/workspace_instructions.py
+    if rules := workspace_instructions.baseline(workspaces.of(project_id)).text:
+        parts.append(rules)
     return "\n\n".join(parts)
 
 
@@ -251,6 +254,8 @@ def _state(snap: _Snapshot) -> dict:
         "budget": budget,
         "summary": snap.summary,
         "compactable": max(0, snap.last_user - covered),
+        # 工作区根目录的规则文件（每轮都进系统提示）：客户端在“对话记忆”里列出来
+        "instructions": workspace_instructions.summary(workspaces.of(snap.conv.project_id if snap.conv else None)),
     }
 
 

@@ -328,3 +328,12 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .ctx-foot { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-1); }
 .ctx-hint { flex: 1; font-size: var(--fs-sm); color: var(--text-3); }
 .ctx-note { margin-top: 0; text-align: start; }
+/* v1.62 工作区规则（AGENTS.md）：每个文件一行，逐项浮入；没整份读进去的换警示色 */
+.ctx-rules { display: grid; gap: var(--sp-1); margin-top: var(--sp-2); }
+.ctx-rules-title { font-size: var(--fs-sm); color: var(--text-2); }
+.ctx-rule { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); padding: var(--sp-1) 0; animation: rise var(--dur) var(--ease) both; }
+.ctx-rule svg { color: var(--text-2); flex: none; }
+.ctx-rule-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-rule-status { flex: 0 1 auto; min-width: 0; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-rule.is-warn svg, .ctx-rule.is-warn .ctx-rule-status { color: var(--warning); }
+@media (prefers-reduced-motion: reduce) { .ctx-rule { animation: none; } }

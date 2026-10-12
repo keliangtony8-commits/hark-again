@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     agent_turn_tokens: int = 600_000
     # 同一步里连续的只读工具调用（读文件、搜索、读网页）同时跑几个（agent/parallel.py；deepseek-harness 默认 10）；≤1 = 一个个来
     agent_parallel_tools: int = 8
+    # 工作区规则文件（AGENTS.md 一类，app/workspace_instructions.py）：根目录的每轮进系统提示、子目录的碰到时追加，
+    # 每批最多多少字节（deepseek-harness 65536；约 4 字节 1 token，16384 ≈ 4k token 封顶）。0 = 不读
+    workspace_instructions_bytes: int = 16384
     # 断线后回答继续写多久（app/live_turns.py）：订阅这一轮的连接全断了，最多再跑几分钟等客户端重连接着看，
     # 到点按“停止”收尾（半截存为 stopped）。0 = 断线即停（v1.60 及以前的行为）。
     turn_offline_minutes: int = 30
