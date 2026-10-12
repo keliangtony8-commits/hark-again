@@ -25,12 +25,13 @@ type Props = OutboxActions & {
   empty?: ReactNode;
 };
 
-/** 长连接断开时的提示条（输入胶囊上方的一颗玻璃胶囊）：待发送的消息会在连上后自动发出，“重试”跳过退避立刻重连。 */
-function LinkBar({ onRetry }: { onRetry: () => void }) {
+/** 长连接断开时的提示条（输入胶囊上方的一颗玻璃胶囊）：待发送的消息会在连上后自动发出，“重试”跳过退避立刻重连。
+ *  断线时还在生成 = 服务器支持续传，回答在那边接着写（useChat 续传）。 */
+function LinkBar({ onRetry, streaming }: { onRetry: () => void; streaming: boolean }) {
   return (
     <div className="link-bar glass" role="status">
       <span className="link-dot" aria-hidden />
-      <span className="link-text">连接已断开 · 正在重连</span>
+      <span className="link-text">{streaming ? "连接已断开 · 回答还在服务器上继续写" : "连接已断开 · 正在重连"}</span>
       <button className="btn btn-ghost btn-sm" onClick={onRetry}>重试</button>
     </div>
   );
@@ -123,7 +124,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
         )}
       </div>
       <FloatingFooter onHeight={setFooterH}>
-        {link === "down" && <LinkBar onRetry={onReconnect} />}
+        {link === "down" && <LinkBar onRetry={onReconnect} streaming={!!streaming} />}
         <Composer disabled={busy} streaming={streaming} onStop={onStop} accessory={accessory} workspace={workspaceOf(projectId)}
           editing={editing} onCancelEdit={() => setDraft(null)} onEditLast={editableId ? startEdit : undefined}
           onSend={(t, files) => { if (editing) { onEdit(t); setDraft(null); } else onSend(t, files); }} />

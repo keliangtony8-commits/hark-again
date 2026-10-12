@@ -200,7 +200,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
                     ? OfflineBar(
                         key: const ValueKey('offline'),
                         onRetry: ctl.sync,
-                        text: chat.offline ? '离线 · 显示的是上次同步的内容' : '连接断开 · 消息会在连上后自动发出',
+                        // 断线时还在生成 = 服务器支持续传，回答在那边接着写（chat_controller 续传）
+                        text: chat.offline
+                            ? '离线 · 显示的是上次同步的内容'
+                            : chat.streaming
+                                ? '连接断开 · 回答还在服务器上继续写，连上后接着显示'
+                                : '连接断开 · 消息会在连上后自动发出',
                       )
                     : null,
               ),

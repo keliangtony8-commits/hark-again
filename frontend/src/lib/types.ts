@@ -98,7 +98,9 @@ export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopp
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
 export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; updated_at: string; snippet?: string; message_id?: string };
 
-export type ServerEvent =
+/** v1.61 续传：一轮里的事件都带 turn_id + 从 1 起连续的 seq（老服务器没有）。 */
+export type TurnCursor = { turn_id?: string; seq?: number };
+export type ServerEvent = TurnCursor & (
   | { type: "message.start"; conversation_id: string; user_message_id: string; title: string; replaced?: string[]; user_message?: Message }
   | { type: "block.start"; index: number; block: Block }
   | { type: "block.update"; index: number; block: Block }
@@ -108,7 +110,11 @@ export type ServerEvent =
   | ({ type: "tool.status" } & ToolRun)
   | { type: "message.done"; message: Message }
   | { type: "message.stopped"; conversation_id: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  /** 对 turn.resume 的答复：live=false = 没这轮（以 GET 为准）；gap = 游标太旧，随后来 turn.snapshot */
+  | { type: "turn.resumed"; turn_id: string | null; conversation_id: string | null; live: boolean; ended?: boolean; gap?: boolean }
+  /** 折叠好的“到目前为止”：整份替换生成中的那条 */
+  | { type: "turn.snapshot"; turn_id: string; seq: number; conversation_id: string | null; message: { blocks: Block[]; steps: ActivityStep[] } });
 
 // ---- 其他资源（对应 backend/app/models.py） ----
 /** conversation_count / last_active_at：服务器算好的只读字段（旧服务器没有）。 */

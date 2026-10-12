@@ -206,6 +206,12 @@ abstract final class Timing {
   static const bannerHold = Duration(seconds: 4); // 端内横幅停留多久
   static const taskRunPoll = Duration(seconds: 4); // 任务详情页有运行在排队/进行时多久刷新一次
   static const outboxGiveUp = Duration(seconds: 45); // 待发送的消息等多久没连上就标“发送失败”
+  // 聊天长连接（core/chat_socket.dart；节奏参考 Codex remote_control：10 s ping、60 s 没回音算断、连上满 60 s 才清退避）
+  static const socketPing = Duration(seconds: 25); // 多久发一次心跳（手机网络常常“假在线”，靠它发现）
+  static const socketDead = Duration(seconds: 60); // 这么久什么都没收到 = 线已经死了，主动断开重连
+  static const socketStable = Duration(seconds: 60); // 连上保持这么久才把重连退避清零（服务器反复闪断时不狂连）
+  static const socketBackoffMin = Duration(seconds: 1); // 重连退避：1 s 起翻倍，封顶 10 s，再乘 0.5–1 的随机抖动
+  static const socketBackoffMax = Duration(seconds: 10);
   static const copiedHold = Duration(milliseconds: 1500); // 复制键变成对勾停多久再变回去
   static const clockTick = Duration(seconds: 1); // “思考中 · 8 秒”这类计时多久跳一次
   static const jobPoll = Duration(seconds: 2); // 聊天里的后台任务卡运行中多久问一次进度

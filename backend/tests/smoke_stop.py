@@ -42,7 +42,7 @@ H = {"Authorization": f"Bearer {token}"}
 def until(ws, *types):
     out = []
     while True:
-        e = ws.receive_json(); out.append(e)
+        e = ws.receive_json(); e.pop("turn_id", None); e.pop("seq", None); out.append(e)  # 续传游标（v1.61）不在比较之列
         if e["type"] in types:
             return out
 
@@ -98,23 +98,27 @@ with c.websocket_connect(f"/ws?token={token}") as ws:
     assert ev[0]["replaced"] == [stopped["id"]] and ev[-1]["message"]["blocks"][0]["text"] == "完整回答", ev
     assert asyncio.run(rows(cid))[-1] == ("assistant", "done", "完整回答")
 
-# 断线：半截回复照样落库（客户端重连后 GET 能看到）。TestClient 退出时会直接停掉事件循环，
-# 测不到真实断线，所以直接驱动 _Turns：等它吐字 → close()（= 收到 WebSocketDisconnect）→ 查库。
+# 断线：turn_offline_minutes=0（旧行为）时断线即停，半截回复照样落库、排在后面的那条不再跑。
+# TestClient 退出时会直接停掉事件循环，测不到真实断线，所以直接驱动 live_turns：等它吐字 → Conn.close()（= 断线）→ 查库。
+# 断线后继续写 / 重连续传的情形见 tests/smoke_live_turns.py。
+from app import live_turns
+from app.config import settings
 mode["m"] = "hang"
+settings.turn_offline_minutes = 0
 
 async def disconnect_case():
     got = asyncio.Event(); sent = []
-    class FakeWS:
-        async def send_json(self, e):
-            sent.append(e)
-            if e["type"] == "block.delta":
-                got.set()
-    turns = rws._Turns(FakeWS())
-    turns.enqueue(rws._handle_user_message, {"type": "user.message", "text": "断线测试"})
-    turns.enqueue(rws._handle_user_message, {"type": "user.message", "text": "排队中的下一条"})
+    async def send(e):
+        sent.append(e)
+        if e["type"] == "block.delta":
+            got.set()
+    conn = live_turns.Conn(send)
+    t1 = live_turns.enqueue(rws._handle_user_message, {"type": "user.message", "text": "断线测试"}, conn)
     await asyncio.wait_for(got.wait(), 5)
-    turns.close()
-    await asyncio.gather(*list(turns._all), return_exceptions=True)
+    t2 = live_turns.enqueue(rws._handle_user_message, {"type": "user.message", "conversation_id": t1.conv_id,
+                                                       "text": "排队中的下一条"}, conn)
+    conn.close()
+    await asyncio.gather(t1.task, t2.task, return_exceptions=True)
     return sent[0]["conversation_id"]
 
 cid2 = asyncio.run(disconnect_case())

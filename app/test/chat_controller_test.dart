@@ -14,6 +14,7 @@ class FakeSocket implements ChatSocket {
   final ctl = StreamController<Map<String, dynamic>>.broadcast();
   final _status = StreamController<LinkStatus>.broadcast();
   final sent = <Map<String, dynamic>>[];
+  final resumes = <Map<String, dynamic>>[]; // turn.resume（续传 / 旁观探询）单独记，不混进聊天请求
   int reconnects = 0;
   @override
   LinkStatus current;
@@ -29,7 +30,7 @@ class FakeSocket implements ChatSocket {
   @override
   bool send(Map<String, dynamic> payload) {
     if (current != LinkStatus.open) return false;
-    sent.add(payload);
+    (payload['type'] == 'turn.resume' ? resumes : sent).add(payload);
     return true;
   }
 

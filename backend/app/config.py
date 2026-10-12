@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     agent_turn_tokens: int = 600_000
     # 同一步里连续的只读工具调用（读文件、搜索、读网页）同时跑几个（agent/parallel.py；deepseek-harness 默认 10）；≤1 = 一个个来
     agent_parallel_tools: int = 8
+    # 断线后回答继续写多久（app/live_turns.py）：订阅这一轮的连接全断了，最多再跑几分钟等客户端重连接着看，
+    # 到点按“停止”收尾（半截存为 stopped）。0 = 断线即停（v1.60 及以前的行为）。
+    turn_offline_minutes: int = 30
     # 子助手（delegate 工具，agent/subagent.py）：一次最多并行几个（Codex 默认 6 个线程，我们 4G 小机器取 4）；
     # 每个子助手的步数 / token / 分钟上限（Gemini generalist：20 轮、10 分钟；到了就收掉工具让它交代进度）。深度固定 1：子助手不能再派。
     # 服务器主机模式（app/host_mode.py）：宿主机上的 host agent（deploy/host-agent）监听这个 unix socket；空 = 没装，功能不出现

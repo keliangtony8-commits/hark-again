@@ -1,11 +1,11 @@
-"""WebSocket 传输层：收消息、收审批答复、推事件。一轮对话放进后台任务，
-这样生成过程中仍能收到用户对审批卡的回复。业务流程在 agent/runner.py。"""
+"""WebSocket 传输层：收消息、收审批答复、推事件。轮次的排队、停止、断线续传都归 live_turns（一轮不绑在连接上），
+这里只把帧交给它；业务流程在 agent/runner.py。"""
 import asyncio
 import contextlib
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .. import workspaces
+from .. import live_turns, workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -25,82 +25,34 @@ async def ws_endpoint(ws: WebSocket):
         await ws.close(code=4401)
         return
     await ws.accept()
-    turns = _Turns(ws)
+
+    async def overflow() -> None:  # 客户端读不动：断开，它重连后按游标补（live_turns.Conn）
+        with contextlib.suppress(Exception):
+            await ws.close(code=1013)
+
+    conn = live_turns.Conn(ws.send_json, overflow)
     try:
         while True:
             event = await ws.receive_json()
             match event.get("type"):
                 case "user.message":
-                    turns.enqueue(_handle_user_message, event)
+                    live_turns.enqueue(_handle_user_message, event, conn)
                 case "message.regenerate":
-                    turns.enqueue(_handle_regenerate, event)
+                    live_turns.enqueue(_handle_regenerate, event, conn)
                 case "message.cancel":
-                    turns.stop(event.get("conversation_id"))
+                    live_turns.stop(conn, event.get("conversation_id"))
+                case "turn.resume":
+                    live_turns.resume(conn, event)
+                case "ping":
+                    conn.put({"type": "pong"})
                 case "approval.reply":
                     approvals.resolve(str(event.get("id")), bool(event.get("approved")), event.get("option"))
                 case "form.reply":
                     approvals.resolve_form(str(event.get("id")), event.get("values"), event.get("remember"))
-    except WebSocketDisconnect:
-        turns.close()
-
-
-class _Turns:
-    """一条连接上的对话轮次。
-
-    - 排队：一次只跑一轮，新请求排在上一轮后面而不是丢掉——上一轮发完 message.done/error 后还要收尾一小会儿，
-      客户端这时立刻发来的下一条（比如马上点“重新生成”）若被丢掉，界面会一直转圈。
-    - 停止：记住正在跑的那轮和它的对话；message.cancel 先 set 停止信号再 cancel，run_turn 据此把半截回复存为
-      stopped 并正常结束，排在后面的轮次照跑。
-    - 断线：取消所有还没结束的轮次（run_turn 会先把半截回复落库再抛出）。"""
-
-    def __init__(self, ws: WebSocket):
-        self._ws = ws
-        self._last: asyncio.Task | None = None
-        self._all: set[asyncio.Task] = set()
-        self._running: asyncio.Task | None = None
-        self._conv_id: str | None = None
-        self._stop = asyncio.Event()
-
-    def enqueue(self, handler, event: dict) -> None:
-        self._last = asyncio.create_task(self._after(self._last, handler, event))
-        self._all.add(self._last)
-        self._last.add_done_callback(self._all.discard)
-
-    def stop(self, conversation_id: str | None) -> None:
-        """只停正在跑的那轮；带了 conversation_id 就必须对得上（旧界面上残留的停止按钮不能误伤别的对话）。
-        没有在跑的轮次 = 刚好已经说完，什么也不做：客户端已经收到了 message.done。"""
-        task = self._running
-        if task is None or task.done() or self._stop.is_set():
-            return
-        if conversation_id and self._conv_id and conversation_id != self._conv_id:
-            return
-        self._stop.set()
-        task.cancel()
-
-    def close(self) -> None:
-        for task in list(self._all):
-            task.cancel()
-
-    async def _after(self, prev: asyncio.Task | None, handler, event: dict) -> None:
-        if prev is not None:
-            await asyncio.wait({prev})  # 只等它结束；上一轮失败/被停止都与这一轮无关
-        self._running, self._conv_id, self._stop = asyncio.current_task(), None, asyncio.Event()
-        try:
-            await handler(self._emit, event, self._stop)
-        except asyncio.CancelledError:
-            # 停止落在 run_turn 之外（还在存用户消息）：同样算正常结束，告诉客户端这一轮停了
-            if not self._stop.is_set():
-                raise
-            asyncio.current_task().uncancel()
-            with contextlib.suppress(Exception):
-                await self._ws.send_json({"type": "message.stopped", "conversation_id": self._conv_id})
-        finally:
-            self._running = None
-
-    async def _emit(self, event: dict) -> None:
-        if event.get("type") == "message.start":
-            self._conv_id = event.get("conversation_id")
-        await self._ws.send_json(event)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        conn.close()  # 退订；回答在服务器上接着跑（live_turns：没人看着最多再跑 turn_offline_minutes）
 
 
 async def _approve(aid: str, _title: str, _detail: str) -> bool:

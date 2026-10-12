@@ -3,7 +3,12 @@
 // family 参数：'' = 主聊天；项目 id = 该项目里的聊天。
 // 离线：先显示 chat_cache 里的上次内容（瞬开），再向服务器要新的；连不上就留着缓存并标 offline，界面给“离线”条。
 // 发件箱：发出的消息先作为 Outbox.queued 进列表；线通了就真正发出（sent），一次只在飞一条。
-//   没连上等太久 → failed；发出后、回复开始前断线 → failed（服务器可能没收到）；回复中途断线 → 连上后重新同步。
+//   没连上等太久 → failed；发出后、回复开始前断线 → failed（服务器可能没收到；连上后问一次，服务器那边正在答就改回已发出）。
+// 续传（v1.61，服务器 live_turns）：回答不绑在连接上。回复中途断线 → 生成中的那条和 streaming 都留着，
+//   连上后发 turn.resume {turn_id, after: 收到的最后一个 seq}，服务器只补后面的；事件带 turn_id + seq，重复的丢掉。
+//   游标太旧（服务器日志已截断）→ turn.snapshot 整份替换生成中的那条；服务器说没这轮了（重启 / 已过保留期）→ 以 GET 为准。
+//   打开对话（和每次重连）都问一次 turn.resume {conversation_id}：别的设备 / 断线前发起、还在写的回答接着看。
+//   老服务器不带 turn_id：按旧规则（断线丢半截、连上后 GET）。
 //   failed 由用户 resend()（挪到末尾重新排队）或 discard()。
 //   未发出的消息按对话存进 chat_cache 的发件箱（listenSelf 一处写，不在各个分支里散写），
 //   切走/App 被杀后再打开这个对话会以“发送失败”回来。
@@ -130,6 +135,11 @@ class ChatController extends Notifier<ChatState> {
   bool _resync = false; // 断线丢了中途的事件，连上后要重新拉当前对话
   bool _regenerating = false; // 在飞的这一轮是重新生成（用户消息早已在服务器上）
   bool _modelDirty = false; // 本机改了模型 / 思考强度还没送到服务器（新对话 / PATCH 没成功）
+  String? _turnId; // 在看的这一轮（服务器 live_turns 的 id；老服务器没有）
+  String? _turnConv; // 这一轮属于哪个对话（续传时带上，服务器核对）
+  int _seq = 0; // 这一轮收到的最后一个事件编号
+  bool _reattach = false; // 回复中途断线、服务器支持续传：连上后 turn.resume 接着收
+  String? _probe; // 发出后、回复前断线的那个对话：连上后问服务器是不是已经在答
   int _openSeq = 0; // 快速连点切换对话时，只认最后一次 open 的结果
 
   Api get _api => ref.read(apiProvider);
@@ -232,6 +242,13 @@ class ChatController extends Notifier<ChatState> {
   }
 
   void _onEvent(Map<String, dynamic> e) {
+    // 续传去重：同一轮里编号不大于已收到的，是重连补发的重复（message.start / 快照在各自分支里认领新一轮）
+    // turn.resumed 是对续传请求的答复（它的 seq = 服务器当前进度），不是这一轮的事件，不参与
+    final tid = e['turn_id'], seq = e['seq'];
+    if (tid is String && seq is int && tid == _turnId && e['type'] != 'turn.resumed') {
+      if (seq <= _seq) return;
+      if (e['type'] != 'turn.snapshot') _seq = seq;
+    }
     // 模型又开始产出：普通重试的提示收起（换备用模型的提示留到这一轮结束）
     if (RetryNotice.clearsOn.contains(e['type'])) {
       final last = state.messages.lastOrNull;
@@ -241,7 +258,14 @@ class ChatController extends Notifier<ChatState> {
       case 'message.start':
         if (state.activeId != null && state.activeId != e['conversation_id']) return; // 别的会话的事件
         _started = true;
-        final ms = [...state.messages];
+        if (tid is String && tid != _turnId) {
+          _turnId = tid;
+          _seq = seq is int ? seq : 0;
+        }
+        _turnConv = e['conversation_id'] as String?;
+        // 旁观（另一台设备发起的重新生成）：被替换的旧回复本机还在，按服务器说的撤掉
+        final replaced = {...?(e['replaced'] as List?)?.whereType<String>()};
+        final ms = [for (final m in state.messages) if (!replaced.contains(m.id) && !m.pending) m];
         // 编辑：用服务器规整后的版本覆盖本地乐观改写（保留本地 id，气泡不重建）
         if (e['user_message'] case final Map<String, dynamic> um) {
           final i = ms.lastIndexWhere((m) => m.isUser);
@@ -249,8 +273,24 @@ class ChatController extends Notifier<ChatState> {
         }
         state = state.copyWith(
           activeId: () => e['conversation_id'] as String,
+          streaming: true,
           messages: [...ms, const Message(id: 'pending', role: 'assistant', blocks: [], pending: true)],
         );
+      case 'turn.resumed':
+        _onResumed(e);
+      case 'turn.snapshot':
+        // 游标落在服务器已丢弃的日志里：拿折叠好的“到目前为止”整份替换生成中的那条，再接实时事件
+        if (state.activeId != null && e['conversation_id'] != null && state.activeId != e['conversation_id']) return;
+        _turnId = tid as String?;
+        _seq = seq is int ? seq : 0;
+        _started = true;
+        final snap = e['message'] as Map<String, dynamic>? ?? const {};
+        final ms = [for (final m in state.messages) if (!m.pending) m];
+        final prev = state.messages.where((m) => m.pending).lastOrNull;
+        var pending = const Message(id: 'pending', role: 'assistant', blocks: [], pending: true)
+            .copyWith(blocks: blocksFrom(snap['blocks']), steps: stepsFrom(snap['steps']));
+        if (prev != null) pending = pending.withThoughtOf(prev);
+        state = state.copyWith(streaming: true, messages: [...ms, pending]);
       case 'block.start' || 'block.update':
         final block = Block.fromJson(e['block'] as Map<String, dynamic>);
         _patchPending((m) => m.copyWith(blocks: _setAt(m.blocks, e['index'] as int, block)));
@@ -283,10 +323,12 @@ class ChatController extends Notifier<ChatState> {
         final id = state.activeId;
         if (id != null) unawaited(_persist(id));
         _regenerating = false;
+        _reattach = false;
         _flush(); // 期间点了“重发”的，轮到它了
       case 'message.stopped':
         // 还没吐字就停了：撤掉思考占位；用户消息留着（服务器上也在），可以“重试”
         _regenerating = false;
+        _reattach = false;
         state = state.copyWith(messages: [for (final m in state.messages) if (!m.pending) m], streaming: false);
         refreshList();
         final id = state.activeId;
@@ -297,6 +339,7 @@ class ChatController extends Notifier<ChatState> {
         final id = state.activeId;
         if (_regenerating && id != null) unawaited(_fetch(id, _openSeq)); // 下面同步把 streaming 置回 false，拉回来时不会被挡
         _regenerating = false;
+        _reattach = false;
         state = state.copyWith(
           messages: [for (final m in state.messages) if (!(m.pending && m.blocks.isEmpty)) m.copyWith(pending: false)],
           streaming: false,
@@ -308,11 +351,17 @@ class ChatController extends Notifier<ChatState> {
 
   void _onLink(LinkStatus s) {
     if (s == LinkStatus.down) {
-      if (state.streaming) {
+      if (state.streaming && _started && _turnId != null) {
+        // 服务器支持续传：回答在那边接着写，这里什么都不丢，连上后补
+        _reattach = true;
+      } else if (state.streaming) {
         // 回复还没开始：服务器可能没收到，最后一条用户消息标失败让用户决定；已经开始：丢掉半截，连上后从服务器拿完整的
         final ms = [for (final m in state.messages) if (!m.pending) m];
         final lastUser = ms.lastIndexWhere((m) => m.isUser);
-        if (!_started && !_regenerating && lastUser >= 0) ms[lastUser] = ms[lastUser].copyWith(outbox: Outbox.failed);
+        if (!_started && !_regenerating && lastUser >= 0) {
+          ms[lastUser] = ms[lastUser].copyWith(outbox: Outbox.failed);
+          _probe = state.activeId;
+        }
         state = state.copyWith(messages: ms, streaming: false);
         _resync = _started || _regenerating;
         _regenerating = false;
@@ -321,9 +370,52 @@ class ChatController extends Notifier<ChatState> {
     } else if (s == LinkStatus.open) {
       state = state.copyWith(linkDown: false);
       final id = state.activeId;
+      if (_reattach && _turnId != null) {
+        _socket.send({'type': 'turn.resume', 'turn_id': _turnId, 'conversation_id': _turnConv ?? id, 'after': _seq});
+      } else if (id != null && !state.streaming) {
+        _watch(id); // 断线期间别处发起的、或刚才没确认送达的那条，服务器可能正在答
+      }
       if (_resync && id != null) unawaited(_fetch(id, _openSeq));
       _resync = false;
       _flush();
+    }
+  }
+
+  /// 问服务器这个对话有没有正在写的回答（有就接着看，turn.resumed + 补发从 message.start 起的事件）。
+  void _watch(String id) => _socket.send({'type': 'turn.resume', 'conversation_id': id});
+
+  void _onResumed(Map<String, dynamic> e) {
+    final cid = e['conversation_id'] as String?;
+    if (cid != null && state.activeId != null && cid != state.activeId) return; // 别的对话（已切走）
+    final probed = _probe != null && _probe == cid;
+    _probe = null;
+    if (e['live'] != true) {
+      final id = state.activeId;
+      if (_reattach) {
+        // 服务器没这轮了（重启 / 断太久过了保留期）：丢掉半截，以服务器落库的为准
+        _reattach = false;
+        state = state.copyWith(messages: [for (final m in state.messages) if (!m.pending) m], streaming: false);
+        if (id != null) unawaited(_fetch(id, _openSeq));
+        _flush();
+      } else if (probed && id != null && !state.streaming) {
+        unawaited(_fetch(id, _openSeq)); // 那条可能已经送到并答完了
+      }
+      return;
+    }
+    _reattach = false;
+    final tid = e['turn_id'] as String?;
+    if (tid != _turnId) {
+      _turnId = tid;
+      _seq = 0;
+      _started = false;
+    }
+    _turnConv = cid ?? _turnConv;
+    if (!state.streaming) {
+      // 接上一轮正在写的回答：发送失败的那条其实已经送到了（服务器正在答它）
+      final ms = [...state.messages];
+      final i = ms.lastIndexWhere((m) => m.isUser);
+      if (probed && i == ms.length - 1 && ms[i].outbox == Outbox.failed) ms[i] = ms[i].copyWith(outbox: Outbox.sent);
+      state = state.copyWith(streaming: true, messages: ms);
     }
   }
 
@@ -392,6 +484,8 @@ class ChatController extends Notifier<ChatState> {
     _giveUp?.cancel(); // 原对话没发出的消息已在发件箱里，随它一起换走
     _giveUp = null;
     _modelDirty = false;
+    _reattach = false;
+    _probe = null;
     state = state.copyWith(
         activeId: () => id,
         model: () => _summaryOf(id)?.model,
@@ -400,6 +494,7 @@ class ChatController extends Notifier<ChatState> {
         error: () => null,
         focus: () => id == null ? null : focus);
     if (id != null) await _fetch(id, seq, hasCache: cached != null);
+    if (id != null && seq == _openSeq && state.activeId == id && !state.streaming) _watch(id);
     // 以服务器为准仍找不到那条消息：作废，免得以后某次刷新时突然跳走
     final f = state.focus;
     if (seq == _openSeq && f != null && !state.messages.any((m) => m.id == f)) state = state.copyWith(focus: () => null);
@@ -491,7 +586,7 @@ class ChatController extends Notifier<ChatState> {
     ]);
   }
 
-  /// 停止生成。不排队：线断了这一轮本来就会在服务器上被停下（断线即停、半截落库），重连后同步即可。
+  /// 停止生成。不排队：线断了就提示，连上后再点（回答在服务器上接着写，重连后续传，停止键还在）。
   void stop() {
     if (!state.canStop) return;
     if (!_socket.send({'type': 'message.cancel', 'conversation_id': state.activeId})) {

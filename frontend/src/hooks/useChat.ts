@@ -59,6 +59,12 @@ export function useChat(projectId?: string) {
   const started = useRef(false);   // 在飞的这条已收到 message.start
   const resync = useRef(false);    // 断线丢了中途的事件，连上后要重新拉当前对话
   const regenerating = useRef(false); // 在飞的这一轮是重新生成（用户消息早已在服务器上）
+  // 续传（v1.61，服务器 live_turns；同 App chat_controller）：回答不绑在连接上，断线不丢半截，连上后 turn.resume 按 seq 接着收
+  const turnId = useRef<string | null>(null);   // 在看的这一轮（老服务器没有）
+  const turnConv = useRef<string | null>(null);
+  const turnSeq = useRef(0);                    // 收到的最后一个事件编号
+  const reattach = useRef(false);               // 回复中途断线、服务器支持续传：连上后续传
+  const probe = useRef<string | null>(null);    // 发出后回复前断线的那个对话：连上后问服务器是否已在答
   const openSeq = useRef(0);       // 快速连点切换对话时，只认最后一次 open
   const threadRef = useRef(thread);
   threadRef.current = thread;
@@ -87,7 +93,15 @@ export function useChat(projectId?: string) {
     }
   }, []);
 
+  /** 问服务器这个对话有没有正在写的回答（别的设备 / 断线前发起的），有就接着看。 */
+  const watch = (id: string) => socket.current?.send({ type: "turn.resume", conversation_id: id });
+
   const onEvent = (e: ServerEvent) => {
+    // 续传去重：同一轮里编号不大于已收到的，是重连补发的重复；turn.resumed 是答复不是事件，不参与
+    if (e.turn_id && typeof e.seq === "number" && e.turn_id === turnId.current && e.type !== "turn.resumed") {
+      if (e.seq <= turnSeq.current) return;
+      if (e.type !== "turn.snapshot") turnSeq.current = e.seq;
+    }
     // 模型又开始产出：普通重试的提示收起（换备用模型的提示留到这一轮结束）
     if (RETRY_CLEARS_ON.has(e.type)) patchPending((p) => (p.retry && !p.retry.fallback ? { ...p, retry: undefined } : p));
     switch (e.type) {
@@ -95,10 +109,14 @@ export function useChat(projectId?: string) {
         const cur = threadRef.current.id;
         if (cur && cur !== e.conversation_id) return;   // 别的对话的事件
         started.current = true;
+        if (e.turn_id && e.turn_id !== turnId.current) { turnId.current = e.turn_id; turnSeq.current = e.seq ?? 0; }
+        turnConv.current = e.conversation_id;
         if (!cur) outbox.save(projectId, null, []);       // 新对话有了 id，剩下的未发消息随它搬家
         const um = e.user_message;   // 编辑：服务器规整后的版本覆盖本地乐观改写（保留本地 id）
+        const replaced = new Set(e.replaced ?? []);   // 旁观别处发起的重新生成：撤掉被替换的旧回复
+        setStreaming(true);
         setThread((t) => {
-          const ms = [...t.messages];
+          const ms = t.messages.filter((x) => !x.pending && !replaced.has(x.id));
           const i = ms.map((x) => x.role).lastIndexOf("user");
           if (um && i >= 0) ms[i] = { ...ms[i], blocks: um.blocks };
           return { id: e.conversation_id, messages: [...ms, { id: "pending", role: "assistant", blocks: [], steps: [], pending: true }] };
@@ -131,8 +149,25 @@ export function useChat(projectId?: string) {
         patchPending((p) => ({ ...p, steps: mergeStep(p.steps ?? [], step) }));
         break;
       }
+      case "turn.resumed":
+        onResumed(e);
+        break;
+      case "turn.snapshot": {
+        const cur = threadRef.current.id;
+        if (cur && e.conversation_id && cur !== e.conversation_id) return;
+        turnId.current = e.turn_id; turnSeq.current = e.seq; started.current = true;
+        setStreaming(true);
+        setMessages((ms) => {
+          const prev = ms.find((x) => x.pending);
+          const p: Message = { id: "pending", role: "assistant", blocks: e.message.blocks ?? [], steps: e.message.steps ?? [], pending: true,
+            thought: prev?.thought, thinkFrom: prev?.thinkFrom, thinkTo: prev?.thinkTo };
+          return [...ms.filter((x) => !x.pending), p];
+        });
+        break;
+      }
       case "message.done":
         regenerating.current = false;
+        reattach.current = false;
         // 本机才有的思考（内容 + 计时）接到正式消息上：回复上方能展开“已思考 N 秒”
         setMessages((m) => {
           const p = m.find((x) => x.pending);
@@ -145,6 +180,7 @@ export function useChat(projectId?: string) {
       case "message.stopped":
         // 还没吐字就停了：撤掉思考占位；用户消息留着（服务器上也在），可以“重试”
         regenerating.current = false;
+        reattach.current = false;
         setMessages((m) => m.filter((x) => !x.pending));
         setStreaming(false);
         list.refresh();
@@ -154,6 +190,7 @@ export function useChat(projectId?: string) {
         const id = threadRef.current.id;
         if (regenerating.current && id) { streamingRef.current = false; fetchThread(id, openSeq.current); }
         regenerating.current = false;
+        reattach.current = false;
         setMessages((m) => m.filter((x) => !(x.pending && x.blocks.length === 0)).map((x) => ({ ...x, pending: false })));
         setError(e.message);
         setStreaming(false);
@@ -162,15 +199,48 @@ export function useChat(projectId?: string) {
     }
   };
 
+  const onResumed = (e: Extract<ServerEvent, { type: "turn.resumed" }>) => {
+    const cur = threadRef.current.id;
+    if (e.conversation_id && cur && e.conversation_id !== cur) return;
+    const probed = !!probe.current && probe.current === e.conversation_id;
+    probe.current = null;
+    if (!e.live) {
+      if (reattach.current) {
+        // 服务器没这轮了（重启 / 断太久）：丢掉半截，以服务器落库的为准
+        reattach.current = false;
+        setMessages((ms) => ms.filter((x) => !x.pending));
+        streamingRef.current = false;
+        setStreaming(false);
+        if (cur) fetchThread(cur, openSeq.current);
+      } else if (probed && cur && !streamingRef.current) fetchThread(cur, openSeq.current);
+      return;
+    }
+    reattach.current = false;
+    if (e.turn_id !== turnId.current) { turnId.current = e.turn_id; turnSeq.current = 0; started.current = false; }
+    turnConv.current = e.conversation_id ?? turnConv.current;
+    if (!streamingRef.current) {
+      // 接上正在写的回答：发送失败的那条其实已经送到了
+      if (probed) setMessages((ms) => {
+        const i = ms.length - 1;
+        return i >= 0 && ms[i].role === "user" && ms[i].outbox === "failed" ? [...ms.slice(0, i), { ...ms[i], outbox: undefined }] : ms;
+      });
+      streamingRef.current = true;
+      setStreaming(true);
+    }
+  };
+
   const onStatus = (s: LinkStatus) => {
     setLink(s);
-    if (s === "down" && streamingRef.current) {
+    if (s === "down" && streamingRef.current && started.current && turnId.current) {
+      reattach.current = true;   // 服务器支持续传：回答在那边接着写，这里什么都不丢
+    } else if (s === "down" && streamingRef.current) {
       // 回复还没开始：服务器可能没收到，最后一条用户消息标失败让用户决定；已经开始：丢掉半截，连上后从服务器拿完整的
       setMessages((ms) => {
         const out = ms.filter((x) => !x.pending);
         if (!started.current && !regenerating.current) {
           const i = out.map((x) => x.role).lastIndexOf("user");
           if (i >= 0) out[i] = { ...out[i], outbox: "failed" };
+          probe.current = threadRef.current.id;
         }
         return out;
       });
@@ -179,6 +249,9 @@ export function useChat(projectId?: string) {
       setStreaming(false);
     } else if (s === "open") {
       const id = threadRef.current.id;
+      if (reattach.current && turnId.current) {
+        socket.current?.send({ type: "turn.resume", turn_id: turnId.current, conversation_id: turnConv.current ?? id, after: turnSeq.current });
+      } else if (id && !streamingRef.current) watch(id);
       if (resync.current && id) fetchThread(id, openSeq.current);
       resync.current = false;
     }
@@ -233,6 +306,8 @@ export function useChat(projectId?: string) {
     setFocus(null);   // 拿到服务器版本、确认那条消息在，才发出定位请求
     clearGiveUp();   // 原对话没发出的消息已在发件箱里，随它一起换走
     modelDirty.current = false;
+    reattach.current = false;
+    probe.current = null;
     const summary = list.items.find((c) => c.id === id);
     setModelState(summary?.model ?? null);
     setEffortState(summary?.reasoning ?? null);
@@ -243,6 +318,7 @@ export function useChat(projectId?: string) {
       if (seq !== openSeq.current) return;
       if (!modelDirty.current) { setModelState(m ?? null); setEffortState(r ?? null); }
       setThread({ id, messages: [...messages, ...restored] });
+      if (!streamingRef.current) watch(id);
       if (focusId && messages.some((m) => m.id === focusId)) setFocus(focusId);
     } catch (e) {
       if (seq !== openSeq.current) return;

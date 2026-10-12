@@ -44,7 +44,7 @@ def turn(ws, event):
     ws.send_json(event)
     out = []
     while True:
-        e = ws.receive_json(); out.append(e)
+        e = ws.receive_json(); e.pop("turn_id", None); e.pop("seq", None); out.append(e)  # 续传游标（v1.61）不在比较之列
         if e["type"] in ("message.done", "error"):
             return out
 
