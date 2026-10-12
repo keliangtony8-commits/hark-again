@@ -214,13 +214,14 @@ class MessageView extends StatelessWidget {
       ),
       // 操作行长出 / 收起都走 RiseSwitcher（回复不再是最后一条时也是平滑收起，不是一跳）
       RiseSwitcher(
-        child: !message.pending && (last || message.stopped || revealed)
+        child: !message.pending && (last || message.cutShort || revealed)
             ? _ReplyActions(
                 key: const ValueKey('actions'),
                 id: message.id,
                 text: copyText(message.blocks),
                 spoken: speakableText(message.blocks),
-                stopped: message.stopped,
+                cut: message.cutLabel,
+                interrupted: message.interrupted,
                 onRegenerate: onRegenerate,
                 onSave: onSave,
               )
@@ -294,11 +295,12 @@ class _OutboxStatus extends StatelessWidget {
 /// 回复下方的操作行：低调的小图标（kit QuietAction，不抢内容）。回复完成时逐个错峰浮现；
 /// 复制 → 对勾、朗读 → 停止都是原地 PopSwitcher；“重新生成”随可用状态淡入淡出。
 class _ReplyActions extends StatelessWidget {
-  const _ReplyActions({super.key, required this.id, required this.text, required this.spoken, this.stopped = false, this.onRegenerate, this.onSave});
+  const _ReplyActions({super.key, required this.id, required this.text, required this.spoken, this.cut, this.interrupted = false, this.onRegenerate, this.onSave});
   final String id;
   final String text;
   final String spoken; // 只含正文，没有就不给朗读键
-  final bool stopped; // 半截回复：行尾标“已停止”，提醒内容不完整（重新生成就能补全）
+  final String? cut; // 半截回复：行尾标“已停止”/“服务器重启，回答被打断”（Message.cutLabel），提醒内容不完整（重新生成就能补全）
+  final bool interrupted;
   final VoidCallback? onRegenerate;
   final VoidCallback? onSave; // 存成文件：有可复制的内容才给
 
@@ -322,13 +324,13 @@ class _ReplyActions extends StatelessWidget {
       // 把回复带走（存成文件）排在“就地重来”之后，和网页同序：复制 · 朗读 · 重新生成 · 存成文件（v1.16）
       if (text.isNotEmpty && onSave != null)
         QuietAction(icon: const Icon(Icons.drive_folder_upload_outlined), tooltip: saveReplyLabel, onPressed: onSave),
-      if (stopped)
+      if (cut != null)
         Padding(
           padding: const EdgeInsets.only(left: Sp.x1),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.stop_circle_outlined, size: 14, color: p.text3),
+            Icon(interrupted ? Icons.power_off_outlined : Icons.stop_circle_outlined, size: 14, color: interrupted ? p.warning : p.text3),
             const SizedBox(width: Sp.x1),
-            Text('已停止', style: context.text.bodySmall?.copyWith(color: p.text3)),
+            Text(cut!, style: context.text.bodySmall?.copyWith(color: p.text3)),
           ]),
         ),
     ];

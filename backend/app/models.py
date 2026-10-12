@@ -44,7 +44,7 @@ class Message(Base):
     conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(16))  # user | assistant
     blocks: Mapped[list] = mapped_column(JSON, default=list)
-    status: Mapped[str] = mapped_column(String(16), default="done", server_default="done")  # done | stopped（用户中途停止）
+    status: Mapped[str] = mapped_column(String(16), default="done", server_default="done")  # done | stopped（用户中途停止）| interrupted（服务器崩溃/重启打断，turn_journal 恢复）
     # 活动时间线：这条回复里每次工具调用一步（app/activity.py 定义形状）；用户消息、老消息为空
     steps: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     # 纯文本副本，只给搜索用（JSON 里的中文可能被转义，直接 LIKE 不可靠）；由下方监听器自动维护，调用方不用管
@@ -63,6 +63,20 @@ class Message(Base):
         if self.steps:
             out["steps"] = self.steps
         return out
+
+
+class TurnJournal(Base):
+    """一轮回答进行中的检查点（崩溃恢复，app/turn_journal.py 是唯一入口）。正常结束就删；
+    进程死了留下的行由 turn_journal.recover 转成 status=interrupted 的助手消息。"""
+    __tablename__ = "turn_journals"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    owner: Mapped[str] = mapped_column(String(48))  # "<进程>:<启动 id>"
+    blocks: Mapped[list] = mapped_column(JSON, default=list)
+    steps: Mapped[list] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    beat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class Project(Base):

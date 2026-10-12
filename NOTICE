@@ -52,3 +52,4 @@
   移植到 backend/app/llm_retry.py、backend/app/agent/loop.py（v1.50）
 - deepseek-ai/deepseek-harness packages/core/tools/src/json-schema.ts（validateJsonSchemaValue / checkValue 规则与用例）、schema.ts（validateArgs）— MIT License, Copyright (c) 2026 DeepSeek, adapted；google-gemini/gemini-cli packages/core/src/utils/schemaValidator.ts（宽松：编不了的 schema 跳过）、utils/tool-utils.ts（getToolSuggestion）— Apache-2.0, Copyright 2025 Google LLC, modified
   移植到 backend/app/agent/tool_args.py（v1.51）
+- deepseek-ai/deepseek-harness packages/core/session/src/repair.ts（TOOL_NOT_STARTED / TOOL_OUTCOME_UNKNOWN 闭合与措辞）— MIT License, Copyright (c) 2026 DeepSeek, adapted；openai/codex codex-rs/core/src/context/turn_aborted.rs（被打断的轮附说明）— Apache-2.0, Copyright 2025 OpenAI, modified

@@ -19,7 +19,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import card_snooze, jobs, report_gist, task_runs
+from . import card_snooze, jobs, report_gist, task_runs, turn_journal
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -121,6 +121,7 @@ async def tick() -> None:
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     load_builtin()
+    await turn_journal.recover_all("worker")  # 上次被杀时没答完的任务/跟进回答 → interrupted 消息
     async with SessionLocal() as db:
         if n := await task_runs.recover_stale(db):
             log.warning("marked %d interrupted task runs as failed", n)

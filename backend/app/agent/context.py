@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import llm, memory_store, project_brief, skills_store, vision, workspaces
+from .. import llm, memory_store, project_brief, skills_store, turn_journal, vision, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -131,7 +131,8 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
     conv = await db.get(Conversation, conversation_id)
     rows = (await db.scalars(select(Message).where(Message.conversation_id == conversation_id)
                              .order_by(Message.created_at))).all()
-    texts = [_render(m.blocks) for m in rows]
+    notes = [turn_journal.history_note(m.status, m.steps) if m.role == "assistant" else "" for m in rows]  # 被打断/停下的回复附说明
+    texts = [_render(m.blocks) + notes[i] for i, m in enumerate(rows)]
     sizes = [len(t) for t in texts]
     last_user = next((i for i in range(len(rows) - 1, -1, -1) if rows[i].role == "user"), len(rows) - 1)
     budget = settings.history_chars
@@ -168,7 +169,7 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
     need = [b for i in range(first, len(rows)) if not raw(i) for b in blocks[i]]
     if any(vision.is_image(b) for b in need):
         await vision.describe_missing(need)
-        texts[first:] = [_render(blocks[i]) for i in range(first, len(rows))]
+        texts[first:] = [_render(blocks[i]) + notes[i] for i in range(first, len(rows))]
     return History(summary=summary, messages=[
         {"role": roles[i], "content": vision.content_with_images(texts[i], blocks[i]) if raw(i) else texts[i]}
         for i in range(first, len(rows))])

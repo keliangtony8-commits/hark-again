@@ -1,3 +1,4 @@
+import { cutLabel } from "./messageStatus";
 import { copyText } from "./copy";
 import type { Message } from "./types";
 
@@ -13,7 +14,7 @@ export function conversationMarkdown(title: string, messages: Message[], at = ne
   const parts = [
     `# ${title.trim() || "新对话"}`,
     `> 导出于 ${stamp(at)} · ${kept.length} 条消息`,
-    ...kept.flatMap(([m, body]) => [m.role === "user" ? "## 我" : "## 助手", m.status === "stopped" ? `${body}\n\n*（已停止）*` : body]),
+    ...kept.flatMap(([m, body]) => [m.role === "user" ? "## 我" : "## 助手", cutLabel(m) ? `${body}\n\n*（${cutLabel(m)}）*` : body]),
   ];
   return parts.join("\n\n") + "\n";
 }

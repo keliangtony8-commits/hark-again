@@ -110,6 +110,26 @@ def carry(old: dict, new: dict) -> dict:
     return out
 
 
+def settle_blocks(blocks: list[dict]) -> list[dict]:
+    """被打断的回复能落库的块（用户停止、断线，以及 turn_journal 崩溃恢复共用这一条规则）：
+    去掉空文字块，还在等的审批卡（含订单卡）标为 expired（它再也等不到答复了），
+    还在跑的实时块去掉 live（命令已随这一轮被停掉），浏览器卡上还在等的接管条标 expired。"""
+    out = []
+    for b in blocks:
+        if b["type"] == "text" and not b["text"].strip():
+            continue
+        if b.get("live"):
+            b = {k: v for k, v in b.items() if k != "live"}
+        if isinstance(h := b.get("handoff"), dict) and h.get("state") == "pending":
+            b = {**b, "handoff": {**h, "state": "expired"}}  # 等用户接管的条：这一轮停了，再也等不到交还
+        b = plan.settle(b)  # 计划卡定格：没做完的步骤不再闪“进行中”
+        if b.get("type") == "delegate":  # 子任务卡：还在做的随这一轮一起停了（subagent.run_all 的取消可能还没轮到）
+            b = {**b, "tasks": [{**{k: v for k, v in t.items() if k != "now"}, "state": "stopped"}
+                                if t.get("state") == "running" else t for t in b.get("tasks") or []]}
+        out.append({**b, "state": "expired"} if b.get("state") == "pending" and "id" in b else b)
+    return out
+
+
 @dataclass
 class MessageBuilder:
     blocks: list[dict] = field(default_factory=list)
@@ -186,22 +206,8 @@ class MessageBuilder:
         return [b for b in self.blocks if not (b["type"] == "text" and not b["text"].strip())]
 
     def partial(self) -> list[dict]:
-        """被打断时能落库的块：去掉空文字块，还在等的审批卡（含订单卡）标为 expired（它再也等不到答复了），
-        还在跑的实时块去掉 live（命令已随这一轮被停掉），浏览器卡上还在等的接管条标 expired。"""
-        out = []
-        for b in self.blocks:
-            if b["type"] == "text" and not b["text"].strip():
-                continue
-            if b.get("live"):
-                b = {k: v for k, v in b.items() if k != "live"}
-            if isinstance(h := b.get("handoff"), dict) and h.get("state") == "pending":
-                b = {**b, "handoff": {**h, "state": "expired"}}  # 等用户接管的条：这一轮停了，再也等不到交还
-            b = plan.settle(b)  # 计划卡定格：没做完的步骤不再闪“进行中”
-            if b.get("type") == "delegate":  # 子任务卡：还在做的随这一轮一起停了（subagent.run_all 的取消可能还没轮到）
-                b = {**b, "tasks": [{**{k: v for k, v in t.items() if k != "now"}, "state": "stopped"}
-                                    if t.get("state") == "running" else t for t in b.get("tasks") or []]}
-            out.append({**b, "state": "expired"} if b.get("state") == "pending" and "id" in b else b)
-        return out
+        """被打断时能落库的块（规则见 settle_blocks）。"""
+        return settle_blocks(self.blocks)
 
     def settle(self) -> list[Event]:
         """这一轮正常说完：计划卡定格（plan.settle）。"""

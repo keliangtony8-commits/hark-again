@@ -4,7 +4,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import conversation_share, usage
+from .. import conversation_share, turn_journal, usage
 from ..auth import require_user
 from ..config import settings
 from ..db import get_session
@@ -96,6 +96,7 @@ async def patch_conversation(cid: str, body: ConversationPatch, db: AsyncSession
 
 @router.get("/{cid}")
 async def get_conversation(cid: str, db: AsyncSession = Depends(get_session)):
+    await turn_journal.recover(db, cid)  # 进程崩掉留下的半截回答（心跳停了）→ interrupted 消息，打开就能看到
     c = await db.scalar(select(Conversation).where(Conversation.id == cid).options(selectinload(Conversation.messages)))
     if not c:
         raise HTTPException(404)

@@ -15,6 +15,7 @@ class Message {
       this.pending = false,
       this.outbox = Outbox.sent,
       this.stopped = false,
+      this.interrupted = false,
       this.createdAt,
       this.thought = '',
       this.thinkFrom,
@@ -27,6 +28,7 @@ class Message {
       blocks: blocksFrom(j['blocks']),
       steps: stepsFrom(j['steps']),
       stopped: j['status'] == 'stopped',
+      interrupted: j['status'] == 'interrupted',
       createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal());
 
   final String id, role;
@@ -38,6 +40,15 @@ class Message {
 
   /// 用户中途点了停止，内容是半截的（服务器 status=stopped）。
   final bool stopped;
+
+  /// 服务器进程在这一轮中途没了（崩溃 / 重启），回答没说完（服务器 status=interrupted，turn_journal 恢复出来的）。
+  final bool interrupted;
+
+  /// 内容不完整：停止或被打断。行尾给一句说明（[cutLabel]），重新生成就能补全。
+  bool get cutShort => stopped || interrupted;
+
+  /// 不完整回复的说明；完整的 → null。
+  String? get cutLabel => stopped ? '已停止' : interrupted ? '服务器重启，回答被打断' : null;
 
   /// 本地时间；老服务器不给、正在生成的占位消息没有 → null（日期分隔把它算进上一条的那天）。
   final DateTime? createdAt;
@@ -90,6 +101,7 @@ class Message {
       pending: pending ?? this.pending,
       outbox: outbox ?? this.outbox,
       stopped: stopped,
+      interrupted: interrupted,
       createdAt: createdAt,
       thought: thought ?? this.thought,
       thinkFrom: thinkFrom ?? this.thinkFrom,

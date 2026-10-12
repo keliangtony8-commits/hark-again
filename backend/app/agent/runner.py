@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, llm_retry, usage, vision
+from .. import host_mode, jobs, llm_retry, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -104,6 +104,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
     否则（断线、关机）落库后把取消继续抛出去。"""
     cid, project_id, model = conv.id, conv.project_id, chat_model(conv.model)
+    await turn_journal.recover(db, cid)  # 别的进程崩掉留下的半截回答先转成 interrupted 消息，排在历史里
     hist = await build_history(db, cid, model)
     history = hist.messages
     if notice:
@@ -119,11 +120,23 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     if host:
         system += f"\n\n{host_mode.PROMPT}"
     builder = loop.MessageBuilder()
+    journal = turn_journal.Journal(cid, task_id)  # 进程被杀时这一轮的进度还在（turn_journal.py）
+    await journal.open()
+    try:
+        return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model)
+    finally:
+        await journal.close()  # 走到这里结果已由 _drive 落库（或出错/没内容）；只有进程死掉才会留下检查点
+
+
+async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str, history: list[dict], builder: loop.MessageBuilder,
+                 journal: turn_journal.Journal, emit: Emit, approve: Approver, stop: asyncio.Event | None,
+                 ask: Asker, task_id: str | None, host: bool, model: str) -> Message | None:
     status = "done"
     interrupted = False
     try:
         async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host), builder, model):
             if not isinstance(ev, loop.Done):
+                await journal.seen(ev, builder)
                 await emit(to_wire(ev))
     except asyncio.CancelledError:
         if (task := asyncio.current_task()) is not None:
@@ -140,7 +153,9 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         reply = Message(conversation_id=cid, role="assistant", blocks=blocks, status=status,
                         steps=builder.steps(stopped=status == "stopped"))
         db.add(reply)
+        await journal.drop(db)  # 同一个事务：回复落库 = 检查点消失
         await db.commit()
+        journal.dropped()
         await _try_emit(emit, {"type": "message.done", "message": reply.to_wire()})
     elif status == "stopped":
         await _try_emit(emit, {"type": "message.stopped", "conversation_id": cid})

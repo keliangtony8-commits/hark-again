@@ -9,7 +9,8 @@ import ActivitySummary from "./Activity";
 import RetryLine from "./RetryLine";
 import CopyButton from "../../ui/CopyButton";
 import SaveReplyButton from "../projects/SaveReplyButton";
-import { IconCheck, IconClose, IconCopy, IconEdit, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
+import { IconCheck, IconClose, IconCloudOff, IconCopy, IconEdit, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
+import { cutLabel } from "../../lib/messageStatus";
 
 export type OutboxActions = { onResend: (id: string) => void; onDiscard: (id: string) => void };
 
@@ -35,7 +36,11 @@ function MessageActions({ message, onRegenerate, projectId }: { message: Message
       {/* 存到项目文件（v1.15）：有内容才给；项目对话直接存本项目，主聊天先选项目 */}
       {md && <SaveReplyButton messageId={message.id} projectId={projectId} />}
       {/* 半截回复：提醒内容不完整（重新生成就能补全） */}
-      {message.status === "stopped" && <span className="msg-stopped"><IconStop size={12} />已停止</span>}
+      {cutLabel(message) && (
+        <span className={`msg-stopped${message.status === "interrupted" ? " is-interrupted" : ""}`}>
+          {message.status === "interrupted" ? <IconCloudOff size={12} /> : <IconStop size={12} />}{cutLabel(message)}
+        </span>
+      )}
     </div>
   );
 }
