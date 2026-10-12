@@ -49,6 +49,8 @@ export function useChat(projectId?: string) {
   const modelRef = useRef(model);
   modelRef.current = model;
   const [effort, setEffortState] = useState<string | null>(null);
+  /** 选了“自动”时这一轮 / 上一轮服务器实际用的别名（turn.model、详情 routed_model）；模型钮显示“自动 · 快速”。 */
+  const [routed, setRouted] = useState<string | null>(null);
   const effortRef = useRef(effort);
   effortRef.current = effort;
   const modelDirty = useRef(false); // 本机改了模型 / 思考强度还没送到服务器（新对话 / PATCH 没成功）
@@ -84,8 +86,9 @@ export function useChat(projectId?: string) {
   /** 拉服务器版本；本机还没发出的消息接在后面，不能被刷新冲掉。 */
   const fetchThread = useCallback(async (id: string, seq: number) => {
     try {
-      const { messages, model: m, reasoning: r } = await http.get<{ messages: Message[]; model?: string | null; reasoning?: string | null }>(`/api/conversations/${id}`);
+      const { messages, model: m, reasoning: r, routed_model: rm } = await http.get<{ messages: Message[]; model?: string | null; reasoning?: string | null; routed_model?: string | null }>(`/api/conversations/${id}`);
       if (seq === openSeq.current && threadRef.current.id === id && !modelDirty.current) { setModelState(m ?? null); setEffortState(r ?? null); }
+      if (seq === openSeq.current && threadRef.current.id === id) setRouted(rm ?? null);
       if (seq !== openSeq.current || threadRef.current.id !== id || streamingRef.current) return;
       setThread((t) => ({ id, messages: [...messages, ...t.messages.filter(isUnsent)] }));
     } catch (e) {
@@ -135,6 +138,9 @@ export function useChat(projectId?: string) {
           blocks[e.index] = { type: "text", text: (b?.text ?? "") + e.text };
           return { ...p, blocks };
         });
+        break;
+      case "turn.model":   // 选了“自动”：服务器这一轮挑的模型（v1.70 model_router）
+        if (e.model) setRouted(e.model);
         break;
       case "turn.retry": {
         const n = retryNotice(e);
@@ -315,12 +321,14 @@ export function useChat(projectId?: string) {
     const summary = list.items.find((c) => c.id === id);
     setModelState(summary?.model ?? null);
     setEffortState(summary?.reasoning ?? null);
+    setRouted(summary?.routed_model ?? null);
     const restored = outbox.load(projectId, id);
     if (!id) { setThread({ id: null, messages: restored }); return; }
     try {
-      const { messages, model: m, reasoning: r } = await http.get<{ messages: Message[]; model?: string | null; reasoning?: string | null }>(`/api/conversations/${id}`);
+      const { messages, model: m, reasoning: r, routed_model: rm } = await http.get<{ messages: Message[]; model?: string | null; reasoning?: string | null; routed_model?: string | null }>(`/api/conversations/${id}`);
       if (seq !== openSeq.current) return;
       if (!modelDirty.current) { setModelState(m ?? null); setEffortState(r ?? null); }
+      setRouted(rm ?? null);
       setThread({ id, messages: [...messages, ...restored] });
       if (!streamingRef.current) watch(id);
       if (focusId && messages.some((m) => m.id === focusId)) setFocus(focusId);
@@ -474,7 +482,7 @@ export function useChat(projectId?: string) {
   return {
     refreshActive, undoChanges,
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
-    canRegenerate, canStop, editableId, focus, model, setModel, effort, setEffort, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
+    canRegenerate, canStop, editableId, focus, model, routed, setModel, effort, setEffort, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };
 }
 

@@ -4,10 +4,10 @@ import asyncio
 import contextlib
 from collections.abc import Awaitable, Callable
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, llm_retry, reasoning, turn_changes, turn_journal, usage, vision
+from .. import host_mode, jobs, llm_retry, model_router, reasoning, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -47,7 +47,7 @@ def apply_model(conv: Conversation, model: object) -> None:
     """客户端随消息带来的模型选择：合法别名就记到对话上（下次、别的设备都沿用）；空串 = 回到默认；其它忽略。"""
     if model == "":
         conv.model = None
-    elif isinstance(model, str) and model in settings.chat_models:
+    elif model_router.choosable(model):
         conv.model = model
 
 
@@ -115,14 +115,17 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     一个块都还没有就发 message.stopped。
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
     否则（断线、关机）落库后把取消继续抛出去。"""
-    cid, project_id, model, effort = conv.id, conv.project_id, chat_model(conv.model), conv.reasoning
+    cid, project_id, choice, effort, previous = conv.id, conv.project_id, chat_model(conv.model), conv.reasoning, conv.routed_model
     await turn_journal.recover(db, cid)  # 别的进程崩掉留下的半截回答先转成 interrupted 消息，排在历史里
-    hist = await build_history(db, cid, model)
+    hist = await build_history(db, cid, model_router.view(choice))
     history = hist.messages
     if notice:
         history = [*history, {"role": "user", "content": notice}]
     last_user = next((m for m in reversed(history) if m["role"] == "user"), None)
     query = vision.text_of(last_user["content"]) if last_user else ""
+    model = await _route(db, cid, choice, query, history, previous, last_user, bool(notice), emit)
+    if choice == model_router.AUTO:
+        effort = None  # 自动：思考强度跟着路由到的模型走默认档（客户端在“自动”下也不显示强度选择）
     prompt = await build_system_prompt(db, project_id, query)  # 稳定段在前、易变段在后（app/prompt_cache.py）
     host = await host_mode.enabled(db)  # 服务器主机模式：每轮读一次，用户在“我的电脑”里关掉后下一轮就没有 host_command
     if host:
@@ -139,6 +142,22 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model, effort)
     finally:
         await journal.close()  # 走到这里结果已由 _drive 落库（或出错/没内容）；只有进程死掉才会留下检查点
+
+
+async def _route(db: AsyncSession, cid: str, choice: str, query: str, history: list[dict], previous: str | None,
+                 last_user: dict | None, notice: bool, emit: Emit) -> str:
+    """这一轮用哪个别名（model_router.route；不是 auto 原样返回、零开销）。选了 auto：记到对话上（下一轮接话沿用、
+    客户端显示“自动 · 快速”）并推 turn.model。一轮只定一次（Gemini currentSequenceModel）；备用模型切换仍归 loop。"""
+    if choice != model_router.AUTO:
+        return choice
+    content = last_user["content"] if last_user else ""
+    images = isinstance(content, list) and any(isinstance(p, dict) and p.get("type") == "image_url" for p in content)
+    d = await model_router.route(choice, query, history, previous, images, notice)
+    await db.execute(update(Conversation).where(Conversation.id == cid)
+                     .values(routed_model=d.model, updated_at=Conversation.updated_at))
+    await db.commit()  # 下一次模型调用前提交（SQLite：没提交的写会让 usage.record 撞锁）
+    await _try_emit(emit, model_router.wire(d))
+    return d.model
 
 
 async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str, history: list[dict], builder: loop.MessageBuilder,

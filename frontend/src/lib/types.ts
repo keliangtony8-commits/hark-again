@@ -98,7 +98,7 @@ export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopp
   /** 模型调用失败在自动重试 / 已换备用模型（v1.50 turn.retry，lib/retry.ts）：只在生成中的占位消息上。 */
   retry?: RetryNotice };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
-export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; updated_at: string; snippet?: string; message_id?: string };
+export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; routed_model?: string | null; updated_at: string; snippet?: string; message_id?: string };
 
 /** v1.61 续传：一轮里的事件都带 turn_id + 从 1 起连续的 seq（老服务器没有）。 */
 export type TurnCursor = { turn_id?: string; seq?: number };
@@ -108,6 +108,7 @@ export type ServerEvent = TurnCursor & (
   | { type: "block.update"; index: number; block: Block }
   | { type: "block.delta"; index: number; text: string }
   | { type: "thinking.delta"; text: string }
+  | { type: "turn.model"; model: string; label?: string; complexity?: string; source?: string; reason?: string }
   | { type: "turn.retry"; attempt: number; max: number; delay_ms: number; reason: string; code?: string; fallback?: string; fallback_label?: string }
   | ({ type: "tool.status" } & ToolRun)
   | { type: "message.done"; message: Message }

@@ -30,6 +30,8 @@ class Conversation(Base):
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # 这个对话用的聊天模型别名（settings.chat_models 的键）；None = 默认。解析见 llm.chat_model
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 选了“自动”（model_router.AUTO）时上一轮实际路由到的别名：客户端显示“自动 · 快速”，“继续”这类接话沿用它
+    routed_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # 这个对话选的思考强度（reasoning.EFFORTS 的键）；None = 模型默认。实际发哪档见 reasoning.resolve
     reasoning: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # 滚动摘要（context.py 维护）：summary 概括了从开头到 summary_upto 这条消息（含）为止的内容；

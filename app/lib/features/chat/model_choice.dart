@@ -53,8 +53,11 @@ class ModelChip extends ConsumerWidget {
   const ModelChip({super.key, required this.scope});
   final String scope;
 
-  static IconData iconFor(String id, ModelCatalog cat) =>
-      id == cat.defaultId ? Icons.bolt_rounded : Icons.auto_awesome_outlined;
+  static IconData iconFor(String id, ModelCatalog cat) => cat.isAuto(id)
+      ? Icons.alt_route_rounded
+      : id == cat.defaultId
+          ? Icons.bolt_rounded
+          : Icons.auto_awesome_outlined;
 
   Future<void> _choose(BuildContext context, WidgetRef ref, ModelCatalog cat, String current) async {
     final ctl = ref.read(chatProvider(scope).notifier);
@@ -63,7 +66,9 @@ class ModelChip extends ConsumerWidget {
       picked = cat.options.firstWhere((o) => o.id != current).id;
     } else {
       picked = await showActionSheet<String>(context, title: '这个对话用哪个模型', actions: [
-        for (final o in cat.options) SheetAction(o.id == current ? Icons.check_rounded : iconFor(o.id, cat), o.label, value: o.id),
+        for (final o in cat.options)
+          SheetAction(o.id == current ? Icons.check_rounded : iconFor(o.id, cat), o.label,
+              subtitle: cat.isAuto(o.id) ? cat.autoHint() : null, value: o.id),
       ]);
     }
     if (picked != null && picked != current) await ctl.setModel(cat.toChoice(picked));
@@ -73,15 +78,16 @@ class ModelChip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cat = ref.watch(modelCatalogProvider).value;
     if (cat == null || !cat.selectable) return const SizedBox.shrink();
-    final choice = ref.watch(chatProvider(scope).select((s) => s.model));
+    final (choice, routed) = ref.watch(chatProvider(scope).select((s) => (s.model, s.routed)));
     final eff = cat.effective(choice)!;
+    final label = cat.chipLabel(eff, routed);
     final strong = eff.id != cat.defaultId; // 非默认（通常是更贵的模型）用强调色，一眼看出这轮在花更多钱
     final p = context.palette;
     final fg = strong ? p.text : p.text2;
     return Pressable(
       onTap: () => _choose(context, ref, cat, eff.id),
       scale: 0.92,
-      semanticLabel: '模型：${eff.label}，点按切换',
+      semanticLabel: '模型：$label，点按切换',
       child: SizedBox(
         height: A11y.minTap,
         child: Center(
@@ -95,10 +101,10 @@ class ModelChip extends ConsumerWidget {
               borderRadius: BorderRadius.circular(Radii.full),
             ),
             child: SwapSwitcher(
-              child: Row(key: ValueKey(eff.id), mainAxisSize: MainAxisSize.min, children: [
+              child: Row(key: ValueKey(label), mainAxisSize: MainAxisSize.min, children: [
                 Icon(iconFor(eff.id, cat), size: 15, color: fg),
                 const SizedBox(width: Sp.x1),
-                Text(eff.label, style: context.text.labelMedium?.copyWith(color: fg)),
+                Text(label, style: context.text.labelMedium?.copyWith(color: fg)),
               ]),
             ),
           ),

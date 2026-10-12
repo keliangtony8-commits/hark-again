@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import httpx
 from openai import AsyncOpenAI
 
-from . import llm_retry, prompt_cache, reasoning, usage
+from . import llm_retry, model_router, prompt_cache, reasoning, usage
 from .config import settings
 from .llm_retry import EmptyResponse
 
@@ -27,14 +27,17 @@ def upstream(alias: str) -> str:
 
 
 def chat_model(alias: str | None) -> str:
-    """对话选的模型 → 实际调用的别名：不在 CHAT_MODELS 里（没选、配置改了）一律回落到默认。"""
-    return alias if alias and alias in settings.chat_models else settings.default_model
+    """对话选的模型 → 这一轮的选择：合法（CHAT_MODELS 里的别名，或开着时的 auto）原样返回；没选 / 配置改了 → 默认
+    （model_router.default_choice）。auto 由 runner 每轮交给 model_router.route 定成真实别名。"""
+    return alias if model_router.choosable(alias) else model_router.default_choice()
 
 
 def chat_models() -> dict:
     """给客户端的可选列表（GET /api/catalog/models）；能调思考强度的别名多带 efforts / effort（reasoning.catalog）。"""
-    return {"default": settings.default_model,
-            "models": [{"id": k, "label": v, **reasoning.catalog(k)} for k, v in settings.chat_models.items()]}
+    models = [{"id": k, "label": v, **reasoning.catalog(k)} for k, v in settings.chat_models.items()]
+    if auto := model_router.catalog_entry():  # “自动”排在最前（没有思考强度：每轮按路由到的模型用默认档）
+        models.insert(0, auto)
+    return {"default": model_router.default_choice(), "models": models}
 
 
 async def _create(alias: str, effort: str | None, **params):

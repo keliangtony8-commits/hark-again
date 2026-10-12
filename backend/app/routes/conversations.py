@@ -4,7 +4,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import conversation_share, conversation_title, quota, reasoning, turn_changes, turn_journal, usage, workspaces
+from .. import conversation_share, conversation_title, model_router, quota, reasoning, turn_changes, turn_journal, usage, workspaces
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -21,7 +21,7 @@ SNIPPET = 36  # 命中位置前后各取多少字
 def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
     """hit = (命中的消息 id, 摘录)：客户端据此打开对话后滚到那条消息并闪一下。"""
     out = {"id": c.id, "title": c.title, "pinned": c.pinned, "model": c.model, "reasoning": c.reasoning,
-           "updated_at": iso(c.updated_at)}
+           "routed_model": c.routed_model, "updated_at": iso(c.updated_at)}
     if hit:
         out["message_id"], out["snippet"] = hit
     return out
@@ -80,7 +80,7 @@ async def patch_conversation(cid: str, body: ConversationPatch, db: AsyncSession
     """重命名 / 置顶 / 换模型 / 换思考强度。不改 updated_at，免得整理一下列表顺序就乱了。"""
     values = body.model_dump(exclude_none=True)
     if "model" in values:
-        if values["model"] and values["model"] not in settings.chat_models:
+        if values["model"] and not model_router.choosable(values["model"]):
             raise HTTPException(422, "没有这个模型")
         values["model"] = values["model"] or None
     if "reasoning" in values:
@@ -116,6 +116,7 @@ async def get_conversation(cid: str, db: AsyncSession = Depends(get_session)):
         "pinned": c.pinned,
         "model": c.model,
         "reasoning": c.reasoning,
+        "routed_model": c.routed_model,
         "messages": [m.to_wire() for m in c.messages],
     }
 

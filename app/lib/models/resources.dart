@@ -5,14 +5,47 @@ DateTime? _date(dynamic v) => v is String ? DateTime.tryParse(v)?.toLocal() : nu
 
 /// 聊天可选的模型（GET /api/catalog/models）。
 class ModelCatalog {
-  const ModelCatalog({required this.defaultId, required this.options, this.efforts = const {}});
+  const ModelCatalog({required this.defaultId, required this.options, this.efforts = const {}, this.autoId, this.routes = const {}});
   factory ModelCatalog.fromJson(Map<String, dynamic> j) {
     final models = [for (final m in (j['models'] as List? ?? const [])) if (m is Map && m['id'] is String) m.cast<String, dynamic>()];
     return ModelCatalog(
       defaultId: j['default'] as String? ?? '',
       options: [for (final m in models) (id: m['id'] as String, label: m['label'] as String? ?? m['id'] as String)],
       efforts: {for (final m in models) m['id'] as String: ?ModelEfforts.fromJson(m)},
+      autoId: [for (final m in models) if (m['auto'] == true) m['id'] as String].firstOrNull,
+      routes: {
+        for (final m in models)
+          if (m['auto'] == true && m['routes'] is Map)
+            for (final r in (m['routes'] as Map).entries)
+              if (r.key is String && r.value is String) r.key as String: r.value as String,
+      },
     );
+  }
+
+  /// “自动”这一项的 id（后端 model_router；旧服务器 / 关掉了 = null）：每轮由服务器在两档里挑。
+  final String? autoId;
+
+  /// 自动的两档：simple / complex → 别名。
+  final Map<String, String> routes;
+
+  bool isAuto(String? id) => id != null && id == autoId;
+
+  /// 别名的显示名（不在列表里就原样）。
+  String labelOf(String id) {
+    for (final o in options) {
+      if (o.id == id) return o.label;
+    }
+    return id;
+  }
+
+  /// 模型钮上的字：自动且知道上一轮用了谁 → “自动 · 快速”；否则就是这一项的名字。
+  String chipLabel(({String id, String label}) eff, String? routed) =>
+      isAuto(eff.id) && routed != null && routed.isNotEmpty ? '${eff.label} · ${labelOf(routed)}' : eff.label;
+
+  /// 选择菜单里“自动”的一行说明：简单的用谁、复杂的用谁。
+  String? autoHint() {
+    final s = routes['simple'], c = routes['complex'];
+    return s == null || c == null ? null : '简单的事用${labelOf(s)}，复杂的用${labelOf(c)}，每轮自动挑';
   }
   final String defaultId;
   final List<({String id, String label})> options;
@@ -76,7 +109,7 @@ class ModelEfforts {
 }
 
 class ConversationSummary {
-  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId});
+  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId, this.routedModel});
   factory ConversationSummary.fromJson(Map<String, dynamic> j) => ConversationSummary(
     id: j['id'] as String,
     title: j['title'] as String? ?? '新对话',
@@ -86,6 +119,7 @@ class ConversationSummary {
     reasoning: j['reasoning'] as String?,
     snippet: j['snippet'] as String?,
     messageId: j['message_id'] as String?,
+    routedModel: j['routed_model'] as String?,
   );
   final String id, title;
   final DateTime? updatedAt;
@@ -93,13 +127,16 @@ class ConversationSummary {
 
   /// 服务器自动起了标题（conversation.title 事件）：只换标题，其余照旧。
   ConversationSummary withTitle(String t) => ConversationSummary(
-    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId);
+    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId, routedModel: routedModel);
 
   /// 这个对话选的聊天模型别名；null = 服务器默认。
   final String? model;
 
   /// 这个对话选的思考强度；null = 模型默认。
   final String? reasoning;
+
+  /// 选了“自动”时上一轮实际用的别名（后端 conversations.routed_model）。
+  final String? routedModel;
 
   /// 只在搜索结果里有：内容命中处的一小段摘录。
   final String? snippet;

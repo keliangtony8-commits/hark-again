@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     # 没选或选的别名后来被删了就用 default_model。定时任务、摘要不受影响
     chat_models: dict[str, str] = {"fast": "快速", "smart": "深度"}
     summary_model: str = "fast"     # 滚动摘要用的便宜模型别名
+    # 自动选模型（app/model_router.py）：对话 / 任务可以选“自动”（auto），每轮开头决定用简单档还是复杂档。
+    # model_router = auto（本地规则 + 拿不准时问一次 router_model，约 500 输入 token）/ rules（只用规则，拿不准用复杂档，零调用）/ off（不提供“自动”）。
+    # router_default = 没选过模型的对话默认就是“自动”；router_model 空 = summary_model
+    model_router: str = "auto"
+    router_simple: str = "fast"
+    router_complex: str = "smart"
+    router_model: str = ""
+    router_default: bool = False
     auto_title: bool = True         # 第一轮回复后用 summary_model 给新对话起短标题（app/conversation_title.py；每段对话约一次小调用）
     # 看图（vision.py）：能直接收图片的别名（阶跃 step-3.7-flash = fast、step-5-preview = smart 实测都能看图；lite 不能）；其余别名看到的是图片的文字描述。
     # vision_model = 写描述用的看图别名（每张图只描述一次并缓存）；image_max_side = 发给模型前缩到的最长边（省 token）

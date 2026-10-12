@@ -84,7 +84,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
             streaming={chat.streaming} onStop={chat.canStop ? chat.stop : undefined}
             focus={chat.focus} onFocused={chat.takeFocus}
             accessory={<>
-              <ModelChip model={chat.model} onChange={chat.setModel} />
+              <ModelChip model={chat.model} routed={chat.routed} onChange={chat.setModel} />
               <EffortChip model={chat.model} effort={chat.effort} onChange={chat.setEffort} />
             </>}
             onSend={chat.send} onReconnect={chat.reconnect} onResend={chat.resend} onDiscard={chat.discard} />

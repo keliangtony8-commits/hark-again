@@ -156,7 +156,7 @@ async def stored(cid):
         cv = await db.get(Conversation, cid)
         return cv.model, cv.reasoning
 
-models = c.get("/api/catalog/models").json()["models"]
+models = [m for m in c.get("/api/catalog/models").json()["models"] if not m.get("auto")]  # “自动”排最前（model_router）
 assert models[1]["id"] == "smart" and models[1]["effort"] == "medium" and len(models[1]["efforts"]) == 3
 assert [e["id"] for e in models[0]["efforts"]] == ["minimal", "low"]
 

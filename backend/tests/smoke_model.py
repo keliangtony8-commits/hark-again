@@ -7,7 +7,7 @@ import os, sys, asyncio, subprocess, tempfile, json
 db_path = os.path.join(tempfile.mkdtemp(), "t.db")
 os.environ.update(DATABASE_URL=f"sqlite+aiosqlite:///{db_path}", LLM_BASE_URL="http://x", LITELLM_MASTER_KEY="k",
   OWNER_USERNAME="u", OWNER_PASSWORD="p", JWT_SECRET="s"*32, VAULT_KEY="",
-  CHAT_MODELS=json.dumps({"fast": "快速", "smart": "深度"}), DEFAULT_MODEL="fast")
+  CHAT_MODELS=json.dumps({"fast": "快速", "smart": "深度"}), DEFAULT_MODEL="fast", MODEL_ROUTER="off")  # 自动选模型另见 smoke_model_router
 root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, root)
 subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=root, check=True, capture_output=True)

@@ -83,3 +83,5 @@
   移植到 backend/app/turn_changes.py（v1.68）
 - openai/codex codex-rs/apply-patch/src/{parser.rs, streaming_parser.rs, file_update.rs, text_file.rs, lib.rs, invocation.rs}（补丁语法与宽松边界、逐行解析与报错、compute_replacements、按行保留换行符、heredoc 识别）— Apache License 2.0, modified
   移植到 backend/app/apply_patch.py（v1.69）；端到端场景 fixtures 原样复制在 backend/tests/fixtures/apply_patch/（Apache License 2.0）
+- google-gemini/gemini-cli packages/core/src/routing/{modelRouterService.ts, routingStrategy.ts, strategies/compositeStrategy.ts, strategies/overrideStrategy.ts, strategies/classifierStrategy.ts, strategies/defaultStrategy.ts}（责任链、override、二选一分类器 rubric 与例子、上文挑选、失败让给默认）— Apache License 2.0, modified
+  移植到 backend/app/model_router.py（v1.70）

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from sqlalchemy import delete, update as sql_update
 
-from . import reasoning, schedule, task_runs
+from . import model_router, reasoning, schedule, task_runs
 from .config import settings
 from .models import Conversation, HomeCard, ScheduledTask
 
@@ -15,8 +15,9 @@ def model_choice(value: object) -> str | None:
     存下来以后服务器改了配置也不怕：运行时 llm.chat_model 会回落到默认，和对话一个规则。"""
     if value in (None, ""):
         return None
-    if not isinstance(value, str) or value not in settings.chat_models:
-        raise ValueError(f"没有这个模型：{value}（可选 {', '.join(settings.chat_models)}）")
+    if not model_router.choosable(value):
+        options = [*([model_router.AUTO] if model_router.enabled() else []), *settings.chat_models]
+        raise ValueError(f"没有这个模型：{value}（可选 {', '.join(options)}）")
     return value
 
 

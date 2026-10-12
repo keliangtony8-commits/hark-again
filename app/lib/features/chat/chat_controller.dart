@@ -52,7 +52,8 @@ class ChatState {
       this.linkDown = false,
       this.focus,
       this.model,
-      this.effort});
+      this.effort,
+      this.routed});
   final List<ConversationSummary> conversations;
   final String? activeId;
   final List<Message> messages;
@@ -76,6 +77,9 @@ class ChatState {
 
   /// 当前对话选的思考强度；null = 模型默认（后端 reasoning.resolve）。
   final String? effort;
+
+  /// 选了“自动”时这一轮 / 上一轮服务器实际用的别名（turn.model 事件、对话详情 routed_model）；模型钮显示“自动 · 快速”。
+  final String? routed;
 
   /// 输入框是否该等：在生成，或有一条在排队（一次只排一条，避免新对话被拆成几段）。
   bool get busy => streaming || messages.any((m) => m.outbox == Outbox.queued);
@@ -108,7 +112,8 @@ class ChatState {
           bool? linkDown,
           String? Function()? focus,
           String? Function()? model,
-          String? Function()? effort}) =>
+          String? Function()? effort,
+          String? Function()? routed}) =>
       ChatState(
         conversations: conversations ?? this.conversations,
         activeId: activeId != null ? activeId() : this.activeId,
@@ -122,6 +127,7 @@ class ChatState {
         focus: focus != null ? focus() : this.focus,
         model: model != null ? model() : this.model,
         effort: effort != null ? effort() : this.effort,
+        routed: routed != null ? routed() : this.routed,
       );
 }
 
@@ -310,6 +316,10 @@ class ChatController extends Notifier<ChatState> {
         _patchPending((m) => m.copyWith(retry: () => m.retry?.isFallback == true && !n.isFallback
             ? RetryNotice(attempt: n.attempt, max: n.max, delayMs: n.delayMs, reason: n.reason, code: n.code, fallback: m.retry!.fallback, fallbackLabel: m.retry!.fallbackLabel)
             : n));
+      case 'turn.model':
+        // 选了“自动”：服务器这一轮挑的模型（v1.70 model_router）；模型钮换成“自动 · 快速”
+        final m = e['model'];
+        if (m is String && m.isNotEmpty) state = state.copyWith(routed: () => m);
       case 'thinking.delta':
         _patchPending((m) => m.think(e['text'] as String? ?? ''));
       case 'tool.status':
@@ -497,6 +507,7 @@ class ChatController extends Notifier<ChatState> {
         activeId: () => id,
         model: () => _summaryOf(id)?.model,
         effort: () => _summaryOf(id)?.reasoning,
+        routed: () => _summaryOf(id)?.routedModel,
         messages: [if (cached != null) ..._messages(cached), ...unsent],
         error: () => null,
         focus: () => id == null ? null : focus);
@@ -528,6 +539,7 @@ class ChatController extends Notifier<ChatState> {
       final raw = detail['messages'] as List;
       unawaited(_cache.putMessages(id, raw));
       if (seq == _openSeq && state.activeId == id && !_modelDirty) state = state.copyWith(model: () => detail['model'] as String?, effort: () => detail['reasoning'] as String?);
+      if (seq == _openSeq && state.activeId == id) state = state.copyWith(routed: () => detail['routed_model'] as String?);
       // 等待期间用户换了对话或已经开始发消息：不覆盖眼前的内容
       if (seq != _openSeq || state.activeId != id || state.streaming) return;
       // 本机还没发出的消息接在服务器版本后面，不能被刷新冲掉

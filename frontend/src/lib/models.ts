@@ -3,12 +3,26 @@ import { http } from "./api";
 /** 聊天可选的模型（GET /api/catalog/models）；与 App models/resources.dart 的 ModelCatalog 同规则。 */
 export type EffortLevel = { id: string; label: string; description?: string };
 /** efforts / effort：能调思考强度的模型才有（后端 reasoning.catalog，从少到多 + 默认档）。 */
-export type ModelOption = { id: string; label: string; efforts?: EffortLevel[]; effort?: string };
+/** auto / routes：“自动”这一项（后端 model_router；每轮在 simple / complex 两档里挑）。 */
+export type ModelOption = { id: string; label: string; efforts?: EffortLevel[]; effort?: string; auto?: boolean; routes?: { simple?: string; complex?: string } };
 export type ModelCatalog = { default: string; models: ModelOption[] };
 
 /** 对话的选择（null = 默认）→ 实际生效的那一项；别名已不在列表里也回落到默认（与后端 llm.chat_model 一致）。 */
 export function effectiveModel(cat: ModelCatalog, choice: string | null | undefined): ModelOption | undefined {
   return cat.models.find((m) => m.id === choice) ?? cat.models.find((m) => m.id === cat.default) ?? cat.models[0];
+}
+
+export const labelOf = (cat: ModelCatalog, id: string): string => cat.models.find((m) => m.id === id)?.label ?? id;
+
+/** 模型钮上的字：自动且知道上一轮用了谁 → “自动 · 快速”（与 App ModelCatalog.chipLabel 同规则）。 */
+export function chipLabel(cat: ModelCatalog, eff: ModelOption, routed: string | null | undefined): string {
+  return eff.auto && routed ? `${eff.label} · ${labelOf(cat, routed)}` : eff.label;
+}
+
+/** “自动”的一行说明（App autoHint 同）。 */
+export function autoHint(cat: ModelCatalog, opt: ModelOption): string | null {
+  const s = opt.routes?.simple, c = opt.routes?.complex;
+  return opt.auto && s && c ? `简单的事用${labelOf(cat, s)}，复杂的用${labelOf(cat, c)}，每轮自动挑` : null;
 }
 
 /** 用户选了 id → 存到对话上的值：选默认就存 null（以后改默认会跟着变）。 */
