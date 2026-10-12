@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../core/workspace.dart';
 import '../../models/block.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -33,7 +34,7 @@ class Attachment {
   }
 
   /// 名片第二行——唯一规则（网页 attachSub 同义）。
-  String get sub => uploading ? '上传中…' : [if (fromProject) '项目文件', formatSize(file!.size)].join(' · ');
+  String get sub => uploading ? '上传中…' : [if (fromProject) workspaceFilesTitle(file!.projectId ?? ''), formatSize(file!.size)].join(' · ');
 }
 
 class AttachmentTray extends StatelessWidget {

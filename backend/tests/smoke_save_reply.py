@@ -1,5 +1,5 @@
 # 冒烟：把一条回复存成项目文件（v1.15，reply_files.py + POST /api/messages/{id}/save-to-project）。
-# 项目对话里不传 project_id 就存到所在项目；主聊天里必须指定项目；文件名取摘要标题 / 正文标题 / 第一行，非法字符去掉；
+# 项目对话里不传 project_id 就存到所在项目；主聊天里不传 = 存进“我的文件”（个人工作区 me，v1.21）；文件名取摘要标题 / 正文标题 / 第一行，非法字符去掉；
 # 同名不覆盖（“名字 2.md”）；内容是 Markdown（真表格、带标题的链接，审批/记忆卡不进文件）；
 # 用户消息、空回复、不存在的消息/项目给 400/404；存好的文件出现在项目文件列表里，也能被下一条消息引用。
 # 运行：python tests/smoke_save_reply.py
@@ -75,8 +75,11 @@ assert sorted(files) == ["数一复习计划 2.md", "数一复习计划.md"], fi
 # 也能当项目文件引用（v1.13 的唯一检查）
 assert storage.project_file(pid, "数一复习计划.md") is not None
 
-# 主聊天：必须指定项目
-assert c.post(f"/api/messages/{m_main}/save-to-project", json={}).status_code == 400
+# 主聊天：不指定 = 我的文件（个人工作区）；也能显式传 "me"
+r = c.post(f"/api/messages/{m_main}/save-to-project", json={})
+assert r.status_code == 200 and r.json()["project_id"] == "me" and r.json()["project_name"] == "我的文件", r.text
+assert [f["path"] for f in c.get("/api/projects/me/files").json()] == ["行李清单.md"]
+assert c.post(f"/api/messages/{m_main}/save-to-project", json={"project_id": "me"}).json()["path"] == "行李清单 2.md"
 r = c.post(f"/api/messages/{m_main}/save-to-project", json={"project_id": oid})
 assert r.status_code == 200 and r.json()["path"] == "行李清单.md" and r.json()["project_name"] == "旅行", r.text
 # 项目对话里的回复也能存到别的项目

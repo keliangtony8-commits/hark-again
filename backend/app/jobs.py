@@ -1,4 +1,4 @@
-"""后台任务的唯一入口：在项目沙盒里跑超过一条命令时限的活（装依赖、训练、爬取、大构建）。
+"""后台任务的唯一入口：在工作区沙盒（项目或个人，见 workspaces.py）里跑超过一条命令时限的活（装依赖、训练、爬取、大构建）。
 
 文件约定（工作区 .jobs/<id>/，沙盒和后端看到的是同一个目录）：
   cmd.sh    用户/模型给的命令原文
@@ -153,7 +153,7 @@ def describe(job: Job) -> str:
 
 
 def log_path(job: Job) -> str:
-    """完整日志相对项目根的路径（read_file 能按 offset 分段读）。"""
+    """完整日志相对工作区根的路径（read_file 能按 offset 分段读）。"""
     return f"{JOBS_DIR}/{job.id}/log"
 
 
@@ -194,7 +194,7 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     if not command:
         raise JobError("命令是空的")
     if (n := await running_count(db, project_id)) >= settings.job_max_running:
-        raise JobError(f"这个项目已有 {n} 个后台任务在跑（上限 {settings.job_max_running}），等它们结束或先取消一个")
+        raise JobError(f"这个工作区已有 {n} 个后台任务在跑（上限 {settings.job_max_running}），等它们结束或先取消一个")
     limit = max(10, min(int(timeout or settings.job_max_seconds), settings.job_max_seconds))
     job = Job(id=new_id(), project_id=project_id, conversation_id=conversation_id, task_id=task_id,
               title=(title or command.splitlines()[0]).strip()[:60] or "后台任务", command=command, timeout=limit,

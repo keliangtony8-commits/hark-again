@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import llm, memory_store, project_brief, skills_store, vision
+from .. import llm, memory_store, project_brief, skills_store, vision, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -47,9 +47,11 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
         parts.append("用户的 MCP 服务器（先 mcp_tools 再 mcp_call）：" + "、".join(s.name for s in servers))
 
     if project_id and (p := await db.get(Project, project_id)):
-        parts.append(f"当前在项目「{p.name}」中，可以用文件工具和 run_command 操作项目工作区。"
+        parts.append(f"当前在项目「{p.name}」中，{workspaces.prompt_line(p.id)}"
                      + (f"\n项目规则：\n{p.rules}" if p.rules.strip() else ""))
         parts.append(project_brief.prompt_section(p))
+    else:
+        parts.append(workspaces.prompt_line(workspaces.PERSONAL))
     return "\n\n".join(parts)
 
 
@@ -76,16 +78,17 @@ def _render(blocks: list[dict]) -> str:
 
 def _project_ref(b: dict) -> str:
     """用户在消息里点名的项目文件：按当前磁盘内容给（文本内联到 ATTACH_CHARS，其余提示用文件工具）。"""
-    rel = b.get("id", "")
-    path = project_file(b.get("project_id") or "", rel)
+    rel, ws = b.get("id", ""), b.get("project_id") or ""
+    what = "个人工作区文件" if workspaces.is_personal(ws) else "项目文件"
+    path = project_file(ws, rel)
     if path is None:
-        return f"[用户引用的项目文件 {rel}（已不在项目里）]"
+        return f"[用户引用的{what} {rel}（已不在工作区里）]"
     if is_text(path.name):
         body = path.read_text(encoding="utf-8", errors="replace")
         more = "\n…（后面还有，需要时用 read_file 读全文）" if len(body) > ATTACH_CHARS else ""
-        return f"[用户引用的项目文件 {rel}]\n{body[:ATTACH_CHARS]}{more}"
+        return f"[用户引用的{what} {rel}]\n{body[:ATTACH_CHARS]}{more}"
     kind = "图片" if b.get("mime", "").startswith("image/") else b.get("mime")
-    return f"[用户引用的项目文件 {rel}（{kind}，{path.stat().st_size} B）——要看内容用 read_file]"
+    return f"[用户引用的{what} {rel}（{kind}，{path.stat().st_size} B）——要看内容用 read_file]"
 
 
 @dataclass

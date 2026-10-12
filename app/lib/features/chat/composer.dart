@@ -7,7 +7,8 @@
 // 设计 v2：整条是浮在内容上的玻璃胶囊（真模糊，外面用 ui/kit.dart FloatingFooter 让位）；
 //   leading：胶囊左边、胶囊外的圆钮位（一级页面聚焦时的“收起”），出现/消失用 RiseSwitcher 横向长出；
 //   focusNode：外面要知道聚焦状态时传进来（LaunchComposer 用它开关整页磨砂）。
-// projectId：项目对话里“添加附件”多一个“项目文件”（features/projects pickProjectFiles 选，不上传，只带引用）。
+// workspace：这段对话的工作区（core/workspace.dart；项目 = 项目文件，主聊天 = 我的文件）。“添加附件”多一个从它选
+// （features/projects pickProjectFiles，不上传，只带引用）；null = 没有这个来源（如首页的快捷输入框）。
 // 上传、转写走 core/media.dart；这里只管交互状态。
 import 'dart:async';
 import 'dart:io';
@@ -25,6 +26,7 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../../core/workspace.dart';
 import '../projects/project_files_sheet.dart';
 import 'attachment_tray.dart';
 
@@ -50,7 +52,7 @@ class Composer extends ConsumerStatefulWidget {
       this.hint = '给助手发消息',
       this.leading,
       this.focusNode,
-      this.projectId});
+      this.workspace});
   final void Function(String text, List<FileBlock> files) onSend;
   final bool busy;
   final bool streaming;
@@ -64,8 +66,8 @@ class Composer extends ConsumerStatefulWidget {
   final Widget? leading;
   final FocusNode? focusNode;
 
-  /// 项目对话的项目 id（null = 不在项目里，没有“项目文件”来源）。
-  final String? projectId;
+  /// 工作区 id（null = 没有“从工作区引用文件”这个来源）。
+  final String? workspace;
 
   @override
   ConsumerState<Composer> createState() => _ComposerState();
@@ -139,7 +141,7 @@ class _ComposerState extends ConsumerState<Composer> {
 
   // ---- 附件 ----
   Future<void> _pick() async {
-    final pid = widget.projectId;
+    final pid = widget.workspace;
     final source = await showAppSheet<_From>(
       context,
       builder: (ctx) => SafeArea(
@@ -150,7 +152,7 @@ class _ComposerState extends ConsumerState<Composer> {
               (_From.gallery, Icons.photo_library_outlined, '相册'),
               (_From.camera, Icons.photo_camera_outlined, '拍照'),
               (_From.file, Icons.insert_drive_file_outlined, '文件'),
-              if (pid != null) (_From.project, Icons.folder_outlined, '项目文件'),
+              if (pid != null) (_From.project, Icons.folder_outlined, workspaceFilesTitle(pid)),
             ])
               Expanded(
                 child: Pressable(

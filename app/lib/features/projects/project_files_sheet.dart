@@ -1,4 +1,5 @@
-// 项目文件：项目文件夹里的资料（我和沙箱共用）。上传、打开、删除；聊天输入框“引用项目文件”的选择器也在这里。
+// 工作区文件：项目文件夹或个人工作区“我的文件”里的资料（我和沙箱共用，core/workspace.dart）。
+// 上传、打开、删除；聊天输入框“引用文件”的选择器也在这里。参数 projectId 一律是工作区 id。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,7 @@ import '../../core/api.dart';
 import '../../core/links.dart';
 import '../../core/media.dart';
 import '../../core/resource.dart';
+import '../../core/workspace.dart';
 import '../../models/block.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
@@ -87,7 +89,7 @@ class _FilePickerState extends ConsumerState<_FilePicker> {
       Padding(
         padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x1),
         child: Row(children: [
-          Expanded(child: Text('引用项目文件', style: context.text.titleLarge)),
+          Expanded(child: Text('引用${workspaceFilesTitle(widget.projectId)}', style: context.text.titleLarge)),
           SwapSwitcher(
             child: Text(_chosen.isEmpty ? '可多选' : '已选 ${_chosen.length}',
                 key: ValueKey(_chosen.length), style: context.text.labelSmall),
@@ -102,10 +104,10 @@ class _FilePickerState extends ConsumerState<_FilePicker> {
         ),
       ),
       switch (files) {
-          AsyncData(:final value) when value.isEmpty => const EmptyHint(
+          AsyncData(:final value) when value.isEmpty => EmptyHint(
             icon: Icons.folder_open_rounded,
             title: '文件夹是空的',
-            text: '先在项目的“文件”里上传资料，再回来引用。',
+            text: workspacePickEmptyText(widget.projectId),
           ),
           AsyncData() => SheetList(
             padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x3),
@@ -228,7 +230,7 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x3, Sp.x2),
           child: Row(
             children: [
-              Expanded(child: Text('项目文件', style: context.text.titleLarge)),
+              Expanded(child: Text(workspaceFilesTitle(widget.projectId), style: context.text.titleLarge)),
               AnimatedSwitcher(
                 duration: Motion.base,
                 child: _uploading > 0
@@ -255,10 +257,10 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
           ),
         ),
         switch (files) {
-            AsyncData(:final value) when value.isEmpty => const EmptyHint(
+            AsyncData(:final value) when value.isEmpty => EmptyHint(
               icon: Icons.folder_open_rounded,
               title: '文件夹是空的',
-              text: '上传资料后，在这个项目里聊天时我可以直接读它们，也能在沙箱里跑代码处理。',
+              text: workspaceEmptyText(widget.projectId),
             ),
             AsyncData(:final value) => SheetList(
               padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x5),

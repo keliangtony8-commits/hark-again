@@ -1,3 +1,4 @@
+import { workspaceFilesTitle } from "./workspace";
 import { fileUrl } from "./api";
 import type { FileBlock, OutgoingFile, ProjectFile } from "./types";
 
@@ -19,9 +20,9 @@ export const asFileBlock = (f: OutgoingFile): FileBlock => ("type" in f ? f : { 
 export const projectFileBlock = (pid: string, f: ProjectFile): FileBlock =>
   ({ type: "file", source: "project", id: f.path, name: f.name, mime: f.mime, size: f.size, project_id: pid });
 
-/** 输入框附件名片第二行——唯一规则（App Attachment.sub 同义）：上传中 / 失败原因 / [项目文件 · ]大小。 */
+/** 输入框附件名片第二行——唯一规则（App Attachment.sub 同义）：上传中 / 失败原因 / [项目文件 / 我的文件 · ]大小。 */
 export const attachSub = (f: { upload?: { size: number }; ref?: FileBlock; error?: string }) =>
-  f.error ? "上传失败" : f.ref ? `项目文件 · ${formatSize(f.ref.size)}` : f.upload ? formatSize(f.upload.size) : "上传中…";
+  f.error ? "上传失败" : f.ref ? `${workspaceFilesTitle(f.ref.project_id)} · ${formatSize(f.ref.size)}` : f.upload ? formatSize(f.upload.size) : "上传中…";
 
 /** 一条消息最多带几个文件（上传 + 引用合计，和服务器 ws.MAX_FILES 一致）。 */
 export const MAX_MESSAGE_FILES = 10;

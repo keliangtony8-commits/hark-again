@@ -3,17 +3,18 @@
   只属于那一刻的卡（审批、表单、记忆、浏览器画面）不进文件。
 - file_name(blocks, at)：文件名 = 摘要/草稿/表格标题 > 正文第一个标题 > 第一行字，去掉非法字符、最长 NAME_MAX；
   都没有 → “回复 MM-DD HHMM”。
-- save(db, message_id, project_id)：项目 = 传入的 project_id（主聊天里存到任意项目）或对话所在项目；
-  写到项目根目录，同名不覆盖（“名字 2.md”）。错误：LookupError（消息/项目不存在）、ValueError（不是回复、没内容、没给项目）。"""
+- save(db, message_id, project_id)：工作区 = 传入的 project_id（主聊天里可选任意项目或 "me" 我的文件）
+  或对话所在工作区（项目 / 个人）；写到根目录，同名不覆盖（“名字 2.md”）。
+  错误：LookupError（消息/项目不存在）、ValueError（不是回复、没内容）。"""
 import re
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import storage
+from . import storage, workspaces
 from .blocks import blocks_to_text
 from .config import settings
-from .models import Conversation, Message, Project
+from .models import Conversation, Message
 
 NAME_MAX = 24
 SKIP = {"approval", "form", "memory", "browser", "job"}
@@ -124,15 +125,13 @@ async def save(db: AsyncSession, message_id: str, project_id: str | None = None)
     if not text.strip():
         raise ValueError("这条回复没有可存的内容")
     conv = await db.get(Conversation, msg.conversation_id)
-    pid = project_id or (conv.project_id if conv else None)
-    if not pid:
-        raise ValueError("要存到哪个项目？")
-    project = await db.get(Project, pid)
-    if not project:
+    pid = project_id or workspaces.of(conv.project_id if conv else None)  # 主聊天不指定 = 我的文件
+    where = await workspaces.name(db, pid)
+    if where is None:
         raise LookupError("项目不存在")
     root = storage.project_dir(pid)
     p = _free_path(root, file_name(msg.blocks or [], msg.created_at))
     p.write_text(text, encoding="utf-8")
     rel = str(p.relative_to(root))
-    return {"project_id": pid, "project_name": project.name, "path": rel, "name": p.name,
+    return {"project_id": pid, "project_name": where, "path": rel, "name": p.name,
             "size": p.stat().st_size, "mime": storage.mime_of(p.name)}

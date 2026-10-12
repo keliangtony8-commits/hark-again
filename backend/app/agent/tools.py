@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..workspaces import of as workspace_of
 from .approvals import FormReply
 
 
@@ -36,6 +37,11 @@ class ToolContext:
     ask: Asker = nobody  # 在聊天里弹表单卡问用户（登录、验证码）
     task_id: str | None = None  # 这一轮是哪个定时任务在跑（None = 用户在聊天）；如早间简报不把自己列进今天的日程
 
+    @property
+    def workspace(self) -> str:
+        """这段对话的工作区 id（项目 = 项目 id；主聊天、定时任务 = 个人工作区）。规则在 app/workspaces.py。"""
+        return workspace_of(self.project_id)
+
 
 @dataclass
 class ToolImage:
@@ -58,7 +64,7 @@ class Tool:
     description: str      # 给模型看
     parameters: dict      # JSON Schema
     run: Callable[..., Awaitable[ToolResult]]
-    scope: str = "always"  # always | project（只在项目对话里提供，如文件与沙盒）| conversation（需要知道当前对话）
+    scope: str = "always"  # always（含文件与沙盒：每段对话都有工作区）| project（只在项目对话里，如项目档案）| conversation（需要知道当前对话）
     risk: Callable[[dict], str | None] | None = None  # 返回需要审批的理由；None = 直接执行
     # 需要审批时的卡片：返回一个带 state 的块（如订单卡），内核补上 id；None = 通用审批卡。参数不对就抛 ValueError。
     card: Callable[[dict], dict] | None = None

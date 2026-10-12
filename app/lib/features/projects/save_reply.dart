@@ -1,11 +1,13 @@
-// 把一条回复存成项目文件（v1.15）——App 里唯一入口（服务器 reply_files.py：Markdown、文件名取标题、同名不覆盖）。
-// 项目对话 → 直接存进本项目；主聊天 → 先选项目（最近活跃的在前）；还没有项目 → 提示先建一个。
-// 存好：提示条“已存进「项目」· 文件名”，并刷新那个项目的文件列表（项目首页“文件”一节、引用选择器立刻看到）。
+// 把一条回复存成文件（v1.15；v1.21 主聊天可存进“我的文件”）——App 里唯一入口（服务器 reply_files.py：Markdown、
+// 文件名取标题、同名不覆盖）。项目对话 → 直接存进本项目；主聊天 → 选“我的文件”或某个项目（我的文件在最前，
+// 项目按最近活跃）；一个项目都没有 → 不用选，直接存进我的文件。
+// 存好：提示条“已存进「我的文件 / 项目」· 文件名”，并刷新那个工作区的文件列表（首页“文件”一节、引用选择器立刻看到）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../core/resource.dart';
+import '../../core/workspace.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -15,7 +17,7 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 
 /// 操作键的文字（App / 网页同一句）。
-const saveReplyLabel = '存到项目文件';
+const saveReplyLabel = '存成文件';
 
 /// 选项目时的顺序：最近活跃的在前，没有时间的排后，其余保持原顺序。
 List<Project> saveTargets(List<Project> projects) {
@@ -33,26 +35,20 @@ List<Project> saveTargets(List<Project> projects) {
 /// 存好后提示条上的那句话。
 String savedReplyText(String projectName, String fileName) => '已存进「$projectName」· $fileName';
 
-/// 把 [messageId] 这条回复存成项目文件。[projectId] 为空 = 主聊天，先让用户选项目。
+/// 把 [messageId] 这条回复存成文件。[projectId] 为空 = 主聊天：选我的文件或某个项目（没有项目就直接存进我的文件）。
 Future<void> saveReplyToProject(BuildContext context, WidgetRef ref, {required String messageId, String projectId = ''}) async {
   var pid = projectId;
   if (pid.isEmpty) {
-    final List<Project> projects;
+    List<Project> projects;
     try {
       projects = await ref.read(projectsProvider.future);
-    } catch (e) {
-      if (context.mounted) showToast(context, '项目列表加载失败');
-      return;
+    } catch (_) {
+      projects = const []; // 项目列表拿不到也能存进我的文件
     }
     if (!context.mounted) return;
-    if (projects.isEmpty) {
-      showToast(context, '还没有项目，先在“项目”里建一个');
-      return;
-    }
-    final chosen = await showAppScrollSheet<String>(
-      context,
-      builder: (_) => _ProjectPicker(projects: saveTargets(projects)),
-    );
+    final chosen = projects.isEmpty
+        ? personalWorkspace
+        : await showAppScrollSheet<String>(context, builder: (_) => _ProjectPicker(projects: saveTargets(projects)));
     if (chosen == null) return;
     pid = chosen;
   }
@@ -75,18 +71,26 @@ class _ProjectPicker extends StatelessWidget {
   Widget build(BuildContext context) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x1),
-          child: Text('存到哪个项目', style: context.text.titleLarge),
+          child: Text('存到哪里', style: context.text.titleLarge),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x3),
-          child: Text('存成一份 Markdown，项目里的对话都能引用。', style: context.text.bodySmall),
+          child: Text('存成一份 Markdown，之后的对话都能引用。', style: context.text.bodySmall),
         ),
         SheetList(
             children: [
               ListGroup(children: [
+                FadeSlideIn(
+                  child: RowTile(
+                    icon: Icons.folder_outlined,
+                    title: workspaceFilesTitle(personalWorkspace),
+                    subtitle: '主聊天的云端电脑',
+                    onTap: () => Navigator.pop(context, personalWorkspace),
+                  ),
+                ),
                 for (final (i, p) in projects.indexed)
                   FadeSlideIn(
-                    delay: Motion.stagger(i),
+                    delay: Motion.stagger(i + 1),
                     child: RowTile(
                       leading: SizedBox.square(
                         dimension: Layout.rowIcon,

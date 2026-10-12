@@ -61,7 +61,7 @@ void main() {
     await tester.tap(find.textContaining('第一条回复'));
     await _settle(tester);
     expect(find.byTooltip('复制'), findsOneWidget);
-    expect(find.byTooltip('存到项目文件'), findsOneWidget);
+    expect(find.byTooltip('存成文件'), findsOneWidget);
     expect(find.byTooltip('重新生成'), findsNothing); // 只有最后一条能重新生成
 
     // 点另一条：它露出，前一条收起

@@ -1,4 +1,4 @@
-// 项目对话里引用项目文件（v1.13）：输入框“添加附件”在项目里多一个“项目文件”（主聊天没有）；
+// 引用工作区文件（v1.13；v1.21 主聊天 = “我的文件”）：输入框“添加附件”多一个从工作区选（项目 = 项目文件，主聊天 = 我的文件）；
 // 选择器可多选，已在托盘里的显示“已在这条消息里”不能再选；确认后托盘出现带文件夹记号的引用，发出去是 source=project 的文件块；
 // 控制器把上传附件和项目文件分开发（attachments / project_files）。
 import 'package:assistant/core/api.dart';
@@ -22,6 +22,11 @@ import 'chat_controller_test.dart' show FakeSocket;
 class _Api implements Api {
   @override
   Future<dynamic> get(String path) async {
+    if (path == '/api/projects/me/files') {
+      return [
+        {'path': '结果.csv', 'name': '结果.csv', 'size': 120, 'mime': 'text/csv'},
+      ];
+    }
     if (path == '/api/projects/p1/files') {
       return [
         {'path': 'notes/大纲.md', 'name': '大纲.md', 'size': 2048, 'mime': 'text/markdown'},
@@ -43,7 +48,7 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-Future<List<FileBlock>> _pump(WidgetTester tester, {String? projectId}) async {
+Future<List<FileBlock>> _pump(WidgetTester tester, {String? projectId = 'me'}) async {
   tester.view.physicalSize = const Size(400, 800);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -55,7 +60,7 @@ Future<List<FileBlock>> _pump(WidgetTester tester, {String? projectId}) async {
       home: Scaffold(
         body: Align(
           alignment: Alignment.bottomCenter,
-          child: Composer(projectId: projectId, busy: false, onSend: (_, files) => sent.addAll(files)),
+          child: Composer(workspace: projectId, busy: false, onSend: (_, files) => sent.addAll(files)),
         ),
       ),
     ),
@@ -106,11 +111,31 @@ void main() {
     expect(e['project_files'], ['notes/大纲.md']);
   });
 
-  testWidgets('主聊天：添加附件里没有“项目文件”', (tester) async {
-    await _pump(tester);
+  testWidgets('主聊天：添加附件里是“我的文件”（个人工作区，v1.21），选择器读 /api/projects/me/files', (tester) async {
+    final sent = await _pump(tester);
     await tester.tap(find.byTooltip('添加附件'));
     await _settle(tester);
     expect(find.text('相册'), findsOneWidget);
+    expect(find.text('项目文件'), findsNothing);
+    await tester.tap(find.text('我的文件'));
+    await _settle(tester);
+    expect(find.text('引用我的文件'), findsOneWidget);
+    await tester.tap(find.text('结果.csv'));
+    await _settle(tester);
+    await tester.tap(find.text('引用 1 个文件'));
+    await _settle(tester);
+    expect(find.textContaining('我的文件 · '), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await _settle(tester);
+    expect(sent.single.projectId, 'me');
+    expect(sent.single.id, '结果.csv');
+  });
+
+  testWidgets('没有工作区（首页快捷输入框）：没有引用文件这个来源', (tester) async {
+    await _pump(tester, projectId: null);
+    await tester.tap(find.byTooltip('添加附件'));
+    await _settle(tester);
+    expect(find.text('我的文件'), findsNothing);
     expect(find.text('项目文件'), findsNothing);
   });
 

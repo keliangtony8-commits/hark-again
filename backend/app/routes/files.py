@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import reply_files, storage
+from .. import reply_files, storage, workspaces
 from ..db import get_session
 from ..auth import require_query_token, require_user
 from ..config import settings
@@ -34,9 +34,15 @@ async def download_upload(uid: str):
     return FileResponse(p, media_type=storage.mime_of(p.name), filename=p.name)
 
 
-# ---- 项目文件 ----
+# ---- 工作区文件（pid = 项目 id，或 "me" = 个人工作区“我的文件”；见 workspaces.py）----
+async def _workspace(pid: str, db: AsyncSession = Depends(get_session)) -> str:
+    if await workspaces.name(db, pid) is None:
+        raise HTTPException(404, "没有这个工作区")  # 不再为随便一个 id 建目录
+    return pid
+
+
 @router.get("/api/projects/{pid}/files", dependencies=auth)
-async def list_project_files(pid: str):
+async def list_project_files(pid: str = Depends(_workspace)):
     root = storage.project_dir(pid)
     return [{"path": str(p.relative_to(root)), "name": p.name, "size": p.stat().st_size,
              "mime": storage.mime_of(p.name), "modified": p.stat().st_mtime}
@@ -44,7 +50,7 @@ async def list_project_files(pid: str):
 
 
 @router.post("/api/projects/{pid}/files", dependencies=auth)
-async def upload_project_file(pid: str, file: UploadFile):
+async def upload_project_file(file: UploadFile, pid: str = Depends(_workspace)):
     p = storage.safe_join(storage.project_dir(pid), file.filename or "file")
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(await _read_limited(file))
@@ -60,7 +66,7 @@ async def download_project_file(pid: str, path: str):
 
 
 @router.delete("/api/projects/{pid}/files/{path:path}", dependencies=auth)
-async def delete_project_file(pid: str, path: str):
+async def delete_project_file(path: str, pid: str = Depends(_workspace)):
     p = storage.safe_join(storage.project_dir(pid), path)
     if p.is_file():
         p.unlink()

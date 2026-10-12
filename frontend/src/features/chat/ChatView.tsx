@@ -1,4 +1,5 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import { workspaceOf } from "../../lib/workspace";
 import type { LinkStatus } from "../../lib/socket";
 import { formatDay, startsNewDay } from "../../lib/format";
 import type { Message, OutgoingFile } from "../../lib/types";
@@ -121,7 +122,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
       </div>
       <FloatingFooter onHeight={setFooterH}>
         {link === "down" && <LinkBar onRetry={onReconnect} />}
-        <Composer disabled={busy} streaming={streaming} onStop={onStop} accessory={accessory} projectId={projectId}
+        <Composer disabled={busy} streaming={streaming} onStop={onStop} accessory={accessory} workspace={workspaceOf(projectId)}
           editing={editing} onCancelEdit={() => setDraft(null)} onEditLast={editableId ? startEdit : undefined}
           onSend={(t, files) => { if (editing) { onEdit(t); setDraft(null); } else onSend(t, files); }} />
       </FloatingFooter>

@@ -1,10 +1,10 @@
-"""长输出落盘的唯一入口：工具结果太长时，给模型留开头 + 结尾，完整原文存进项目工作区 .spill/，
+"""长输出落盘的唯一入口：工具结果太长时，给模型留开头 + 结尾，完整原文存进工作区 .spill/，
 告诉它路径，需要时用 read_file 按 offset 分段读回来——既不撑爆上下文（省 token），也不丢信息。
 
 思路参考了 deepseek-ai/deepseek-harness（MIT）的 spill-policy：
   - 预算对半分给开头和结尾（报错和结论常在结尾），中间换成一句“省略了多少 + 去哪看全文”；
   - 落盘失败/没有工作区（主聊天）就只截断不落盘，绝不因为存不下而丢掉工具结果本身；
-  - 存下来的文件按项目只留最近 KEEP 个，旧的自动清掉（.spill 是隐藏目录，不进项目文件列表）。
+  - 存下来的文件按工作区只留最近 KEEP 个，旧的自动清掉（.spill 是隐藏目录，不进项目文件列表）。
 我们在切口上多做一步：尽量切在换行处，不把一行日志拦腰截断。
 """
 import secrets
@@ -14,7 +14,7 @@ from .storage import project_dir
 
 SPILL_DIR = ".spill"
 MARK = "\n…（中间省略）…\n"  # 沙盒服务截断前台命令输出时放在切口的标记（sandbox/runner.py 里同一个字面量）
-KEEP = 50          # 每个项目最多留多少个落盘文件
+KEEP = 50          # 每个工作区最多留多少个落盘文件
 SNAP = 0.2         # 切口往回找换行最多退让预算的 20%
 
 
@@ -39,7 +39,7 @@ def cut(text: str, budget: int) -> tuple[str, str, int]:
 
 
 def save(project_id: str, name: str, text: str) -> str:
-    """存进 .spill/，返回相对项目根的路径；顺手清掉超出 KEEP 的旧文件。"""
+    """存进 .spill/，返回相对工作区根的路径；顺手清掉超出 KEEP 的旧文件。"""
     d = project_dir(project_id) / SPILL_DIR
     d.mkdir(parents=True, exist_ok=True)
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)[:40] or "output"

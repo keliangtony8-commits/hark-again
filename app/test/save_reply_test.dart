@@ -1,5 +1,6 @@
-// 把回复存成项目文件（v1.15）：回复操作行多一颗“存到项目文件”（有内容且 ChatView 给了才有）；
-// 项目对话直接存进本项目，主聊天先选项目（最近活跃的在前）；存好提示“已存进「项目」· 文件名”；没有项目 / 出错给提示。
+// 把回复存成文件（v1.15；v1.21 我的文件）：回复操作行多一颗“存成文件”（有内容且 ChatView 给了才有）；
+// 项目对话直接存进本项目；主聊天选“我的文件”或项目（我的文件最前，项目最近活跃在前），没有项目直接存进我的文件；
+// 存好提示“已存进「…」· 文件名”；出错给提示。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
 import 'package:assistant/features/chat/message_view.dart';
@@ -25,7 +26,7 @@ class _Api implements Api {
     posts.add((path, body));
     final pid = (body as Map)['project_id'];
     if (pid == 'bad') throw ApiError('项目不存在', 404);
-    final name = projects.firstWhere((p) => p['id'] == pid, orElse: () => {'name': '考研'})['name'];
+    final name = pid == 'me' ? '我的文件' : projects.firstWhere((p) => p['id'] == pid, orElse: () => {'name': '考研'})['name'];
     return {'project_id': pid, 'project_name': name, 'path': '复习计划.md', 'name': '复习计划.md', 'size': 10, 'mime': 'text/markdown'};
   }
 
@@ -89,7 +90,7 @@ void main() {
     expect(find.byTooltip(saveReplyLabel), findsNothing);
   });
 
-  testWidgets('操作条顺序和网页一致：复制 · 重新生成 · 存到项目文件（v1.16）', (tester) async {
+  testWidgets('操作条顺序和网页一致：复制 · 重新生成 · 存成文件（v1.16）', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ProviderScope(
@@ -114,16 +115,17 @@ void main() {
     await _settle(tester);
     expect(api.posts.single.$1, '/api/messages/m1/save-to-project');
     expect(api.posts.single.$2, {'project_id': 'p1'});
-    expect(find.text('存到哪个项目'), findsNothing);
+    expect(find.text('存到哪里'), findsNothing);
     expect(find.text('已存进「考研」· 复习计划.md'), findsOneWidget);
   });
 
-  testWidgets('主聊天：先选项目（最近的在前），选了才存', (tester) async {
+  testWidgets('主聊天：我的文件在最前，项目最近的在前，选了才存', (tester) async {
     final api = _Api(projects: [_p('p1', '考研', '2026-10-01T00:00:00Z'), _p('p2', '旅行', '2026-10-11T00:00:00Z')]);
     await _pump(tester, api);
     await tester.tap(find.byTooltip(saveReplyLabel));
     await _settle(tester);
-    expect(find.text('存到哪个项目'), findsOneWidget);
+    expect(find.text('存到哪里'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('我的文件')).dy, lessThan(tester.getTopLeft(find.text('旅行')).dy));
     expect(tester.getTopLeft(find.text('旅行')).dy, lessThan(tester.getTopLeft(find.text('考研')).dy));
     expect(api.posts, isEmpty);
     await tester.tap(find.text('旅行'));
@@ -132,13 +134,24 @@ void main() {
     expect(find.text('已存进「旅行」· 复习计划.md'), findsOneWidget);
   });
 
-  testWidgets('主聊天：还没有项目 → 提示先建一个', (tester) async {
+  testWidgets('主聊天：还没有项目 → 不用选，直接存进我的文件', (tester) async {
     final api = _Api();
     await _pump(tester, api);
     await tester.tap(find.byTooltip(saveReplyLabel));
     await _settle(tester);
-    expect(api.posts, isEmpty);
-    expect(find.text('还没有项目，先在“项目”里建一个'), findsOneWidget);
+    expect(find.text('存到哪里'), findsNothing);
+    expect(api.posts.single.$2, {'project_id': 'me'});
+    expect(find.text('已存进「我的文件」· 复习计划.md'), findsOneWidget);
+  });
+
+  testWidgets('主聊天：选我的文件', (tester) async {
+    final api = _Api(projects: [_p('p1', '考研', null)]);
+    await _pump(tester, api);
+    await tester.tap(find.byTooltip(saveReplyLabel));
+    await _settle(tester);
+    await tester.tap(find.text('我的文件'));
+    await _settle(tester);
+    expect(api.posts.single.$2, {'project_id': 'me'});
   });
 
   testWidgets('服务器拒绝 → 提示原因', (tester) async {

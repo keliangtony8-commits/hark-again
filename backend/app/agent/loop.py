@@ -201,7 +201,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     yield ToolStatus(call.id, call.name, t.label, "done")
     content = result.content
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）
-        content = spill.bound(content, settings.tool_result_max, ctx.project_id, call.name)
+        content = spill.bound(content, settings.tool_result_max, ctx.workspace, call.name)
     yield ToolResult(content, images=result.images)
 
 @dataclass

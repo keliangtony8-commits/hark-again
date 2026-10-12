@@ -1,4 +1,5 @@
-"""项目工作区：读写文件直接在后端做（快、零成本）；执行命令交给隔离沙盒。只在项目对话中可用。"""
+"""工作区工具：读写文件直接在后端做（快、零成本）；执行命令交给隔离沙盒。
+每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import httpx
 
 from ... import command_guard, jobs, sandbox_client, spill, vision
@@ -14,13 +15,13 @@ def _command_risk(args: dict) -> str | None:
     """需要用户点头的命令弹审批卡；会被直接拦下的（block）不弹卡，run_command 里拒绝。规则全在 command_guard.py。"""
     v = command_guard.verdict(args.get("command", ""))
     return v.why if v is not None and v.level == "ask" else None
-_PATH = {"type": "string", "description": "相对项目根目录的路径"}
+_PATH = {"type": "string", "description": "相对工作区根目录的路径"}
 
 
-@tool("list_files", "正在查看文件", "列出项目工作区里的文件。",
-      {"type": "object", "properties": {"path": {**_PATH, "default": ""}}}, scope="project")
+@tool("list_files", "正在查看文件", "列出工作区里的文件。",
+      {"type": "object", "properties": {"path": {**_PATH, "default": ""}}})
 async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
-    root = project_dir(ctx.project_id)
+    root = project_dir(ctx.workspace)
     base = safe_join(root, path)
     if not base.is_dir():
         return ToolResult("目录不存在。")
@@ -30,15 +31,15 @@ async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
 
 
 @tool("read_file", "正在读文件",
-      "读取项目里的文本文件；图片文件（jpg/png/webp/gif）会直接给你看。长文件用 offset / limit 分段读"
+      "读取工作区里的文本文件；图片文件（jpg/png/webp/gif）会直接给你看。长文件用 offset / limit 分段读"
       "（也能读被省略的长输出 .spill/… 和后台任务完整日志 .jobs/<id>/log）。",
       {"type": "object", "properties": {
           "path": _PATH,
           "offset": {"type": "integer", "default": 0, "description": "从第几个字符开始（负数 = 从结尾倒数）"},
           "limit": {"type": "integer", "default": MAX_READ, "maximum": MAX_READ_LIMIT, "description": "最多读多少字符"}},
-       "required": ["path"]}, scope="project")
+       "required": ["path"]})
 async def read_file(ctx: ToolContext, path: str, offset: int = 0, limit: int = MAX_READ) -> ToolResult:
-    p = safe_join(project_dir(ctx.project_id), path)
+    p = safe_join(project_dir(ctx.workspace), path)
     if not p.is_file():
         return ToolResult("文件不存在。")
     if mime_of(p.name) in vision.IMAGE_MIMES:
@@ -64,20 +65,20 @@ def page(text: str, offset: int = 0, limit: int = MAX_READ) -> str:
     return f"{text[start:end]}\n…（第 {start}–{end} 字符，共 {total} 字符；{more}）"
 
 
-@tool("write_file", "正在写文件", "在项目里创建或覆盖一个文本文件。",
+@tool("write_file", "正在写文件", "在工作区里创建或覆盖一个文本文件。",
       {"type": "object", "properties": {"path": _PATH, "content": {"type": "string"}},
-       "required": ["path", "content"]}, scope="project")
+       "required": ["path", "content"]})
 async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
-    p = safe_join(project_dir(ctx.project_id), path)
+    p = safe_join(project_dir(ctx.workspace), path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
     return ToolResult(f"已写入 {path}（{len(content)} 字符）。", [
         {"type": "file", "source": "project", "id": path, "name": p.name, "mime": "text/plain",
-         "size": p.stat().st_size, "project_id": ctx.project_id}])
+         "size": p.stat().st_size, "project_id": ctx.workspace}])
 
 
 @tool("run_command", "正在运行命令",
-      "在项目的隔离 Linux 沙盒里执行 shell 命令（工作目录就是项目根目录，有 python3、node、git）。"
+      "在工作区的隔离 Linux 沙盒里执行 shell 命令（工作目录就是工作区根目录，有 python3、node、git）。"
       "用于运行代码、测试、安装依赖、git 操作。前台单次最长 120 秒。"
       "预计超过一分钟的活（装大依赖、训练、批量下载/爬取、大构建、长时间脚本）用 background=true 放到后台："
       "立即返回任务 id，用户在聊天里看到实时日志、可以取消；结束时你会收到通知并在这段对话里接着说，"
@@ -92,14 +93,14 @@ async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
           "idle_timeout": {"type": "integer",
                            "description": f"秒，仅后台：连续这么久没有新输出就判定卡住并停掉；默认 {settings.job_idle_seconds}，"
                                           "确实会长时间不打印（不输出进度的训练、静默编译）就设 0"}},
-       "required": ["command"]}, scope="project", risk=_command_risk)
+       "required": ["command"]}, risk=_command_risk)
 async def run_command(ctx: ToolContext, command: str, timeout: int | None = None, background: bool = False,
                       title: str | None = None, idle_timeout: int | None = None) -> ToolResult:
     if (v := command_guard.verdict(command)) is not None and v.level == "block":
         return ToolResult(command_guard.refusal(v))
     if background:
         try:
-            job = await jobs.start(ctx.db, project_id=ctx.project_id, command=command, title=title, timeout=timeout,
+            job = await jobs.start(ctx.db, project_id=ctx.workspace, command=command, title=title, timeout=timeout,
                                    idle_timeout=idle_timeout, conversation_id=ctx.conversation_id, task_id=ctx.task_id)
         except jobs.JobError as e:
             return ToolResult(f"没有启动：{e}")
@@ -108,7 +109,7 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
                           "用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。",
                           [jobs.block(job)])
     try:
-        r = await sandbox_client.run(ctx.project_id, command, min(timeout or 60, 120))
+        r = await sandbox_client.run(ctx.workspace, command, min(timeout or 60, 120))
     except httpx.HTTPError as e:
         return ToolResult(f"沙盒没响应（{type(e).__name__}），命令没有执行。")
     timed_out = r.get("timed_out")

@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { workspaceFilesTitle } from "../../lib/workspace";
 import { http } from "../../lib/api";
 import { asFileBlock, attachSub, extOf, MAX_MESSAGE_FILES } from "../../lib/files";
 import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
@@ -29,9 +30,10 @@ type Props = {
   leading?: ReactNode;
   placeholder?: string;
   /** 项目对话的项目 id：“添加附件”变成菜单，多一个“项目里的文件”（只带引用，不上传）。 */
-  projectId?: string;
+  /** 这段对话的工作区（lib/workspace.ts）：“添加附件”多一个从它引用文件；不给 = 没有这个来源。 */
+  workspace?: string;
 };
-export default function Composer({ onSend, disabled, streaming = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息", projectId }: Props) {
+export default function Composer({ onSend, disabled, streaming = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息", workspace }: Props) {
   const [text, setText] = useState("");
   const stash = useRef<string | null>(null);   // 进入编辑前的草稿
   const editId = editing?.id ?? null;
@@ -121,8 +123,8 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
         {!editing && files.length > 0 && (
           <div className="attach-row">
             {files.map((f) => (
-              <span key={f.key} className={`attach ${f.error ? "err" : ""} ${!f.upload && !f.ref && !f.error ? "loading" : ""}`} title={f.error ?? (f.ref ? `项目文件 ${f.ref.id}` : f.name)}>
-                <span className="attach-ext">{extOf(f.name)}{f.ref && <i className="attach-from" aria-label="项目文件"><IconFolder size={10} /></i>}</span>
+              <span key={f.key} className={`attach ${f.error ? "err" : ""} ${!f.upload && !f.ref && !f.error ? "loading" : ""}`} title={f.error ?? (f.ref ? `${workspaceFilesTitle(f.ref.project_id)} ${f.ref.id}` : f.name)}>
+                <span className="attach-ext">{extOf(f.name)}{f.ref && <i className="attach-from" aria-label={workspaceFilesTitle(f.ref.project_id)}><IconFolder size={10} /></i>}</span>
                 <span className="attach-text"><span className="attach-name">{f.name}</span><span className="attach-sub">{attachSub(f)}</span></span>
                 <button onClick={() => setFiles((s) => s.filter((x) => x.key !== f.key))} aria-label="移除"><IconClose size={14} /></button>
               </span>
@@ -137,10 +139,10 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
           </div>
         ) : (
           <div className="composer-row">
-            {projectId && !editing
+            {workspace && !editing
               ? <Menu label="添加附件" trigger={<IconClip />} items={[
                   { label: "从电脑选文件", icon: <IconFile size={16} />, onSelect: () => picker.current?.click() },
-                  { label: "项目里的文件", icon: <IconFolder size={16} />, onSelect: () => setPicking(true) },
+                  { label: workspaceFilesTitle(workspace), icon: <IconFolder size={16} />, onSelect: () => setPicking(true) },
                 ]} />
               : <button className="icon-btn" onClick={() => picker.current?.click()} disabled={!!editing} aria-label="添加附件"><IconClip /></button>}
             <input ref={picker} type="file" multiple hidden onChange={(e) => pick(e.target.files)} />
@@ -163,8 +165,8 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
         )}
         {voiceErr && <div className="composer-hint err" onClick={() => setVoiceErr(null)}>{voiceErr}</div>}
       </div>
-      {picking && projectId && (
-        <ProjectFilePicker projectId={projectId} onClose={() => setPicking(false)} onPick={takeRefs}
+      {picking && workspace && (
+        <ProjectFilePicker projectId={workspace} onClose={() => setPicking(false)} onPick={takeRefs}
           taken={new Set(files.flatMap((f) => (f.ref ? [f.ref.id] : [])))} room={MAX_MESSAGE_FILES - files.length} />
       )}
     </div>

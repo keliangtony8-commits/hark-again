@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { workspaceEmptyText, workspaceFilesTitle } from "../../lib/workspace";
 import { fileUrl, http } from "../../lib/api";
 import { extOf } from "../../lib/files";
 import { projectFileLine } from "./projectHome";
@@ -25,12 +26,12 @@ export default function ProjectFiles({ projectId, onClose }: { projectId: string
   const remove = async (p: string) => { await http.del(`${base}/${enc(p)}`); load(); };
 
   return (
-    <Sheet title="项目文件" onClose={onClose} actions={<>
+    <Sheet title={workspaceFilesTitle(projectId)} onClose={onClose} actions={<>
       <input ref={picker} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
       <button className="btn btn-primary" disabled={busy} onClick={() => picker.current?.click()}><IconUpload size={18} />{busy ? "上传中…" : "上传文件"}</button>
     </>}>
       {files === null ? <Skeleton /> : files.length === 0 ? (
-        <Hint icon={<IconFile size={26} />} title="还没有文件" text="上传资料让我参考，或者让我在这个项目里写代码、跑命令，生成的文件都会出现在这里。" />
+        <Hint icon={<IconFile size={26} />} title="还没有文件" text={workspaceEmptyText(projectId)} />
       ) : (
         <div className="list">
           {files.map((f) => (

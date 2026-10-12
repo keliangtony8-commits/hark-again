@@ -200,7 +200,7 @@ async def tool(name, **args):
 out = run(tool("cancel_job", job_id=j4))
 assert out.startswith("已取消") and run(job(j4)).followup == "none", (out, run(job(j4)).followup)
 assert "已经结束" in run(tool("cancel_job", job_id=j4))
-assert "只能取消本项目" in run(tool("cancel_job", job_id="jnope"))
+assert "只能取消本工作区" in run(tool("cancel_job", job_id="jnope"))
 
 # ---- 7. 进程消失没留退出码 → worker 判 lost ----
 j5 = run(start("sleep 30"))

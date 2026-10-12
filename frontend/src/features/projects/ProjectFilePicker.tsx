@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { workspaceFilesTitle, workspacePickEmptyText } from "../../lib/workspace";
 import { http } from "../../lib/api";
 import { extOf, MAX_MESSAGE_FILES, projectFileBlock } from "../../lib/files";
 import { formatWhen } from "../../lib/format";
@@ -32,7 +33,7 @@ export default function ProjectFilePicker({ projectId, taken, room, onPick, onCl
   const confirm = () => onPick((files ?? []).filter((f) => chosen.has(f.path)).map((f) => projectFileBlock(projectId, f)));
 
   return (
-    <Sheet title="引用项目文件" onClose={onClose} actions={
+    <Sheet title={`引用${workspaceFilesTitle(projectId)}`} onClose={onClose} actions={
       <button className="btn btn-primary" disabled={chosen.size === 0} onClick={confirm}>
         {chosen.size === 0 ? "选几个文件" : `引用 ${chosen.size} 个文件`}
       </button>
@@ -42,9 +43,9 @@ export default function ProjectFilePicker({ projectId, taken, room, onPick, onCl
       </p>
       {err ? <Hint icon={<IconFile size={26} />} title="加载失败" text={err} />
         : files === null ? <Skeleton />
-        : files.length === 0 ? <Hint icon={<IconFile size={26} />} title="文件夹是空的" text="先在项目的“文件”里上传资料，再回来引用。" />
+        : files.length === 0 ? <Hint icon={<IconFile size={26} />} title="文件夹是空的" text={workspacePickEmptyText(projectId)} />
         : (
-          <div className="list" role="group" aria-label="项目文件">
+          <div className="list" role="group" aria-label={workspaceFilesTitle(projectId)}>
             {files.map((f, i) => {
               const isTaken = taken.has(f.path);
               const on = isTaken || chosen.has(f.path);

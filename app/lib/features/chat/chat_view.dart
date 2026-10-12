@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocks/block_actions.dart';
 import '../../core/speech.dart';
+import '../../core/workspace.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../models/message.dart';
@@ -121,7 +122,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         editing: editing,
         onCancelEdit: () => setState(() => _editing = null),
         accessory: ModelChip(scope: widget.projectId),
-        projectId: widget.projectId.isEmpty ? null : widget.projectId,
+        workspace: workspaceOf(widget.projectId),
         onSend: (text, files) {
           if (editing != null) {
             ctl.edit(text);

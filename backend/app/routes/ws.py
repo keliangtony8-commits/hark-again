@@ -5,12 +5,13 @@ import contextlib
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from .. import workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_model, rewind, run_turn
 from ..auth import verify_token
 from ..blocks import FileBlock, text_to_blocks
 from ..db import SessionLocal
-from ..models import Conversation, Message, Project
+from ..models import Conversation, Message
 from ..storage import mime_of, project_file, project_file_root, upload_path
 
 router = APIRouter()
@@ -115,6 +116,8 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
     async with SessionLocal() as db:
         conv = await db.get(Conversation, event.get("conversation_id")) if event.get("conversation_id") else None
         pid = conv.project_id if conv is not None else event.get("project_id")
+        if workspaces.is_personal(pid) or not isinstance(pid, str):
+            pid = None  # 主聊天：对话不属于任何项目（个人工作区不是项目）
         files = _attachments(event.get("attachments") or [])
         files += await _project_files(db, pid, event.get("project_files") or [], MAX_FILES - len(files))
         if not text and not files:
@@ -168,9 +171,10 @@ def _attachments(ids: list[str]) -> list[dict]:
 
 
 async def _project_files(db, pid: str | None, paths: list, room: int) -> list[dict]:
-    """项目对话里“引用项目文件”：只认这个对话所在项目里真实存在的文件（相对路径，去重）。
-    消息里只存引用（source=project，id=相对路径）；内容每轮由 context 从磁盘读，文件改了模型看到的就是新的。"""
-    if not pid or room <= 0 or not isinstance(paths, list) or await db.get(Project, pid) is None:
+    """“引用工作区文件”：只认这段对话所在工作区（项目 / 主聊天 = 个人工作区）里真实存在的文件（相对路径，去重）。
+    消息里只存引用（source=project，id=相对路径，project_id=工作区 id）；内容每轮由 context 从磁盘读。"""
+    pid = workspaces.of(pid)
+    if room <= 0 or not isinstance(paths, list) or await workspaces.name(db, pid) is None:
         return []
     out, seen = [], set()
     for rel in paths:

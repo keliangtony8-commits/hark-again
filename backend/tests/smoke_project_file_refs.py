@@ -1,7 +1,7 @@
 # 冒烟：项目对话里引用项目文件（v1.13）。模拟模型，只看发给模型的消息：
 # user.message 的 project_files 只认这个对话所在项目里真实存在的文件（越界/不存在/.git/重复丢掉，和上传合计 ≤10）；
 # 消息里存 source=project 的文件块；文本内容每轮按磁盘内联（改了文件下一轮看到新的；超长截断并提示 read_file），
-# 图片/其他文件只给名字 + 提示用文件工具；文件删了说“已不在项目里”；不在项目里的对话带了也不认；重答保留引用。
+# 图片/其他文件只给名字 + 提示用文件工具；文件删了说“已不在工作区里”；主聊天带项目的文件不认（主聊天认的是“我的文件”，见 smoke_personal_workspace）；重答保留引用。
 # 运行：python tests/smoke_project_file_refs.py
 import os, sys, asyncio, subprocess, tempfile, json
 tmp = tempfile.mkdtemp()
@@ -100,7 +100,7 @@ with c.websocket_connect(f"/ws?token={token}") as ws:
     turn(ws, {"type": "user.message", "text": "我改了", "conversation_id": cid})
     first_user = [m for m in sent[-1] if m["role"] == "user"][0]["content"]
     assert "改成每天三小时" in first_user and "两小时" not in first_user
-    assert "[用户引用的项目文件 data.bin（已不在项目里）]" in first_user
+    assert "[用户引用的项目文件 data.bin（已不在工作区里）]" in first_user
 
     # 3) 只有引用、没有文字也能发；对已有对话，项目以对话为准（事件里乱带 project_id 不管用）
     turn(ws, {"type": "user.message", "conversation_id": cid, "project_id": "other", "project_files": ["photo.png"]})

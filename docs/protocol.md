@@ -20,7 +20,7 @@
 客户端 → 服务器：
 | type | 字段 | 说明 |
 |---|---|---|
-| `user.message` | `text`, `conversation_id?`, `project_id?`, `attachments?: [uploadId]`, `project_files?: [相对路径]`, `model?` | 发一条消息；一次只跑一轮。`project_files`（v1.13）= 引用项目文件：只认这个对话所在项目（已有对话以对话为准，新对话以 `project_id` 为准）里真实存在的文件，越界/不存在/.git/重复丢掉，和上传合计 ≤10；存成 `source=project` 的文件块（`id` = 相对路径），内容每轮由服务器从磁盘读（文本内联 ≤6000 字，其余提示模型用 read_file；删了说已不在）。`model` = 这个对话改用的模型别名（`GET /api/catalog/models` 里的 id；`""` = 回默认；不认识的忽略），记到对话上、本轮起生效。客户端只在本机改过且还没 PATCH 成功（或新对话）时带。附件里的图片（jpeg/png/webp/gif）模型能看懂（v0.72，服务端处理，客户端无需改动）：当前这一问且模型在 VISION_MODELS 里 → 发原图（缩到 1280）；其余 → 图片的文字描述（每张描述一次并缓存） |
+| `user.message` | `text`, `conversation_id?`, `project_id?`, `attachments?: [uploadId]`, `project_files?: [相对路径]`, `model?` | 发一条消息；一次只跑一轮。`project_files`（v1.13）= 引用工作区文件：只认这个对话所在工作区（已有对话以对话为准，新对话以 `project_id` 为准；主聊天 = 个人工作区 `me`，v1.21；`project_id:"me"` 当作主聊天，不会把对话挂到项目上）里真实存在的文件，越界/不存在/.git/重复丢掉，和上传合计 ≤10；存成 `source=project` 的文件块（`id` = 相对路径），内容每轮由服务器从磁盘读（文本内联 ≤6000 字，其余提示模型用 read_file；删了说已不在）。`model` = 这个对话改用的模型别名（`GET /api/catalog/models` 里的 id；`""` = 回默认；不认识的忽略），记到对话上、本轮起生效。客户端只在本机改过且还没 PATCH 成功（或新对话）时带。附件里的图片（jpeg/png/webp/gif）模型能看懂（v0.72，服务端处理，客户端无需改动）：当前这一问且模型在 VISION_MODELS 里 → 发原图（缩到 1280）；其余 → 图片的文字描述（每张描述一次并缓存） |
 | `message.regenerate` | `conversation_id`, `message_id?`, `text?`, `model?` | 重新生成最后一条回复：删掉最后一条用户消息之后的回复，同一条用户消息再跑一轮（不保留旧版本）。`message_id` = 客户端眼中的最后一条回复，不是最新的就回 `error`、什么都不删；不带 = 上一轮失败没有回复时“重试”。带 `text` = **编辑**：最后一条用户消息的文字原地换成它（id 不变、附件保留、标题不动；文字空且没附件 → `error`）再答。带 `model` = 换模型重答（同 user.message，记到对话上）。不排队，线不通直接提示 |
 | `message.cancel` | `conversation_id?` | 停止正在生成的这一轮。带 id 就必须对得上正在跑的对话；没有在跑的轮次就忽略（刚好已说完）。不排队 |
 | `approval.reply` | `id`, `approved: bool` | 回答审批卡 |
@@ -47,7 +47,7 @@
 | `links` | `items: [{url, label?, title?}]` |
 | `table` | `title?`, `columns[]`, `rows[][]`, `note?` |
 | `code` | `language`, `title?`, `source` |
-| `file` | `source: upload\|project`, `id`, `name`, `mime`, `size`, `project_id?` |
+| `file` | `source: upload\|project`, `id`, `name`, `mime`, `size`, `project_id?`（source=project 时是工作区 id：项目 id 或 `me`；下载 `/api/projects/{project_id}/files/{id}`） |
 | `approval` | `id`, `title`, `detail`, `state: pending\|approved\|rejected\|expired` |
 | `browser` | `session`（实时画面：`GET /api/browser/screen?token=` 轮询；接管：`POST /api/browser/mouse {x,y}` 0–1 归一化坐标，`POST /api/browser/keyboard {text?, key?}`） |
 | `page` | `slug`, `title`, `url` |
@@ -68,8 +68,8 @@
 | 资源 | 路径 | 备注 |
 |---|---|---|
 | 对话 | `/api/conversations` | `GET ?q=&project_id=` 搜标题+内容（置顶在前，内容命中带 `snippet` + `message_id`＝最近一条命中的消息，客户端打开后滚到它并闪一下；标题命中两者都不带）；`PATCH /{id} {title?, pinned?, model?}` 不改 `updated_at`（`model` 非法 422，`""` = 回默认）；列表项和详情都带 `model`（`null` = 默认）；`GET /{id}` 返回 messages（每条 `{id, role, blocks, status?, created_at?}`，`status` 只在 `stopped` 时出现；`created_at` 是带时区的 ISO 时间（v0.45 起，客户端按本地日期画日期分隔，没有就不画）） |
-| 回复存成项目文件 | `POST /api/messages/{id}/save-to-project` | body `{project_id?}`（不给 = 回复所在对话的项目）→ `{project_id, project_name, path, name, size, mime}`；只收助手回复，存成 Markdown 写进项目根目录，同名加“ 2”；没内容/用户消息/主聊天没给项目 400，消息或项目不存在 404（v1.15） |
-| 项目 | `/api/projects` | `brief` = 项目档案（Markdown，≤8000 字，超出 422；PATCH 时去首尾空白，内容真变了才把 `brief_by` 设为 `user`、`brief_updated_at` 设为现在；助手用 `project_brief` 工具改时 `brief_by=assistant`；老服务器没有这三个字段）；只读 `conversation_count`（项目内对话数）、`last_active_at`（项目或其中任一对话的最后更新）；文件：`/api/projects/{pid}/files[/{path}]`（multipart 上传；列表每项 `path/name/size/mime/modified`，modified = Unix 秒，客户端首屏按它取最近 3 个；下载路径逐段 URL 编码） |
+| 回复存成项目文件 | `POST /api/messages/{id}/save-to-project` | body `{project_id?}`（不给 = 回复所在对话的工作区：项目，或主聊天的 `me`“我的文件”；v1.21 也可显式传 `me`）→ `{project_id, project_name, path, name, size, mime}`（`me` 的 project_name = “我的文件”）；只收助手回复，存成 Markdown 写进工作区根目录，同名加“ 2”；没内容/用户消息 400，消息或项目不存在 404（v1.15） |
+| 项目 | `/api/projects` | `brief` = 项目档案（Markdown，≤8000 字，超出 422；PATCH 时去首尾空白，内容真变了才把 `brief_by` 设为 `user`、`brief_updated_at` 设为现在；助手用 `project_brief` 工具改时 `brief_by=assistant`；老服务器没有这三个字段）；只读 `conversation_count`（项目内对话数）、`last_active_at`（项目或其中任一对话的最后更新）；文件：`/api/projects/{pid}/files[/{path}]`（pid = 项目 id，或 `me` = 个人工作区“我的文件”（v1.21，主聊天和定时任务的工作区）；不存在的 pid 404，不再建目录；multipart 上传；列表每项 `path/name/size/mime/modified`，modified = Unix 秒，客户端首屏按它取最近 3 个；下载路径逐段 URL 编码） |
 | 记忆 | `/api/memories` | 每项 `{id, category, content, created_at, updated_at}`；`category` 常用 `profile\|food\|travel\|work\|shopping\|general`，客户端认识的显示中文名、不认识的原样显示。搜索、分类筛选都在客户端做（记忆全量已在列表里） |
 | 我对你的了解 | `/api/memory-digest` | `GET` → `{text\|null, generated_at\|null, count（生成时的记忆数）, memories（现在的记忆数）, stale}`，零模型调用；`stale` = 生成后记忆有增删改。`POST` 用便宜模型重写一次（记账 kind=digest）返回同样形状；没有记忆 → 删掉旧概括返回 text=null；模型失败 502，旧概括不动。客户端从不自动 POST（花 token），只在用户点“生成/更新”时调 |
 | 定时任务 | `/api/tasks` | 计划二选一：`cron`（重复，5 段，用户时区）或 `run_at`（一次性，ISO 时间，此时 `cron` 为 `""`），两者都给/都不给/cron 无效 → 422；PATCH 合并后同样校验，换成一次性传 `{run_at, cron: ""}`、换回重复传 `{cron, run_at: null}`；`done`（只读）= 一次性任务已跑过（last_run_at ≥ run_at），此时 `next_run_at` 为 null，把 run_at 改到以后即重新排上，“立即运行”不消耗这次提醒；`output: report\|panel`（面板 = output=panel 的任务 + 一张 kind=panel 的卡；PATCH 改面板任务的 `name` 时服务端同步改卡片 `title`，客户端编辑面板只 PATCH 任务）；`last_status: ok\|error\|null`（上一次结束的运行）；`fail_streak`（只读，连续失败次数，成功归零）+ `paused_reason: failures\|null`（只读；重复任务连续失败 3 次服务端自动 `active=false, paused_reason=failures` 并发“已暂停”提醒卡；PATCH `active: true` 或手动运行成功 → 恢复、归零、收起卡；用户手动停 = null）；`next_run_at`（只读，服务端按 cron + 用户时区算好的下次运行，与 worker 同一套计算；停用或 cron 无效为 null；过期未跑显示为现在）；`POST /{id}/run` 立即运行；`GET /{id}/runs?limit=1..30` 最近运行记录，新的在前：`[{id, trigger: schedule\|manual, status: running\|ok\|error, error, conversation_id（报告那次的对话；面板或对话已删为 null）, started_at, finished_at, duration_ms}]`，任务不存在 404 |
@@ -87,7 +87,7 @@
 | 某天用量 | `GET /api/usage/days/{date}` | `date` = `YYYY-MM-DD`（服务器 TIMEZONE 的本地日期，格式不对 422）→ `{currency, priced, date, total, conversations}`，total 同上面的分段形状，conversations 同报表的 conversations（那天窗口内最花钱的前 5 个对话，已删 title=null）；窗口是本地 0 点到次日 0 点，与 daily 的分桶同一条边界（柱子的数 = total 的数）；任何日期都能查，没用量全 0。客户端在用量图上“选定”某天时取（今天也取，因为报表里没有今天的对话；请求途中先用报表的 today 画模型行） |
 | 分享对话 | `/api/conversations/{id}/share` | 只读网页快照（v0.63）：`GET` → `{shared:false}`（从没分享）或 Pages 项 `{id, slug, title, updated, published, url, source:"conversation:<id>"}` + `shared`（= published）+ `stale`（快照之后对话有新消息）；`POST`（无 body）生成或更新快照并公开，同一对话 slug 不变（停止过的也恢复）；`DELETE` 停止分享 = 页面下线（链接保留）。对话不存在 404。页面同时出现在 `/api/pages`；快照不含审批卡、浏览器画面，附件只写文件名。助手也能在对话里分享（v0.74 工具 `share_conversation` share/unshare/status，同一链接；share 时回复带一张 `page` 块，快照到用户那句为止，所以随后 GET 会是 `stale:true`）。客户端收到 `page` 块时让 Pages 列表失效 |
 | 本对话用量 | `GET /api/conversations/{id}/usage` | → `{currency, priced, total}`，total 同上面的分段形状；累计这个对话的所有调用（回复、滚动摘要、记忆向量等）；对话不存在 404；删对话不删用量行（月度总账不变）。客户端在换对话和一轮回复结束时取 |
-| 后台任务 | `/api/jobs` | v1.19：`GET ?project_id=&running=true` 最近 50 个（新的在前）；`GET /{id}?tail=4000`（200–20000 字）→ `{id, project_id, conversation_id, title, command, state, exit_code, followup: none\|pending\|done\|seen\|skipped, started_at, finished_at, elapsed（秒）, log_size, tail, stop_reason}`，读接口时顺便按磁盘结掉已结束的任务；`POST /{id}/cancel` → 同形状（已结束则原样返回；沙盒不在线 503）；不存在 404。工作区 `.jobs/` 不出现在项目文件里 |
+| 后台任务 | `/api/jobs` | v1.19：`GET ?project_id=&running=true` 最近 50 个（project_id = 工作区 id，主聊天的任务是 `me`）（新的在前）；`GET /{id}?tail=4000`（200–20000 字）→ `{id, project_id, conversation_id, title, command, state, exit_code, followup: none\|pending\|done\|seen\|skipped, started_at, finished_at, elapsed（秒）, log_size, tail, stop_reason}`，读接口时顺便按磁盘结掉已结束的任务；`POST /{id}/cancel` → 同形状（已结束则原样返回；沙盒不在线 503）；不存在 404。工作区 `.jobs/` 不出现在项目文件里 |
 | 健康 | `GET /api/health` | 登录页“测试连接”用 |
 
 ## 5. 客户端约定

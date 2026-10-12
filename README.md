@@ -68,6 +68,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - skills/        内置技能，一个 .md 一个（用户技能在 data/skills/）
 - schedule.py 计划校验与时刻（check() = cron/run_at 二选一的唯一校验，接口与工具共用；is_done/due_at/next_run_at）；task_store.py 任务（含面板）增删改唯一入口（删任务连带删 Home 卡与运行记录；面板改名同步卡片标题 after_patch，接口经 crud_router 的 after_update 钩子、工具经 update()；create_panel 也在这里）；智能体工具 manage_home（agent/builtin/home.py：list/refresh/update/dismiss/snooze/unsnooze，“把天气面板改到 7 点”“这条明早再提醒我”“删掉比分面板”“收件箱那条不用管了”）；智能体工具 schedule_task（agent/builtin/tasks.py：create/list/update/cancel，一次性提醒“明早 8 点提醒我…”）
 - project_brief.py 项目档案（活文档）唯一入口：PATCH 钩子盖“谁改的”戳、工具的 edit/write 规则、注入系统提示（超 6000 字截断）
+- workspaces.py  工作区唯一规则（v1.21）：每段对话都有“云电脑”——项目对话 = 项目工作区（id = 项目 id），主聊天和定时任务 = 个人工作区 id "me"（data/projects/me，容器 sbx-me，“我的文件”）；ToolContext.workspace、文件/命令/后台任务/落盘工具都走它；name() 不存在 → 文件接口 404
 - storage.py     文件系统唯一入口（项目工作区、附件、技能），路径防越界；project_file(pid, rel) = 项目里真实存在的文件（引用项目文件的唯一校验，v1.13：ws._project_files 存引用，agent/context._project_ref 每轮按磁盘内容给模型）
 - skills_store.py 技能读写：用户目录里与内置同 id 的文件 = 自定义版（就地顶替内置，customized=true，reset 删掉即恢复）；新建 id 永远唯一，绝不覆盖或顶替；内置不能删、不能直接 PUT；停用开关存 data/skills/_disabled.json（按 id，损坏当全启用），系统提示只列 enabled_skills()，use_skill 拒绝停用的
 - sandbox_client.py 调沙盒服务（前台命令 run；后台任务 start_job/cancel_job/job_alive）

@@ -1,6 +1,6 @@
 // 设计 v2：用户 = 右侧强调色胶囊；助手 = 左侧玻璃卡（假玻璃，不模糊），两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
 // 一条消息：用户 = 右侧气泡（没发出的带“待发送/发送失败”状态行；长按出菜单：复制，最后一条另有“编辑”）；助手 = 全宽块列表 + 工具进度 + 思考动画，
-// 生成完的回复下方一行操作（复制、朗读、存到项目文件；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
+// 生成完的回复下方一行操作（复制、朗读、存成文件；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
 // 操作行只常驻在最后一条（和半截回复）上；更早的回复点一下卡片才露出来（v1.17，ChatView 记住露出的是哪条，同时只露一条）。
 import 'dart:math' as math;
 
@@ -30,7 +30,7 @@ class MessageView extends StatelessWidget {
   /// 是不是对话里最后一条回复：只有它常驻“复制 / 重新生成”一排小图标（版面更干净）。
   final bool last;
 
-  /// 更早的回复：点一下卡片露出 / 收起操作行（复制 · 朗读 · 存到项目文件）。用点按不用长按——
+  /// 更早的回复：点一下卡片露出 / 收起操作行（复制 · 朗读 · 存成文件）。用点按不用长按——
   /// 回复是可选中文字，长按归系统选字；点正文经 TextTapScope 传上来，点卡片空白处由外层 GestureDetector 收。
   /// onReveal 只给已完成、非最后一条的回复（ChatView 决定）；revealed = 现在是不是露着。
   final bool revealed;
@@ -41,7 +41,7 @@ class MessageView extends StatelessWidget {
   /// 只有最后一条可编辑的用户消息才给（由 ChatView 按 ChatState.editableId 决定）。
   final VoidCallback? onEdit;
 
-  /// 存到项目文件（features/projects/save_reply.dart）；ChatView 给已落库的回复。
+  /// 存成文件（features/projects/save_reply.dart）；ChatView 给已落库的回复。
   final VoidCallback? onSave;
 
   @override
@@ -284,7 +284,7 @@ class _ReplyActions extends StatelessWidget {
   final String spoken; // 只含正文，没有就不给朗读键
   final bool stopped; // 半截回复：行尾标“已停止”，提醒内容不完整（重新生成就能补全）
   final VoidCallback? onRegenerate;
-  final VoidCallback? onSave; // 存到项目文件：有可复制的内容才给
+  final VoidCallback? onSave; // 存成文件：有可复制的内容才给
 
   @override
   Widget build(BuildContext context) {
@@ -303,7 +303,7 @@ class _ReplyActions extends StatelessWidget {
                 onPressed: onRegenerate,
               ),
       ),
-      // 把回复带走（存到项目文件）排在“就地重来”之后，和网页同序：复制 · 朗读 · 重新生成 · 存到项目文件（v1.16）
+      // 把回复带走（存成文件）排在“就地重来”之后，和网页同序：复制 · 朗读 · 重新生成 · 存成文件（v1.16）
       if (text.isNotEmpty && onSave != null)
         QuietAction(icon: const Icon(Icons.drive_folder_upload_outlined), tooltip: saveReplyLabel, onPressed: onSave),
       if (stopped)

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/session.dart';
+import '../../core/workspace.dart';
 import '../../models/usage.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/appearance.dart';
@@ -17,6 +18,7 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../projects/project_files_sheet.dart';
 import 'avatar_color_sheet.dart';
 import 'usage_screen.dart';
 
@@ -90,6 +92,7 @@ class _MeBody extends ConsumerWidget {
         child: GlassGroup(children: [
           RowTile(icon: Icons.hub_outlined, title: '连接器', subtitle: 'Google、GitHub 和 MCP 服务器', onTap: () => context.push('/me/connectors')),
           RowTile(icon: Icons.lock_outline_rounded, title: '保险箱', subtitle: 'API Key 和网站登录，加密保存', onTap: () => context.push('/me/vault')),
+          RowTile(icon: Icons.folder_outlined, title: workspaceFilesTitle(personalWorkspace), subtitle: '云端电脑上的文件，我做出来的也在这', onTap: () => showProjectFiles(context, personalWorkspace)),
           RowTile(icon: Icons.web_rounded, title: 'Pages', subtitle: '我为你做好并发布的网页', onTap: () => context.push('/me/pages')),
         ]),
       ),

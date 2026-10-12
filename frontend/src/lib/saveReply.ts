@@ -1,7 +1,7 @@
-// 把回复存成项目文件（v1.15）：规则与 App features/projects/save_reply.dart 一致。服务器 reply_files.py 决定文件名和内容。
+// 把回复存成文件（v1.15；v1.21 主聊天可存进“我的文件”）：规则与 App features/projects/save_reply.dart 一致。服务器 reply_files.py 决定文件名和内容。
 import type { Project } from "./types";
 
-export const SAVE_REPLY_LABEL = "存到项目文件";
+export const SAVE_REPLY_LABEL = "存成文件";
 
 /** POST /api/messages/{id}/save-to-project 的回执。 */
 export type SavedReply = { project_id: string; project_name: string; path: string; name: string; size: number; mime: string };
