@@ -4,7 +4,7 @@
 参考了三份开源实现取长补短（对比写在 docs/core-research.md 第 11 项）：
 - Gemini CLI tools/edit.ts：先精确匹配，再“逐行去首尾空白”的宽松匹配并按原缩进重排；CRLF 文件先归一成 \\n 再匹配、
   写回时恢复原换行；三种失败（没找到 / 不唯一 / 新旧相同）各给模型一句能照着改的话。
-- Codex apply-patch seek_sequence.rs：宽松匹配分档（原样 → 去行尾空白 → 去首尾空白），越往后越宽；
+- Codex apply-patch seek_sequence.rs：宽松匹配分档（原样 → 去行尾空白 → 去首尾空白 → Unicode 标点归一），越往后越宽；
   宽松档只在“恰好一处”时才用，免得改错地方。
 - deepseek-harness str_replace_editor：不唯一就不改，并提示“多带几行上下文”；我们再报出每处在第几行，模型一步就能补准。
 不做 Gemini 的“让模型修补 old_string”（多一次模型调用，费 token）。
@@ -57,10 +57,42 @@ def _where(lines: list[int]) -> str:
     return f"第 {shown} 行" + (f" 等 {len(lines)} 处" if len(lines) > 8 else "")
 
 
+# Ported from openai/codex codex-rs/apply-patch/src/seek_sequence.rs (Apache-2.0), modified:
+# 最宽的一档——把常见 Unicode 标点归一成 ASCII 再比（模型常把文件里的 “—” ‘’ “” 不换行空格写成 - ' " 空格）。
+_PUNCT = str.maketrans({
+    **dict.fromkeys("\u2010\u2011\u2012\u2013\u2014\u2015\u2212", "-"),
+    **dict.fromkeys("\u2018\u2019\u201A\u201B", "'"),
+    **dict.fromkeys("\u201C\u201D\u201E\u201F", '"'),
+    **dict.fromkeys("\u00A0\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000", " "),
+})
+
+
+def normalise(s: str) -> str:
+    """Codex seek_sequence normalise：先 trim 再换标点。"""
+    return s.strip().translate(_PUNCT)
+
+
+def seek_sequence(lines: list[str], pattern: list[str], start: int = 0, eof: bool = False) -> int | None:
+    """Codex seek_sequence 原样：从 start 起找第一处（精确 → 去行尾空白 → 去首尾空白 → 标点归一）。
+    eof=True 先从文件结尾那一窗找。空 pattern → start；pattern 比文件长 → None。只用于移植的单测对照。"""
+    if not pattern:
+        return start
+    if len(pattern) > len(lines):
+        return None
+    begin = max(len(lines) - len(pattern), start) if eof else start
+    for norm in (None, str.rstrip, str.strip, normalise):
+        for i in range(begin, len(lines) - len(pattern) + 1):
+            if all((a if norm is None else norm(a)) == (b if norm is None else norm(b))
+                   for a, b in zip(lines[i:i + len(pattern)], pattern)):
+                return i
+    return None
+
+
 def _loose_windows(lines: list[str], pattern: list[str]) -> list[int]:
-    """Codex seek_sequence 的分档：先去行尾空白，再去首尾空白；返回第一档有结果时的所有起始行（0 起）。"""
+    """Codex seek_sequence 的宽松分档（去行尾空白 → 去首尾空白 → 标点归一），但要的是所有命中：
+    返回第一档有结果时的全部起始行（0 起），由调用方判唯一（Codex 只取第一处，会悄悄改错地方）。"""
     n = len(pattern)
-    for norm in (str.rstrip, str.strip):
+    for norm in (str.rstrip, str.strip, normalise):
         pat = [norm(p) for p in pattern]
         hits = [i for i in range(len(lines) - n + 1) if [norm(x) for x in lines[i:i + n]] == pat]
         if hits:
@@ -110,7 +142,7 @@ def apply(text: str, old: str, new: str, replace_all: bool = False) -> Edit:
             if not picked or h >= picked[-1] + len(pattern):
                 picked.append(h)
         if not picked:
-            raise EditError("没在文件里找到 old_string（连空白/缩进放宽后也没有）。文件可能已经变了，"
+            raise EditError("没在文件里找到 old_string（连空白/缩进、中英文标点放宽后也没有）。文件可能已经变了，"
                             "先用 read_file 看一下要改的那几行，再用一字不差的原文重试。", "没找到要换的原文")
         if len(picked) > 1 and not replace_all:
             raise EditError(f"old_string 忽略空白后在文件里匹配到 {len(picked)} 处（{_where([p + 1 for p in picked])}），没有改。"

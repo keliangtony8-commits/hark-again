@@ -27,3 +27,7 @@
   移植到 backend/app/term_text.py、sandbox/runner.py（ANSI_PATTERN、Cleaner）（v1.40）
 - google-gemini/gemini-cli packages/core/src/utils/textUtils.ts isBinary 与 shellExecutionService 去 ANSI 的做法 — Apache-2.0, Copyright 2025 Google LLC, modified
   参照写入 backend/app/term_text.py（is_binary）、sandbox/runner.py（二进制嗅探）（v1.40）
+- deepseek-ai/deepseek-harness packages/fs/fs-observation-policy — MIT License, adapted
+  移植到 backend/app/file_seen.py（v1.41）
+- openai/codex codex-rs/apply-patch/src/seek_sequence.rs — Apache-2.0, Copyright OpenAI, modified
+  移植到 backend/app/file_edit.py（seek_sequence、normalise）、backend/tests/smoke_file_seen.py（单测）（v1.41）

@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from ... import command_guard, deliver, file_edit, jobs, quota, sandbox_client, spill, term_text, vision, workspace_search, workspaces
+from ... import command_guard, deliver, file_edit, file_seen, jobs, quota, sandbox_client, spill, term_text, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -82,6 +82,7 @@ async def grep(ctx: ToolContext, pattern: str, path: str = "", include: str = ""
        "required": ["path"]})
 async def read_file(ctx: ToolContext, path: str, offset: int = 0, limit: int = MAX_READ) -> ToolResult:
     p = safe_join(project_dir(ctx.workspace), path)
+    file_seen.observe(_owner(ctx), p)  # 看过（哪怕只读一段 / 不存在）：之后 write_file 才许覆盖，规则在 file_seen.py
     if not p.is_file():
         return ToolResult("文件不存在。")
     if mime_of(p.name) in vision.IMAGE_MIMES:
@@ -109,17 +110,23 @@ def page(text: str, offset: int = 0, limit: int = MAX_READ) -> str:
 
 @tool("write_file", "正在写文件",
       "在工作区里创建或整篇覆盖一个文本文件（用户看不到卡片；要交给用户的用 display_file）。"
+      "覆盖已存在的文件前要先在这段对话里 read_file 过它（读开头一段也行），读过之后被改过也要重读。"
       "改已有文件的一小段用 edit_file，不要整篇重写。",
       {"type": "object", "properties": {"path": _PATH, "content": {"type": "string"}},
        "required": ["path", "content"]})
 async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
     p = safe_join(project_dir(ctx.workspace), path)
+    try:
+        file_seen.check_write(_owner(ctx), p, path)
+    except file_seen.Refused as e:
+        return ToolResult(str(e), failed=e.short)
     before = _old_text(p)
     grow = len(content.encode()) - (p.stat().st_size if p.is_file() else 0)
     if (full := await _quota_refusal(ctx, path, grow)) is not None:
         return full
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
+    file_seen.observe(_owner(ctx), p)
     quota.forget(ctx.workspace)
     c = file_edit.change(path, before, content)
     verb = "新建" if before is None else "覆盖原文件"
@@ -142,6 +149,10 @@ async def edit_file(ctx: ToolContext, path: str, old_string: str, new_string: st
     p = safe_join(project_dir(ctx.workspace), path)
     if not p.is_file():
         return ToolResult(f"{path} 不存在：新建文件用 write_file。", failed="文件不存在")
+    try:
+        file_seen.check_edit(_owner(ctx), p, path)
+    except file_seen.Refused as e:
+        return ToolResult(str(e), failed=e.short)
     if not looks_text(p):
         return ToolResult(f"{path} 不是文本文件，不能按文字替换；可以用 run_command 处理。", failed="不是文本文件")
     raw = p.read_bytes()
@@ -156,10 +167,15 @@ async def edit_file(ctx: ToolContext, path: str, old_string: str, new_string: st
     if (full := await _quota_refusal(ctx, path, len(e.text.encode()) - len(raw))) is not None:
         return full
     p.write_bytes(e.text.encode("utf-8"))  # 不经 write_text：保住文件原来的 \r\n
+    file_seen.observe(_owner(ctx), p)
     quota.forget(ctx.workspace)
     c = file_edit.change(path, before, e.text)
-    how = "（原文的空白/缩进和文件里略有不同，已按文件里的缩进替换）" if e.loose else ""
+    how = "（原文的空白/缩进或标点和文件里略有不同，已按文件里的缩进替换）" if e.loose else ""
     return ToolResult(f"已修改 {path}：替换了 {e.count} 处，{file_edit.stat(c)}{how}。", change=c)
+
+
+def _owner(ctx: ToolContext) -> str | None:
+    return file_seen.owner_of(ctx.conversation_id, ctx.task_id)
 
 
 def _old_text(p) -> str | None:
