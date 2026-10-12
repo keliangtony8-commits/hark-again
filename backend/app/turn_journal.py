@@ -123,6 +123,12 @@ async def recover(db: AsyncSession, conversation_id: str | None = None, now: dat
     return len(rows)
 
 
+async def busy(db: AsyncSession, conversation_id: str, now: datetime | None = None) -> bool:
+    """这个对话有一轮正在进行（检查点在、主人还活着）。手动整理上文等“别在回复中途动历史”的操作看它。"""
+    rows = (await db.scalars(select(TurnJournal).where(TurnJournal.conversation_id == conversation_id))).all()
+    return any(not dead(r.owner, r.beat_at, now) for r in rows)
+
+
 async def recover_all(process: str) -> int:
     """进程启动：声明身份 + 收掉上一次启动留下的。失败（表还没建等）只记日志。"""
     claim(process)

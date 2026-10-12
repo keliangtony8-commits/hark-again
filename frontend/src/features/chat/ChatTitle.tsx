@@ -4,6 +4,7 @@ import { formatMoney, formatTokens, type ConversationUsage, usageLine } from "..
 import { Sheet } from "../../ui/kit";
 import ModelUsageList from "../me/ModelUsageList";
 import ConversationFilesSheet from "./ConversationFilesSheet";
+import ConversationMemory from "./ConversationMemory";
 import ShareSheet from "./ShareSheet";
 
 /** 聊天顶栏标题 + 下面一行本对话用量（“¥0.012 · 3.4K token”），点那行弹出按模型明细。与 App 的 ChatTitle 同规则。 */
@@ -19,7 +20,7 @@ export default function ChatTitle({ title, conversationId, streaming }: { title:
       {line && (
         <button key={line} className="chat-usage" onClick={() => setOpen(true)} aria-label={`本对话用量 ${line}`}>{line}</button>
       )}
-      {open && usage && <UsageSheet usage={usage} onClose={() => setOpen(false)}
+      {open && usage && conversationId && <UsageSheet usage={usage} conversationId={conversationId} onClose={() => setOpen(false)}
         onShare={() => { setOpen(false); setSharing(true); }}
         onFiles={() => { setOpen(false); setFiles(true); }} />}
       {files && conversationId && <ConversationFilesSheet conversationId={conversationId} onClose={() => setFiles(false)} />}
@@ -28,7 +29,7 @@ export default function ChatTitle({ title, conversationId, streaming }: { title:
   );
 }
 
-function UsageSheet({ usage: u, onClose, onShare, onFiles }: { usage: ConversationUsage; onClose: () => void; onShare: () => void; onFiles: () => void }) {
+function UsageSheet({ usage: u, conversationId, onClose, onShare, onFiles }: { usage: ConversationUsage; conversationId: string; onClose: () => void; onShare: () => void; onFiles: () => void }) {
   const t = u.total;
   const money = u.priced.length > 0;
   const prompt = t.models.reduce((s, m) => s + m.prompt_tokens, 0);
@@ -49,6 +50,7 @@ function UsageSheet({ usage: u, onClose, onShare, onFiles }: { usage: Conversati
           包含这个对话里的回复、滚动摘要等所有模型调用。
           {!money ? "服务器还没配置 MODEL_PRICES，只统计 token。" : unpriced ? "“未定价”的模型只统计 token。" : ""}
         </p>
+        <ConversationMemory conversationId={conversationId} />
       </div>
     </Sheet>
   );

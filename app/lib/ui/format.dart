@@ -134,3 +134,6 @@ class NumberParts {
     return '$prefix$n$suffix';
   }
 }
+
+/// 字数（对话记忆的原文大小）：一万以下原样，以上 “1.2 万字”。
+String formatChars(int n) => n < 10000 ? '$n 字' : '${(n / 10000).toStringAsFixed(1)} 万字';

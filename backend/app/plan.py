@@ -5,6 +5,8 @@
 #   “清单只属于这一轮”（turn/start 清空 → 这里是：卡片属于这一轮的回复，下一轮重新写）。
 # 嫁接：Gemini CLI write-todos.ts（Apache-2.0）——回给模型时把整张清单逐条列出（压缩/剪枝后模型仍知道计划），
 #       空清单 = 清掉；Codex update_plan（Apache-2.0）——可选的 explanation（为什么改计划），卡片上显示一行。
+# 压缩后重新钉上计划：Codex compact 之后保留“最近的用户消息 + 摘要”、Gemini 把 todo 清单逐条回显，两者的意图
+#       合起来——检查点写完后把当前整张清单原样贴在检查点末尾（pinned），摘要模型漏掉计划细节也不丢。
 # 我们加的：条数上限 / 每条长度上限（手机卡片放得下）、settled（这一轮结束后“进行中”不再闪）、
 #       历史里的一行文字（用户回“继续”时模型知道上一轮的计划做到哪）。
 """一轮回复里的计划清单（唯一规则）：update_plan 工具校验、回给模型的文字、卡片块、历史文字、收尾。
@@ -68,6 +70,19 @@ def for_model(items: list[dict]) -> str:
     tail = "全部完成，可以收尾回复用户了。" if c["completed"] == len(items) else \
         "做完一步就立刻标 completed，并把下一步标 in_progress。"
     return f"计划已更新：完成 {c['completed']} / 共 {len(items)}，进行中 {c['in_progress']}。\n{lines}\n{tail}"
+
+
+PINNED_HEAD = "[当前计划——检查点之后仍然有效，按它继续推进；改计划照常调用 update_plan 传完整清单]"
+
+
+def pinned(blocks: list[dict]) -> str:
+    """压成检查点后要钉在检查点末尾的计划原文（这一轮还没有计划 / 清单为空 → ""）。"""
+    b = next((b for b in blocks if b.get("type") == "plan"), None)
+    items = (b or {}).get("items") or []
+    if not items:
+        return ""
+    lines = "\n".join(f"{n}. [{i.get('status')}] {i.get('content')}" for n, i in enumerate(items, 1))
+    return f"{PINNED_HEAD}\n{lines}"
 
 
 def block(items: list[dict], explanation: str = "") -> dict:

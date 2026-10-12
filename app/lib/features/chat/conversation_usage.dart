@@ -16,6 +16,7 @@ import '../me/usage_screen.dart' show ModelUsageList;
 import '../../ui/sheets.dart';
 import 'chat_controller.dart';
 import 'conversation_files.dart';
+import 'conversation_memory.dart';
 import 'conversation_share.dart';
 
 final conversationUsageProvider = FutureProvider.autoDispose.family<UsageTotal, String>((ref, id) async =>
@@ -125,6 +126,11 @@ class ConversationUsageSheet extends ConsumerWidget {
                 ]),
                 data: (u) => _Detail(u, key: const ValueKey('data')),
               ),
+            ),
+            // 对话记忆：原文占多少、摘要覆盖多少、手动整理上文（conversation_memory.dart）
+            Padding(
+              padding: const EdgeInsets.only(top: Sp.x3),
+              child: FadeSlideIn(delay: Motion.stagger(2), child: ConversationMemoryCard(id: id)),
             ),
           ]),
         ),

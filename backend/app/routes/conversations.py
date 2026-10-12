@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from .. import conversation_share, turn_journal, usage
+from ..agent import context
 from ..auth import require_user
 from ..config import settings
 from ..db import get_session
@@ -117,6 +118,30 @@ async def conversation_usage(cid: str, db: AsyncSession = Depends(get_session)):
     if not await db.get(Conversation, cid):
         raise HTTPException(404)
     return await usage.conversation_report(db, cid)
+
+
+@router.get("/{cid}/context")
+async def conversation_context(cid: str, db: AsyncSession = Depends(get_session)):
+    """对话记忆的现状：下一轮发给模型的原文多大、多少条已压成滚动摘要（及摘要正文）、还有几条可以手动整理。"""
+    if not await db.get(Conversation, cid):
+        raise HTTPException(404)
+    return await context.context_state(db, cid)
+
+
+@router.post("/{cid}/compact")
+async def compact_conversation(cid: str, db: AsyncSession = Depends(get_session)):
+    """手动整理上文：把最后一问之前的原文都并进滚动摘要（Codex /compact）。正在回复 → 409；摘要模型出错 → 502。"""
+    if not await db.get(Conversation, cid):
+        raise HTTPException(404)
+    try:
+        return await context.compact_now(db, cid)
+    except context.CompactBusy:
+        raise HTTPException(409, "正在回复，等这一轮结束再整理") from None
+    except LookupError:
+        raise HTTPException(404) from None
+    except Exception as e:  # noqa: BLE001 — 摘要模型挂了：原文和摘要都没动
+        await db.rollback()
+        raise HTTPException(502, f"整理失败：{e}") from None
 
 
 async def _with_messages(db: AsyncSession, cid: str) -> Conversation:

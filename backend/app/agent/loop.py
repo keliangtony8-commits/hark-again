@@ -235,7 +235,8 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     seen = supersede.Tracker()  # 旧页面快照 / 截图只留最新一份（supersede.py）
 
     guard = loop_guard.LoopGuard()  # 原地打转：第一次提醒模型，第二次停下（loop_guard.py）
-    squeeze = compact.Compactor(len(messages), model, tools)  # 上文快满：剪长工具结果 / 压成检查点（compact.py）
+    squeeze = compact.Compactor(len(messages), model, tools,
+                                pinned=lambda: plan.pinned(builder.blocks))  # 上文快满：剪长工具结果 / 压成检查点（compact.py）
     overflowed = False  # 供应商报“上文超长”时强制压一次再重试；成功调用一次后复位
     retry_policy, retries, tried = llm_retry.policy(), 0, {model or settings.default_model}  # 调用失败的重试（llm_retry.py）
     max_steps, spent, step = max(1, limits.max_steps), 0, 0

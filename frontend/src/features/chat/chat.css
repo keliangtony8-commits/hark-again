@@ -309,3 +309,18 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .retry-icon { display: inline-flex; color: var(--warning); animation: icon-pop var(--dur) var(--ease) both; }
 .retry-text { animation: rise var(--dur) var(--ease) both; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 @media (prefers-reduced-motion: reduce) { .retry-line, .retry-icon, .retry-text { animation: none; } }
+
+/* 对话记忆卡（ConversationMemory.tsx）：本对话用量 Sheet 里的原文占比 + 摘要 + 整理上文 */
+.ctx-card { padding: var(--sp-4); display: grid; gap: var(--sp-2); animation: rise var(--dur) var(--ease) both; }
+.ctx-head { display: flex; align-items: baseline; justify-content: space-between; }
+.ctx-title { font-weight: var(--fw-semibold); }
+.ctx-pct { font-size: var(--fs-sm); color: var(--text-2); font-variant-numeric: tabular-nums; animation: fade var(--dur) var(--ease); }
+.ctx-pct.is-warn { color: var(--warning); }
+.meter .ctx-fill { background: var(--text-2); }
+.meter-near .ctx-fill { background: var(--warning); }
+.ctx-line { animation: fade var(--dur) var(--ease); }
+.ctx-summary-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.ctx-summary { background: var(--tile); border-radius: var(--r-md); padding: var(--sp-3); font-size: var(--fs-sm); white-space: pre-wrap; user-select: text; animation: rise var(--dur) var(--ease) both; }
+.ctx-foot { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-1); }
+.ctx-hint { flex: 1; font-size: var(--fs-sm); color: var(--text-3); }
+.ctx-note { margin-top: 0; text-align: start; }

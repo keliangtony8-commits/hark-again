@@ -122,28 +122,47 @@ async def _fold(previous: str, rows: list[tuple[str, str]]) -> str:
     ], model=settings.summary_model)
 
 
+@dataclass
+class _Snapshot:
+    """一个对话此刻的历史视图（build_history / context_state / compact_now 共用，规则只写一处）。"""
+    conv: Conversation | None
+    ids: list[str]
+    roles: list[str]
+    blocks: list[list[dict]]
+    notes: list[str]
+    texts: list[str]
+    last_user: int
+    summary: str
+    covered: int  # 摘要已覆盖前多少条
+    stale: bool   # 摘要指向的消息没了（被重答删掉）：作废
+
+
+async def _snapshot(db: AsyncSession, conversation_id: str) -> _Snapshot:
+    conv = await db.get(Conversation, conversation_id)
+    rows = (await db.scalars(select(Message).where(Message.conversation_id == conversation_id)
+                             .order_by(Message.created_at))).all()
+    notes = [turn_journal.history_note(m.status, m.steps) if m.role == "assistant" else "" for m in rows]  # 被打断/停下的回复附说明
+    texts = [_render(m.blocks) + notes[i] for i, m in enumerate(rows)]
+    last_user = next((i for i in range(len(rows) - 1, -1, -1) if rows[i].role == "user"), len(rows) - 1)
+    ids = [m.id for m in rows]  # 先取出来：失败时 rollback 会让 ORM 对象过期
+    summary = conv.summary if conv else ""
+    upto = conv.summary_upto if conv else None
+    covered = ids.index(upto) + 1 if upto in ids else 0
+    return _Snapshot(conv, ids, [m.role for m in rows], [m.blocks for m in rows], notes, texts, last_user,
+                     summary if covered else "", covered, bool(upto) and covered == 0)
+
+
 async def build_history(db: AsyncSession, conversation_id: str, model: str | None = None) -> History:
     """预算内的最近原文 + 更早内容的摘要。model = 这一轮用的别名（决定当前这一问的图片发原图还是发描述）。
 
     不变式：最后一条用户消息（当前这一问）及其后的内容永远是原文，所以重答/编辑只动原文区，摘要不受影响。
     原文超预算时，把摘要之后、窗口之前的消息折叠进摘要（压到 FOLD_TARGET，留余量），用便宜模型一次调用。
     摘要失败不影响聊天：退化为按预算硬截断，下一轮再试。"""
-    conv = await db.get(Conversation, conversation_id)
-    rows = (await db.scalars(select(Message).where(Message.conversation_id == conversation_id)
-                             .order_by(Message.created_at))).all()
-    notes = [turn_journal.history_note(m.status, m.steps) if m.role == "assistant" else "" for m in rows]  # 被打断/停下的回复附说明
-    texts = [_render(m.blocks) + notes[i] for i, m in enumerate(rows)]
+    snap = await _snapshot(db, conversation_id)
+    conv, ids, roles, blocks, notes, texts = snap.conv, snap.ids, snap.roles, snap.blocks, snap.notes, snap.texts
+    last_user, summary, covered = snap.last_user, snap.summary, snap.covered
     sizes = [len(t) for t in texts]
-    last_user = next((i for i in range(len(rows) - 1, -1, -1) if rows[i].role == "user"), len(rows) - 1)
     budget = settings.history_chars
-
-    ids, roles = [m.id for m in rows], [m.role for m in rows]  # 先取出来：失败时 rollback 会让 ORM 对象过期
-    blocks = [m.blocks for m in rows]
-    summary = conv.summary if conv else ""
-    upto = conv.summary_upto if conv else None
-    covered = ids.index(upto) + 1 if upto in ids else 0
-    if covered == 0:
-        summary = ""  # 指向的消息没了：作废
 
     start = _window_start(sizes, budget, last_user)
     if start > covered and conv is not None:  # 摘要和原文窗口之间有缺口：折叠
@@ -157,7 +176,7 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
             log.warning("summary fold failed for %s: %s", conversation_id, e)
             await db.rollback()
             covered = start
-    elif conv is not None and covered == 0 and upto:
+    elif conv is not None and snap.stale:
         conv.summary, conv.summary_upto = "", None
         await db.commit()
     first = max(start, covered)
@@ -166,10 +185,63 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
     pixels = vision.accepts_images(model or settings.default_model)
     def raw(i: int) -> bool:
         return pixels and i >= last_user and roles[i] == "user"
-    need = [b for i in range(first, len(rows)) if not raw(i) for b in blocks[i]]
+    n = len(ids)
+    need = [b for i in range(first, n) if not raw(i) for b in blocks[i]]
     if any(vision.is_image(b) for b in need):
         await vision.describe_missing(need)
-        texts[first:] = [_render(blocks[i]) + notes[i] for i in range(first, len(rows))]
+        texts[first:] = [_render(blocks[i]) + notes[i] for i in range(first, n)]
     return History(summary=summary, messages=[
         {"role": roles[i], "content": vision.content_with_images(texts[i], blocks[i]) if raw(i) else texts[i]}
-        for i in range(first, len(rows))])
+        for i in range(first, n)])
+
+
+# —— 手动整理上文（Codex /compact、Gemini /compress 的对应物；嫁接 Gemini compressCommand：忙时拒绝、报前后大小、
+#    摘要反而更长（INFLATED）就不换）。和自动折叠同一份摘要、同一个不变式：当前这一问及其后永远是原文。 ——
+
+class CompactBusy(Exception):
+    """这个对话正在回复：等这一轮结束再整理（否则这一轮的历史和摘要会对不上）。"""
+
+
+def _state(snap: _Snapshot) -> dict:
+    """对话记忆的现状：下一轮发给模型的原文有多大、多少条已压成摘要、还能不能手动整理。"""
+    sizes = [len(t) for t in snap.texts]
+    covered = snap.covered
+    budget = settings.history_chars
+    first = max(_window_start(sizes, budget, snap.last_user), covered)
+    return {
+        "messages": len(snap.ids),
+        "summarized": covered,
+        "raw": len(snap.ids) - first,
+        "raw_chars": sum(sizes[first:]),
+        "budget": budget,
+        "summary": snap.summary,
+        "compactable": max(0, snap.last_user - covered),
+    }
+
+
+async def context_state(db: AsyncSession, conversation_id: str) -> dict:
+    return _state(await _snapshot(db, conversation_id))
+
+
+async def compact_now(db: AsyncSession, conversation_id: str) -> dict:
+    """把摘要之后、最后一问之前的原文全部并进滚动摘要。返回 {**state, "status", "before", "after"}：
+    status = compressed | noop（没什么可整理）| inflated（摘要比原文还长，没换）；before/after = 原文 + 摘要的字数。
+    正在回复 → CompactBusy；摘要模型出错 → 原样抛出（摘要和原文都不动）。"""
+    if await turn_journal.busy(db, conversation_id):
+        raise CompactBusy()
+    snap = await _snapshot(db, conversation_id)
+    if snap.conv is None:
+        raise LookupError(conversation_id)
+    before = len(snap.summary) + sum(len(t) for t in snap.texts[snap.covered:])
+    target = snap.last_user
+    if target - snap.covered < 1:
+        return {**_state(snap), "status": "noop", "before": before, "after": before}
+    folded = snap.texts[snap.covered:target]
+    summary = await _fold(snap.summary, [(snap.roles[i], snap.texts[i]) for i in range(snap.covered, target)])
+    if len(summary) >= len(snap.summary) + sum(len(t) for t in folded):
+        return {**_state(snap), "status": "inflated", "before": before, "after": before}
+    snap.conv.summary, snap.conv.summary_upto = summary, snap.ids[target - 1]
+    await db.commit()
+    snap = await _snapshot(db, conversation_id)
+    after = len(snap.summary) + sum(len(t) for t in snap.texts[snap.covered:])
+    return {**_state(snap), "status": "compressed", "before": before, "after": after}

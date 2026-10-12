@@ -30,6 +30,7 @@
 """
 import logging
 import math
+from collections.abc import Callable
 
 from .. import llm, llm_retry
 from ..config import settings
@@ -189,8 +190,11 @@ def is_checkpoint(m: dict) -> bool:
         and m["content"].startswith(CHECKPOINT_PREAMBLE)
 
 
-def checkpoint(summary: str) -> dict:
-    return {"role": "user", "content": f"{CHECKPOINT_PREAMBLE}\n\n{SUMMARY_OPEN}\n{summary.strip()}\n{SUMMARY_CLOSE}"}
+def checkpoint(summary: str, pinned: str = "") -> dict:
+    """检查点消息。pinned = 摘要之后原样钉上的内容（当前计划清单，plan.pinned）：不经摘要模型转述，不会丢。"""
+    tail = f"\n\n{pinned.strip()}" if pinned and pinned.strip() else ""
+    return {"role": "user",
+            "content": f"{CHECKPOINT_PREAMBLE}\n\n{SUMMARY_OPEN}\n{summary.strip()}\n{SUMMARY_CLOSE}{tail}"}
 
 
 def _no_images(m: dict) -> dict:
@@ -250,8 +254,10 @@ def _drop_oldest(msgs: list[dict]) -> list[dict] | None:
 class Compactor:
     """loop 一轮的压缩器。base = 这一轮自己的第一条消息（系统提示 + 历史之后）。"""
 
-    def __init__(self, base: int, model: str | None, tools: list[dict] | None):
-        self.base, self.model, self.tools = base, model, tools
+    def __init__(self, base: int, model: str | None, tools: list[dict] | None,
+                 pinned: Callable[[], str] | None = None):
+        """pinned = 写检查点那一刻要原样钉上的文字（loop 传当前计划，plan.pinned）。"""
+        self.base, self.model, self.tools, self.pinned = base, model, tools, pinned
         self.limit = int(window(model) * COMPACT_RATIO)
         self.retain = int(window(model) * RETAIN_RATIO)
         self.anchor: tuple[int, int] | None = None  # (上次调用的真实 token, 那时的消息条数)
@@ -306,7 +312,7 @@ class Compactor:
             log.warning("turn compaction failed: %s", ex)
             self.failed = True
             return info if pruned else None
-        new = [*messages[:s], checkpoint(summary), *messages[e:]]
+        new = [*messages[:s], checkpoint(summary, self.pinned() if self.pinned else ""), *messages[e:]]
         if estimate(new) >= estimate(messages):  # 摘要反而更长（Gemini inflated）：不换
             self.failed = True
             return info if pruned else None
