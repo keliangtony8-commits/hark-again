@@ -36,7 +36,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import job_restart, quota, sandbox_client, term_text
+from . import command_env, job_restart, quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -153,7 +153,7 @@ def log_tail(job: Job, chars: int = TAIL_CHARS) -> str:
         return ""
     if _binary(job):
         return term_text.binary_note(size)
-    text = term_text.clean(raw)
+    text = command_env.scrub(term_text.clean(raw))  # 用户的命令环境变量值打码（app/command_env.py）
     return text[-chars:] if len(text) > chars else text
 
 
@@ -198,7 +198,7 @@ def read_new(job: Job, chars: int = TAIL_CHARS) -> tuple[str, int, int]:
         return (term_text.binary_note(size) if size > start else ""), size, 0
     skip = utf8_start(raw) if begin > start else 0  # 窗口从字中间切进来：跳到下一个码点
     end = utf8_complete(raw)
-    text = term_text.clean(raw[skip:end].decode("utf-8", "replace"))
+    text = command_env.scrub(term_text.clean(raw[skip:end].decode("utf-8", "replace")))
     dropped = begin - start + skip
     if len(text) > chars:
         cut = len(text) - chars
@@ -341,7 +341,7 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     (d / "cmd.sh").write_text(command + "\n", encoding="utf-8")
     (d / "run.sh").write_text(script(job.id, limit), encoding="utf-8")
     try:
-        await sandbox_client.start_job(project_id, job.id)
+        await _launch(db, project_id, job.id)
     except httpx.HTTPError as e:
         for f in d.iterdir():
             f.unlink()
@@ -350,6 +350,12 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     db.add(job)
     await db.commit()
     return job
+
+
+async def _launch(db: AsyncSession, workspace: str, job_id: str) -> None:
+    """叫沙盒跑 run.sh：每次（含自动 / 手动重启）都现取用户的命令环境变量，改了变量重启就生效。"""
+    env = await command_env.load(db)
+    await sandbox_client.start_job(workspace, job_id, **({"env": env} if env else {}))
 
 
 async def patch_blocks(db: AsyncSession, job: Job) -> None:
@@ -446,7 +452,7 @@ async def _relaunch(db: AsyncSession, job: Job) -> None:
     await asyncio.to_thread(_relaunch_files, job)
     now = datetime.now(timezone.utc)
     try:
-        await sandbox_client.start_job(job.project_id, job.id)
+        await _launch(db, job.project_id, job.id)
     except httpx.HTTPError:
         job.restart_at = now + timedelta(seconds=job_restart.FIRST_S)
         await db.commit()
@@ -505,6 +511,7 @@ async def _alive_or_unknown(job: Job) -> bool:
 
 async def tick(db: AsyncSession) -> list[str]:
     """worker 每轮调：把所有运行中的任务对一遍，返回这次结掉的任务 id。"""
+    await command_env.ensure(db)  # 读日志尾巴要打码：worker 进程里的值缓存定期刷新
     out = []
     for job in (await db.scalars(select(Job).where(Job.state == "running"))).all():
         await refresh(db, job, check_alive=True)

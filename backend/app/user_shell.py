@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_guard, computer, foreground, quota, workspaces
+from . import command_env, command_guard, computer, foreground, quota, workspaces
 from .config import settings
 from .models import Message
 
@@ -149,7 +149,7 @@ async def run(db: AsyncSession, conversation_id: str, project_id: str | None, co
     tick = asyncio.create_task(ticker())
     interrupted = False
     try:
-        r = await foreground.run(ws, command, settings.user_shell_seconds, None, live)
+        r = await foreground.run(ws, command, settings.user_shell_seconds, None, live, await command_env.load(db))
     except asyncio.CancelledError:
         if (task := asyncio.current_task()) is not None:
             task.uncancel()

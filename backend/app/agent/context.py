@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import command_env, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -39,9 +39,12 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     # 只告诉模型“能调哪些服务”，不给任何凭证内容（按名字排序：库里的返回顺序不保证，乱序会打掉缓存）
     access = sorted(f"- {PROVIDERS[c.provider].name}（{c.account}）：{', '.join(PROVIDERS[c.provider].api_hosts)}"
                     for c in (await db.scalars(select(Connection))).all() if c.provider in PROVIDERS)
-    access += sorted(f"- {s.name}：{', '.join(s.hosts)}" for s in (await db.scalars(select(Secret))).all())
+    access += sorted(f"- {s.name}：{', '.join(s.hosts)}" for s in (await db.scalars(select(Secret))).all()
+                     if s.kind != command_env.KIND)
     if access:
         p.add(STABLE, "这些服务已授权，用 api_request 直接调用（认证自动附加；具体用法先看对应技能）：\n" + "\n".join(access))
+    if env_line := command_env.prompt(await command_env.names(db)):  # 沙盒命令里能用的环境变量（只给名字）
+        p.add(STABLE, env_line)
     servers = sorted(s.name for s in (await db.scalars(select(McpServer))).all())
     if servers:
         p.add(STABLE, "用户的 MCP 服务器（先 mcp_tools 再 mcp_call）：" + "、".join(servers))

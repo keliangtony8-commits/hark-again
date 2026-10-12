@@ -508,6 +508,8 @@ class SecretItem {
   final String? username;
   final List<String> hosts;
   bool get isLogin => kind == 'login';
+  /// 命令环境变量：name 就是变量名，没有域名（后端 app/command_env.py）。
+  bool get isEnv => kind == 'env';
 }
 
 /// OAuth 连接器（Google、GitHub…）。id 就是 provider。

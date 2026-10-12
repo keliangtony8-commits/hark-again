@@ -58,6 +58,18 @@ void main() {
     expect(vaultSummary([sec('k1'), sec('l', login: true), sec('k2')]), '1 个网站登录 · 2 个 API Key');
     expect(secretHint(sec('k')), '••••wxyz');
     expect(secretHint(sec('l', login: true)), 'me');
+    const env = SecretItem(id: 'e', kind: 'env', name: 'TG_TOKEN', hosts: [], preview: '');
+    expect(groupSecrets([sec('k1'), env]).envs.single.name, 'TG_TOKEN');
+    expect(groupSecrets([sec('k1'), env]).keys.length, 1);
+    expect(vaultSummary([sec('k1'), env]), '1 个 API Key · 1 个环境变量');
+    expect(secretHint(env), '');
+    expect(secretWhere(env), r'电脑上的命令里读 $TG_TOKEN');
+    expect(secretWhere(sec('k')), 'a.com');
+    expect(envName(r' $tg_token '), 'TG_TOKEN');
+    expect(envNameError('tg_token'), isNull);
+    expect(envNameError('PATH'), contains('系统变量'));
+    expect(envNameError('1abc'), isNotNull);
+    expect(envNameError('A'), isNotNull);
   });
 
   testWidgets('连接器页：页头摘要、MCP 为空时起步卡', (tester) async {
@@ -120,6 +132,33 @@ void main() {
     await tester.tap(find.text('OpenWeather'));
     await tester.pumpAndSettle();
     expect(find.text('删除'), findsOneWidget);
+  });
+
+  testWidgets('保险箱：环境变量自成一组，点开能换值', (tester) async {
+    await pump(tester, '/me/vault', const VaultScreen(), {
+      '/api/vault': [
+        {'id': '3', 'kind': 'env', 'name': 'TELEGRAM_BOT_TOKEN', 'hosts': [], 'preview': 'wxyz'},
+      ],
+    });
+    expect(find.text('1 个环境变量'), findsOneWidget);
+    expect(find.text('环境变量'), findsOneWidget);
+    expect(find.text(r'电脑上的命令里读 $TELEGRAM_BOT_TOKEN'), findsOneWidget);
+    expect(find.byIcon(Icons.terminal_rounded), findsOneWidget);
+    await tester.tap(find.text('TELEGRAM_BOT_TOKEN'));
+    await tester.pumpAndSettle();
+    expect(find.text('换个值'), findsOneWidget);
+    await tester.tap(find.text('换个值'));
+    await tester.pumpAndSettle();
+    expect(find.text(r'给 $TELEGRAM_BOT_TOKEN 换个值'), findsOneWidget);
+    expect(find.text('变量名'), findsNothing);
+  });
+
+  testWidgets('保险箱为空：环境变量起步按钮 → 变量表单', (tester) async {
+    await pump(tester, '/me/vault', const VaultScreen(), const {});
+    await tester.tap(find.text('环境变量'));
+    await tester.pumpAndSettle();
+    expect(find.text('新环境变量'), findsOneWidget);
+    expect(find.text('变量名'), findsOneWidget);
   });
 
   testWidgets('保险箱为空：网站登录起步按钮 → 登录表单', (tester) async {

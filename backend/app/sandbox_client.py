@@ -9,12 +9,15 @@ from .config import settings
 STDIN_MAX = 64 * 1024  # 与 sandbox/runner.py 相同
 
 
-async def stream(project_id: str, command: str, timeout: int = 60, stdin: str | None = None) -> AsyncIterator[dict]:
+async def stream(project_id: str, command: str, timeout: int = 60, stdin: str | None = None,
+                 env: dict[str, str] | None = None) -> AsyncIterator[dict]:
     """前台执行，边跑边产出：{"type":"out","data"} …，最后 {"type":"exit", exit_code, timed_out, output, …}
     或 {"type":"error"}。调用方中途不再读（这一轮被停止）→ 连接关闭 → 沙盒整组杀掉命令。"""
     body = {"project_id": project_id, "command": command, "timeout": timeout}
     if stdin is not None:
         body["stdin"] = stdin
+    if env:  # 用户的命令环境变量（app/command_env.py）
+        body["env"] = env
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout + 15)) as c:
         async with c.stream("POST", f"{settings.sandbox_url}/exec/stream", json=body,
                             headers={"Authorization": f"Bearer {settings.sandbox_token}"}) as r:
@@ -60,18 +63,20 @@ async def cleanup(project_id: str) -> int:
         return int(r.json().get("freed") or 0)
 
 
-async def _job(action: str, project_id: str, job_id: str) -> dict:
+async def _job(action: str, project_id: str, job_id: str, env: dict[str, str] | None = None) -> dict:
+    body = {"project_id": project_id, "job_id": job_id}
+    if env:
+        body["env"] = env
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(f"{settings.sandbox_url}/jobs/{action}",
-                         headers={"Authorization": f"Bearer {settings.sandbox_token}"},
-                         json={"project_id": project_id, "job_id": job_id})
+                         headers={"Authorization": f"Bearer {settings.sandbox_token}"}, json=body)
         r.raise_for_status()
         return r.json()
 
 
-async def start_job(project_id: str, job_id: str) -> None:
-    """脚本已由 jobs.py 写进工作区 .jobs/<id>/run.sh；这里只叫沙盒脱离启动它。"""
-    await _job("start", project_id, job_id)
+async def start_job(project_id: str, job_id: str, env: dict[str, str] | None = None) -> None:
+    """脚本已由 jobs.py 写进工作区 .jobs/<id>/run.sh；这里只叫沙盒脱离启动它。env：每次启动现取（改了变量，重启生效）。"""
+    await _job("start", project_id, job_id, env)
 
 
 async def cancel_job(project_id: str, job_id: str) -> None:

@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, command_guard, computer, deliver, file_edit, file_seen, foreground, jobs, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, command_env, command_guard, computer, deliver, file_edit, file_seen, foreground, jobs, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -380,7 +380,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         return ToolResult(f"stdin 太长（上限 {sandbox_client.STDIN_MAX // 1024} KB）：先写进工作区文件，命令里用 < 文件 读。")
     title = f"$ {command[:80]}"
     r = await foreground.run(ctx.workspace, command, timeout or 60, stdin,
-                             lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}))
+                             lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}),
+                             await command_env.load(ctx.db))
     if r.failed:
         return ToolResult(r.message, failed=r.failed)
     timed_out, status, out, shown = r.timed_out, r.status, r.out, r.shown

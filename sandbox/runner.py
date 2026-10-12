@@ -94,6 +94,28 @@ class ExecIn(BaseModel):
     command: str
     timeout: int = 60
     stdin: str | None = None
+    env: dict[str, str] | None = None  # 用户的命令环境变量（后端 app/command_env.py 给），check_env 把关
+
+
+# 命令环境变量：名字/个数/长度与后端 app/command_env.py 同一套；系统变量不许覆盖
+ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{1,63}")
+ENV_RESERVED = frozenset({"PATH", "HOME", "LANG", "SHELL", "TMPDIR", "USER", "LOGNAME", "TERM", "COLORTERM", "PWD",
+                          "OLDPWD", "HOSTNAME", "SHLVL", "IFS", "BASH_ENV", "ENV", "PS1", "LD_PRELOAD",
+                          "LD_LIBRARY_PATH", "STDIN_B64"})
+ENV_MAX, ENV_VALUE_MAX = 30, 8192
+
+
+def check_env(env: dict[str, str] | None) -> dict[str, str]:
+    """不合格的整个请求 400（后端已校验过，这里是第二道）。"""
+    env = env or {}
+    if len(env) > ENV_MAX:
+        raise HTTPException(400, "too many env vars")
+    for k, v in env.items():
+        if not ENV_NAME_RE.fullmatch(k) or k in ENV_RESERVED:
+            raise HTTPException(400, f"bad env name {k[:70]}")
+        if not isinstance(v, str) or len(v) > ENV_VALUE_MAX or "\x00" in v:
+            raise HTTPException(400, f"bad env value for {k}")
+    return dict(env)
 
 
 class Sink:
@@ -209,6 +231,7 @@ class HeadTail:
 class JobIn(BaseModel):
     project_id: str
     job_id: str
+    env: dict[str, str] | None = None  # 只有 /jobs/start 用：注入给 run.sh 及其子进程
 
 
 def _check_job(jid: str) -> str:
@@ -504,19 +527,23 @@ _WRAP = ('echo $$ > /tmp/.exec-{tok}; '
 
 
 def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: str | None = None,
-          sink: Sink | None = None) -> dict:
+          sink: Sink | None = None, env: dict[str, str] | None = None) -> dict:
     with _Using(pid):
-        return _run(pid, command, timeout, stdin, tok, sink)
+        return _run(pid, command, timeout, stdin, tok, sink, env)
 
 
-def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | None, sink: Sink | None) -> dict:
+def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | None, sink: Sink | None,
+         env_vars: dict[str, str] | None = None) -> dict:
     c = _container(pid)
     last_used[pid] = time.time()
     was = _take_woke(pid)
     if pid not in oom_seen:  # 服务刚重启：先记下现有计数，别把以前的 OOM 算到这条命令头上
         oom_seen[pid] = _oom_count(c) or 0
     tok = tok or os.urandom(6).hex()
-    env = {"STDIN_B64": base64.b64encode(stdin.encode()).decode()} if stdin is not None else None
+    env = dict(env_vars or {})  # 用户变量先放，STDIN_B64 后写（Codex exec_env：运行时注入的最后写、赢）
+    if stdin is not None:
+        env["STDIN_B64"] = base64.b64encode(stdin.encode()).decode()
+    env = env or None
     ex = client.api.exec_create(c.id, ["bash", "-c", _WRAP.format(tok=tok, timeout=timeout), "_", command],
                                 workdir="/workspace", environment=env)
     dec, clean, buf = codecs.getincrementaldecoder("utf-8")("replace"), Cleaner(), HeadTail(MAX_OUTPUT)
@@ -676,19 +703,22 @@ def _check_stdin(body: ExecIn) -> None:
 @app.post("/exec", dependencies=[Depends(auth)])
 async def exec_(body: ExecIn):
     _check_stdin(body)
-    return await asyncio.to_thread(_exec, body.project_id, body.command, max(1, min(body.timeout, 120)), body.stdin)
+    env = check_env(body.env)
+    return await asyncio.to_thread(_exec, body.project_id, body.command, max(1, min(body.timeout, 120)), body.stdin,
+                                   None, None, env)
 
 
 @app.post("/exec/stream", dependencies=[Depends(auth)])
 async def exec_stream(body: ExecIn):
     """NDJSON：若干 {"type":"out","data":新输出} → 最后一行 {"type":"exit", 同 /exec 的结果} 或 {"type":"error"}。"""
     _check_stdin(body)
+    env = check_env(body.env)
     _container(body.project_id)  # 项目 id 不合法在开流之前就 400
     tok, sink = os.urandom(6).hex(), Sink()
     timeout = max(1, min(body.timeout, 120))
 
     async def gen():
-        task = asyncio.create_task(asyncio.to_thread(_exec, body.project_id, body.command, timeout, body.stdin, tok, sink))
+        task = asyncio.create_task(asyncio.to_thread(_exec, body.project_id, body.command, timeout, body.stdin, tok, sink, env))
         try:
             while not task.done():
                 await asyncio.wait({task}, timeout=FLUSH_S)
@@ -707,6 +737,7 @@ async def exec_stream(body: ExecIn):
 @app.post("/jobs/start", dependencies=[Depends(auth)])
 async def job_start(body: JobIn):
     jid = _check_job(body.job_id)
+    env = check_env(body.env) or None
 
     def go():
         c = _container(body.project_id)
@@ -714,7 +745,7 @@ async def job_start(body: JobIn):
         _take_woke(body.project_id)  # 任务是新起的，不用提醒“之前的程序停了”
         if c.exec_run(["test", "-f", f".jobs/{jid}/run.sh"], workdir="/workspace").exit_code != 0:
             raise HTTPException(404, "job script missing")
-        c.exec_run(["setsid", "-f", "bash", f".jobs/{jid}/run.sh"], workdir="/workspace", detach=True)
+        c.exec_run(["setsid", "-f", "bash", f".jobs/{jid}/run.sh"], workdir="/workspace", detach=True, environment=env)
     await asyncio.to_thread(go)
     return {"ok": True}
 

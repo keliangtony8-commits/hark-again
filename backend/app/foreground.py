@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from . import jobs, sandbox_client, spill, term_text
+from . import command_env, jobs, sandbox_client, spill, term_text
 
 MAX_SECONDS = 120  # 沙盒前台单次上限（sandbox/runner.py 同一个数）
 
@@ -34,17 +34,19 @@ class Outcome:
 
 
 async def run(workspace: str, command: str, timeout: int, stdin: str | None = None,
-              live: Callable[[str], None] | None = None) -> Outcome:
+              live: Callable[[str], None] | None = None, env: dict[str, str] | None = None) -> Outcome:
     """timeout 秒（夹到 1..MAX_SECONDS）。live(tail)：每来一段输出给一次最近的终端尾巴（运行中的卡片）。
+    env：用户的命令环境变量（command_env.load）；输出里的值一律打码（live 尾巴、out、shown 都过 command_env.scrub）。
     调用方被取消（用户停止）→ 连接关闭 → 沙盒整组杀掉命令；CancelledError 原样抛出。"""
     started = time.monotonic()
     tail, r = "", None
     try:
-        async for ev in sandbox_client.stream(workspace, command, max(1, min(timeout, MAX_SECONDS)), stdin):
+        async for ev in sandbox_client.stream(workspace, command, max(1, min(timeout, MAX_SECONDS)), stdin,
+                                              **({"env": env} if env else {})):
             if ev["type"] == "out":
                 tail = term_text.tail(tail + ev["data"])
                 if live is not None:
-                    live(tail)
+                    live(command_env.scrub(tail, env))
             elif ev["type"] == "exit":
                 r = ev
             elif ev["type"] == "error":
@@ -60,7 +62,7 @@ async def run(workspace: str, command: str, timeout: int, stdin: str | None = No
     if r.get("oom"):  # 沙盒比过 cgroup 的 OOM 计数：确实是内存超上限被内核杀的
         status = f"{jobs.OOM_REASON}（退出码 {r['exit_code']}）"
     # 终端文本统一洗一遍（颜色转义、\r 进度帧）；二进制输出沙盒已换成一句说明
-    out = shown = term_text.clean(r.get("output", ""))
+    out = shown = command_env.scrub(term_text.clean(r.get("output", "")), env)
     if r.get("binary") is not None:
         out, shown = term_text.binary_note(r["binary"]), f"（二进制输出，{r['binary']} 字节，不显示）"
     if spill.MARK in out:  # 沙盒那边输出太长：中间段省略，完整输出（能存下时）写进了工作区 .spill/

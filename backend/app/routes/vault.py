@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import vault
+from .. import command_env, vault
 from ..auth import require_user
 from ..db import get_session
 from ..models import Secret
@@ -13,11 +13,11 @@ router = APIRouter(prefix="/api/vault", dependencies=[Depends(require_user)])
 
 
 class SecretIn(BaseModel):
-    kind: str = "api_key"          # api_key | login
+    kind: str = "api_key"          # api_key | login | env（命令环境变量：name 即变量名，不要 hosts）
     name: str
     username: str | None = None
     value: str = Field(min_length=4)
-    hosts: list[str] = Field(min_length=1)
+    hosts: list[str] = Field(default_factory=list)
     header_name: str = "Authorization"
     header_prefix: str = "Bearer "
 
@@ -29,6 +29,10 @@ async def list_secrets(db: AsyncSession = Depends(get_session)):
 
 @router.post("")
 async def create_secret(body: SecretIn, db: AsyncSession = Depends(get_session)):
+    if body.kind == command_env.KIND:
+        return await _create_env(body, db)
+    if body.kind not in ("api_key", "login"):
+        raise HTTPException(400, "不认识的类型")
     try:
         s = vault.create(body.name, body.value, body.hosts, body.kind, body.username, body.header_name, body.header_prefix)
     except RuntimeError as e:
@@ -42,9 +46,34 @@ async def create_secret(body: SecretIn, db: AsyncSession = Depends(get_session))
     return vault.public(s)
 
 
+async def _create_env(body: SecretIn, db: AsyncSession) -> dict:
+    """命令环境变量：名字/值按 command_env 校验；同名覆盖旧值（像 export 一样，改 Token 不用先删）。"""
+    try:
+        name, value = command_env.check_name(body.name), command_env.check_value(body.value)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    rows = (await db.scalars(select(Secret).where(Secret.kind == command_env.KIND))).all()
+    old = next((s for s in rows if s.name == name), None)
+    if old is None and len(rows) >= command_env.ENV_MAX:
+        raise HTTPException(400, f"环境变量最多 {command_env.ENV_MAX} 个，先删掉不用的")
+    try:
+        s = vault.create(name, value, [], command_env.KIND)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if old is not None:
+        await db.delete(old)
+    db.add(s)
+    await db.commit()
+    await command_env.load(db)  # 打码缓存马上换成新值
+    return vault.public(s)
+
+
 @router.delete("/{sid}")
 async def delete_secret(sid: str, db: AsyncSession = Depends(get_session)):
     if s := await db.get(Secret, sid):
+        env = s.kind == command_env.KIND
         await db.delete(s)
         await db.commit()
+        if env:
+            await command_env.load(db)
     return {"ok": True}

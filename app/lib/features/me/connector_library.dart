@@ -28,25 +28,49 @@ String connectorSummary(List<Connector> accounts, List<McpServerItem>? servers) 
   return parts.isEmpty ? '还没有连接任何服务' : parts.join(' · ');
 }
 
-/// 保险箱分组：网站登录（云浏览器里代填）与 API Key（按域名进请求头）严格分开。
-({List<SecretItem> logins, List<SecretItem> keys}) groupSecrets(List<SecretItem> list) =>
-    (logins: [for (final s in list) if (s.isLogin) s], keys: [for (final s in list) if (!s.isLogin) s]);
+/// 保险箱分组：网站登录（云浏览器里代填）、API Key（按域名进请求头）、环境变量（注入电脑上的命令）严格分开。
+({List<SecretItem> logins, List<SecretItem> keys, List<SecretItem> envs}) groupSecrets(List<SecretItem> list) => (
+      logins: [for (final s in list) if (s.isLogin) s],
+      keys: [for (final s in list) if (!s.isLogin && !s.isEnv) s],
+      envs: [for (final s in list) if (s.isEnv) s],
+    );
 
-/// 保险箱页头小标签：“1 个网站登录 · 2 个 API Key”。
+/// 保险箱页头小标签：“1 个网站登录 · 2 个 API Key · 1 个环境变量”。
 String vaultSummary(List<SecretItem> list) {
   final g = groupSecrets(list);
   final parts = [
     if (g.logins.isNotEmpty) '${g.logins.length} 个网站登录',
     if (g.keys.isNotEmpty) '${g.keys.length} 个 API Key',
+    if (g.envs.isNotEmpty) '${g.envs.length} 个环境变量',
   ];
   return parts.isEmpty ? '保险箱是空的' : parts.join(' · ');
 }
 
-/// 一行里的脱敏说明：登录 → 用户名；Key → ••••末四位。永远不含明文。
+/// 一行里的脱敏说明：登录 → 用户名；Key / 环境变量 → ••••末四位（短值不露）。永远不含明文。
 String secretHint(SecretItem s) => s.isLogin ? (s.username ?? '') : (s.preview.isEmpty ? '' : '••••${s.preview}');
 
-/// 保险箱里能存的两类，起步卡和“存入什么？”菜单共用一份文案。
+/// 一行的副标题：登录 / Key 是用在哪些域名；环境变量是程序里怎么读它。
+String secretWhere(SecretItem s) => s.isEnv ? '电脑上的命令里读 \$${s.name}' : s.hosts.join('、');
+
+/// 环境变量名的本地预检（与后端 command_env.check_name 同规则，后端仍会再查一次）：返回错误句，合格返回 null。
+String? envNameError(String raw) {
+  final n = envName(raw);
+  if (!RegExp(r'^[A-Z][A-Z0-9_]{1,63}$').hasMatch(n)) return '变量名只能用大写字母、数字和下划线，字母开头';
+  if (reservedEnvNames.contains(n)) return '$n 是系统变量，不能覆盖';
+  return null;
+}
+
+/// 规范化：去空白、去开头的 \$、转大写（TELEGRAM_bot_token → TELEGRAM_BOT_TOKEN）。
+String envName(String raw) => raw.trim().replaceFirst(RegExp(r'^\$+'), '').toUpperCase();
+
+const reservedEnvNames = {
+  'PATH', 'HOME', 'LANG', 'SHELL', 'TMPDIR', 'USER', 'LOGNAME', 'TERM', 'COLORTERM', 'PWD', 'OLDPWD', 'HOSTNAME',
+  'SHLVL', 'IFS', 'BASH_ENV', 'ENV', 'PS1', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'STDIN_B64',
+};
+
+/// 保险箱里能存的三类，起步卡和“存入什么？”菜单共用一份文案。
 const secretKinds = [
   (kind: 'login', label: '网站登录', desc: '我在云浏览器里替你登录这个网站'),
   (kind: 'api_key', label: 'API Key', desc: '我调用这个服务时按域名带上它'),
+  (kind: 'env', label: '环境变量', desc: '你电脑上跑的程序按名字读取，比如机器人 Token'),
 ];

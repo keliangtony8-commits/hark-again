@@ -182,5 +182,5 @@ export type ProjectFile = { path: string; name: string; size: number; mime: stri
 export type Connector = { id: string; name: string; desc: string; logo: string; configured: boolean; account: string | null };
 /** problem：还没恢复的问题 "auth"（令牌被拒）| "down"（连不上）| null（规则见后端 connectors/mcp.py）。 */
 export type McpServerInfo = { id: string; name: string; url: string; has_token: boolean; problem?: string | null };
-export type VaultSecret = { id: string; kind: "api_key" | "login"; name: string; username: string | null; hosts: string[]; header_name: string; header_prefix: string; preview: string; created_at: string };
+export type VaultSecret = { id: string; kind: "api_key" | "login" | "env"; name: string; username: string | null; hosts: string[]; header_name: string; header_prefix: string; preview: string; created_at: string };
 

@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .preview import PREFIX as PREVIEW_PREFIX
 
-from . import turn_journal
+from . import command_env, turn_journal
+from .db import SessionLocal
 from .agent.tools import load_builtin
 from .routes import auth, browser, catalog, connectors, conversations, files, home, host, inbox, jobs, memory_digest, pages, preview, resources, tasks, usage, vault, voice, ws
 
@@ -15,6 +16,11 @@ from .routes import auth, browser, catalog, connectors, conversations, files, ho
 async def lifespan(_: FastAPI):
     load_builtin()
     await turn_journal.recover_all("backend")  # 上次进程被杀时没答完的回答 → interrupted 消息
+    try:  # 打码缓存先装好：重启后第一次看任务日志也不会露出用户的环境变量值
+        async with SessionLocal() as db:
+            await command_env.load(db)
+    except Exception:  # noqa: BLE001 — 表还没建（首次迁移前）不挡启动
+        pass
     yield
 
 

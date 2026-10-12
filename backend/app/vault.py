@@ -34,6 +34,10 @@ def decrypt(token: str) -> str:
 
 def create(name: str, value: str, hosts: list[str], kind: str = "api_key", username: str | None = None,
            header_name: str = "Authorization", header_prefix: str = "Bearer ") -> Secret:
+    """kind：api_key（按域名进请求头）| login（浏览器代填）| env（命令环境变量，名字规则在 command_env.py，不绑域名）。"""
+    if kind == "env":
+        return Secret(name=name, kind="env", username=None, hosts=[], header_name="", header_prefix="",
+                      ciphertext=encrypt(value), preview=value[-4:] if len(value) >= 16 else "")
     login = kind == "login"
     return Secret(name=name, kind="login" if login else "api_key", username=username if login else None,
                   hosts=[x for x in (normalize_host(h) for h in hosts) if x],

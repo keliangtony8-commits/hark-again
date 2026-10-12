@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 
-from .. import activity, browser_files, llm_retry, plan, plan_mode, spill, steering, vision
+from .. import activity, browser_files, command_env, llm_retry, plan, plan_mode, spill, steering, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
 from . import approvals, compact, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
@@ -559,7 +559,8 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
     content = _with_notes(result.content, notes)
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）；日志型再补中间段要点（distill.py）
         content = await distill.bound(content, settings.tool_result_max, ctx.workspace, call.name, ctx.db)
-    yield ToolResult(content, images=result.images)
+    await command_env.ensure(ctx.db)  # 任何工具读到的用户命令环境变量值（文件、日志、网页回显）都打码再给模型
+    yield ToolResult(command_env.scrub(content), images=result.images)
 
 def _with_notes(content: str, notes: list[str]) -> str:
     """参数层（tool_args）做过的修补/丢弃附在结果末尾，模型下次就会写对。"""
