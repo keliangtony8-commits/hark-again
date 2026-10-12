@@ -86,7 +86,8 @@ class ToolResult:
     blocks: list[dict] = field(default_factory=list)
     images: list[ToolImage] = field(default_factory=list)
     failed: str = ""  # 非空 = 这一步没成（活动时间线记 error + 这句原因），内容照常交给模型
-    change: dict | None = None  # 改了工作区里的文件：file_edit.change() 的摘要，随时间线那一步落库，两端显示 +N −M 与 diff
+    # 改了工作区里的文件：file_edit.change() 的摘要（apply_patch 一次改几个文件 → 列表），随时间线那一步落库，两端显示 +N −M 与 diff
+    change: dict | list[dict] | None = None
 
 
 @dataclass

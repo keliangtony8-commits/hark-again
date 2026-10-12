@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from ... import command_guard, deliver, file_edit, file_seen, jobs, quota, sandbox_client, spill, term_text, vision, workspace_search, workspaces
+from ... import apply_patch as patching, command_guard, deliver, file_edit, file_seen, jobs, quota, sandbox_client, spill, term_text, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -181,6 +181,96 @@ async def edit_file(ctx: ToolContext, path: str, old_string: str, new_string: st
     return _with_rules(ctx, p, ToolResult(f"已修改 {path}：替换了 {e.count} 处，{file_edit.stat(c)}{how}。", change=c))
 
 
+PATCH_GRAMMAR = (
+    "*** Begin Patch\n"
+    "*** Add File: 路径          ← 新建（已有就整篇覆盖），之后每一行都以 + 开头\n"
+    "*** Delete File: 路径       ← 删除，后面什么都不跟\n"
+    "*** Update File: 路径       ← 修改；要改名就紧跟一行 *** Move to: 新路径\n"
+    "@@ 定位行（可选：类名/函数名那一行，帮着找准位置；只有 @@ 也行）\n"
+    " 上下文行（空格开头，照抄文件里的原文，改动前后各 3 行左右）\n"
+    "-删掉的行\n"
+    "+加上的行\n"
+    "*** End of File             ← 可选：这一处必须在文件结尾\n"
+    "*** End Patch")
+
+
+@tool("apply_patch", "正在改文件",
+      "用一份补丁一次改工作区里的多个文本文件：新建、修改（多处）、删除、改名都可以，整份要么全部生效、要么一个都不动。"
+      "动多个文件或一个文件的多处时用它；只换一小段用 edit_file 也行。格式（Codex apply_patch）：\n" + PATCH_GRAMMAR + "\n"
+      "要点：每一段都要有段头；新建文件的内容行也要以 + 开头；路径相对工作区根目录；"
+      "同一文件的多处改动按文件里的先后顺序写，每处用 @@ 隔开；上下文和 - 行必须和文件一致，先 read_file 看准。"
+      "覆盖或改名到已有文件前要先 read_file 过它。",
+      {"type": "object", "properties": {
+          "patch": {"type": "string", "description": "整份补丁，从 *** Begin Patch 到 *** End Patch"}},
+       "required": ["patch"]})
+async def apply_patch(ctx: ToolContext, patch: str) -> ToolResult:
+    return await _apply_patch(ctx, patch)
+
+
+async def _apply_patch(ctx: ToolContext, patch: str, sub: str = "") -> ToolResult:
+    """apply_patch 工具和 run_command 里的 `apply_patch <<'EOF'` 共用。规则在 app/apply_patch.py；这里接工作区的护栏。"""
+    root = project_dir(ctx.workspace)
+    try:
+        base = safe_join(root, sub) if sub else root
+        if not base.is_dir():
+            raise patching.PatchError(f"目录 {sub} 不存在。", "目录不存在")
+        hunks = patching.parse(patch)
+        if base != root.resolve():  # cd 子目录 && apply_patch：段里的路径相对那个子目录
+            pre = base.relative_to(root.resolve()).as_posix()
+            for h in hunks:
+                h.path = f"{pre}/{h.path.lstrip('/')}"
+                h.move_to = f"{pre}/{h.move_to.lstrip('/')}" if h.move_to else h.move_to
+        plan = await asyncio.to_thread(patching.plan, root, hunks)
+    except ValueError:
+        return ToolResult(f"目录 {sub} 在工作区外面。", failed="路径越界")
+    except patching.PatchError as e:
+        return ToolResult(f"补丁没有应用，什么都没改：{e}", failed=e.short)
+    changed = [e for e in plan.entries if e.changed]
+    if not changed:
+        return ToolResult("补丁应用后内容和原来完全一样，什么都没改。")
+    owner = _owner(ctx)
+    try:
+        for e in changed:
+            if e.disk is None:
+                continue
+            if e.whole:
+                file_seen.check_write(owner, e.p, e.rel)
+            else:
+                file_seen.check_edit(owner, e.p, e.rel)
+    except file_seen.Refused as err:
+        return ToolResult(f"补丁没有应用，什么都没改：{err}", failed=err.short)
+    if (full := await _quota_refusal(ctx, "这些文件", plan.growth)) is not None:
+        return full
+    for e in changed:
+        ctx.changes.before(root, e.p)  # 整轮撤销的基线（turn_changes.py）
+    try:
+        await asyncio.to_thread(patching.commit, plan)
+    except patching.PatchError as e:
+        return ToolResult(str(e), failed=e.short)
+    for e in changed:
+        file_seen.observe(owner, e.p)
+    quota.forget(ctx.workspace)
+    cards = [_patch_change(e) for e in changed if not e.moved_away]
+    stats = "；".join(f"{c['path']} {file_edit.stat(c)}" for c in cards)
+    r = ToolResult(f"已应用补丁（{plan.hunks} 段）：{patching.summary(changed)}。{stats}。", change=cards)
+    for e in changed:
+        if e.after is not None:
+            r = _with_rules(ctx, e.p, r)
+    return r
+
+
+def _patch_change(e) -> dict:
+    """时间线上每个文件一份改动摘要：改名的按原文件算 diff 并注明从哪来；删掉的 = 整篇删除。"""
+    c = file_edit.change(e.rel, e.before_text, e.after if e.after is not None else "")
+    if e.after is None:
+        c.pop("created", None)
+        c["deleted"] = True
+    if e.origin is not None:
+        c.pop("created", None)
+        c["moved_from"] = e.origin.rel
+    return c
+
+
 def _with_rules(ctx: ToolContext, p, r: ToolResult, is_dir: bool = False) -> ToolResult:
     """碰到子目录里的文件：把根到那里之间新出现 / 改过 / 删掉的 AGENTS.md 一类规则追加给模型（这一轮只说一次）。
     规则在 app/workspace_instructions.py（移植自 deepseek-harness agent-instructions，思路同 Gemini CLI 的 JIT context）。"""
@@ -258,6 +348,9 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
        "required": ["command"]}, risk=_command_risk)
 async def run_command(ctx: ToolContext, command: str, timeout: int | None = None, background: bool = False,
                       title: str | None = None, idle_timeout: int | None = None, stdin: str | None = None) -> ToolResult:
+    if (heredoc := patching.from_command(command)) is not None and not background:
+        # Codex 的模型习惯在 shell 里写 apply_patch <<'EOF'：沙盒里没有这个命令，整条就是它时直接按补丁改（同 Codex invocation.rs）
+        return await _apply_patch(ctx, *heredoc)
     if (v := command_guard.verdict(command)) is not None and v.level == "block":
         return ToolResult(command_guard.refusal(v), failed="危险命令，已拦下")
     if v is not None and v.level == "unsupported":

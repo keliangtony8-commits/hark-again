@@ -45,7 +45,37 @@ export const STEP_STATE_LABEL: Record<ActivityStep["state"], string> = {
 
 /** 读屏：“新建，增加 3 行” / “增加 2 行，删除 1 行”（与 App FileChange.semantics 同款）。 */
 export function changeSemantics(c: FileChange): string {
-  return [c.created ? "新建" : "", `增加 ${c.added} 行`, c.removed > 0 ? `删除 ${c.removed} 行` : ""].filter(Boolean).join("，");
+  return [c.created ? "新建" : "", c.moved_from ? `从 ${c.moved_from} 改名` : "", `增加 ${c.added} 行`,
+    c.removed > 0 ? `删除 ${c.removed} 行` : ""].filter(Boolean).join("，");
+}
+
+/** 行里显示的路径：改名的写成 “旧 → 新”（v1.69 apply_patch）。 */
+export function changeLabel(c: FileChange): string {
+  return c.moved_from ? `${c.moved_from} → ${c.path}` : c.path;
+}
+
+/** 这一步改了的文件：changes 列表（apply_patch 一步几个，v1.69）优先，否则单个 change。坏项跳过。 */
+export function stepFiles(s: ActivityStep): FileChange[] {
+  const list = Array.isArray(s.changes) ? s.changes : s.change ? [s.change] : [];
+  return list.filter((c): c is FileChange => !!c && typeof c === "object" && typeof c.path === "string");
+}
+
+/** 行尾 “+N −M”：一个文件就是它；几个文件合计（路径空、没有 diff）。 */
+export function stepChange(s: ActivityStep): FileChange | null {
+  const files = stepFiles(s);
+  if (files.length <= 1) return files[0] ?? null;
+  return { path: "", diff: "", added: files.reduce((n, f) => n + f.added, 0), removed: files.reduce((n, f) => n + f.removed, 0) };
+}
+
+/** 有东西可展开：一个文件看 diff，几个文件看逐个文件。 */
+export function stepExpandable(s: ActivityStep): boolean {
+  const files = stepFiles(s);
+  return files.length > 1 || !!files[0]?.diff;
+}
+
+/** 时间线一步里逐个文件的状态字：这一步删掉的写“已删除”。 */
+export function stepFileTag(c: FileChange): string | null {
+  return c.deleted ? "已删除" : null;
 }
 
 export type DiffKind = "hunk" | "add" | "remove" | "context" | "note";
@@ -57,6 +87,13 @@ export function diffLines(diff: string): [DiffKind, string][] {
 }
 
 export function stepSemantics(s: ActivityStep): string {
-  return [[s.title, s.detail].filter(Boolean).join(" "), STEP_STATE_LABEL[s.state], s.note, s.change ? changeSemantics(s.change) : "",
+  return [[s.title, s.detail].filter(Boolean).join(" "), STEP_STATE_LABEL[s.state], s.note, stepFilesSemantics(s),
     s.ms != null && s.state !== "running" ? `用时 ${stepDuration(s.ms)}` : ""].filter(Boolean).join("，");
+}
+
+function stepFilesSemantics(s: ActivityStep): string {
+  const files = stepFiles(s);
+  const total = stepChange(s);
+  if (!total) return "";
+  return files.length > 1 ? `改了 ${files.length} 个文件，${changeSemantics(total)}` : changeSemantics(total);
 }

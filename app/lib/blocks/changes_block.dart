@@ -7,7 +7,6 @@
 // 成功后服务器回的消息替换本条，卡片变“已撤销”（图标 PopSwitcher、标题 FadeSwitcher、文件名划掉）。
 import 'package:flutter/material.dart';
 
-import '../models/activity.dart';
 import '../models/block.dart';
 import '../models/changes.dart';
 import '../theme/app_theme.dart';
@@ -96,8 +95,9 @@ class _ChangesBlockViewState extends State<ChangesBlockView> {
             FadeSlideIn(
               key: ValueKey(f.path),
               delay: Motion.stagger(n),
-              child: _FileRow(f,
+              child: FileDiffRow(f,
                   undone: b.undone,
+                  tag: changeTag(f),
                   open: _open == f.path,
                   onTap: f.expandable ? () => setState(() => _open = _open == f.path ? null : f.path) : null),
             ),
@@ -117,53 +117,6 @@ class _ChangesBlockViewState extends State<ChangesBlockView> {
           ),
         ]),
       ),
-    );
-  }
-}
-
-class _FileRow extends StatelessWidget {
-  const _FileRow(this.f, {required this.undone, required this.open, this.onTap});
-  final FileChange f;
-  final bool undone, open;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final small = context.text.labelSmall;
-    final tag = changeTag(f);
-    final head = Padding(
-      padding: const EdgeInsets.only(top: Sp.x2, right: Sp.x2),
-      child: Row(children: [
-        Expanded(
-          child: AnimatedDefaultTextStyle(
-            duration: context.motion(Motion.base),
-            curve: Motion.ease,
-            style: (context.text.bodySmall ?? const TextStyle()).copyWith(
-                fontFamily: monoFont,
-                color: undone ? p.text3 : p.text,
-                decoration: undone ? TextDecoration.lineThrough : null,
-                decorationColor: p.text3),
-            child: Text(f.path, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-        ),
-        const SizedBox(width: Sp.x2),
-        if (tag != null) Text(tag, style: small?.copyWith(color: p.text3)) else DiffStat(f),
-        if (onTap != null) TurnIcon(open: open, child: Icon(Icons.chevron_right_rounded, size: 16, color: p.text3)),
-      ]),
-    );
-    return Semantics(
-      button: onTap != null,
-      label: '${f.path}，${f.semantics}',
-      excludeSemantics: true,
-      onTap: onTap,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        onTap == null ? head : Pressable(onTap: onTap!, child: head),
-        Padding(
-          padding: const EdgeInsets.only(right: Sp.x2),
-          child: RiseSwitcher(child: open ? DiffView(f, key: const ValueKey('diff')) : null),
-        ),
-      ]),
     );
   }
 }

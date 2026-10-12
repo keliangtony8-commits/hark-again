@@ -59,7 +59,16 @@ def _from_message(msg, ws: str) -> list[dict]:
     user = msg.role == "user"
     # 先步骤（过程：写了哪些文件）再块（结果：交付的卡）——写在交之前，倒序后“交给你的”排在“写的”上面
     for s in msg.steps or []:
-        if isinstance(s, dict) and s.get("tool") in WRITERS and s.get("state") == "done" and s.get("detail"):
+        if not isinstance(s, dict) or s.get("state") != "done":
+            continue
+        files = s.get("changes") or ([s["change"]] if isinstance(s.get("change"), dict) else [])
+        if files:  # 带改动摘要的步骤（v1.34 起的 write/edit_file、v1.69 apply_patch）：路径以摘要为准，删掉的不列
+            for c in files:
+                if isinstance(c, dict) and c.get("path") and not c.get("deleted"):
+                    path = str(c["path"]).lstrip("/")
+                    out.append(_item("project", path, Path(path).name, ws, "written", msg))
+            continue
+        if s.get("tool") in WRITERS and s.get("detail"):
             path = str(s["detail"]).lstrip("/")
             if not path.endswith("…"):  # 摘要被截断的长路径认不出是哪个文件，不列
                 out.append(_item("project", path, Path(path).name, ws, "written", msg))

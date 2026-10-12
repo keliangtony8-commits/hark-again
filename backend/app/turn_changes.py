@@ -205,7 +205,7 @@ def history_text(b: dict) -> str:
         return f"{f['path']}（{'新建 ' if f.get('created') else ''}{file_edit.stat(f)}）"
     names = "、".join(one(f) for f in b.get("files") or [])
     more = f" 等 {len(b['files']) + b['more']} 个文件" if b.get("more") else ""
-    line = f"[这一轮用 write_file / edit_file 改了文件：{names}{more}"
+    line = f"[这一轮用 write_file / edit_file / apply_patch 改了文件：{names}{more}"
     if b.get("undone"):
         line += "——用户已撤销这些改动，文件已回到这一轮之前的样子；之前读到的内容已过期，要改先重读"
     return line + "]"

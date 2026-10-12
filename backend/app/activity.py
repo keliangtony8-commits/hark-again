@@ -11,7 +11,8 @@
 - state：running | done | error | denied（没批准/没填表）| stopped（这一轮被停掉时还在跑）；
 - at：开始时间（ISO，带时区，经 wire_time）；ms：用时毫秒（running 时没有）；
 - note：只在 error / denied 时带一句原因（≤ NOTE_MAX 字）；
-- change：只在工具改了工作区文件时（write_file / edit_file，v1.34）带 {"path","added","removed","diff"[,"created"]}，
+- change：只在工具改了工作区文件时（write_file / edit_file，v1.34）带 {"path","added","removed","diff"[,"created"]}；
+  一步改了几个文件（apply_patch，v1.69）改带 changes: [同样的摘要…]（还可能有 deleted / moved_from），
   形状和截断规则在 file_edit.py；两端在这一步上显示 “+3 −1”，点开看 diff。
 """
 import time
@@ -61,7 +62,7 @@ class Recorder:
         del self.steps[:-KEEP]
         return dict(step)
 
-    def finish(self, call_id: str, state: str, note: str = "", change: dict | None = None,
+    def finish(self, call_id: str, state: str, note: str = "", change: dict | list[dict] | None = None,
                detail: str | None = None) -> dict | None:
         """detail：结束时才知道的摘要（如上文压缩的结果）替换开始时的。"""
         step = next((s for s in self.steps if s["id"] == call_id), None)
@@ -75,7 +76,14 @@ class Recorder:
         if note and state in ("error", "denied"):
             step["note"] = _short(note, NOTE_MAX)
         if change and state == "done":
-            step["change"] = change
+            files = change if isinstance(change, list) else [change]
+            if len(files) == 1:
+                step["change"] = files[0]
+            else:  # 一步改了几个文件（apply_patch）：逐个列出；没有摘要的步骤（参数里没路径）用文件名补上
+                step["changes"] = files
+            if not step.get("detail"):
+                more = f" 等 {len(files)} 个文件" if len(files) > 1 else ""
+                step["detail"] = _short(files[0].get("path", "") + more, DETAIL_MAX)
         return dict(step)
 
     def denied(self, call_id: str, tool: str, label: str, args: dict, note: str) -> dict:

@@ -7,7 +7,7 @@ enum ActivityState { running, done, error, denied, stopped }
 /// 这一步改了工作区里的文件（v1.34：write_file / edit_file）：服务器 app/file_edit.py 的 change。
 /// diff = unified diff 去掉文件头（@@ 段头、+ 新增、- 删除、空格开头是上下文）；hidden = 像密钥的文件，不给 diff。
 class FileChange {
-  const FileChange({required this.path, this.added = 0, this.removed = 0, this.diff = '', this.created = false, this.hidden = false, this.big = false, this.deleted = false});
+  const FileChange({required this.path, this.added = 0, this.removed = 0, this.diff = '', this.created = false, this.hidden = false, this.big = false, this.deleted = false, this.movedFrom = ''});
 
   static FileChange? fromJson(Object? raw) {
     if (raw is! Map<String, dynamic>) return null;
@@ -20,6 +20,7 @@ class FileChange {
       hidden: raw['hidden'] == true,
       big: raw['big'] == true,
       deleted: raw['deleted'] == true,
+      movedFrom: raw['moved_from'] as String? ?? '',
     );
   }
 
@@ -30,11 +31,22 @@ class FileChange {
   /// 改动卡（v1.68）：big = 太大没记基线（不能撤销）；deleted = 这一轮之后文件已经不在了。
   final bool big, deleted;
 
+  /// v1.69 apply_patch 改名：从哪个路径改过来（diff 按原文件算）。
+  final String movedFrom;
+
+  /// 行里显示的路径：改名的写成 “旧 → 新”。
+  String get label => movedFrom.isEmpty ? path : '$movedFrom → $path';
+
   /// 有 diff 可展开看。
   bool get expandable => diff.isNotEmpty;
 
   /// 读屏：“新建，增加 3 行” / “增加 2 行，删除 1 行”。
-  String get semantics => [if (created) '新建', '增加 $added 行', if (removed > 0) '删除 $removed 行'].join('，');
+  String get semantics => [
+        if (created) '新建',
+        if (movedFrom.isNotEmpty) '从 $movedFrom 改名',
+        '增加 $added 行',
+        if (removed > 0) '删除 $removed 行',
+      ].join('，');
 }
 
 enum DiffKind { hunk, add, remove, context, note }
@@ -55,7 +67,7 @@ List<(DiffKind, String)> diffLines(String diff) => [
     ];
 
 class ActivityStep {
-  const ActivityStep({required this.id, required this.title, this.tool = '', this.detail = '', this.state = ActivityState.running, this.at, this.ms, this.note = '', this.change});
+  const ActivityStep({required this.id, required this.title, this.tool = '', this.detail = '', this.state = ActivityState.running, this.at, this.ms, this.note = '', this.files = const []});
 
   factory ActivityStep.fromJson(Map<String, dynamic> j) => ActivityStep(
         id: j['id'] as String? ?? '',
@@ -66,7 +78,7 @@ class ActivityStep {
         at: DateTime.tryParse(j['at'] as String? ?? '')?.toLocal(),
         ms: (j['ms'] as num?)?.toInt(),
         note: j['note'] as String? ?? '',
-        change: FileChange.fromJson(j['change']),
+        files: changedFiles(j),
       );
 
   /// WS tool.status：新服务器带完整 step；老服务器只有 label / state，退化成只有标题的一步。
@@ -85,12 +97,36 @@ class ActivityStep {
   final ActivityState state;
   final DateTime? at;
   final int? ms;
-  final FileChange? change;
+  /// 这一步改了的文件：write_file / edit_file 一个（step.change），apply_patch 可能几个（step.changes，v1.69）。
+  final List<FileChange> files;
+
+  /// 行尾 “+N −M”：一个文件就是它本身；几个文件合计（路径为空，没有 diff）。
+  FileChange? get change => switch (files) {
+        [] => null,
+        [final one] => one,
+        _ => FileChange(
+            path: '',
+            added: files.fold(0, (n, f) => n + f.added),
+            removed: files.fold(0, (n, f) => n + f.removed),
+          ),
+      };
+
+  /// 有东西可展开：一个文件看 diff，几个文件看逐个文件。
+  bool get expandable => files.length > 1 || (files.isNotEmpty && files.first.expandable);
 
   bool get running => state == ActivityState.running;
 
   /// 没成：出错、没批准/没填、被停掉。
   bool get failed => state == ActivityState.error || state == ActivityState.denied || state == ActivityState.stopped;
+}
+
+/// 时间线一步里逐个文件的状态字：这一步删掉的文件没有 diff 可看，写“已删除”（行数在读屏里）。
+String? stepFileTag(FileChange f) => f.deleted ? '已删除' : null;
+
+/// step 里的改动：changes 列表优先，否则单个 change。
+List<FileChange> changedFiles(Map<String, dynamic> j) {
+  if (j['changes'] case final List list) return [for (final x in list) ?FileChange.fromJson(x)];
+  return [?FileChange.fromJson(j['change'])];
 }
 
 /// 生成中把一步合进列表：同 id 原地换，新的接在后面。
@@ -149,6 +185,6 @@ String stepSemantics(ActivityStep s) => [
       [s.title, if (s.detail.isNotEmpty) s.detail].join(' '),
       stepStateLabel(s.state),
       if (s.note.isNotEmpty) s.note,
-      if (s.change case final c?) c.semantics,
+      if (s.files.length > 1) '改了 ${s.files.length} 个文件，${s.change!.semantics}' else if (s.change case final c?) c.semantics,
       if (s.ms != null && !s.running) '用时 ${stepDuration(s.ms!)}',
     ].join('，');

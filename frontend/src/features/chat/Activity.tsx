@@ -2,9 +2,9 @@
 // 点开是竖向时间线：状态圆点 + 标题 + 等宽摘要 + 用时，没成的下面一行原因；步骤之间一根发丝线。规则在 lib/activity.ts。
 // v1.34：改了文件的步骤行尾 “+3 −1”（绿/红），点这一行展开 diff（新增绿、删除红、段头淡）；像密钥的文件只有数字。
 import { useState } from "react";
-import { activitySummary, stepDuration, stepFailed, stepSemantics, STEP_STATE_LABEL } from "../../lib/activity";
+import { activitySummary, stepChange, stepDuration, stepExpandable, stepFailed, stepFileTag, stepFiles, stepSemantics, STEP_STATE_LABEL } from "../../lib/activity";
 import type { ActivityStep } from "../../lib/types";
-import { Diff, DiffStat } from "../../ui/Diff";
+import { Diff, DiffStat, FileDiffRow } from "../../ui/Diff";
 import { IconAlert, IconCheck, IconChevron, IconClose, IconHistory, IconStop } from "../../ui/icons";
 
 function Mark({ s }: { s: ActivityStep }) {
@@ -39,8 +39,10 @@ export default function ActivitySummary({ steps, pending }: { steps: ActivitySte
 
 function Step({ s, i }: { s: ActivityStep; i: number }) {
   const [diff, setDiff] = useState(false);
-  const c = s.change;
-  const canOpen = !!c?.diff;
+  const [file, setFile] = useState<number | null>(null); // 几个文件时展开了哪一个
+  const files = stepFiles(s);
+  const c = stepChange(s);
+  const canOpen = stepExpandable(s);
   const line = (
     <>
       <span className="step-title">{s.title}</span>
@@ -64,7 +66,13 @@ function Step({ s, i }: { s: ActivityStep; i: number }) {
           <div className="step-line" aria-label={stepSemantics(s)} role="group">{line}</div>
         )}
         {stepFailed(s) && <div className="step-note" aria-hidden>{s.note || STEP_STATE_LABEL[s.state]}</div>}
-        {diff && c && <Diff c={c} />}
+        {diff && canOpen && (files.length === 1 ? <Diff c={files[0]} /> : (
+          <ul className="file-diff-list">
+            {files.map((f, k) => (
+              <FileDiffRow key={f.path} c={f} i={k} tag={stepFileTag(f)} open={file === k} onToggle={() => setFile(file === k ? null : k)} />
+            ))}
+          </ul>
+        ))}
       </div>
     </li>
   );

@@ -17,7 +17,7 @@ ENVIRONMENT = (f"沙盒是非 root 的 Debian（没有 sudo/apt），已预装�
                "Python 包直接 pip install、Node 命令行工具 npm i -g：都装进工作区（~/.local），以后的对话和后台任务都能接着用，"
                "容器重建也不丢，不用每次重装；项目自己的依赖照常用 .venv / node_modules。"
                "缺系统软件就换 pip/npm 上的替代品，实在没有就告诉用户需要往沙盒镜像里加什么。"
-               "找文件用 glob、搜内容用 grep（比 run_command find/grep 快，不唤醒沙盒），改文件用 edit_file。"
+               "找文件用 glob、搜内容用 grep（比 run_command find/grep 快，不唤醒沙盒），改一处用 edit_file，多个文件 / 多处 / 新建删除改名用 apply_patch（一份补丁，全成或全不动）。"
                "做了网页/小工具要给用户看：后台启动服务（监听 0.0.0.0）后用 preview_port 出预览卡，别让用户自己找端口。")
 
 PERSONAL = "me"

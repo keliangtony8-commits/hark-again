@@ -4,6 +4,7 @@
 // + 右侧用时；没成的步骤下面一行原因。步骤之间一根发丝线连起来。展开逐项错峰浮现。
 // 生成中也显示（“已用 2 步”），展开能看着它一步步长出来；正在跑的那一步另有输入框上方的小条（message_view _ToolChip）。
 // v1.34：改了文件的步骤（写文件 / 改文件）行尾多一个 “+3 −1”（绿/红），点这一步展开 diff（等宽，新增绿、删除红、段头淡）。
+// v1.69：一步改了几个文件（apply_patch）：行尾是合计，点开先列出每个文件（FileDiffRow，错峰浮现），再点某个文件看它的 diff。
 import 'package:flutter/material.dart';
 
 import '../../models/activity.dart';
@@ -99,6 +100,7 @@ class StepRow extends StatefulWidget {
 
 class _StepRowState extends State<StepRow> {
   bool _diff = false;
+  int? _file; // 几个文件时展开了哪一个
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +108,7 @@ class _StepRowState extends State<StepRow> {
     final s = widget.step;
     final first = widget.first, last = widget.last;
     final change = s.change;
-    final canOpen = change?.expandable ?? false;
+    final canOpen = s.expandable;
     final line = context.hairline;
     final tone = s.failed ? p.warning : p.text2;
     final mark = switch (s.state) {
@@ -139,12 +141,16 @@ class _StepRowState extends State<StepRow> {
         Text(stepDuration(s.ms!), style: small?.copyWith(color: p.text3)),
       ],
     ]);
-    return Semantics(
+    // 读屏：整步一句话挂在标题行上（原因、diff 正文不再单独读）；几个文件展开后每个文件各自一行可点。
+    void toggle() => setState(() => _diff = !_diff);
+    final title = Semantics(
       label: stepSemantics(s),
       excludeSemantics: true,
       button: canOpen,
-      onTap: canOpen ? () => setState(() => _diff = !_diff) : null,
-      child: IntrinsicHeight(
+      onTap: canOpen ? toggle : null,
+      child: canOpen ? Pressable(onTap: toggle, child: head) : head,
+    );
+    return IntrinsicHeight(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           SizedBox(
             width: _dot,
@@ -165,25 +171,39 @@ class _StepRowState extends State<StepRow> {
             child: Padding(
               padding: EdgeInsets.only(top: Sp.x1, bottom: last ? 0 : Sp.x3),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                canOpen ? Pressable(onTap: () => setState(() => _diff = !_diff), child: head) : head,
+                title,
                 RiseSwitcher(
                   child: s.failed
-                      ? Padding(
+                      ? ExcludeSemantics(
                           key: const ValueKey('note'),
+                          child: Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: Text(s.note.isEmpty ? stepStateLabel(s.state) : s.note,
                               style: context.text.bodySmall?.copyWith(color: tone)),
-                        )
+                        ))
                       : null,
                 ),
                 RiseSwitcher(
-                  child: _diff && change != null && canOpen ? DiffView(change, key: const ValueKey('diff')) : null,
+                  child: !_diff || !canOpen
+                      ? null
+                      : s.files.length == 1
+                          ? ExcludeSemantics(key: const ValueKey('diff'), child: DiffView(s.files.first))
+                          : Column(key: const ValueKey('files'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                              for (final (i, f) in s.files.indexed)
+                                FadeSlideIn(
+                                  key: ValueKey(f.path),
+                                  delay: Motion.stagger(i),
+                                  child: FileDiffRow(f,
+                                      tag: stepFileTag(f),
+                                      open: _file == i,
+                                      onTap: f.expandable ? () => setState(() => _file = _file == i ? null : i) : null),
+                                ),
+                            ]),
                 ),
               ]),
             ),
           ),
         ]),
-      ),
     );
   }
 }

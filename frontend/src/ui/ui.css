@@ -310,3 +310,10 @@ button.run-row:hover { background: var(--tile); }
 .step-diff { margin: var(--sp-2) 0 0; padding: var(--sp-2); max-height: 280px; overflow: auto; background: var(--tile); border-radius: var(--r-sm);
   font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.45; white-space: pre; animation: rise var(--dur) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) { .step-diff { animation: none; } }
+/* 一行文件（改动卡 + 时间线里 apply_patch 一步改几个文件，ui/Diff.tsx FileDiffRow） */
+.file-diff-list { list-style: none; margin: 0; padding: 0; }
+.file-diff-row { padding-top: var(--sp-2); animation: rise var(--dur) var(--ease) both; }
+.file-diff-line { display: flex; align-items: center; gap: var(--sp-2); width: 100%; }
+.file-diff-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono);
+  font-size: var(--fs-xs); color: var(--text); text-align: start; transition: color var(--dur) var(--ease); }
+@media (prefers-reduced-motion: reduce) { .file-diff-row { animation: none; } .file-diff-path { transition: none; } }

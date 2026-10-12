@@ -37,7 +37,7 @@ GRACE_SECONDS = 60      # 截止时间之后再等多久（最后一步在写结
 # 改用户设置的、计划清单（属于主助手那张）、派活工具本身（深度 1）。
 CHILD_TOOLS = frozenset({
     "web_search", "web_fetch",
-    "list_files", "glob", "grep", "read_file", "write_file", "edit_file",
+    "list_files", "glob", "grep", "read_file", "write_file", "edit_file", "apply_patch",
     "run_command", "job_status", "cancel_job",
     "api_request", "mcp_tools", "mcp_call", "use_skill",
 })

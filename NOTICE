@@ -81,3 +81,5 @@
   移植到 backend/app/conversation_title.py（v1.67）
 - openai/codex codex-rs/core/src/turn_diff_tracker.rs（每路径首次触碰记基线、基线 = 现状不出 diff、按路径排序汇总）— Apache License 2.0, modified
   移植到 backend/app/turn_changes.py（v1.68）
+- openai/codex codex-rs/apply-patch/src/{parser.rs, streaming_parser.rs, file_update.rs, text_file.rs, lib.rs, invocation.rs}（补丁语法与宽松边界、逐行解析与报错、compute_replacements、按行保留换行符、heredoc 识别）— Apache License 2.0, modified
+  移植到 backend/app/apply_patch.py（v1.69）；端到端场景 fixtures 原样复制在 backend/tests/fixtures/apply_patch/（Apache License 2.0）
