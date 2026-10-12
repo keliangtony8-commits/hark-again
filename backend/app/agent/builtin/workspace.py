@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from ... import command_guard, deliver, file_edit, jobs, quota, sandbox_client, spill, vision, workspace_search, workspaces
+from ... import command_guard, deliver, file_edit, jobs, quota, sandbox_client, spill, term_text, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -250,7 +250,7 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     try:
         async for ev in sandbox_client.stream(ctx.workspace, command, min(timeout or 60, 120), stdin):
             if ev["type"] == "out":
-                tail = live_tail(tail + ev["data"])
+                tail = term_text.tail(tail + ev["data"])
                 ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True})
             elif ev["type"] == "exit":
                 r = ev
@@ -264,10 +264,16 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     status = "超时被终止" if timed_out else f"退出码 {r['exit_code']}"
     if r.get("oom"):  # 沙盒比过 cgroup 的 OOM 计数：确实是内存超上限被内核杀的
         status = f"{jobs.OOM_REASON}（退出码 {r['exit_code']}）"
-    out = shown = r.get("output", "")
+    # 终端文本统一洗一遍（颜色转义、\r 进度帧）；二进制输出沙盒已换成一句说明
+    out = shown = term_text.clean(r.get("output", ""))
+    if r.get("binary") is not None:
+        out, shown = term_text.binary_note(r["binary"]), f"（二进制输出，{r['binary']} 字节，不显示）"
     if spill.MARK in out:  # 沙盒那边输出太长：中间段省略，完整输出（能存下时）写进了工作区 .spill/
         omitted = r.get("omitted", 0)
-        out = out.replace(spill.MARK, spill.notice(omitted, r.get("spill"), r.get("total", 0)))
+        note = spill.notice(omitted, r.get("spill"), r.get("total", 0))
+        if r.get("spill_truncated"):  # 沙盒只存了前 64 MB
+            note += "（完整输出太大，文件里只存了开头一部分）"
+        out = out.replace(spill.MARK, note)
         shown = shown.replace(spill.MARK, f"\n…（中间省略 {omitted} 字符）…\n")
     hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
     if r.get("oom"):
@@ -278,12 +284,3 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}],
         failed="" if r.get("exit_code") == 0 and not timed_out else status)
 
-
-LIVE_LINES, LIVE_CHARS = 40, 4000  # 运行中卡片只带最近这些输出：每 0.5 秒整块推一次，别越推越大
-
-
-def live_tail(text: str) -> str:
-    """运行中给用户看的最近输出：最多 LIVE_LINES 行、LIVE_CHARS 字；\r 进度条只留最后一帧。"""
-    text = text[-LIVE_CHARS * 2:]
-    lines = [ln.rsplit("\r", 1)[-1] if "\r" in ln.rstrip("\r") else ln for ln in text.split("\n")]
-    return "\n".join(lines[-LIVE_LINES:])[-LIVE_CHARS:]

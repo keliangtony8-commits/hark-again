@@ -19,7 +19,7 @@ assert r.returncode == 0, r.stderr
 from app import llm, sandbox_client
 from app.agent.runner import run_turn
 from app.agent.tools import REGISTRY, ToolContext, load_builtin
-from app.agent.builtin.workspace import live_tail
+from app.term_text import tail as live_tail
 from app.blocks import Block, text_to_blocks
 from app.db import SessionLocal
 from app.models import Conversation, Message, Project
@@ -106,7 +106,7 @@ assert len(calls) == n
 assert "stdin" in REGISTRY["run_command"].parameters["properties"]
 r = asyncio.run(tool("run_command", command="echo"))  # 不在聊天里（没人挂 live）：照常出最终卡
 assert r.blocks[0]["type"] == "code" and "live" not in r.blocks[0]
-assert live_tail("a\nb 1%\rb 50%") == "a\nb 50%" and live_tail("x\r\ny") == "x\r\ny"
+assert live_tail("a\nb 1%\rb 50%") == "a\nb 50%" and live_tail("x\r\ny") == "x\ny"
 assert live_tail("\n".join(str(i) for i in range(100))).splitlines()[0] == "60"
 assert len(live_tail("x" * 20000)) == 4000
 

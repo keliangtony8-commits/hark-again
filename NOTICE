@@ -20,3 +20,10 @@
 
 - deepseek-ai/deepseek-harness packages/jobs（jobs-local ring.ts utf8Tail、tool-jobs render.ts / index.ts 的消费式读、合并通知、maxConsecutiveWakes）— MIT License, Copyright (c) 2026 DeepSeek
   移植到 backend/app/jobs.py（read_new、follow_ups、take_held）、backend/app/agent/builtin/jobs.py、backend/tests/smoke_jobs_port.py（v1.39）
+
+- openai/codex codex-rs/core/src/unified_exec/head_tail_buffer.rs（及 head_tail_buffer_tests.rs）— Apache-2.0, Copyright 2025 OpenAI, modified（按字符计）
+  移植到 sandbox/runner.py（HeadTail）、backend/tests/smoke_term_output.py（v1.40）
+- chalk/ansi-regex — MIT License, Copyright (c) Sindre Sorhus, modified（OSC 单列一支）
+  移植到 backend/app/term_text.py、sandbox/runner.py（ANSI_PATTERN、Cleaner）（v1.40）
+- google-gemini/gemini-cli packages/core/src/utils/textUtils.ts isBinary 与 shellExecutionService 去 ANSI 的做法 — Apache-2.0, Copyright 2025 Google LLC, modified
+  参照写入 backend/app/term_text.py（is_binary）、sandbox/runner.py（二进制嗅探）（v1.40）

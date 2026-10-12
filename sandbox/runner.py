@@ -18,6 +18,7 @@ import asyncio
 import base64
 import calendar
 import codecs
+from collections import deque
 import json
 import os
 import re
@@ -41,10 +42,14 @@ CPUS = float(os.environ.get("SANDBOX_CPUS", "1"))
 IDLE_MINUTES = int(os.environ.get("SANDBOX_IDLE_MINUTES", "30"))
 MAX_OUTPUT = 12000
 SPILL_MARK = "\n…（中间省略）…\n"  # 与 backend/app/spill.py MARK 相同
+PROJECTS_ROOT = "/projects"  # 本服务容器里挂载的全部工作区
 SPILL_KEEP = 50
 SPILL_DAYS = 30
 SPILL_NAME_RE = re.compile(r"^\d{8}-\d{6}-[A-Za-z0-9._~-]{1,160}-[0-9a-f]{4}\.txt$")  # 同 spill.NAME_RE
 STDIN_MAX = 64 * 1024  # 走环境变量（base64），单个变量上限 128 KB，留足余量
+SINK_MAX = 16000       # 实时推送一批最多带这么多字（后端只显示最近 4000 字）
+SPILL_MAX_BYTES = 64 * 1024 * 1024  # 前台命令完整输出落盘上限（与后台任务日志上限 job_log_max_mb 同量级）
+BINARY_SAMPLE = 512    # 开头这么多字节里有 NUL 就当二进制输出（同 backend/app/term_text.py）
 FLUSH_S = 0.5          # 实时输出多久推一批：太密只是白占带宽
 # 沙盒容器接的专用网络（docker-compose.yml 的 sandboxes 网络，本服务也接在上面）：端口预览靠它直连容器。
 # 网络不存在（不在 compose 里跑）就退回 Docker 默认网络，只是预览连不上
@@ -69,19 +74,113 @@ class ExecIn(BaseModel):
 
 
 class Sink:
-    """执行线程往里写新输出，推送协程每 FLUSH_S 秒取走一批。"""
+    """执行线程往里写新输出，推送协程每 FLUSH_S 秒取走一批。一批最多留最后 SINK_MAX 字：
+    后端只显示最近几千字，命令狂刷屏时不该在这里攒几百 MB。"""
     def __init__(self):
         self._buf: list[str] = []
+        self._size = 0
         self._lock = threading.Lock()
 
     def put(self, text: str) -> None:
         with self._lock:
             self._buf.append(text)
+            self._size += len(text)
+            if self._size > SINK_MAX * 2:
+                keep = "".join(self._buf)[-SINK_MAX:]
+                self._buf, self._size = [keep], len(keep)
 
     def take(self) -> str:
         with self._lock:
-            out, self._buf = "".join(self._buf), []
-        return out
+            out, self._buf, self._size = "".join(self._buf), [], 0
+        return out[-SINK_MAX:]
+
+
+# ---- 终端输出（v1.40）----
+# ANSI_PATTERN 与 backend/app/term_text.py 一字不差（冒烟测试比对）：Ported from chalk/ansi-regex (MIT)，modified。
+ANSI_PATTERN = (
+    "(?:\u001B\\][^\u0007\u001B\u009C]*(?:\u0007|\u001B\\x5c|\u009C))|"  # OSC 整段（标题、超链接；ansi-regex 6.2 的写法）
+    "[\u001B\u009B][\\[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*"
+    "|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?(?:\u0007|\u001B\\x5c|\u009C))"
+    "|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))"
+)
+ANSI_RE = re.compile(ANSI_PATTERN)
+OSC_HOLD = 1024  # OSC 序列（窗口标题、超链接）可能较长
+ESC_HOLD = 64  # 一块输出末尾没收完的转义序列最多留这么长等下一块，再长就不是转义了
+
+
+class Cleaner:
+    """流式去 ANSI：转义序列可能被切在两块之间，末尾半截先扣下，拼到下一块再洗。"""
+    def __init__(self):
+        self._held = ""
+
+    def feed(self, text: str, final: bool = False) -> str:
+        text = self._held + text
+        self._held = ""
+        if not final:
+            i = max(text.rfind("\x1b", len(text) - ESC_HOLD), text.rfind("\x9b", len(text) - ESC_HOLD))
+            m = ANSI_RE.match(text, i) if i >= 0 else None
+            # 没匹配上，或正好匹配到块尾（"\x1b[3" 本身也算一条完整序列，可能还差 "1m"）：扣下等下一块
+            cut = i if i >= 0 and (m is None or m.end() == len(text)) else -1
+            o = text.rfind("\x1b]", max(0, len(text) - OSC_HOLD))  # OSC（标题、超链接）还没等到结束符
+            if o >= 0 and not re.search("\x07|\x1b\\\\|\x9c", text[o + 2:]):
+                cut = o if cut < 0 else min(cut, o)
+            if cut >= 0:
+                text, self._held = text[:cut], text[cut:]
+        return ANSI_RE.sub("", text) if ("\x1b" in text or "\x9b" in text) else text
+
+
+class HeadTail:
+    """Ported from openai/codex codex-rs/core/src/unified_exec/head_tail_buffer.rs (Apache-2.0), modified：按字符计。
+    固定上限的缓冲：前一半留最先的输出（head，稳定不变），后一半留最新的（tail），中间丢掉并计数——
+    命令刷几个 GB 也只占 MAX 字内存。"""
+    def __init__(self, max_chars: int):
+        self.head_budget = max_chars // 2
+        self.tail_budget = max_chars - self.head_budget
+        self.head, self._tail, self._tail_len, self.omitted = [], deque(), 0, 0
+        self._head_len = 0
+
+    def push(self, chunk: str) -> None:
+        room = self.head_budget - self._head_len
+        if room > 0 and chunk:
+            self.head.append(chunk[:room])
+            self._head_len += len(chunk[:room])
+            chunk = chunk[room:]
+        if not chunk:
+            return
+        if self.tail_budget == 0:
+            self.omitted += len(chunk)
+            return
+        if len(chunk) >= self.tail_budget:  # 一块就把尾巴装满：旧尾巴全丢
+            self.omitted += self._tail_len + len(chunk) - self.tail_budget
+            self._tail, self._tail_len = deque([chunk[-self.tail_budget:]]), self.tail_budget
+            return
+        self._tail.append(chunk)
+        self._tail_len += len(chunk)
+        excess = self._tail_len - self.tail_budget
+        while excess > 0:
+            first = self._tail[0]
+            if len(first) <= excess:
+                self._tail.popleft()
+                self._tail_len -= len(first)
+                self.omitted += len(first)
+                excess -= len(first)
+            else:
+                self._tail[0] = first[excess:]
+                self._tail_len -= excess
+                self.omitted += excess
+                excess = 0
+
+    def retained(self) -> int:
+        return self._head_len + self._tail_len
+
+    def total(self) -> int:
+        return self.retained() + self.omitted
+
+    def parts(self) -> tuple[str, str]:
+        return "".join(self.head), "".join(self._tail)
+
+    def text(self) -> str:
+        return "".join(self.parts())
 
 
 class JobIn(BaseModel):
@@ -206,31 +305,64 @@ def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: s
     env = {"STDIN_B64": base64.b64encode(stdin.encode()).decode()} if stdin is not None else None
     ex = client.api.exec_create(c.id, ["bash", "-c", _WRAP.format(tok=tok, timeout=timeout), "_", command],
                                 workdir="/workspace", environment=env)
-    dec, parts = codecs.getincrementaldecoder("utf-8")("replace"), []
-    for chunk in client.api.exec_start(ex["Id"], stream=True):
-        if text := dec.decode(chunk):
-            parts.append(text)
-            if sink is not None:
-                sink.put(text)
-    parts.append(dec.decode(b"", final=True))
+    dec, clean, buf = codecs.getincrementaldecoder("utf-8")("replace"), Cleaner(), HeadTail(MAX_OUTPUT)
+    spill, sniff, binary_bytes = None, b"", None  # spill：超过 MAX_OUTPUT 才开的落盘文件 _SpillFile
+
+    def take(text: str) -> None:
+        nonlocal spill
+        if not text:
+            return
+        if spill is None and buf.total() + len(text) > MAX_OUTPUT:  # 头一次超长：到目前为止的全文还都在 buf 里
+            try:
+                spill = _SpillFile(pid)
+                spill.write(buf.text())
+            except OSError:
+                spill = False
+        if spill:
+            spill.write(text)
+        buf.push(text)
+        if sink is not None:
+            sink.put(text)
+
+    try:
+        for chunk in client.api.exec_start(ex["Id"], stream=True):
+            if binary_bytes is not None:
+                binary_bytes += len(chunk)
+                continue
+            if len(sniff) < BINARY_SAMPLE:  # Gemini CLI 的判定：开头采样里有 NUL 就是二进制，之后只计字节数
+                sniff += chunk[:BINARY_SAMPLE - len(sniff)]
+                if b"\x00" in sniff:
+                    binary_bytes = buf.total() + len(chunk)  # 之前的块是 ASCII，字节数 = 字符数
+                    continue
+            take(clean.feed(dec.decode(chunk)))
+        if binary_bytes is None:
+            take(clean.feed(dec.decode(b"", final=True), final=True))
+    finally:
+        if spill:
+            spill.close()
     code = client.api.exec_inspect(ex["Id"]).get("ExitCode")
     c.exec_run(["rm", "-f", f"/tmp/.exec-{tok}"], detach=True)
     last_used[pid] = time.time()
-    out = "".join(parts)
-    result = {"exit_code": code, "timed_out": code == 124, "output": out}
+    result = {"exit_code": code, "timed_out": code == 124, "output": buf.text()}
     if code == 137:  # 被 SIGKILL：看 cgroup 计数有没有涨，涨了就是内存超上限被内核杀的
         n = _oom_count(c)
         if n is not None and n > oom_seen.get(pid, 0):
             result.update(oom=True, memory_limit=mem_bytes(MEM))
         if n is not None:
             oom_seen[pid] = n
-    if len(out) > MAX_OUTPUT:
-        head, tail = out[:MAX_OUTPUT // 2], out[-MAX_OUTPUT // 2:]
-        result.update(output=head + SPILL_MARK + tail, omitted=len(out) - len(head) - len(tail), total=len(out))
-        try:
-            result["spill"] = _spill(pid, out)
-        except OSError:
-            pass
+    if binary_bytes is not None:
+        if spill:
+            spill.discard()
+        result.update(output="", binary=binary_bytes)
+        if sink is not None:
+            sink.put(f"（二进制输出，{binary_bytes} 字节，不显示）")
+    elif buf.omitted:
+        head, tail = buf.parts()
+        result.update(output=head + SPILL_MARK + tail, omitted=buf.omitted, total=buf.total())
+        if spill:
+            result["spill"] = spill.rel
+            if spill.truncated:
+                result["spill_truncated"] = True
     return result
 
 
@@ -244,25 +376,64 @@ def _kill_exec(pid: str, tok: str) -> None:
                 f'sleep 2; kill -KILL -- -$p 2>/dev/null; rm -f {f}; exit 0'])
 
 
-def _spill(pid: str, text: str) -> str:
-    """完整输出存进 /projects/<pid>/.spill/，返回工作区相对路径。约定与 backend/app/spill.py 相同（v1.38 移植自
-    deepseek-harness spill-local，MIT）：独占创建不覆盖；清理只认 SPILL_NAME_RE 形状的普通文件、不跟随符号链接，
-    严格早于 SPILL_DAYS 天的删、再只留 SPILL_KEEP 个；清理出错不影响这次落盘。"""
-    d = f"/projects/{pid}/.spill"
-    os.makedirs(d, exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-    for _ in range(8):
-        name = f"{stamp}-run_command-{os.urandom(2).hex()}.txt"
+class _SpillFile:
+    """前台命令完整输出边跑边写进 /projects/<pid>/.spill/（v1.40：不再先在内存里攒全文）。约定与 backend/app/spill.py
+    相同（v1.38 移植自 deepseek-harness spill-local，MIT）：独占创建不覆盖；超过 SPILL_MAX_BYTES 不再写，标 truncated。"""
+    def __init__(self, pid: str):
+        self.dir = f"{PROJECTS_ROOT}/{pid}/.spill"
+        os.makedirs(self.dir, exist_ok=True)
+        stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+        for _ in range(8):
+            name = f"{stamp}-run_command-{os.urandom(2).hex()}.txt"
+            try:
+                self._f = open(f"{self.dir}/{name}", "x", encoding="utf-8")
+                break
+            except FileExistsError:
+                continue
+        else:
+            raise FileExistsError(name)
+        self.path, self.rel, self.size, self.truncated = f"{self.dir}/{name}", f".spill/{name}", 0, False
+
+    def write(self, text: str) -> None:
+        if self.truncated or self._f is None:
+            return
+        data = text.encode("utf-8")
+        room = SPILL_MAX_BYTES - self.size
+        if len(data) > room:
+            data, self.truncated = data[:room], True
+            data = data.decode("utf-8", "ignore").encode("utf-8")  # 别把半个字写进去
         try:
-            with open(f"{d}/{name}", "x", encoding="utf-8") as f:
-                f.write(text)
-            break
-        except FileExistsError:
-            continue
-    else:
-        raise FileExistsError(name)
-    for path in (d, f"{d}/{name}"):
-        os.chown(path, 1000, 1000)
+            self._f.write(data.decode("utf-8"))
+            self.size += len(data)
+        except OSError:  # 磁盘满之类：已写的留着，后面不写了
+            self.truncated = True
+        if self.truncated:
+            try:
+                self._f.write("\n…（输出太长，后面没有保存）\n")
+            except OSError:
+                pass
+
+    def close(self) -> None:
+        if self._f is None:
+            return
+        try:
+            self._f.close()
+            for path in (self.dir, self.path):
+                os.chown(path, 1000, 1000)
+        except OSError:
+            pass
+        self._f = None
+        _sweep_spill(self.dir)
+
+    def discard(self) -> None:
+        try:
+            os.unlink(self.path)
+        except OSError:
+            pass
+
+
+def _sweep_spill(d: str) -> None:
+    """清理只认 SPILL_NAME_RE 形状的普通文件、不跟随符号链接，严格早于 SPILL_DAYS 天的删、再只留 SPILL_KEEP 个；出错不管。"""
     try:
         cutoff = time.time() - SPILL_DAYS * 86400
         ours = []
@@ -279,7 +450,6 @@ def _spill(pid: str, text: str) -> str:
                 pass
     except OSError:
         pass
-    return f".spill/{name}"
 
 
 def _check_stdin(body: ExecIn) -> None:

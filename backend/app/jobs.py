@@ -31,7 +31,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import quota, sandbox_client
+from . import quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -124,13 +124,17 @@ def log_size(job: Job) -> int:
         return 0
 
 
-def _frames(raw: str) -> str:
-    """进度条靠 \\r 原地刷新（pip、wget、tqdm）：每行只留最后一次刷新的样子。"""
-    return "\n".join(ln.rsplit("\r", 1)[-1] if "\r" in ln.rstrip("\r") else ln.rstrip("\r") for ln in raw.split("\n"))
+def _binary(job: Job) -> bool:
+    """日志开头就是二进制（后台 cat 了个压缩包之类）：不把乱码给人和模型看。"""
+    try:
+        with (job_dir(job) / "log").open("rb") as f:
+            return term_text.is_binary(f.read(term_text.BINARY_SAMPLE))
+    except FileNotFoundError:
+        return False
 
 
 def log_tail(job: Job, chars: int = TAIL_CHARS) -> str:
-    """日志最后一段（\\r 进度帧折叠）。"""
+    """日志最后一段（term_text.clean：去颜色转义、\\r 进度帧折叠）；二进制日志换成一句说明。"""
     p = job_dir(job) / "log"
     try:
         with p.open("rb") as f:
@@ -139,7 +143,9 @@ def log_tail(job: Job, chars: int = TAIL_CHARS) -> str:
             raw = f.read().decode("utf-8", "replace")
     except FileNotFoundError:
         return ""
-    text = _frames(raw)
+    if _binary(job):
+        return term_text.binary_note(size)
+    text = term_text.clean(raw)
     return text[-chars:] if len(text) > chars else text
 
 
@@ -180,9 +186,11 @@ def read_new(job: Job, chars: int = TAIL_CHARS) -> tuple[str, int, int]:
             raw = f.read(size - begin)
     except FileNotFoundError:
         return "", job.read_offset or 0, 0
+    if _binary(job):  # 二进制日志：游标直接跳到末尾，只说一句
+        return (term_text.binary_note(size) if size > start else ""), size, 0
     skip = utf8_start(raw) if begin > start else 0  # 窗口从字中间切进来：跳到下一个码点
     end = utf8_complete(raw)
-    text = _frames(raw[skip:end].decode("utf-8", "replace"))
+    text = term_text.clean(raw[skip:end].decode("utf-8", "replace"))
     dropped = begin - start + skip
     if len(text) > chars:
         cut = len(text) - chars
