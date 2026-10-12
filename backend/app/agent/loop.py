@@ -13,10 +13,13 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import supersede
+from . import loop_guard, supersede
 from .tools import REGISTRY, ToolContext, ToolResult, no_live, schemas
 
-MAX_STEPS = 6  # 防止工具死循环烧钱
+# 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
+WRAP_UP = ("[系统提示] 这一轮的步数/用量预算用完了，不能再调用工具。请直接回复用户：已经完成了什么、"
+           "还差哪些没做、下一步打算怎么做；告诉用户回复“继续”你就接着做。")
+SKIPPED = "没有执行：同一批里前面的调用已被判定为原地打转。"
 SELF_PAGED = {"read_file"}  # 自己按 offset 分页的工具，结果不再落盘截断
 
 
@@ -151,28 +154,52 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     tools = schemas(ctx)
     seen = supersede.Tracker()  # 旧页面快照 / 截图只留最新一份（supersede.py）
 
-    for step in range(MAX_STEPS):
+    guard = loop_guard.LoopGuard()  # 原地打转：第一次提醒模型，第二次停下（loop_guard.py）
+    max_steps, spent, step = max(1, settings.agent_max_steps), 0, 0
+    while True:
+        over = step >= max_steps - 1 or 0 < settings.agent_turn_tokens <= spent
+        if over and step:  # 预算到了：最后一步不给工具，让模型交代进度（第一步就是最后一步时不用交代）
+            messages.append({"role": "user", "content": WRAP_UP})
         seen.apply(messages)
         turn: Turn | None = None
-        # 最后一步不给工具，强制模型收尾作答
-        async for item in stream_turn(messages, tools if step < MAX_STEPS - 1 else None, model):
-            if isinstance(item, Turn):
-                turn = item
-            elif isinstance(item, Reasoning):
-                yield Thinking(item.text)
-            else:
-                for ev in builder.text(item):
+        said, chant = "", 0
+        async with aclosing(stream_turn(messages, None if over else tools, model)) as items:
+            async for item in items:
+                if isinstance(item, Turn):
+                    turn = item
+                elif isinstance(item, Reasoning):
+                    yield Thinking(item.text)
+                else:
+                    said += item
+                    for ev in builder.text(item):
+                        yield ev
+                    if chant := guard.content(item):
+                        break  # 复读：不等它说完（关闭流，已花的 token 照记）
+        step += 1
+        if chant:
+            builder.break_text()
+            if chant > 1 or over:
+                for ev in builder.text(loop_guard.STOP_NOTE):
                     yield ev
+                break
+            guard.recovered()
+            messages += [{"role": "assistant", "content": said},
+                         {"role": "user", "content": loop_guard.nudge(guard.detail)}]
+            continue
         assert turn is not None
-        if not turn.tool_calls:
+        spent += turn.tokens
+        if not turn.tool_calls or over:
             break
 
         builder.break_text()
         messages.append({"role": "assistant", "content": turn.text or None, "tool_calls": [
             {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}
             for c in turn.tool_calls]})
-        images, browser_only = [], True
+        images, browser_only, hit = [], True, 0
         for call in turn.tool_calls:
+            if hit:  # 已判定打转：同一批里剩下的调用不再执行（每个调用仍要有一条结果）
+                messages.append({"role": "tool", "tool_call_id": call.id, "content": SKIPPED})
+                continue
             result = ToolResult("")
             async for ev in _call_tool(call, ctx, builder):
                 if isinstance(ev, ToolResult):
@@ -183,6 +210,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
             browser_only &= not result.images or call.name.startswith("browser_")
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result.content})
             seen.note(messages, len(messages) - 1, call.name)
+            hit = guard.tool(call.name, _args(call.arguments), result.content)
         if images:  # 工具给了图：原图补一条消息，或描述并进最后一个工具结果（vision.for_tool 决定）
             note, msg = await vision.for_tool(images, model or settings.default_model)
             if note:
@@ -191,9 +219,23 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                 messages.append(msg)
                 if browser_only:
                     seen.note_image(len(messages) - 1)
+        if hit > 1:
+            for ev in builder.text(loop_guard.STOP_NOTE):
+                yield ev
+            break
+        if hit:
+            guard.recovered()
+            messages.append({"role": "user", "content": loop_guard.nudge(guard.detail)})
 
     yield Done(builder.blocks)
 
+
+
+def _args(raw: str) -> object:
+    try:
+        return json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return raw
 
 
 async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):

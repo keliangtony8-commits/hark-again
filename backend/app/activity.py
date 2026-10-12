@@ -23,7 +23,7 @@ from .wire_time import iso
 DETAIL_KEYS = ("command", "url", "query", "pattern", "port", "path", "paths", "job_id", "title", "name", "skill", "server", "tool", "reason")
 DETAIL_MAX = 120
 NOTE_MAX = 160
-KEEP = 40  # 一条回复最多记这么多步（MAX_STEPS 6 × 每步可多个调用；再多只是噪音）
+KEEP = 80  # 一条回复最多记这么多步（长任务可走到 agent_max_steps 次模型调用；更早的步骤只是噪音，留最近的）
 
 
 def title(label: str) -> str:

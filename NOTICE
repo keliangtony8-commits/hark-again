@@ -36,3 +36,5 @@
 - deepseek-ai/deepseek-harness packages/fs/tool-fs-search src/glob.ts（sampleAcrossTopLevel、relativeToSearchRoot、topLevelSegment）及 tests/tools.spec.ts 对应用例 — MIT License, Copyright (c) 2026 DeepSeek, modified
 - jupyterhub/jupyter-server-proxy jupyter_server_proxy/handlers.py（proxy_open、select_subprotocol、_record_activity、X-Forwarded-Prefix/Context/ProxyContextPath）— BSD-3-Clause, Copyright (c) Jupyter Development Team, modified (design ported to Starlette/websockets)
   移植到 sandbox/runner.py（preview_ws、ws_relay）、backend/app/preview.py、backend/app/routes/preview.py（v1.44）
+- google-gemini/gemini-cli packages/core/src/services/loopDetectionService.ts（及其测试）、core/client.ts 的 _recoverFromLoop — Apache-2.0, Copyright 2025 Google LLC, modified
+  移植到 backend/app/agent/loop_guard.py、backend/tests/smoke_loop_guard.py（v1.45）

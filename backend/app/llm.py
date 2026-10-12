@@ -55,6 +55,7 @@ class Turn:
     """一次模型调用的完整结果（流式过程中逐步填满）。"""
     text: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
+    tokens: int = 0  # 这次调用用掉的 token（输入 + 输出；供应商没报用量就是 0）：内核按它管一轮的用量预算
 
 
 async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
@@ -93,6 +94,8 @@ async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
         if last_usage is not None:
             await usage.record(model, "chat", last_usage.prompt_tokens or 0, last_usage.completion_tokens or 0)
     turn.tool_calls = [calls[i] for i in sorted(calls)]
+    if last_usage is not None:
+        turn.tokens = (last_usage.prompt_tokens or 0) + (last_usage.completion_tokens or 0)
     yield turn
 
 

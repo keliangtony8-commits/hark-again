@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     workspace_disk_mb: int = 3072
     # 单个工具结果给模型的上限（字符）；超出的完整原文落盘到项目 .spill/（spill.py），主聊天只截断
     tool_result_max: int = 16000
+    # 一轮回复的预算（参考 Gemini CLI MAX_TURNS=100；Codex/deepseek-harness 不设上限只靠用户停止）：
+    # agent_max_steps = 最多调用模型几次（每次可带多个工具调用）；agent_turn_tokens = 这一轮累计 token（每次调用的输入都含
+    # 全部上文，越往后越贵）。哪个先到都一样：收掉工具，让模型说清做到哪、还差什么，用户回“继续”接着做。
+    # 步数至少按 1 算；token 设 0 = 不按 token 管。
+    agent_max_steps: int = 40
+    agent_turn_tokens: int = 600_000
     stt_model: str = "stt"      # 语音识别别名（gateway 模式走 OpenAI 音频接口）
     embed_model: str = "embed"  # 记忆检索的向量别名
     # 语音供应商：gateway = 识别走网关 stt 别名、朗读用设备自带语音；
