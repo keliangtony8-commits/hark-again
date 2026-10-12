@@ -122,9 +122,9 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
 async def run_command(ctx: ToolContext, command: str, timeout: int | None = None, background: bool = False,
                       title: str | None = None, idle_timeout: int | None = None, stdin: str | None = None) -> ToolResult:
     if (v := command_guard.verdict(command)) is not None and v.level == "block":
-        return ToolResult(command_guard.refusal(v))
+        return ToolResult(command_guard.refusal(v), failed="危险命令，已拦下")
     if v is not None and v.level == "unsupported":
-        return ToolResult(command_guard.unsupported(v, workspaces.ENVIRONMENT))
+        return ToolResult(command_guard.unsupported(v, workspaces.ENVIRONMENT), failed="沙盒里没有这个权限")
     if background:
         if stdin is not None:
             return ToolResult("后台任务不接受 stdin：把输入写进工作区文件，命令里用 < 文件 读。")
@@ -132,7 +132,7 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
             job = await jobs.start(ctx.db, project_id=ctx.workspace, command=command, title=title, timeout=timeout,
                                    idle_timeout=idle_timeout, conversation_id=ctx.conversation_id, task_id=ctx.task_id)
         except jobs.JobError as e:
-            return ToolResult(f"没有启动：{e}")
+            return ToolResult(f"没有启动：{e}", failed=f"没有启动：{e}")
         idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
         return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（最长 {jobs.duration_text(job.timeout)}{idle}）。"
                           "用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。",
@@ -149,11 +149,11 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
             elif ev["type"] == "exit":
                 r = ev
             elif ev["type"] == "error":
-                return ToolResult(f"沙盒出错（{ev.get('error', '')}），命令的结果不确定。")
+                return ToolResult(f"沙盒出错（{ev.get('error', '')}），命令的结果不确定。", failed="沙盒出错")
     except httpx.HTTPError as e:
-        return ToolResult(f"沙盒没响应（{type(e).__name__}），命令没有执行。")
+        return ToolResult(f"沙盒没响应（{type(e).__name__}），命令没有执行。", failed="沙盒没响应")
     if r is None:
-        return ToolResult("沙盒连接中断，命令的结果不确定。")
+        return ToolResult("沙盒连接中断，命令的结果不确定。", failed="沙盒连接中断")
     timed_out = r.get("timed_out")
     status = "超时被终止" if timed_out else f"退出码 {r['exit_code']}"
     if r.get("oom"):  # 沙盒比过 cgroup 的 OOM 计数：确实是内存超上限被内核杀的
@@ -167,7 +167,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     if r.get("oom"):
         hint = f"\n（{jobs.oom_hint(r.get('memory_limit'))}）"
     return ToolResult(f"{status}\n{out}{hint}", [
-        {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}])
+        {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}],
+        failed="" if r.get("exit_code") == 0 and not timed_out else status)
 
 
 LIVE_LINES, LIVE_CHARS = 40, 4000  # 运行中卡片只带最近这些输出：每 0.5 秒整块推一次，别越推越大

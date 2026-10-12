@@ -1,6 +1,7 @@
 // v0.84：回复按段排版——正文类块进回复卡（最宽 bubbleMax），卡片类块（审批/订单/表单/商品/摘要/浏览器）单独成卡、占满聊天区。
 import 'package:assistant/blocks/block_frame.dart';
 import 'package:assistant/features/chat/message_view.dart';
+import 'package:assistant/models/activity.dart';
 import 'package:assistant/models/block.dart';
 import 'package:assistant/models/message.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -72,7 +73,7 @@ void main() {
       role: 'assistant',
       pending: true,
       blocks: [_order],
-      tools: [ToolRun(id: 't1', label: '打开网页', running: true)],
+      steps: [ActivityStep(id: 't1', title: '打开网页')],
     );
     await tester.pumpWidget(_host(m));
     await tester.pump(const Duration(milliseconds: 500));

@@ -264,3 +264,24 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .attach-name { color: var(--text); }
 .attach-sub { color: var(--text-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attach.err .attach-sub { color: var(--danger); }
+
+/* 活动时间线（v1.28）：和“已思考”同一种低调行；展开 = 竖向时间线，圆点之间一根发丝线 */
+.activity-bad { color: var(--warning); }
+.activity-steps { list-style: none; margin: 0 0 var(--sp-2); padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-3); background: var(--tile);
+  border-radius: var(--r-tile); animation: rise var(--dur) var(--ease) both; }
+.step { position: relative; display: flex; gap: var(--sp-3); padding-bottom: var(--sp-3); animation: rise var(--dur) var(--ease) both; }
+.step:last-child { padding-bottom: 0; }
+.step:not(:last-child)::before { content: ""; position: absolute; left: 9px; top: 22px; bottom: 0; width: 1px; background: var(--border); }
+.step-dot { flex: none; width: 18px; height: 18px; margin-top: 2px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: var(--r-full); color: var(--text-2); }
+.step.bad .step-dot { border-color: var(--warning); color: var(--warning); }
+.step-pulse { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-2); animation: blink 1.6s infinite; }
+.step-body { min-width: 0; flex: 1; }
+.step-line { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
+.step-title { flex: none; font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text); }
+.step-detail { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono);
+  font-size: var(--fs-xs); color: var(--text-2); background: none; }
+.step-ms { flex: none; margin-left: auto; font-size: var(--fs-xs); color: var(--text-3); }
+.step-note { margin-top: 2px; font-size: var(--fs-xs); color: var(--warning); }
+.tool-run-detail { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
+@media (prefers-reduced-motion: reduce) { .activity-steps, .step, .step-pulse { animation: none; } }

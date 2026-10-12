@@ -5,6 +5,7 @@ import { copyText } from "../../lib/copy";
 import { speechSupported, stopIfSpeaking, toggleSpeech, useSpeechPhase } from "../../lib/speech";
 import type { Message } from "../../lib/types";
 import { ThinkingCard, ThoughtSummary } from "./Thought";
+import ActivitySummary from "./Activity";
 import CopyButton from "../../ui/CopyButton";
 import SaveReplyButton from "../projects/SaveReplyButton";
 import { IconCheck, IconClose, IconCopy, IconEdit, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
@@ -83,7 +84,8 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
       </div>
     );
   }
-  const running = message.tools?.filter((t) => t.state === "running") ?? [];
+  const steps = message.steps ?? [];
+  const running = steps.filter((t) => t.state === "running");
   const empty = message.pending && message.blocks.length === 0 && running.length === 0;
   // AI 回复 = 若干段（blocks/registry replySegments）：正文段是左侧玻璃回复卡，卡片块单独成卡、占满聊天区；
   // 运行中的工具条跟在最后一段正文里，最后一段是卡片时另起一张小回复卡。还没出字时只是一颗“思考中”小胶囊
@@ -93,6 +95,8 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
   return (
     <div className={`msg assistant ${last ? "last" : ""}`} data-msg-id={message.id}>
       {!empty && message.thought?.trim() && <ThoughtSummary message={message} />}
+      {/* 活动时间线（v1.28）：用过工具就多一行“用了 N 步”，生成中有完成的步骤就出现 */}
+      {steps.length > 0 && (!message.pending || steps.some((t) => t.state !== "running")) && <ActivitySummary steps={steps} pending={message.pending} />}
       {empty ? (message.thought?.trim()
         ? <ThinkingCard message={message} />
         : <div className="thinking glass-chip"><span /><span /><span /></div>) : segments.map((s, i) => s.card ? (
@@ -101,7 +105,7 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
           <div key={i} className="ai-card">
             <BlockRenderer blocks={s.blocks} />
             {i === segments.length - 1 && tools.map((t) => (
-              <div key={t.id} className="tool-run"><span className="tool-spin" />{t.label}…</div>
+              <div key={t.id} className="tool-run"><span className="tool-spin" />正在{t.title}{t.detail ? <span className="tool-run-detail"> · {t.detail}</span> : "…"}</div>
             ))}
           </div>
         ))}

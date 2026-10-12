@@ -32,8 +32,8 @@ def to_wire(ev: loop.Event) -> dict:
             return {"type": "block.update", "index": index, "block": block}
         case loop.TextDelta(index, text):
             return {"type": "block.delta", "index": index, "text": text}
-        case loop.ToolStatus(id, name, label, state):
-            return {"type": "tool.status", "id": id, "name": name, "label": label, "state": state}
+        case loop.ToolStatus(id, name, label, state, step):
+            return {"type": "tool.status", "id": id, "name": name, "label": label, "state": state, "step": step}
         case loop.Thinking(text):
             return {"type": "thinking.delta", "text": text}
     raise ValueError(ev)
@@ -129,7 +129,8 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     blocks = builder.partial() if status == "stopped" else builder.blocks
     reply = None
     if blocks:
-        reply = Message(conversation_id=cid, role="assistant", blocks=blocks, status=status)
+        reply = Message(conversation_id=cid, role="assistant", blocks=blocks, status=status,
+                        steps=builder.steps(stopped=status == "stopped"))
         db.add(reply)
         await db.commit()
         await _try_emit(emit, {"type": "message.done", "message": reply.to_wire()})

@@ -4,6 +4,7 @@ import { memoryStore } from "../lib/memoryStore";
 import { OUTBOX_GIVE_UP_MS, outbox } from "../lib/outbox";
 import { ChatSocket, type LinkStatus } from "../lib/socket";
 import type { Block, FileBlock, Message, OutgoingFile, ServerEvent, TextBlock } from "../lib/types";
+import { mergeStep, stepFromStatus } from "../lib/activity";
 import { asFileBlock } from "../lib/files";
 import { useConversations } from "./useConversations";
 
@@ -93,7 +94,7 @@ export function useChat(projectId?: string) {
           const ms = [...t.messages];
           const i = ms.map((x) => x.role).lastIndexOf("user");
           if (um && i >= 0) ms[i] = { ...ms[i], blocks: um.blocks };
-          return { id: e.conversation_id, messages: [...ms, { id: "pending", role: "assistant", blocks: [], tools: [], pending: true }] };
+          return { id: e.conversation_id, messages: [...ms, { id: "pending", role: "assistant", blocks: [], steps: [], pending: true }] };
         });
         break;
       }
@@ -114,12 +115,8 @@ export function useChat(projectId?: string) {
         patchPending((p) => { const now = Date.now(); return { ...p, thought: keepTail((p.thought ?? "") + e.text), thinkFrom: p.thinkFrom ?? now, thinkTo: now }; });
         break;
       case "tool.status": {
-        const { type: _t, ...run } = e;
-        patchPending((p) => {
-          const tools = p.tools ?? [];
-          const i = tools.findIndex((t) => t.id === run.id);
-          return { ...p, tools: i < 0 ? [...tools, run] : tools.map((t, j) => (j === i ? run : t)) };
-        });
+        const step = stepFromStatus(e);
+        patchPending((p) => ({ ...p, steps: mergeStep(p.steps ?? [], step) }));
         break;
       }
       case "message.done":

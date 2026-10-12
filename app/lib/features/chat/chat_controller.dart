@@ -25,6 +25,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/chat_socket.dart';
 import '../../core/resource.dart';
+import '../../models/activity.dart';
 import '../../models/block.dart';
 import '../../models/export.dart';
 import '../../models/message.dart';
@@ -253,11 +254,7 @@ class ChatController extends Notifier<ChatState> {
       case 'thinking.delta':
         _patchPending((m) => m.think(e['text'] as String? ?? ''));
       case 'tool.status':
-        _patchPending((m) {
-          final run = ToolRun(id: e['id'] as String, label: e['label'] as String? ?? '', running: e['state'] == 'running');
-          final i = m.tools.indexWhere((t) => t.id == run.id);
-          return m.copyWith(tools: i < 0 ? [...m.tools, run] : [for (final t in m.tools) t.id == run.id ? run : t]);
-        });
+        _patchPending((m) => m.copyWith(steps: mergeStep(m.steps, ActivityStep.fromStatus(e))));
       case 'message.done':
         final pending = state.messages.where((m) => m.pending).lastOrNull;
         var done = Message.fromJson(e['message'] as Map<String, dynamic>);

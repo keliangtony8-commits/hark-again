@@ -45,6 +45,8 @@ class Message(Base):
     role: Mapped[str] = mapped_column(String(16))  # user | assistant
     blocks: Mapped[list] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(16), default="done", server_default="done")  # done | stopped（用户中途停止）
+    # 活动时间线：这条回复里每次工具调用一步（app/activity.py 定义形状）；用户消息、老消息为空
+    steps: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     # 纯文本副本，只给搜索用（JSON 里的中文可能被转义，直接 LIKE 不可靠）；由下方监听器自动维护，调用方不用管
     search_text: Mapped[str] = mapped_column(Text, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
@@ -58,6 +60,8 @@ class Message(Base):
             out["created_at"] = iso(self.created_at)
         if self.status and self.status != "done":
             out["status"] = self.status
+        if self.steps:
+            out["steps"] = self.steps
         return out
 
 

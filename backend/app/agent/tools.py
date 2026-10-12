@@ -63,6 +63,7 @@ class ToolResult:
     content: str
     blocks: list[dict] = field(default_factory=list)
     images: list[ToolImage] = field(default_factory=list)
+    failed: str = ""  # 非空 = 这一步没成（活动时间线记 error + 这句原因），内容照常交给模型
 
 
 @dataclass

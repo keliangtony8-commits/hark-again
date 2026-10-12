@@ -1,10 +1,5 @@
+import 'activity.dart';
 import 'block.dart';
-
-class ToolRun {
-  const ToolRun({required this.id, required this.label, required this.running});
-  final String id, label;
-  final bool running;
-}
 
 /// 用户消息的发送状态（只存在于本机；服务器来的消息都是 sent）。
 /// queued：没连上，连上自动发；failed：等太久或发出后断线没回音，要用户点“重发”。
@@ -15,7 +10,7 @@ class Message {
       {required this.id,
       required this.role,
       required this.blocks,
-      this.tools = const [],
+      this.steps = const [],
       this.pending = false,
       this.outbox = Outbox.sent,
       this.stopped = false,
@@ -28,12 +23,14 @@ class Message {
       id: j['id'] as String,
       role: j['role'] as String,
       blocks: blocksFrom(j['blocks']),
+      steps: stepsFrom(j['steps']),
       stopped: j['status'] == 'stopped',
       createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal());
 
   final String id, role;
   final List<Block> blocks;
-  final List<ToolRun> tools;
+  /// 活动时间线（models/activity.dart）：生成中由 tool.status 实时合并，完成后以服务器落库的为准。
+  final List<ActivityStep> steps;
   final bool pending; // 正在生成
   final Outbox outbox;
 
@@ -72,12 +69,12 @@ class Message {
   bool get unsent => outbox != Outbox.sent;
 
   Message copyWith(
-          {List<Block>? blocks, List<ToolRun>? tools, bool? pending, Outbox? outbox, String? thought, DateTime? thinkFrom, DateTime? thinkTo}) =>
+          {List<Block>? blocks, List<ActivityStep>? steps, bool? pending, Outbox? outbox, String? thought, DateTime? thinkFrom, DateTime? thinkTo}) =>
       Message(
       id: id,
       role: role,
       blocks: blocks ?? this.blocks,
-      tools: tools ?? this.tools,
+      steps: steps ?? this.steps,
       pending: pending ?? this.pending,
       outbox: outbox ?? this.outbox,
       stopped: stopped,

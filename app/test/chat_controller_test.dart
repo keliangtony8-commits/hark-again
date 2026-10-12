@@ -82,7 +82,7 @@ void main() {
     expect(pending.pending, true);
     expect((pending.blocks[0] as TextBlock).text, '你好！');
     expect((pending.blocks[1] as ApprovalBlock).state, 'approved');
-    expect(pending.tools.single.running, true);
+    expect(pending.steps.single.running, true);
 
     socket.ctl.add({
       'type': 'message.done',

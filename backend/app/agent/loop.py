@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 
-from .. import spill, vision
+from .. import activity, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
 from .tools import REGISTRY, ToolContext, ToolResult, no_live, schemas
@@ -42,7 +42,8 @@ class ToolStatus:
     id: str
     name: str
     label: str
-    state: str  # running | done | error
+    state: str  # running | done | error | denied
+    step: dict = field(default_factory=dict)  # 活动时间线的这一步（activity.py），客户端据此画时间线
 
 
 @dataclass
@@ -63,6 +64,7 @@ Event = BlockStart | BlockUpdate | TextDelta | ToolStatus | Thinking | Done
 class MessageBuilder:
     blocks: list[dict] = field(default_factory=list)
     _text_open: bool = False
+    timeline: activity.Recorder = field(default_factory=activity.Recorder)  # 这条回复的工具步骤（随回复落库）
 
     def text(self, delta: str) -> list[Event]:
         out: list[Event] = []
@@ -117,6 +119,9 @@ class MessageBuilder:
                 b = {k: v for k, v in b.items() if k != "live"}
             out.append({**b, "state": "expired"} if b.get("state") == "pending" and "id" in b else b)
         return out
+
+    def steps(self, stopped: bool = False) -> list[dict]:
+        return self.timeline.partial() if stopped else [dict(s) for s in self.timeline.steps]
 
 
 async def run(system: str, history: list[dict], ctx: ToolContext,
@@ -177,6 +182,13 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     except json.JSONDecodeError:
         yield ToolResult("参数不是合法 JSON，请重试。")
         return
+    if not isinstance(args, dict):
+        yield ToolResult("参数要是一个 JSON 对象，请重试。")
+        return
+    rec = builder.timeline
+
+    def denied(note: str) -> ToolStatus:
+        return ToolStatus(call.id, call.name, t.label, "denied", rec.denied(call.id, call.name, t.label, args, note))
 
     if t.risk and (reason := t.risk(args, ctx)):
         try:
@@ -191,6 +203,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
             else:
                 yield ev
         if not approved:
+            yield denied("你没有批准")
             yield ToolResult("用户没有批准这个操作，已取消。不要换方式绕过，告诉用户即可。")
             return
 
@@ -204,11 +217,12 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
                 yield ev
         if reply is not None:
             if reply.reply is None:
+                yield denied("你没有填写")
                 yield ToolResult("用户没有填写，已取消。可以问问用户想怎么办，不要反复弹表单。")
                 return
             args["form"] = reply.reply
 
-    yield ToolStatus(call.id, call.name, t.label, "running")
+    yield ToolStatus(call.id, call.name, t.label, "running", rec.start(call.id, call.name, t.label, args))
     live = _Live(builder)
     try:
         async with aclosing(live.run(t.run(ctx, **args), ctx)) as events:
@@ -218,7 +232,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     except Exception as e:  # 工具失败交给模型处理（换方法或如实告知）
         if (ev := live.settle()) is not None:
             yield ev
-        yield ToolStatus(call.id, call.name, t.label, "error")
+        yield ToolStatus(call.id, call.name, t.label, "error", rec.finish(call.id, "error", str(e)) or {})
         yield ToolResult(f"工具出错：{e}")
         return
     blocks = list(result.blocks)
@@ -227,7 +241,8 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     for b in blocks:
         if not builder.has(b):
             yield builder.add(b)
-    yield ToolStatus(call.id, call.name, t.label, "done")
+    state = "error" if result.failed else "done"
+    yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed) or {})
     content = result.content
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）
         content = spill.bound(content, settings.tool_result_max, ctx.workspace, call.name)

@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocks/block_view.dart';
 import '../../core/speech.dart';
+import '../../models/activity.dart';
 import '../../models/block.dart';
 import '../../models/message.dart';
 import '../../theme/app_theme.dart';
@@ -21,6 +22,7 @@ import '../../ui/markdown.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../projects/save_reply.dart';
+import 'activity_view.dart';
 import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
@@ -135,10 +137,10 @@ class MessageView extends StatelessWidget {
   /// 运行中的工具小条跟在最后一段正文里；最后一段是卡片时另起一张小回复卡。
   Widget _assistant(BuildContext context, double width) {
     final maxWidth = width * Layout.bubbleMax;
-    final running = message.pending ? message.tools.where((t) => t.running).toList() : const <ToolRun>[];
+    final running = message.pending ? message.steps.where((t) => t.running).toList() : const <ActivityStep>[];
     final thinking = message.pending && message.blocks.isEmpty && running.isEmpty;
     final segments = replySegments(message.blocks);
-    final chips = [for (final t in running) _ToolChip(t.label)];
+    final chips = [for (final t in running) _ToolChip(t)];
     if (chips.isNotEmpty && (segments.isEmpty || segments.last.card)) segments.add(const ReplySegment.prose([]));
     Widget prose(ReplySegment s, {required bool tail}) => ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
@@ -179,10 +181,17 @@ class MessageView extends StatelessWidget {
           ]);
     // 思考卡收成回复上方的一行（正文开始流出时就收），用 RiseSwitcher 长出来，不是一跳
     final summary = !thinking && message.thought.trim().isNotEmpty;
+    // 活动时间线（v1.28）：用过工具就在回复上方多一行“用了 N 步”，生成中有完成的步骤时就出现（“已用 N 步”）
+    final activity = message.steps.isNotEmpty && (!message.pending || message.steps.any((s) => !s.running));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: RiseSwitcher(child: summary ? ThoughtSummary(key: const ValueKey('summary'), message: message) : null),
+      ),
+      ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: RiseSwitcher(
+            child: activity ? ActivitySummary(key: const ValueKey('activity'), steps: message.steps, pending: message.pending) : null),
       ),
       _tappable(
         AnimatedSize(
@@ -353,9 +362,10 @@ class _SpeakButton extends ConsumerWidget {
   }
 }
 
+/// 正在跑的那一步：转圈 + “运行命令 · ls -la…”（摘要等宽、一行省略）。
 class _ToolChip extends StatelessWidget {
-  const _ToolChip(this.label);
-  final String label;
+  const _ToolChip(this.step);
+  final ActivityStep step;
 
   @override
   Widget build(BuildContext context) {
@@ -369,7 +379,14 @@ class _ToolChip extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.6, color: p.accent)),
             const SizedBox(width: Sp.x2),
-            Text('$label…', style: context.text.bodySmall),
+            Text(step.detail.isEmpty ? '正在${step.title}…' : '正在${step.title}', style: context.text.bodySmall),
+            if (step.detail.isNotEmpty)
+              Flexible(
+                child: Text(' · ${step.detail}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodySmall?.copyWith(fontFamily: 'monospace', fontSize: Fs.xs, color: p.text2)),
+              ),
           ]),
         ),
       ),

@@ -54,14 +54,17 @@ export type SitePage = { id: string; slug: string; title: string; url: string; u
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;
 
 export type Role = "user" | "assistant";
-export type ToolRun = { id: string; name: string; label: string; state: "running" | "done" | "error" };
+/** 活动时间线的一步（v1.28，backend/app/activity.py）：每次工具调用一步，随消息落库（Message.steps）。 */
+export type ActivityStep = { id: string; tool: string; title: string; detail: string; state: "running" | "done" | "error" | "denied" | "stopped"; at?: string; ms?: number; note?: string };
+/** WS tool.status：step = 完整的一步（老服务器没有）。 */
+export type ToolRun = { id: string; name: string; label: string; state: ActivityStep["state"]; step?: ActivityStep };
 /** 发件箱状态（只在本机）：queued = 待发送，failed = 发送失败；没有 = 已进服务器。 */
 export type Outbox = "queued" | "failed";
 /** status 只在不是正常说完时出现：stopped = 用户中途停止，内容是半截的。 */
 /** created_at：服务器时间（带时区 ISO）；本地刚发的 = 发出时刻；生成中的占位没有。用于聊天里的日期分隔。 */
 /** thought：推理模型的思考（thinking.delta 累积，只留尾部），服务器不存；message.done 时接到正式消息上（本次会话可展开回看）。
  *  thinkFrom/thinkTo：第一段 / 最近一段思考到达的本机时间（ms），算“已思考 N 秒”。 */
-export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopped"; pending?: boolean; tools?: ToolRun[]; outbox?: Outbox; created_at?: string; thought?: string; thinkFrom?: number; thinkTo?: number };
+export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopped"; pending?: boolean; steps?: ActivityStep[]; outbox?: Outbox; created_at?: string; thought?: string; thinkFrom?: number; thinkTo?: number };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
 export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; updated_at: string; snippet?: string; message_id?: string };
 

@@ -33,9 +33,9 @@
 | `block.start` | `index`, `block` | 新增第 index 个块 |
 | `block.delta` | `index`, `text` | 追加文字到第 index 个 text 块 |
 | `block.update` | `index`, `block` | 整块替换（审批卡状态变化） |
-| `tool.status` | `id`, `name`, `label`, `state: running\|done` | 工具进度条 |
+| `tool.status` | `id`, `name`, `label`, `state: running\|done\|error\|denied`, `step?` | 工具进度条 + 活动时间线（v1.28）：`step = {id, tool, title, detail, state, at, ms?, note?}`（backend/app/activity.py；detail 只取命令/路径/网址等白名单参数；denied = 没批准/没填表，不经过 running）。客户端按 `id` 合并进 pending 消息的 steps |
 | `thinking.delta` | `text` | 推理模型的思考片段（v0.65）：追加到生成中的占位消息上临时展示（客户端只留尾部 2000 字），**不属于任何块、服务器不存、`message.done` 里没有**；老服务器/非推理模型不发 |
-| `message.done` | `message: {id, role, blocks, status?, created_at?}` | 一轮结束，以它为准落盘。`status: "stopped"` = 被停止的半截回复（等待中的审批卡变 `expired`） |
+| `message.done` | `message: {id, role, blocks, status?, created_at?, steps?}` | 一轮结束，以它为准落盘。`status: "stopped"` = 被停止的半截回复（等待中的审批卡变 `expired`） |
 | `message.stopped` | `conversation_id` | 还没产出任何内容就被停止：不存回复，用户消息留着（可“重试”） |
 | `error` | `message` | 本轮失败 |
 
@@ -67,7 +67,7 @@
 统一形状：列表 `GET`，新建 `POST`，改 `PATCH`，删 `DELETE`，每项都有 `id`。
 | 资源 | 路径 | 备注 |
 |---|---|---|
-| 对话 | `/api/conversations` | `GET ?q=&project_id=` 搜标题+内容（置顶在前，内容命中带 `snippet` + `message_id`＝最近一条命中的消息，客户端打开后滚到它并闪一下；标题命中两者都不带）；`PATCH /{id} {title?, pinned?, model?}` 不改 `updated_at`（`model` 非法 422，`""` = 回默认）；列表项和详情都带 `model`（`null` = 默认）；`GET /{id}` 返回 messages（每条 `{id, role, blocks, status?, created_at?}`，`status` 只在 `stopped` 时出现；`created_at` 是带时区的 ISO 时间（v0.45 起，客户端按本地日期画日期分隔，没有就不画）） |
+| 对话 | `/api/conversations` | `GET ?q=&project_id=` 搜标题+内容（置顶在前，内容命中带 `snippet` + `message_id`＝最近一条命中的消息，客户端打开后滚到它并闪一下；标题命中两者都不带）；`PATCH /{id} {title?, pinned?, model?}` 不改 `updated_at`（`model` 非法 422，`""` = 回默认）；列表项和详情都带 `model`（`null` = 默认）；`GET /{id}` 返回 messages（每条 `{id, role, blocks, status?, created_at?, steps?}`；`steps` = 这条回复用过的工具步骤（v1.28，没用工具不带；停止时还在跑的为 `stopped`），`status` 只在 `stopped` 时出现；`created_at` 是带时区的 ISO 时间（v0.45 起，客户端按本地日期画日期分隔，没有就不画）） |
 | 回复存成项目文件 | `POST /api/messages/{id}/save-to-project` | body `{project_id?}`（不给 = 回复所在对话的工作区：项目，或主聊天的 `me`“我的文件”；v1.21 也可显式传 `me`）→ `{project_id, project_name, path, name, size, mime}`（`me` 的 project_name = “我的文件”）；只收助手回复，存成 Markdown 写进工作区根目录，同名加“ 2”；没内容/用户消息 400，消息或项目不存在 404（v1.15） |
 | 项目 | `/api/projects` | `brief` = 项目档案（Markdown，≤8000 字，超出 422；PATCH 时去首尾空白，内容真变了才把 `brief_by` 设为 `user`、`brief_updated_at` 设为现在；助手用 `project_brief` 工具改时 `brief_by=assistant`；老服务器没有这三个字段）；只读 `conversation_count`（项目内对话数）、`last_active_at`（项目或其中任一对话的最后更新）；文件：`/api/projects/{pid}/files[/{path}]`（pid = 项目 id，或 `me` = 个人工作区“我的文件”（v1.21，主聊天和定时任务的工作区）；不存在的 pid 404，不再建目录；multipart 上传；列表每项 `path/name/size/mime/modified`，modified = Unix 秒，客户端首屏按它取最近 3 个；下载路径逐段 URL 编码）；v1.25 电脑状态：`GET /api/projects/{pid}/computer` → `{workspace, name, sandbox: {state: running\|stopped\|none\|unreachable, memory_used?, memory_limit?（字节）, started_at?, last_used_at?, idle_minutes?, outdated?}, disk_used（字节，含隐藏目录）, disk_partial, running_jobs: [同 /api/jobs 形状]}`（只看不开机；沙盒连不上 state=unreachable，其余照给）；`POST …/computer/restart` → 停掉运行中的后台任务（按用户取消）+ 删容器，返回新状态；沙盒连不上 503 且什么都不动；v1.27：`sandbox` 加 `cpu_percent`（占沙盒 CPU 配额 %）、`oom_kills`（本次开机内存超上限被内核杀的进程数）、`processes: [{pid, cpu, memory（字节）, elapsed（秒）, command}]`（按 CPU 前 8，只在运行中）；顶层加 `storage: {files, installed, logs, spill, cache, cleanable}`（字节，disk_used = 前五项和）与 `tools: [{kind: pip\|npm, name, version}]`（用户级安装）；`POST …/computer/cleanup` → `{freed, status}`（删 .spill、已结束任务的 .jobs/<id>、.home/.cache 和运行中容器 /tmp 的 pip/npm 缓存；沙盒连不上照清工作区）。后台任务内存超上限：state=failed、`stop_reason`=“内存超过这台电脑的上限，被系统强制结束” |
 | 记忆 | `/api/memories` | 每项 `{id, category, content, created_at, updated_at}`；`category` 常用 `profile\|food\|travel\|work\|shopping\|general`，客户端认识的显示中文名、不认识的原样显示。搜索、分类筛选都在客户端做（记忆全量已在列表里） |

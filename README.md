@@ -54,7 +54,7 @@ docker compose --profile build-only build sandbox-image                      # �
 
 沙盒服务是唯一持有 Docker 权限的容器，不暴露端口；后端只能用 SANDBOX_TOKEN 调它。
 每个项目一个容器：1G 内存、1 核、256 进程、无 capability，单条命令最长 120 秒，空闲 30 分钟自动停。
-前台命令运行中，聊天里的命令卡每 0.5 秒刷新最近输出，点停止会杀掉沙盒里的命令（v1.24）。项目首屏的“电脑”一节和“我的 → 我的电脑”显示容器运行/休眠、内存、磁盘、正在跑的后台任务，可一键重启（停任务 + 删容器，文件和装的包都在，v1.25）。云浏览器会话按网站保存（taobao.com → 会话 taobao-com）：在一个网站登录一次，之后的任务都接着用；“我的电脑 → 浏览器登录”可看到每个网站并退出登录（v1.26）。家目录在工作区的 `.home`（隐藏）：助手 `pip install` / `npm i -g` 装的东西跨对话、跨容器保留；沙盒里没有 sudo/apt，要加系统软件就改 `sandbox/image/Dockerfile` 后重新 `build sandbox-image`（旧容器下次用时自动换新镜像，有后台任务在跑的除外）。
+前台命令运行中，聊天里的命令卡每 0.5 秒刷新最近输出，点停止会杀掉沙盒里的命令（v1.24）。项目首屏的“电脑”一节和“我的 → 我的电脑”显示容器运行/休眠、内存、磁盘、正在跑的后台任务，可一键重启（停任务 + 删容器，文件和装的包都在，v1.25）。云浏览器会话按网站保存（taobao.com → 会话 taobao-com）：在一个网站登录一次，之后的任务都接着用；“我的电脑 → 浏览器登录”可看到每个网站并退出登录（v1.26）。助手用过工具的回复上方有一行“用了 N 步 · 用时”，点开按顺序回看每一步（运行了什么命令、读写了哪个文件、打开了哪个网页、哪步失败或没批准），跟着消息存库、换设备也在（v1.28）。家目录在工作区的 `.home`（隐藏）：助手 `pip install` / `npm i -g` 装的东西跨对话、跨容器保留；沙盒里没有 sudo/apt，要加系统软件就改 `sandbox/image/Dockerfile` 后重新 `build sandbox-image`（旧容器下次用时自动换新镜像，有后台任务在跑的除外）。
 
 ## 手机 App（Flutter 原生，安卓优先）
 见 `app/README.md`：GitHub Actions 自动出 APK；首次打开在登录页填服务器地址（需 HTTPS 域名）。最近的对话、项目、首页卡片会缓存在手机上，断网也能看（纯客户端，不涉及后端）。
@@ -73,6 +73,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - storage.py     文件系统唯一入口（项目工作区、附件、技能），路径防越界；project_file(pid, rel) = 项目里真实存在的文件（引用项目文件的唯一校验，v1.13：ws._project_files 存引用，agent/context._project_ref 每轮按磁盘内容给模型）
 - skills_store.py 技能读写：用户目录里与内置同 id 的文件 = 自定义版（就地顶替内置，customized=true，reset 删掉即恢复）；新建 id 永远唯一，绝不覆盖或顶替；内置不能删、不能直接 PUT；停用开关存 data/skills/_disabled.json（按 id，损坏当全启用），系统提示只列 enabled_skills()，use_skill 拒绝停用的
 - sandbox_client.py 调沙盒服务（前台命令 stream：NDJSON 边跑边出输出，可带 stdin ≤64KB，断开=沙盒整组杀（v1.24）；后台任务 start_job/cancel_job/job_alive）
+- activity.py 活动时间线唯一规则（v1.28）：每次工具调用一步（标题、白名单参数摘要、状态、用时），随消息存 messages.steps，WS tool.status 带 step
 - browser_sessions.py 云浏览器会话唯一规则（v1.26）：按网站起会话名、每段对话的当前会话（Tab）、列表 / 退出登录
 - computer.py    工作区“电脑”状态唯一入口（v1.25）：容器状态/内存（沙盒 /sandboxes/{id}/status）+ 磁盘 + 运行中任务；restart = 停任务 + 删容器
 - command_guard.py 命令安全规则唯一入口（v1.20）：verdict(cmd) → block（永不执行）/ ask（弹审批卡）；拆段逐条看，参考 Codex CLI
