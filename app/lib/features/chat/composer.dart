@@ -10,7 +10,9 @@
 // workspace：这段对话的工作区（core/workspace.dart；项目 = 项目文件，主聊天 = 我的文件）。“添加附件”多一个从它选
 // （features/projects pickProjectFiles，不上传，只带引用）；null = 没有这个来源（如首页的快捷输入框）。
 // 打 $ → 顶部列出启用的技能，点一下补成 `$id `（服务器 app/skill_mentions.py 把正文给模型）。
-// 开头打 / → 顶部列出斜杠命令（models/slash.dart；目前 /init 生成 AGENTS.md），点一下补成 `/init `。
+// 开头打 / → 顶部列出斜杠命令（models/slash.dart）：/init 原文发给服务器；本机命令（/new /compact /plan /copy /status）
+// 交给 onSlash（ChatView → slash_actions.dart），不发消息。点候选：不接话的本机命令直接执行，其余补成 `/xxx `。
+// 生成中不能用的命令：提示条说“回答结束后再用”、发送钮灰掉。
 // 打 @ → 顶部列出工作区文件（features/chat/mentions.dart），点一下补成 `@路径 `；服务器发出时解析成引用（app/file_mentions.py）。
 // 上传、转写走 core/media.dart；这里只管交互状态。
 import 'dart:async';
@@ -63,7 +65,8 @@ class Composer extends ConsumerStatefulWidget {
       this.hint = '给助手发消息',
       this.leading,
       this.focusNode,
-      this.workspace});
+      this.workspace,
+      this.onSlash});
   final void Function(String text, List<FileBlock> files) onSend;
   final bool busy;
   final bool streaming;
@@ -82,6 +85,9 @@ class Composer extends ConsumerStatefulWidget {
 
   /// 工作区 id（null = 没有“从工作区引用文件”这个来源）。
   final String? workspace;
+
+  /// 本机斜杠命令（/new /compact /plan /copy /status）的执行者；null = 这个输入框不接本机命令（打了当普通文字发）。
+  final void Function(SlashCall call, List<FileBlock> files)? onSlash;
 
   @override
   ConsumerState<Composer> createState() => _ComposerState();
@@ -136,7 +142,14 @@ class _ComposerState extends ConsumerState<Composer> {
   }
 
   void _pickSlash(String name) {
-    final (text, caret) = applySlash(slashCommands.firstWhere((c) => c.name == name));
+    final c = slashCommands.firstWhere((c) => c.name == name);
+    final call = SlashCall(c, '');
+    if (c.local && !c.args && !slashBlocked(call, busy: widget.busy)) {
+      _c.clear(); // Codex：不带参数的命令点了就执行
+      widget.onSlash?.call(call, const []);
+      return;
+    }
+    final (text, caret) = applySlash(c);
     _c.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: caret));
     _focus.requestFocus();
   }
@@ -178,17 +191,35 @@ class _ComposerState extends ConsumerState<Composer> {
   bool get _uploading => !_editing && _attachments.any((a) => a.uploading);
   bool get _hasContent =>
       _c.text.trim().isNotEmpty || (_editing ? widget.editing!.hasFiles : _attachments.any((a) => a.file != null));
-  bool get _canSend => (!widget.busy || _steering) && !_uploading && _hasContent;
+  bool get _canSend {
+    final cmd = _command;
+    if (cmd != null && cmd.local) return !slashBlocked(cmd, busy: widget.busy) && !_uploading;
+    return (!widget.busy || _steering) && !_uploading && _hasContent;
+  }
 
   /// 生成中打了纯文字：发出去是补充给这一轮（不带附件 / 不是命令 / 不在编辑），否则仍只能停止。
   bool get _steering =>
-      widget.streaming && widget.canSteer && !_editing && _attachments.isEmpty && !_shell && _init == null && _c.text.trim().isNotEmpty;
+      widget.streaming && widget.canSteer && !_editing && _attachments.isEmpty && !_shell && _command == null && _c.text.trim().isNotEmpty;
+
+  /// 整条是本机命令（不发消息）。
+  bool get _local => _command?.local ?? false;
+
+  /// 生成中也能马上执行的本机命令（/copy /status）：停止钮让位给执行钮。
+  bool get _runsNow {
+    final c = _command;
+    return c != null && c.local && !slashBlocked(c, busy: widget.busy);
+  }
 
   /// 整条是 `!命令`（且没带附件）：发出去不问助手，直接在这段对话的电脑上跑（后端 user_shell）。
   bool get _shell => !_editing && _attachments.isEmpty && shellCommandOf(_c.text) != null;
 
-  /// 整条是 `/init`：补充要求（可能是 ''）；不是 → null。生成中发出去排成下一轮（不插进正在进行的回答）。
-  String? get _init => _editing ? null : initNoteOf(_c.text);
+  /// 整条是一条斜杠命令（编辑消息时不认）。/init 生成中发出去排成下一轮；本机命令只在没带附件时认（/plan 接话可带）。
+  SlashCall? get _command {
+    if (_editing) return null;
+    final c = slashOf(_c.text, local: widget.onSlash != null);
+    if (c != null && c.local && _attachments.isNotEmpty && !c.command.args) return null;
+    return c;
+  }
 
   void _send() {
     if (!_canSend) return;
@@ -196,7 +227,13 @@ class _ComposerState extends ConsumerState<Composer> {
       widget.onSend(_c.text, const []); // 草稿由 didUpdateWidget 在退出编辑时放回
       return;
     }
-    widget.onSend(_c.text, [for (final a in _attachments) if (a.file != null) a.file!]);
+    final files = [for (final a in _attachments) if (a.file != null) a.file!];
+    final cmd = _command;
+    if (cmd != null && cmd.local) {
+      widget.onSlash!(cmd, files);
+    } else {
+      widget.onSend(_c.text, files);
+    }
     _c.clear();
     setState(_attachments.clear);
   }
@@ -335,7 +372,7 @@ class _ComposerState extends ConsumerState<Composer> {
             duration: context.motion(Motion.base),
             curve: Motion.ease,
             alignment: Alignment.topCenter,
-            child: _slash != null && rankSlash(_slash!).isNotEmpty
+            child: _slash != null && rankSlash(_slash!, local: widget.onSlash != null).isNotEmpty
                 ? _slashList()
                 : _mention != null
                 ? _mentionList()
@@ -343,8 +380,8 @@ class _ComposerState extends ConsumerState<Composer> {
                 ? _EditBar(onCancel: widget.onCancelEdit)
                 : _shell
                 ? const _HintBar(key: ValueKey('shell'), icon: Icons.terminal_rounded, text: '直接在电脑上运行 · 不经过助手，结果它下次能看到')
-                : _init != null
-                ? _HintBar(key: const ValueKey('init'), icon: initCommand.icon, text: initBarText(_init!))
+                : _command != null
+                ? _HintBar(key: ValueKey('slash-${_command!.command.name}'), icon: _command!.command.icon, text: slashBarText(_command!, busy: widget.busy))
                 : const SizedBox(width: double.infinity),
           ),
           AttachmentTray(items: _editing ? const [] : _attachments, onRemove: (a) => setState(() => _attachments.remove(a))),
@@ -360,8 +397,13 @@ class _ComposerState extends ConsumerState<Composer> {
   Widget _slashList() => MentionList(
         key: const ValueKey('slash'),
         items: [
-          for (final c in rankSlash(_slash!))
-            MentionItem(key: c.name, icon: c.icon, title: c.token, subtitle: c.title, semantic: '命令 ${c.token}：${c.title}'),
+          for (final c in rankSlash(_slash!, local: widget.onSlash != null))
+            MentionItem(
+                key: c.name,
+                icon: c.icon,
+                title: c.token,
+                subtitle: slashSubtitle(c, busy: widget.busy),
+                semantic: '命令 ${c.token}：${slashSubtitle(c, busy: widget.busy)}'),
         ],
         empty: '',
         onPick: _pickSlash,
@@ -417,7 +459,7 @@ class _ComposerState extends ConsumerState<Composer> {
         AnimatedSwitcher(
           duration: context.motion(Motion.fast),
           transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-          child: widget.streaming && !_steering
+          child: widget.streaming && !_steering && !_runsNow
               ? _RoundButton(
                   key: const ValueKey('stop'),
                   icon: Icons.stop_rounded,
@@ -427,9 +469,11 @@ class _ComposerState extends ConsumerState<Composer> {
                 )
               : _hasContent || widget.busy
               ? _RoundButton(
-                  key: ValueKey(_steering ? 'steer' : (_shell ? 'run' : 'send')),
-                  icon: _shell ? Icons.terminal_rounded : Icons.arrow_upward_rounded,
-                  label: _editing ? '保存并重新回答' : (_shell ? '在电脑上运行' : (_steering ? '补充给正在进行的回答' : '发送')),
+                  key: ValueKey(_steering ? 'steer' : (_shell ? 'run' : (_local ? 'slash' : 'send'))),
+                  icon: _shell ? Icons.terminal_rounded : (_local ? Icons.keyboard_return_rounded : Icons.arrow_upward_rounded),
+                  label: _editing
+                      ? '保存并重新回答'
+                      : (_shell ? '在电脑上运行' : (_steering ? '补充给正在进行的回答' : (_local ? '执行 ${_command!.command.token}' : '发送'))),
                   filled: _canSend,
                   onTap: _canSend ? _send : null,
                 )

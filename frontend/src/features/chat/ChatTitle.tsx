@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useConversationUsage } from "../../hooks/useConversationUsage";
 import { cacheHitLabel, formatMoney, formatTokens, type ConversationUsage, usageLine } from "../../lib/usage";
 import { Sheet } from "../../ui/kit";
@@ -8,11 +8,13 @@ import ConversationMemory from "./ConversationMemory";
 import ShareSheet from "./ShareSheet";
 
 /** 聊天顶栏标题 + 下面一行本对话用量（“¥0.012 · 3.4K token”），点那行弹出按模型明细。与 App 的 ChatTitle 同规则。 */
-export default function ChatTitle({ title, conversationId, streaming }: { title: string; conversationId: string | null; streaming: boolean }) {
+/** statusAsk：输入框 /status 每用一次 +1 → 打开用量面板（0 = 没要过）。 */
+export default function ChatTitle({ title, conversationId, streaming, statusAsk = 0 }: { title: string; conversationId: string | null; streaming: boolean; statusAsk?: number }) {
   const { usage } = useConversationUsage(conversationId, streaming);
   const [open, setOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [files, setFiles] = useState(false);
+  useEffect(() => { if (statusAsk > 0) setOpen(true); }, [statusAsk]);
   const line = usage ? usageLine(usage) : null;
   return (
     <div className="chat-top-title">

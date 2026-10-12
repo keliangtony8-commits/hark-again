@@ -5,7 +5,7 @@ import { asFileBlock, attachSub, extOf, MAX_MESSAGE_FILES } from "../../lib/file
 import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
 import ProjectFilePicker from "../projects/ProjectFilePicker";
 import { useRecorder } from "../../hooks/useRecorder";
-import { IconCheck, IconClip, IconClose, IconDoc, IconEdit, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconStop, IconTerminal } from "../../ui/icons";
+import { IconBrain, IconCheck, IconClip, IconClose, IconCopy, IconDoc, IconGauge, IconMap, IconPlus, IconEdit, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconStop, IconTerminal } from "../../ui/icons";
 import { shellCommandOf } from "../../lib/shell";
 import { Menu } from "../../ui/kit";
 import { applyMention, mentionAt, rankMentions, rankSkills, type MentionQuery, type Sigil } from "../../lib/mentions";
@@ -13,7 +13,10 @@ import type { ProjectFile, Skill } from "../../lib/types";
 import { projectFileLine } from "../projects/projectHome";
 import MentionList, { type MentionItem } from "./MentionList";
 import { STEER_HINT, steerable } from "../../lib/steer";
-import { applySlash, initBarText, initNoteOf, rankSlash, slashQueryAt, slashToken, SLASH_COMMANDS } from "../../lib/slash";
+import {
+  applySlash, rankSlash, slashBarText, slashBlocked, slashOf, slashQueryAt, slashSubtitle, slashToken, SLASH_COMMANDS,
+  type SlashCall, type SlashIcon,
+} from "../../lib/slash";
 import "./chat.css";
 
 /** 托盘里的一项：本机文件（上传中 / upload / error）或项目文件引用（ref，现成的文件块）。 */
@@ -28,7 +31,8 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  *  编辑态（editing 不为空）：顶部“编辑消息”条 + 原文字填进来；原附件随消息保留，这里的附件和草稿先收起，
  *  退出编辑（发出、取消、Esc）后原样回来。输入框为空时按 ↑ = 编辑最后一条（onEditLast）。
  *  打 @ → 顶部列出工作区文件（lib/mentions.ts）：↑↓ 选、Enter/Tab 补成 `@路径 `、Esc 收起；服务器发出时解析成引用。
- *  开头打 / → 列出斜杠命令（lib/slash.ts；目前 /init 生成 AGENTS.md），补成 `/init `。
+ *  开头打 / → 列出斜杠命令（lib/slash.ts）：/init 原文发给服务器；本机命令（/new /compact /plan /copy /status）交给 onSlash
+ *  （ChatScreen → slashActions.ts），不发消息，返回的一句提示显示在胶囊下方；点不接话的本机命令直接执行。
  *  打 $ → 列出启用的技能（没有工作区也行），补成 `$id `；服务器 app/skill_mentions.py 把技能正文直接给模型。 */
 export type EditDraft = { id: string; text: string; hasFiles: boolean };
 type Props = {
@@ -44,8 +48,10 @@ type Props = {
   /** 项目对话的项目 id：“添加附件”变成菜单，多一个“项目里的文件”（只带引用，不上传）。 */
   /** 这段对话的工作区（lib/workspace.ts）：“添加附件”多一个从它引用文件；不给 = 没有这个来源。 */
   workspace?: string;
+  /** 本机斜杠命令的执行者（返回一句提示）；不给 = 不接本机命令（打了当普通文字发）。 */
+  onSlash?: (c: SlashCall, files: OutgoingFile[]) => Promise<string | undefined> | void;
 };
-export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息", workspace }: Props) {
+export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息", workspace, onSlash }: Props) {
   const [text, setText] = useState("");
   const stash = useRef<string | null>(null);   // 进入编辑前的草稿
   const editId = editing?.id ?? null;
@@ -103,9 +109,22 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
   const sigils: Sigil[] = workspace ? ["$", "@"] : ["$"];
   const found: MentionQuery | null = shellCommandOf(text) === null ? mentionAt(text, caret, sigils) : null;
   const slashQ = editing ? null : slashQueryAt(text, caret);
-  const slash = slashQ !== null && closedAt !== 0 && rankSlash(slashQ).length ? rankSlash(slashQ) : null;
-  /** 整条是 `/init`：补充要求（可能是 ""）；不是 → null。 */
-  const init = editing ? null : initNoteOf(text);
+  const slash = slashQ !== null && closedAt !== 0 && rankSlash(slashQ, !!onSlash).length ? rankSlash(slashQ, !!onSlash) : null;
+  /** 整条是一条斜杠命令（编辑时不认；不接话的本机命令带了附件不认）。 */
+  const found0 = editing ? null : slashOf(text, !!onSlash);
+  const command = found0 && found0.command.local && files.length > 0 && !found0.command.args ? null : found0;
+  const local = !!command?.command.local;
+  const runsNow = !!command && local && !slashBlocked(command, disabled);
+  const [slashNote, setSlashNote] = useState<string | null>(null);
+  useEffect(() => {   // 命令结果的一句提示：4 秒后自己收起
+    if (!slashNote) return;
+    const t = setTimeout(() => setSlashNote(null), 4000);
+    return () => clearTimeout(t);
+  }, [slashNote]);
+  const runSlash = (c: SlashCall, withFiles: OutgoingFile[]) => {
+    const r = onSlash?.(c, withFiles);
+    if (r) r.then((note) => setSlashNote(note ?? null)).catch(() => setSlashNote("没做成，稍后再试"));
+  };
   const mention = !slash && found && found.start !== closedAt ? found : null;
   const wantSkills = mention?.sigil === "$" && skills === null;
   useEffect(() => {   // 第一次打 $ 时才读技能
@@ -122,7 +141,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
   }, [mention, workspace, wsFiles?.ws]);
   const loaded = wsFiles && wsFiles.ws === workspace ? wsFiles.files : null;
   const items: MentionItem[] | null = slash
-    ? slash.map((c) => ({ key: c.name, icon: <IconDoc size={14} />, title: slashToken(c), sub: c.title }))
+    ? slash.map((c) => ({ key: c.name, icon: slashIcon(c.icon), title: slashToken(c), sub: slashSubtitle(c, disabled) }))
     : !mention ? null
     : mention.sigil === "$"
       ? skills && rankSkills(skills, mention.query).map((s) => ({ key: s.id, icon: <IconSpark size={14} />, title: s.name, sub: s.description }))
@@ -130,7 +149,13 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
   const choice = Math.min(active, Math.max((items?.length ?? 1) - 1, 0));
   const pickMention = (key: string) => {
     if (!mention && !slash) return;
-    const [next, at] = slash ? applySlash(SLASH_COMMANDS.find((c) => c.name === key)!) : applyMention(text, mention!, key);
+    const picked = slash ? SLASH_COMMANDS.find((c) => c.name === key)! : null;
+    if (picked?.local && !picked.args && !slashBlocked({ command: picked, args: "" }, disabled)) {
+      setText(""); setCaret(0); setActive(0);   // Codex：不带参数的命令点了就执行
+      runSlash({ command: picked, args: "" }, []);
+      return;
+    }
+    const [next, at] = picked ? applySlash(picked) : applyMention(text, mention!, key);
     setText(next);
     setCaret(at);
     setActive(0);
@@ -142,7 +167,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
 
   // 生成中打了纯文字：发出去是补充给这一轮（lib/steer.ts），否则仍只能停止
   const steering = streaming && canSteer && steerable(text, { files: files.length, shell, editing: !!editing });
-  const canSend = (!disabled || steering) && (editing
+  const canSend = local ? runsNow && !uploading : (!disabled || steering) && (editing
     ? !!text.trim() || editing.hasFiles
     : !uploading && (!!text.trim() || ready.length > 0));
 
@@ -165,7 +190,8 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
   const submit = () => {
     if (!canSend) return;
     if (editing) { onSend(text.trim(), []); return; }   // 草稿由上面的 effect 在退出编辑时放回
-    onSend(text.trim(), ready);
+    if (command && local) runSlash(command, ready);
+    else onSend(text.trim(), ready);
     setText("");
     setCaret(0);
     setFiles([]);
@@ -181,10 +207,10 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
               empty="没有对得上的技能 · 可以在“我的 › 技能”里新建" loading="正在读技能…" />
           : <MentionList items={items} active={choice} onPick={pickMention} onHover={setActive} label="引用文件"
               empty="没有对得上的文件 · 发出去我也会按名字再找一次" loading="正在找文件…" />)}
-        {!mention && !slash && !shell && init !== null && (
-          <div className="edit-bar shell-bar">
-            <IconDoc size={14} />
-            <span>{initBarText(init)}</span>
+        {!mention && !slash && !shell && command && (
+          <div className="edit-bar shell-bar" key={`slash-${command.command.name}`}>
+            {slashIcon(command.command.icon)}
+            <span>{slashBarText(command, disabled)}</span>
           </div>
         )}
         {!mention && editing && (
@@ -244,16 +270,18 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
               }} />
             {accessory}
-            {streaming && !steering
+            {streaming && !steering && !runsNow
               ? <button key="stop" className="send-btn stop" onClick={onStop} disabled={!onStop} aria-label="停止生成" title="停止生成（Esc）"><IconStop /></button>
               : canSend || !mic.supported
-              ? <button key={steering ? "steer" : shell ? "run" : "send"} className="send-btn" onClick={submit} disabled={!canSend}
-                  aria-label={editing ? "保存并重新回答" : shell ? "在电脑上运行" : steering ? "补充给正在进行的回答" : "发送"} title={shell ? "在电脑上运行（Enter）" : undefined}>
-                  {shell ? <IconTerminal /> : <IconSend />}</button>
+              ? <button key={steering ? "steer" : shell ? "run" : local ? "slash" : "send"} className="send-btn" onClick={submit} disabled={!canSend}
+                  aria-label={editing ? "保存并重新回答" : shell ? "在电脑上运行" : steering ? "补充给正在进行的回答" : local ? `执行 ${slashToken(command!.command)}` : "发送"}
+                  title={shell ? "在电脑上运行（Enter）" : local ? "执行（Enter）" : undefined}>
+                  {shell ? <IconTerminal /> : local ? <IconCheck /> : <IconSend />}</button>
               : <button className="send-btn ghost" onClick={startVoice} disabled={disabled || voiceBusy} aria-label="说话"><IconMic /></button>}
           </div>
         )}
         {voiceErr && <div className="composer-hint err" onClick={() => setVoiceErr(null)}>{voiceErr}</div>}
+        {slashNote && <div className="composer-hint slash-note" role="status" onClick={() => setSlashNote(null)}>{slashNote}</div>}
       </div>
       {picking && workspace && (
         <ProjectFilePicker projectId={workspace} onClose={() => setPicking(false)} onPick={takeRefs}
@@ -261,4 +289,10 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
       )}
     </div>
   );
+}
+
+/** 斜杠命令的图标（lib/slash.ts 只存名字，图标组件在这里对上）。 */
+function slashIcon(icon: SlashIcon) {
+  const C = { doc: IconDoc, plus: IconPlus, brain: IconBrain, map: IconMap, copy: IconCopy, gauge: IconGauge }[icon];
+  return <C size={14} />;
 }

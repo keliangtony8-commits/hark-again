@@ -9,6 +9,7 @@ import ChatView from "./ChatView";
 import ConversationList from "./ConversationList";
 import EffortChip from "./EffortChip";
 import PlanModeChip from "./PlanModeChip";
+import { runSlash } from "./slashActions";
 import ModelChip from "./ModelChip";
 import type { ConversationSummary, OutgoingFile } from "../../lib/types";
 import "./chat.css";
@@ -53,6 +54,12 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   if (found) lastTitle.current = { id: found.id, title: found.title };
   const title = headerTitle ?? (lastTitle.current.id === chat.activeId && chat.activeId ? lastTitle.current.title : "新对话");
   const open = (id: string | null, focus?: string) => { chat.open(id, focus); setDrawer(false); };
+  // /status 打开标题的本对话用量面板：每次 +1，ChatTitle 看到变化就打开
+  const [statusAsk, setStatusAsk] = useState(0);
+  const onSlash = (c: Parameters<typeof runSlash>[0], files: OutgoingFile[]) => runSlash(c, files, {
+    activeId: chat.activeId, messages: chat.messages, planMode: chat.planMode,
+    open: (id) => open(id), setPlanMode: chat.setPlanMode, send: chat.send, showStatus: () => setStatusAsk((n) => n + 1),
+  });
 
   return (
     <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval, replyForm: chat.replyForm, onJobSettled: chat.refreshActive, undoChanges: chat.undoChanges }}>
@@ -67,7 +74,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
                 {leading}
                 <button className="icon-btn mobile-only" onClick={() => setDrawer(true)} aria-label="历史"><IconHistory /></button>
               </div>
-              <ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} />
+              <ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} />
               <div className="chat-bar-side end">{trailing}</div>
             </header>
           ) : (
@@ -75,7 +82,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
               <ShellLead>
                 <button className="glass-btn glass mobile-only" onClick={() => setDrawer(true)} aria-label="历史"><IconHistory /></button>
               </ShellLead>
-              <header className="chat-top chat-caption"><ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} /></header>
+              <header className="chat-top chat-caption"><ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} /></header>
             </>
           )}
           <ChatView empty={empty?.({ send: (t) => chat.send(t), open: (id) => open(id), showAll: () => setDrawer(true), conversations: chat.list.items })}
@@ -89,7 +96,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
               <EffortChip model={chat.model} effort={chat.effort} onChange={chat.setEffort} />
               <PlanModeChip on={chat.planMode} onChange={chat.setPlanMode} />
             </>}
-            onSend={chat.send} onReconnect={chat.reconnect} onResend={chat.resend} onDiscard={chat.discard} />
+            onSend={chat.send} onSlash={onSlash} onReconnect={chat.reconnect} onResend={chat.resend} onDiscard={chat.discard} />
         </section>
       </div>
     </BlockActionsContext.Provider>

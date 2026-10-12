@@ -5,6 +5,7 @@ import { formatDay, startsNewDay } from "../../lib/format";
 import type { Message, OutgoingFile } from "../../lib/types";
 import { FloatingFooter } from "../../ui/kit";
 import Composer, { type EditDraft } from "./Composer";
+import type { SlashCall } from "../../lib/slash";
 import EmptyState from "./EmptyState";
 import MessageView, { type OutboxActions } from "./MessageView";
 import { CONTINUE_TEXT, continuable } from "../../lib/messageStatus";
@@ -23,6 +24,8 @@ type Props = OutboxActions & {
   /** 输入框主按钮左边的插槽（模型钮）。 */
   accessory?: ReactNode;
   onSend: (t: string, files?: OutgoingFile[]) => void; projectId?: string; onReconnect: () => void; greeting?: string;
+  /** 本机斜杠命令（/new /compact /plan /copy /status，features/chat/slashActions.ts）；返回输入框下方的一句提示。 */
+  onSlash?: (c: SlashCall, files: OutgoingFile[]) => Promise<string | undefined>;
   /** 没有消息时画什么（项目首屏）；空 = 通用问候 EmptyState。 */
   empty?: ReactNode;
 };
@@ -44,7 +47,7 @@ const PIN_SLACK = 32;
 
 /** 编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
  *  编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。 */
-export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, canSteer, focus, onFocused, accessory, onSend, onReconnect, onResend, onDiscard, greeting, empty: emptyView, projectId }: Props) {
+export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, canSteer, focus, onFocused, accessory, onSend, onSlash, onReconnect, onResend, onDiscard, greeting, empty: emptyView, projectId }: Props) {
   const last = messages[messages.length - 1];
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const editing = draft && draft.id === editableId ? draft : null;
@@ -128,7 +131,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
       <FloatingFooter onHeight={setFooterH}>
         {link === "down" && <LinkBar onRetry={onReconnect} streaming={!!streaming} />}
         <Composer disabled={busy} streaming={streaming} canSteer={canSteer} onStop={onStop} accessory={accessory} workspace={workspaceOf(projectId)}
-          editing={editing} onCancelEdit={() => setDraft(null)} onEditLast={editableId ? startEdit : undefined}
+          onSlash={onSlash} editing={editing} onCancelEdit={() => setDraft(null)} onEditLast={editableId ? startEdit : undefined}
           onSend={(t, files) => { if (editing) { onEdit(t); setDraft(null); } else onSend(t, files); }} />
       </FloatingFooter>
     </>

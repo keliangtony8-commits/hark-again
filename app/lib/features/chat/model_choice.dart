@@ -117,6 +117,9 @@ class ModelChip extends ConsumerWidget {
   }
 }
 
+/// 计划模式开 / 关后的提示条（模式钮和 /plan 共用）。[on] = 切换后的状态。
+String planModeToast(bool on) => on ? '计划模式：先出方案，你批准后再动手' : '已退出计划模式';
+
 /// 输入框里的“模型选择”：模型钮 + 思考强度钮（当前模型能调才有）+ 计划模式开关。
 class ModelChoice extends StatelessWidget {
   const ModelChoice({super.key, required this.scope});
@@ -210,7 +213,7 @@ class PlanModeChip extends ConsumerWidget {
       child: Pressable(
         onTap: () {
           ref.read(chatProvider(scope).notifier).setPlanMode(!on);
-          showToast(context, on ? '已退出计划模式' : '计划模式：先出方案，你批准后再动手');
+          showToast(context, planModeToast(!on));
         },
         scale: 0.92,
         semanticLabel: semantics(on),

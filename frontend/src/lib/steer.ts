@@ -1,4 +1,4 @@
-import { initNoteOf } from "./slash";
+import { slashOf } from "./slash";
 /**
  * 回答途中补充（v1.83，服务器 steering.py；对应 App models/message.dart 的 steer / beforePending）。
  * 生成中再发纯文字 = 补充给正在进行的这一轮：user.message 带 steer + client_id；气泡插在生成中那条前面，
@@ -21,4 +21,4 @@ export function beforePending(ms: Message[], m: Message): Message[] {
 
 /** 输入框里这段能不能作为补充发出：纯文字、不是 !命令 / /init、没带附件、不在编辑。 */
 export const steerable = (text: string, opts: { files: number; shell: boolean; editing: boolean }) =>
-  !!text.trim() && opts.files === 0 && !opts.shell && !opts.editing && initNoteOf(text) === null;
+  !!text.trim() && opts.files === 0 && !opts.shell && !opts.editing && slashOf(text) === null;

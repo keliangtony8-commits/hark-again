@@ -179,6 +179,8 @@
 .rec-dot { width: 8px; height: 8px; border-radius: var(--r-full); background: var(--danger); animation: blink 1.2s infinite; }
 .composer-hint { padding: 0 var(--sp-2) var(--sp-1); font-size: var(--fs-xs); cursor: pointer; }
 .composer-hint.err { color: var(--danger); }
+.composer-hint.slash-note { color: var(--text-2); animation: rise var(--dur) var(--ease) both; } /* 斜杠命令结果的一句提示（4 秒后收起） */
+@media (prefers-reduced-motion: reduce) { .composer-hint.slash-note { animation: none; } }
 
 /* 回复操作条 */
 /* 回复操作条：最后一条常驻，更早的悬停/聚焦才出现（触屏常驻） */

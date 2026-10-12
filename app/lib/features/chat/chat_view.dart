@@ -22,6 +22,7 @@ import 'chat_controller.dart';
 import 'composer.dart';
 import 'message_view.dart';
 import 'model_choice.dart';
+import 'slash_actions.dart';
 
 class ChatView extends ConsumerStatefulWidget {
   const ChatView({super.key, this.projectId = '', this.suggestions = const [], this.empty});
@@ -125,6 +126,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         onCancelEdit: () => setState(() => _editing = null),
         accessory: ModelChoice(scope: widget.projectId),
         workspace: workspaceOf(widget.projectId),
+        onSlash: (call, files) => runSlash(context, ref, widget.projectId, call, files),
         onSend: (text, files) {
           if (editing != null) {
             ctl.edit(text);
