@@ -84,7 +84,8 @@ export type Role = "user" | "assistant";
 export type FileChange = { path: string; added: number; removed: number; diff: string; created?: boolean; hidden?: boolean; big?: boolean; deleted?: boolean; moved_from?: string };
 /** v1.68 这一轮改过的文件（后端 app/turn_changes.py）：token 非空 = 能整轮撤销。 */
 /** v1.71 计划模式下交给你批准的方案（后端 app/plan_mode.py）：批准 / 再改改走 approval.reply。 */
-export type PlanReviewBlock = { type: "plan_review"; id: string; title: string; plan: string; state: "pending" | "approved" | "rejected" | "expired" };
+/** workspace + path（v1.72）= 批准后方案存进工作区的位置（老卡没有）。 */
+export type PlanReviewBlock = { type: "plan_review"; id: string; title: string; plan: string; state: "pending" | "approved" | "rejected" | "expired"; workspace?: string; path?: string };
 export type ChangesBlock = { type: "changes"; token: string; files: FileChange[]; more?: number | null; undone?: boolean | null };
 export type ActivityStep = { id: string; tool: string; title: string; detail: string; state: "running" | "done" | "error" | "denied" | "stopped"; at?: string; ms?: number; note?: string; change?: FileChange; changes?: FileChange[] };
 /** WS tool.status：step = 完整的一步（老服务器没有）。 */

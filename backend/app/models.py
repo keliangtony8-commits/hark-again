@@ -37,6 +37,8 @@ class Conversation(Base):
     # 计划模式（app/plan_mode.py）：default | plan。mode_seen = 上一轮模型看到的模式（不同 → 这一轮先告诉它“用户切换了”）
     mode: Mapped[str] = mapped_column(String(8), default="default", server_default="default")
     mode_seen: Mapped[str | None] = mapped_column(String(8), nullable=True, info={"private": True})
+    # 计划模式批准的方案存成的工作区文件（相对路径，plan_mode.plan_file）；之后每轮系统提示提到它，文件被删就不再提
+    plan_path: Mapped[str | None] = mapped_column(String(255), nullable=True, info={"private": True})
     # 滚动摘要（context.py 维护）：summary 概括了从开头到 summary_upto 这条消息（含）为止的内容；
     # 更早的原文不再发给模型。summary_upto 指向的消息不在了（被重答删掉）就视为作废。
     summary: Mapped[str] = mapped_column(Text, default="", server_default="", info={"private": True})

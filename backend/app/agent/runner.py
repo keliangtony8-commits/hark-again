@@ -12,6 +12,8 @@ from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
 from ..models import Conversation, Message
+from ..storage import project_dir
+from ..workspaces import of as workspace_of
 from . import loop
 from ..prompt_cache import STABLE, VOLATILE
 from .context import build_history, build_system_prompt
@@ -120,7 +122,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
     否则（断线、关机）落库后把取消继续抛出去。"""
     cid, project_id, choice, effort, previous = conv.id, conv.project_id, chat_model(conv.model), conv.reasoning, conv.routed_model
-    mode, seen = plan_mode.normalize(conv.mode), conv.mode_seen  # 都在 build_history 之前读：摘要折叠的回滚会让 conv 过期
+    mode, seen, plan_path = plan_mode.normalize(conv.mode), conv.mode_seen, conv.plan_path  # 都在 build_history 之前读：摘要折叠的回滚会让 conv 过期
     await turn_journal.recover(db, cid)  # 别的进程崩掉留下的半截回答先转成 interrupted 消息，排在历史里
     hist = await build_history(db, cid, model_router.view(choice))
     history = hist.messages
@@ -137,6 +139,8 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         prompt.add(STABLE, host_mode.PROMPT)
     if mode == plan_mode.PLAN:  # 计划模式规则放稳定段：同一模式里每轮不变，前缀缓存照样命中
         prompt.add(STABLE, plan_mode.PROMPT)
+    if plan_path and (approved := plan_mode.approved_path(project_dir(workspace_of(project_id)), plan_path)):  # 批准过的方案文件还在：每轮提一句（稳定段）
+        prompt.add(STABLE, plan_mode.approved_prompt(approved, mode == plan_mode.PLAN))
     if switched := plan_mode.notice(seen, mode):  # 两轮之间用户切了模式：先告诉模型一句
         prompt.add(VOLATILE, switched)
     if seen != mode:

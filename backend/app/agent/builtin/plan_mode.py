@@ -2,20 +2,59 @@
 
 描述移植自 deepseek-harness plan-mode EXIT_DESCRIPTION（MIT）与 Gemini CLI exit_plan_mode（Apache-2.0）的写法，modified。
 工具常驻（deepseek：进出计划模式只换提示、不换工具目录，前缀缓存不断）；不在计划模式时 plan_mode.refusal 直接拒。
+v1.72：批准后方案写进工作区 plans/（plan_mode.plan_file，Gemini approvedPlanPath），进时间线这一步的改动和整轮改动卡。
 """
-from sqlalchemy import update
+import asyncio
+import logging
 
-from ... import plan_mode
+from sqlalchemy import select, update
+
+from ... import file_edit, file_seen, plan_mode, quota
 from ...models import Conversation
+from ...schedule import local_now
+from ...storage import project_dir
 from ..tools import Approval, ToolContext, ToolResult, tool
 
+log = logging.getLogger(__name__)
 
-def _risk(args: dict, ctx: ToolContext):
+
+async def _target(ctx: ToolContext, title: str) -> str:
+    """批准后存到哪（卡上显示的和真正写的是同一个规则、同一份输入）。"""
+    previous = await ctx.db.scalar(select(Conversation.plan_path).where(Conversation.id == ctx.conversation_id))
+    return plan_mode.plan_file(project_dir(ctx.workspace), title, previous, local_now().date())
+
+
+async def _risk(args: dict, ctx: ToolContext):
     try:
         text, title = plan_mode.check_plan(args.get("plan"))
     except plan_mode.PlanTextError:
         return None  # 方案不合格：不打扰用户，run 把原因还给模型
-    return Approval(f"批准方案：{title}", plan_mode.review_card(text, title), rejected=plan_mode.REJECTED)
+    card = plan_mode.review_card(text, title, ctx.workspace, await _target(ctx, title))
+    return Approval(f"批准方案：{title}", card, rejected=plan_mode.REJECTED)
+
+
+async def _save(ctx: ToolContext, rel: str, text: str) -> tuple[str, dict | None]:
+    """把批准的方案写进工作区（和 write_file 一样：整轮改动基线、已读记录、配额）。返回 (给模型的一句, 改动摘要)。"""
+    root = project_dir(ctx.workspace)
+    p = root / rel
+    body = text.rstrip() + "\n"
+    try:
+        before = p.read_text(encoding="utf-8") if p.is_file() else None
+        grow = len(body.encode()) - (p.stat().st_size if p.is_file() else 0)
+        if grow > 0:
+            await asyncio.to_thread(quota.check, ctx.workspace, grow)
+        ctx.changes.before(root, p)  # 进这一轮的改动卡，能整轮撤销
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(body, encoding="utf-8")
+    except (OSError, UnicodeDecodeError, quota.QuotaError) as e:
+        log.warning("approved plan not saved: %s", e)
+        return f"（方案没能存成文件：{e}。照上面批准的方案原文做即可。）", None
+    file_seen.observe(file_seen.owner_of(ctx.conversation_id, ctx.task_id), p)
+    quota.forget(ctx.workspace)
+    await ctx.db.execute(update(Conversation).where(Conversation.id == ctx.conversation_id)
+                         .values(plan_path=rel, updated_at=Conversation.updated_at))
+    verb = "已存到" if before is None else "已更新"
+    return f"方案{verb}工作区 {rel}（之后要改做法，先和用户确认再更新它）。", file_edit.change(rel, before, body)
 
 
 @tool(plan_mode.TOOL, "正在提交方案",
@@ -28,13 +67,14 @@ def _risk(args: dict, ctx: ToolContext):
       scope="conversation", risk=_risk, quiet=True)
 async def exit_plan_mode(ctx: ToolContext, plan: object = "") -> ToolResult:
     try:
-        plan_mode.check_plan(plan)
+        text, title = plan_mode.check_plan(plan)
     except plan_mode.PlanTextError as e:
         return ToolResult(f"方案没有交出去：{e}", failed=str(e))
     # 走到这里 = 用户在方案卡上点了批准（kernel 的审批流程）
     if ctx.plan is not None:
         ctx.plan.lift()
+    saved, change = await _save(ctx, await _target(ctx, title), text)
     await ctx.db.execute(update(Conversation).where(Conversation.id == ctx.conversation_id)
                          .values(mode=plan_mode.DEFAULT, mode_seen=plan_mode.DEFAULT, updated_at=Conversation.updated_at))
     await ctx.db.commit()  # 下一次模型调用前提交（SQLite 锁）
-    return ToolResult(plan_mode.LIFTED)
+    return ToolResult(f"{plan_mode.LIFTED}\n{saved}", change=change)

@@ -161,7 +161,7 @@ assert ran == ["ls && cat a.txt | head -n 3"], ran                              
 r3 = tool_results(requests[-3])[-1]
 assert "# 标题" in r3, r3
 r4 = tool_results(requests[-2])[-1]
-assert r4 == P.LIFTED, r4
+assert r4.startswith(P.LIFTED) and "plans/" in r4, r4
 assert P.PROMPT not in requests[-2][0]["content"] and P.PROMPT in requests[-3][0]["content"]  # 批准后下一次请求就没有计划规则
 assert "已写入" in tool_results(requests[-1])[-1] or "a.txt" in tool_results(requests[-1])[-1]
 assert (wr / "a.txt").read_text() == "新文\n"

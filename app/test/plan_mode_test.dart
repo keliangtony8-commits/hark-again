@@ -18,20 +18,24 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'chat_controller_test.dart' show FakeSocket;
 
-PlanReviewBlock _card({String state = 'pending', String? plan}) => Block.fromJson({
+PlanReviewBlock _card({String state = 'pending', String? plan, String? path}) => Block.fromJson({
       'type': 'plan_review',
       'id': 'r1',
       'title': '改 a.txt',
       'plan': plan ?? '# 改 a.txt\n\n## 概要\n把原文改成新文\n\n## 验证\ncat a.txt',
       'state': state,
+      'workspace': 'me',
+      'path': ?path,
     }) as PlanReviewBlock;
 
-Future<void> _show(WidgetTester t, PlanReviewBlock b, {void Function(String, bool)? reply}) => t.pumpWidget(MaterialApp(
-      theme: buildTheme(Brightness.light),
-      home: Scaffold(
-        body: BlockActions(
-          onApproval: reply,
-          child: Padding(padding: const EdgeInsets.all(16), child: SingleChildScrollView(child: BlockView(b))),
+Future<void> _show(WidgetTester t, PlanReviewBlock b, {void Function(String, bool)? reply}) => t.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: Scaffold(
+          body: BlockActions(
+            onApproval: reply,
+            child: Padding(padding: const EdgeInsets.all(16), child: SingleChildScrollView(child: BlockView(b))),
+          ),
         ),
       ),
     ));
@@ -88,6 +92,29 @@ void main() {
     expect(ConversationSummary.fromJson({'id': 'x', 'mode': 'plan'}).planMode, isTrue);
     expect(ConversationSummary.fromJson({'id': 'x'}).planMode, isFalse);
     expect(ConversationSummary.fromJson({'id': 'x', 'mode': 'plan'}).withTitle('t').planMode, isTrue);
+  });
+
+  test('v1.72 批准后存成的方案文件', () {
+    final saved = _card(state: 'approved', path: 'plans/2026-10-13-改-a-txt.md');
+    expect(saved.workspace, 'me');
+    expect(planReviewSaved(saved), isTrue);
+    expect(planReviewSaved(_card(state: 'approved')), isFalse); // 老卡没有路径
+    expect(planReviewSaved(_card(path: 'plans/x.md')), isFalse); // 还没批准
+    expect(planReviewSaved(_card(state: 'rejected', path: 'plans/x.md')), isFalse);
+    expect(planReviewFileName(saved), '2026-10-13-改-a-txt.md');
+    expect(planReviewFilePath(saved), '/api/projects/me/files/plans/${Uri.encodeComponent('2026-10-13-改-a-txt.md')}');
+    expect(planReviewFileSemantics(saved), contains('我的文件'));
+  });
+
+  testWidgets('批准后卡头下露“已存为”一行（收起时也在）', (t) async {
+    await _show(t, _card(path: 'plans/a.md'), reply: (_, _) {});
+    await t.pumpAndSettle();
+    expect(find.text('已存为'), findsNothing);
+    await _show(t, _card(state: 'approved', path: 'plans/a.md'), reply: (_, _) {});
+    await t.pumpAndSettle();
+    expect(find.text('已存为'), findsOneWidget);
+    expect(find.text('a.md'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('方案已存到我的文件：plans/a.md')), findsOneWidget);
   });
 
   testWidgets('等批准：正文 + 两个按钮走 onApproval；有结果后按钮收起、卡片收成一行可展开', (t) async {

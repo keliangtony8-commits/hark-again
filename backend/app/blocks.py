@@ -173,6 +173,8 @@ class PlanReviewBlock(BaseModel):
     title: str
     plan: str
     state: Literal["pending", "approved", "rejected", "expired"] = "pending"
+    workspace: str = ""  # v1.72 批准后方案存到哪：工作区 id + 相对路径（客户端“已批准”时显示、点开文件）
+    path: str = ""
 
 
 class PageBlock(BaseModel):

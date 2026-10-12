@@ -79,6 +79,8 @@ def _from_message(msg, ws: str) -> list[dict]:
             src = "project" if b.get("source") == "project" else "upload"
             out.append(_item(src, str(b["id"]), str(b.get("name") or ""), b.get("project_id") or ws,
                              "sent" if user else "delivered", msg, str(b.get("mime") or ""), int(b.get("size") or 0)))
+        elif b.get("type") == "plan_review" and b.get("state") == "approved" and b.get("path"):  # v1.72 批准后存进工作区的方案
+            out.append(_item("project", str(b["path"]).lstrip("/"), Path(str(b["path"])).name, b.get("workspace") or ws, "written", msg))
         elif b.get("type") == "browser":
             bws = b.get("workspace") or ws
             for f in b.get("files") or []:

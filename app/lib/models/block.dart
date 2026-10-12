@@ -67,7 +67,9 @@ sealed class Block {
             id: j['id'] as String? ?? '',
             title: j['title'] as String? ?? '方案',
             plan: j['plan'] as String? ?? '',
-            state: j['state'] as String? ?? 'pending'),
+            state: j['state'] as String? ?? 'pending',
+            workspace: j['workspace'] as String? ?? '',
+            path: j['path'] as String? ?? ''),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -152,9 +154,11 @@ class ApprovalBlock extends Block {
 
 /// v1.71 计划模式下交给你批准的方案（后端 app/plan_mode.py；批准走 approval.reply，和审批卡同一条线）。
 /// state：pending 等你批准 / approved 已批准（退出计划模式、这一轮按方案做）/ rejected 要改 / expired 没等到答复。
+/// workspace + path（v1.72）= 批准后方案存进工作区的位置（老卡为空）。
 class PlanReviewBlock extends Block {
-  const PlanReviewBlock({required this.id, required this.title, required this.plan, required this.state});
-  final String id, title, plan, state;
+  const PlanReviewBlock(
+      {required this.id, required this.title, required this.plan, required this.state, this.workspace = '', this.path = ''});
+  final String id, title, plan, state, workspace, path;
   bool get pending => state == 'pending';
 }
 

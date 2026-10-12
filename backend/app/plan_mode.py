@@ -22,8 +22,11 @@ subagent（子助手继承只读）、builtin/plan_mode.py（exit_plan_mode）�
 """
 import re
 from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
 
 from . import readonly_command
+from .storage import safe_join
 
 DEFAULT = "default"
 PLAN = "plan"
@@ -137,9 +140,10 @@ def check_plan(plan: object) -> tuple[str, str]:
     return text, title[:TITLE_MAX]
 
 
-def review_card(plan: str, title: str) -> dict:
-    """交给用户批准的方案卡（kernel 补 id/state；state pending → approved / rejected / expired）。"""
-    return {"type": "plan_review", "title": title, "plan": plan, "state": "pending"}
+def review_card(plan: str, title: str, workspace: str = "", path: str = "") -> dict:
+    """交给用户批准的方案卡（kernel 补 id/state；state pending → approved / rejected / expired）。
+    workspace/path = 批准后存到哪（客户端在“已批准”时显示、点开文件）。"""
+    return {"type": "plan_review", "title": title, "plan": plan, "state": "pending", "workspace": workspace, "path": path}
 
 
 def lift_prompt(messages: list[dict]) -> bool:
@@ -160,3 +164,67 @@ def history_text(block: dict) -> str:
     if len(plan) > HISTORY_MAX:
         plan = plan[:HISTORY_MAX] + "\n…（后面略）"
     return f"[方案「{block.get('title') or '方案'}」——{state.get(block.get('state'), '')}]\n{plan}"
+
+
+# ---- 批准的方案存成工作区文件（Gemini approvedPlanPath + renderApprovedPlanSection，modified）----
+# Gemini 把批准的方案留在 plans 目录、记下路径，之后每轮系统提示都说“有一份批准的方案，照它做、动手前先读、要改先问再更新它；
+# 计划模式下默认在它上面改，用户要新方案或换了件事才另起一份”。我们的方案正文在 exit_plan_mode 的参数里，所以批准时由服务器
+# 写进工作区 plans/（用户在文件里看得到、能改能删；删掉 = 不再按它做），路径记在 conversations.plan_path。
+PLANS_DIR = "plans"
+SLUG_MAX = 40
+READ_MAX = 256 * 1024  # 读回旧方案找标题时最多读这么多字节
+
+
+def plan_slug(title: str) -> str:
+    """文件名里的标题部分：保留字母数字、汉字和 -，其余换成 -；空了用 plan。"""
+    slug = re.sub(r"[^\w-]+", "-", title, flags=re.UNICODE).replace("_", "-")
+    slug = re.sub(r"-{2,}", "-", slug).strip("-")[:SLUG_MAX].strip("-")
+    return slug or "plan"
+
+
+def _title_of(p: Path) -> str | None:
+    try:
+        if not p.is_file():
+            return None
+        with p.open("rb") as f:
+            text = f.read(READ_MAX).decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    t = heading(text)
+    return t.strip()[:TITLE_MAX] if t else None
+
+
+def plan_file(root: Path, title: str, previous: str | None, day: date) -> str:
+    """这份方案该存到哪（工作区相对路径）。上一份批准的方案还在、标题相同 → 原地更新它（在旧方案上改）；
+    否则 plans/<日期>-<标题>.md，重名加 -2、-3……"""
+    if previous:
+        try:
+            if _title_of(safe_join(root, previous)) == title:
+                return previous
+        except ValueError:
+            pass
+    base = f"{PLANS_DIR}/{day.isoformat()}-{plan_slug(title)}"
+    rel, n = f"{base}.md", 2
+    while (root / rel).exists():
+        rel, n = f"{base}-{n}.md", n + 1
+    return rel
+
+
+def approved_path(root: Path, path: str | None) -> str | None:
+    """记下的方案文件还在（没被用户删）→ 路径；否则 None（不再按它做）。"""
+    if not path:
+        return None
+    try:
+        p = safe_join(root, path)
+    except ValueError:
+        return None
+    return path if p.is_file() else None
+
+
+def approved_prompt(path: str, planning: bool) -> str:
+    """系统提示里的“批准的方案”一节（稳定段：只在批准新方案时变）。"""
+    if planning:
+        return (f"# 已批准的方案\n这个对话之前批准过一份方案：{path}。默认在这份方案上继续改（交新版时用同一个 # 标题，会更新这份文件）；"
+                "只有用户明确要“新方案”，或者这次是完全不同的事，才换个标题另起一份。")
+    return (f"# 已批准的方案\n用户批准过的方案存在工作区 {path}，它是这件事的依据。接着做之前，如果上下文里已经看不到方案原文，先 read_file 读它；"
+            "中途发现新需求或要换做法，先和用户确认，再更新这个文件，让它和实际做法一致。")

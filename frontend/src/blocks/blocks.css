@@ -380,6 +380,13 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-review-plan.is-peek { max-height: 260px; mask-image: linear-gradient(to bottom, #000 75%, transparent); }
 .blk-review-more { margin-top: var(--sp-1); }
 .blk-review-actions { animation: rise var(--dur) var(--ease); }
+.blk-review-file { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm);
+  background: var(--tile); color: var(--text-2); text-decoration: none; animation: rise var(--dur) var(--ease);
+  transition: background var(--dur) var(--ease); }
+.blk-review-file:hover { background: color-mix(in srgb, var(--text) 8%, var(--tile)); }
+.blk-review-file:focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; }
+.blk-review-file-label { font-size: var(--fs-xs); color: var(--text-3); }
+.blk-review-file-name { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) {
-  .blk-review, .blk-review-icon, .blk-review-hint, .blk-review-state, .blk-review-body, .blk-review-actions { animation: none; transition: none; }
+  .blk-review, .blk-review-icon, .blk-review-hint, .blk-review-state, .blk-review-body, .blk-review-actions, .blk-review-file { animation: none; transition: none; }
 }

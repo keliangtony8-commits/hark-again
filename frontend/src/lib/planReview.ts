@@ -1,4 +1,5 @@
 import type { PlanReviewBlock } from "./types";
+import { workspaceFilePath, workspaceFilesTitle } from "./workspace";
 
 /** 方案卡（v1.71 计划模式，后端 app/plan_mode.py）的显示规则，与 App models/plan_review.dart 一一对应。 */
 export const PLAN_REVIEW_LONG_LINES = 14;
@@ -31,6 +32,13 @@ export function planReviewLong(b: PlanReviewBlock): boolean {
 export const planReviewCollapsedByDefault = (b: PlanReviewBlock) => b.state !== "pending";
 
 export const planReviewSemantics = (b: PlanReviewBlock) => `方案：${b.title}，${planReviewLabel(b)}。${planReviewHint(b)}`;
+
+/** 批准后方案存成了工作区文件（v1.72，后端 plan_mode.plan_file）：卡头下露一行，点开看。老卡、没批准的不显示。 */
+export const planReviewSaved = (b: PlanReviewBlock) => b.state === "approved" && !!b.path && !!b.workspace;
+export const planReviewFileName = (b: PlanReviewBlock) => (b.path ?? "").split("/").pop() ?? "";
+/** 下载路径（未带 token，交给 fileUrl）。 */
+export const planReviewFilePath = (b: PlanReviewBlock) => workspaceFilePath(b.workspace ?? "", b.path ?? "");
+export const planReviewFileSemantics = (b: PlanReviewBlock) => `方案已存到${workspaceFilesTitle(b.workspace)}：${b.path}，点开查看`;
 
 export const PLAN_MODE_ON = "计划模式已开：只看不改，先交方案给你批准。点按关闭";
 export const PLAN_MODE_OFF = "计划模式已关。点按打开：先出方案、你批准后再动手";

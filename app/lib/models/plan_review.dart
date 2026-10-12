@@ -1,4 +1,5 @@
 // 方案卡（v1.71 计划模式，后端 app/plan_mode.py）的显示规则：标签、正文、要不要折叠、读屏文字。界面只读这里。
+import '../core/workspace.dart';
 import 'block.dart';
 
 /// 正文超过这么多行 / 字就先只露一截，点“展开全部”看完。
@@ -38,3 +39,14 @@ bool planReviewLong(PlanReviewBlock b) {
 bool planReviewCollapsedByDefault(PlanReviewBlock b) => !b.pending;
 
 String planReviewSemantics(PlanReviewBlock b) => '方案：${b.title}，${planReviewLabel(b)}。${planReviewHint(b)}';
+
+
+/// 批准后方案存成了工作区文件（v1.72，后端 plan_mode.plan_file）：卡上露一行，点开看 / 下载。老卡、没批准的不显示。
+bool planReviewSaved(PlanReviewBlock b) => b.state == 'approved' && b.path.isNotEmpty && b.workspace.isNotEmpty;
+
+/// 那一行的文件名（只显示最后一段，完整路径在读屏文字里）。
+String planReviewFileName(PlanReviewBlock b) => b.path.split('/').last;
+
+String planReviewFilePath(PlanReviewBlock b) => workspaceFilePath(b.workspace, b.path);
+
+String planReviewFileSemantics(PlanReviewBlock b) => '方案已存到${workspaceFilesTitle(b.workspace)}：${b.path}，点开查看';

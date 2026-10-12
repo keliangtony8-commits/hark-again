@@ -4,8 +4,13 @@
 //   ┌ 方案正文（Markdown；太长先露一截，“展开全部”）┐
 //   [ 再改改 ]  [ 批准，开始执行 ]
 // 批准 / 再改改走 BlockActions.onApproval（和审批卡同一条 approval.reply）。有了结果：状态字 SwapSwitcher 换、按钮 AnimatedSize 收起，
-// 卡片默认收成一行（TurnIcon 箭头，点卡头展开）。规则在 models/plan_review.dart。
+// 卡片默认收成一行（TurnIcon 箭头，点卡头展开）。v1.72：批准后方案存进工作区 plans/，卡头下露一行文件（收起时也在），点开看。
+// 规则在 models/plan_review.dart。
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/api.dart';
+import '../core/links.dart';
 
 import '../models/block.dart';
 import '../models/plan_review.dart';
@@ -85,6 +90,7 @@ class _PlanReviewBlockViewState extends State<PlanReviewBlockView> {
               ],
             ]),
           ),
+          RiseSwitcher(child: planReviewSaved(b) ? _SavedFile(b, key: ValueKey(b.path)) : null),
           AnimatedSize(
             duration: context.motion(Motion.base),
             curve: Motion.ease,
@@ -130,6 +136,42 @@ class _PlanReviewBlockViewState extends State<PlanReviewBlockView> {
                 : const SizedBox(width: double.infinity),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+/// “已存为 plans/….md”：批准后方案在工作区里的那份，点开用工作区文件接口（同浏览器卡的文件行）。
+class _SavedFile extends ConsumerWidget {
+  const _SavedFile(this.block, {super.key});
+  final PlanReviewBlock block;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: Sp.x3),
+      child: Pressable(
+        semanticLabel: planReviewFileSemantics(block),
+        onTap: () => openUrl(ref.read(apiProvider).fileUrl(planReviewFilePath(block))),
+        child: ExcludeSemantics(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
+            decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+            child: Row(children: [
+              Icon(Icons.description_outlined, size: 16, color: p.text2),
+              const SizedBox(width: Sp.x2),
+              Text('已存为', style: context.text.labelSmall?.copyWith(color: p.text3)),
+              const SizedBox(width: Sp.x1),
+              Expanded(
+                child: Text(planReviewFileName(block),
+                    style: context.text.labelMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: Sp.x2),
+              Icon(Icons.open_in_new_rounded, size: 16, color: p.text3),
+            ]),
+          ),
+        ),
       ),
     );
   }
