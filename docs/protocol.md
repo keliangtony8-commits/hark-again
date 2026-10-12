@@ -67,6 +67,7 @@
 | 资源 | 路径 | 备注 |
 |---|---|---|
 | 对话 | `/api/conversations` | `GET ?q=&project_id=` 搜标题+内容（置顶在前，内容命中带 `snippet` + `message_id`＝最近一条命中的消息，客户端打开后滚到它并闪一下；标题命中两者都不带）；`PATCH /{id} {title?, pinned?, model?}` 不改 `updated_at`（`model` 非法 422，`""` = 回默认）；列表项和详情都带 `model`（`null` = 默认）；`GET /{id}` 返回 messages（每条 `{id, role, blocks, status?, created_at?}`，`status` 只在 `stopped` 时出现；`created_at` 是带时区的 ISO 时间（v0.45 起，客户端按本地日期画日期分隔，没有就不画）） |
+| 回复存成项目文件 | `POST /api/messages/{id}/save-to-project` | body `{project_id?}`（不给 = 回复所在对话的项目）→ `{project_id, project_name, path, name, size, mime}`；只收助手回复，存成 Markdown 写进项目根目录，同名加“ 2”；没内容/用户消息/主聊天没给项目 400，消息或项目不存在 404（v1.15） |
 | 项目 | `/api/projects` | `brief` = 项目档案（Markdown，≤8000 字，超出 422；PATCH 时去首尾空白，内容真变了才把 `brief_by` 设为 `user`、`brief_updated_at` 设为现在；助手用 `project_brief` 工具改时 `brief_by=assistant`；老服务器没有这三个字段）；只读 `conversation_count`（项目内对话数）、`last_active_at`（项目或其中任一对话的最后更新）；文件：`/api/projects/{pid}/files[/{path}]`（multipart 上传；列表每项 `path/name/size/mime/modified`，modified = Unix 秒，客户端首屏按它取最近 3 个；下载路径逐段 URL 编码） |
 | 记忆 | `/api/memories` | 每项 `{id, category, content, created_at, updated_at}`；`category` 常用 `profile\|food\|travel\|work\|shopping\|general`，客户端认识的显示中文名、不认识的原样显示。搜索、分类筛选都在客户端做（记忆全量已在列表里） |
 | 我对你的了解 | `/api/memory-digest` | `GET` → `{text\|null, generated_at\|null, count（生成时的记忆数）, memories（现在的记忆数）, stale}`，零模型调用；`stale` = 生成后记忆有增删改。`POST` 用便宜模型重写一次（记账 kind=digest）返回同样形状；没有记忆 → 删掉旧概括返回 text=null；模型失败 502，旧概括不动。客户端从不自动 POST（花 token），只在用户点“生成/更新”时调 |

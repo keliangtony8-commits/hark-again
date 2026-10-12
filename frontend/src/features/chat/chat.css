@@ -198,6 +198,9 @@
 
 /* 重新生成：只挂在最后一条回复上，出现时轻轻浮起；错误条里的“重试”和文字同排 */
 .msg-regen { animation: rise var(--dur) var(--ease); }
+.msg-saved { display: inline-flex; align-items: center; min-width: 0; padding: 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.msg-saved.is-err { color: var(--danger); }
 .msg-stopped { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-3); }
 /* 生成中的停止键：和发送键同位，换形时用同一套 rise 入场 */
 .send-btn.stop { animation: rise var(--dur) var(--ease); }

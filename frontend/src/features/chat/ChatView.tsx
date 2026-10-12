@@ -105,7 +105,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
                 {startsNewDay(messages, i) && <div className="day-sep">{formatDay(m.created_at!)}</div>}
                 <MessageView message={m} last={m === last} onResend={onResend} onDiscard={onDiscard}
                   onRegenerate={m === last && m.role === "assistant" && canRegenerate ? onRegenerate : undefined}
-                  onEdit={m.id === editableId ? startEdit : undefined} editing={m.id === editing?.id} />
+                  onEdit={m.id === editableId ? startEdit : undefined} editing={m.id === editing?.id} projectId={projectId} />
               </div>
             ))}
             {error && (

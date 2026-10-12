@@ -15,6 +15,7 @@ import '../../models/message.dart';
 import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
+import '../projects/save_reply.dart';
 import 'chat_controller.dart';
 import 'composer.dart';
 import 'message_view.dart';
@@ -168,6 +169,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   onResend: ctl.resend,
                                   onDiscard: ctl.discard,
                                   onRegenerate: regen ? ctl.regenerate : null,
+                                  onSave: m.isUser || m.pending ? null : () => saveReplyToProject(context, ref, messageId: m.id, projectId: widget.projectId),
                                   last: i == 0 && !m.isUser,
                                   onEdit: m.id == chat.editableId ? () => setState(() => _editing = EditDraft.of(m)) : null),
                             );

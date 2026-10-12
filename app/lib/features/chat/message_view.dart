@@ -1,6 +1,6 @@
 // 设计 v2：用户 = 右侧强调色胶囊；助手 = 左侧玻璃卡（假玻璃，不模糊），两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
 // 一条消息：用户 = 右侧气泡（没发出的带“待发送/发送失败”状态行；长按出菜单：复制，最后一条另有“编辑”）；助手 = 全宽块列表 + 工具进度 + 思考动画，
-// 生成完的回复下方一行操作（复制、朗读；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
+// 生成完的回复下方一行操作（复制、朗读、存到项目文件；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -18,10 +18,11 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../projects/save_reply.dart';
 import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
-  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onEdit, this.last = false});
+  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onEdit, this.onSave, this.last = false});
   final Message message;
 
   /// 是不是对话里最后一条回复：只有它常驻“复制 / 重新生成”一排小图标（版面更干净）。
@@ -32,6 +33,9 @@ class MessageView extends StatelessWidget {
 
   /// 只有最后一条可编辑的用户消息才给（由 ChatView 按 ChatState.editableId 决定）。
   final VoidCallback? onEdit;
+
+  /// 存到项目文件（features/projects/save_reply.dart）；ChatView 给已落库的回复。
+  final VoidCallback? onSave;
 
   @override
   Widget build(BuildContext context) => FadeSlideIn(
@@ -184,7 +188,7 @@ class MessageView extends StatelessWidget {
         ),
       ),
       if (!message.pending && (last || message.stopped))
-        _ReplyActions(id: message.id, text: copyText(message.blocks), spoken: speakableText(message.blocks), stopped: message.stopped, onRegenerate: onRegenerate),
+        _ReplyActions(id: message.id, text: copyText(message.blocks), spoken: speakableText(message.blocks), stopped: message.stopped, onRegenerate: onRegenerate, onSave: onSave),
     ]);
   }
 }
@@ -235,12 +239,13 @@ class _OutboxStatus extends StatelessWidget {
 /// 回复下方的操作行：低调的小图标（kit QuietAction，不抢内容）。回复完成时逐个错峰浮现；
 /// 复制 → 对勾、朗读 → 停止都是原地 PopSwitcher；“重新生成”随可用状态淡入淡出。
 class _ReplyActions extends StatelessWidget {
-  const _ReplyActions({required this.id, required this.text, required this.spoken, this.stopped = false, this.onRegenerate});
+  const _ReplyActions({required this.id, required this.text, required this.spoken, this.stopped = false, this.onRegenerate, this.onSave});
   final String id;
   final String text;
   final String spoken; // 只含正文，没有就不给朗读键
   final bool stopped; // 半截回复：行尾标“已停止”，提醒内容不完整（重新生成就能补全）
   final VoidCallback? onRegenerate;
+  final VoidCallback? onSave; // 存到项目文件：有可复制的内容才给
 
   @override
   Widget build(BuildContext context) {
@@ -248,6 +253,8 @@ class _ReplyActions extends StatelessWidget {
     final items = <Widget>[
       if (text.isNotEmpty) CopyAction(text: text),
       if (spoken.isNotEmpty) _SpeakButton(id: id, text: spoken),
+      if (text.isNotEmpty && onSave != null)
+        QuietAction(icon: const Icon(Icons.drive_folder_upload_outlined), tooltip: saveReplyLabel, onPressed: onSave),
       AnimatedSwitcher(
         duration: context.motion(Motion.fast),
         child: onRegenerate == null

@@ -7,6 +7,8 @@ type P = { size?: number };
 export const IconHome = (p: P) => <S {...p} d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" />;
 export const IconChat = (p: P) => <S {...p} d="M5 18.5 3.5 21V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v10.5a2 2 0 0 1-2 2z" />;
 export const IconFolder = (p: P) => <S {...p} d="M3.5 7a2 2 0 0 1 2-2H10l2 2.5h6.5a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />;
+/** 存进项目文件：文件夹 + 向上箭头 */
+export const IconSaveTo = (p: P) => <S {...p} d="M3.5 7a2 2 0 0 1 2-2H10l2 2.5h6.5a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2zM12 17v-6M9.5 13.5 12 11l2.5 2.5" />;
 export const IconUser = (p: P) => <S {...p} d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5c1.2-3.5 4-5 7.5-5s6.3 1.5 7.5 5" />;
 export const IconMenu = (p: P) => <S {...p} d="M4 7h16M4 12h16M4 17h10" />;
 export const IconPlus = (p: P) => <S {...p} d="M12 5v14M5 12h14" />;

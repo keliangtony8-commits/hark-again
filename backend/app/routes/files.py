@@ -2,8 +2,11 @@
 下载支持 ?token=，因为 <img>/<a> 标签无法带 Authorization 头。"""
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import storage
+from .. import reply_files, storage
+from ..db import get_session
 from ..auth import require_query_token, require_user
 from ..config import settings
 
@@ -62,3 +65,18 @@ async def delete_project_file(pid: str, path: str):
     if p.is_file():
         p.unlink()
     return {"ok": True}
+
+
+# ---- 把一条回复存成项目文件（reply_files.py）----
+class SaveReply(BaseModel):
+    project_id: str | None = Field(default=None, max_length=32)  # 不给 = 回复所在对话的项目
+
+
+@router.post("/api/messages/{mid}/save-to-project", dependencies=auth)
+async def save_reply(mid: str, body: SaveReply, db: AsyncSession = Depends(get_session)):
+    try:
+        return await reply_files.save(db, mid, body.project_id or None)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
