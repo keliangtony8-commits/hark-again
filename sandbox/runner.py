@@ -29,7 +29,7 @@ import time
 import docker
 import httpx
 from docker.errors import NotFound
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel
@@ -779,6 +779,103 @@ async def preview(pid: str, port: int, path: str, request: Request):
     resp = StreamingResponse(r.aiter_raw(), status_code=r.status_code, background=BackgroundTask(r.aclose))
     resp.raw_headers = [(k.encode("latin-1"), v.encode("latin-1")) for k, v in out] + [(b"x-sandbox-preview", b"1")]
     return resp
+
+
+# ---- WebSocket 转发（Vite/Next 热更新、Streamlit、Gradio、Jupyter 内核）----
+# 思路取自 jupyter-server-proxy（BSD-3-Clause）handlers.py 的 proxy_open / select_subprotocol / _record_activity，
+# 改进它 issue #459 的毛病：先和上游握手、拿到上游选的子协议，再接受客户端（它是先接受客户端、盲选第一个）。
+WS_MAX = 16 * 1024 * 1024  # 单帧上限
+# 握手时不往上游传的头：逐跳头 + websockets 自己会生成的握手头 + Origin（预览页是不透明源 Origin: null，
+# 不少服务（tornado 系：Streamlit/Jupyter）见到对不上的 Origin 就拒；没有 Origin 头则放行）
+_WS_DROP = _HOP | {"sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-protocol",
+                   "origin", "cookie2"}
+
+
+def ws_close_code(code) -> int:
+    """上游的关闭码 → 能发给对端的码：1005/1006/1015 是保留码不能发（无码 → 1000，异常断开 → 1011）。"""
+    if code in (None, 1005):
+        return 1000
+    if not isinstance(code, int) or code in (1006, 1015) or not 1000 <= code <= 4999 or 1016 <= code < 3000:
+        return 1011
+    return code
+
+
+async def ws_relay(client_ws, upstream, touch=lambda: None) -> None:
+    """双向搬运：文本帧仍是文本、二进制仍是二进制；一边断了另一边跟着关，并带上对方的关闭码。"""
+    async def down():  # 上游 → 客户端
+        try:
+            async for msg in upstream:
+                touch()
+                if isinstance(msg, bytes):
+                    await client_ws.send_bytes(msg)
+                else:
+                    await client_ws.send_text(msg)
+        except Exception:
+            pass
+        code = getattr(upstream, "close_code", None)
+        try:
+            await client_ws.close(ws_close_code(code))
+        except Exception:
+            pass
+
+    async def up():  # 客户端 → 上游
+        code = 1000
+        try:
+            while True:
+                m = await client_ws.receive()
+                if m["type"] == "websocket.disconnect":
+                    code = m.get("code", 1000)
+                    break
+                touch()
+                if m.get("bytes") is not None:
+                    await upstream.send(m["bytes"])
+                elif m.get("text") is not None:
+                    await upstream.send(m["text"])
+        except Exception:
+            pass
+        try:
+            await upstream.close(ws_close_code(code))
+        except Exception:
+            pass
+
+    tasks = [asyncio.create_task(down()), asyncio.create_task(up())]
+    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    await asyncio.wait(tasks, timeout=5)
+    for t in tasks:
+        t.cancel()
+
+
+@app.websocket("/preview/{pid}/{port}/{path:path}")
+async def preview_ws(ws: WebSocket, pid: str, port: int, path: str):
+    """和 HTTP 预览同一条路：只连已开着的容器，握手失败（休眠 / 端口上没人 / 鉴权不对）就不接受 → 对端拿到 403。"""
+    import websockets
+    if ws.headers.get("authorization") != f"Bearer {TOKEN}" or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", pid) or not 1 <= port <= 65535:
+        await ws.close(1008)
+        return
+    c = await asyncio.to_thread(_existing, pid)
+    if c is None:
+        await ws.close(1013)
+        return
+    host = await asyncio.to_thread(_address, c) or c.name
+    last_used[pid] = time.time()
+    query = ws.url.query
+    uri = f"ws://{host}:{port}/{path}" + (f"?{query}" if query else "")
+    protos = [p.strip() for p in ws.headers.get("sec-websocket-protocol", "").split(",") if p.strip()]
+    headers = [(k, v) for k, v in ws.headers.items() if k.lower() not in _WS_DROP]
+    try:
+        upstream = await websockets.connect(uri, subprotocols=protos or None, additional_headers=headers,
+                                            open_timeout=10, max_size=WS_MAX, ping_interval=None, proxy=None)
+    except Exception:
+        await ws.close(1011)
+        return
+    await ws.accept(subprotocol=upstream.subprotocol)
+
+    def touch():  # 预览页开着、有来往 = 在用，别空闲回收（jupyter-server-proxy 的 _record_activity）
+        last_used[pid] = time.time()
+    try:
+        await ws_relay(ws, upstream, touch)
+    finally:
+        await upstream.close()
 
 
 async def _reaper():

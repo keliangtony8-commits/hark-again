@@ -12,7 +12,11 @@ forward() 经 sandbox_client.preview_send 交给沙盒服务，沙盒在专用�
   - 响应一律加 CSP sandbox（不透明源）：预览页面是模型写的代码，跑在和 App 同一个域名下，绝不能读到 App 的登录信息；
     同时放行脚本、表单、弹窗、下载，并给跨源请求开 ACAO *（不透明源发出的 fetch 都算跨源，否则页面连自己的接口都调不了）。
   - 改写跳转（Location 指向 / 或容器地址 → 改回预览前缀）和 Set-Cookie 的 Path（只在这条预览链接下生效，不落到 App 的根路径）。
-  - 已知限制（写进工具说明）：页面里以 / 开头的绝对路径会跳出预览前缀，要用相对路径或框架的 base 选项；不转 WebSocket（热更新要手动刷新）。
+  - 转发时告诉服务它挂在哪个前缀下（X-Forwarded-Prefix / X-Forwarded-Context / X-ProxyContextPath，取自
+    jupyter-server-proxy）：Flask(ProxyFix)/Werkzeug、Jupyter、Streamlit 一类会据此生成带前缀的链接。
+  - WebSocket 照样转（热更新、Streamlit/Gradio、Jupyter 内核）：签名同一条，先和上游握手、带回上游选的子协议再接受，
+    帧原样搬运（文本/二进制不变），关闭码两边互传；有来往就算电脑在用。
+  - 已知限制（写进工具说明）：页面里以 / 开头的绝对路径会跳出预览前缀，要用相对路径或框架的 base 选项。
 """
 import base64
 import hashlib
@@ -126,8 +130,91 @@ async def open_port(ws: str, port: int, path: str = "") -> dict:
 
 
 # ---- 转发 ----
-def request_headers(items: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    return [(k, v) for k, v in items if k.lower() not in _HOP]
+_PREFIX_HEADERS = ("x-forwarded-prefix", "x-forwarded-context", "x-proxycontextpath")
+
+
+def prefix_headers(token: str) -> list[tuple[str, str]]:
+    """告诉上游自己挂在哪个路径前缀下（jupyter-server-proxy 的三个头，Werkzeug ProxyFix 认 X-Forwarded-Prefix）。"""
+    p = base_path(token).rstrip("/")
+    return [(h, p) for h in _PREFIX_HEADERS]
+
+
+def request_headers(items: list[tuple[str, str]], token: str | None = None) -> list[tuple[str, str]]:
+    """浏览器请求头 → 转给服务的头：去逐跳头和 App 登录；客户端自带的前缀头不信，换成我们的。"""
+    out = [(k, v) for k, v in items if k.lower() not in _HOP and k.lower() not in _PREFIX_HEADERS]
+    return out + (prefix_headers(token) if token else [])
+
+
+# ---- WebSocket ----
+# 握手时不往下传的头：逐跳头 + 握手头（客户端库自己生成）+ Origin（预览页是不透明源，Origin: null 常被 tornado 系拒；
+# 不带 Origin 则放行）。和 sandbox/runner.py 的 _WS_DROP 同一份。
+_WS_DROP = _HOP | {"sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-protocol",
+                   "origin", "cookie2"}
+WS_MAX = 16 * 1024 * 1024
+
+
+def ws_headers(items: list[tuple[str, str]], token: str) -> list[tuple[str, str]]:
+    return [(k, v) for k, v in items if k.lower() not in _WS_DROP and k.lower() not in _PREFIX_HEADERS] + prefix_headers(token)
+
+
+def ws_protocols(header: str) -> list[str]:
+    return [p.strip() for p in (header or "").split(",") if p.strip()]
+
+
+def ws_close_code(code) -> int:
+    """对端的关闭码 → 能发出去的码：1005/1006/1015 是保留码不能发（无码 → 1000，异常断开 → 1011）。"""
+    if code in (None, 1005):
+        return 1000
+    if not isinstance(code, int) or code in (1006, 1015) or not 1000 <= code <= 4999 or 1016 <= code < 3000:
+        return 1011
+    return code
+
+
+async def ws_relay(client_ws, upstream, touch=lambda: None) -> None:
+    """双向搬运（与 sandbox/runner.py 的 ws_relay 同一份逻辑）：文本仍是文本、二进制仍是二进制；
+    一边断了另一边跟着关，并带上对方的关闭码。client_ws 是 Starlette WebSocket，upstream 是 websockets 连接。"""
+    import asyncio
+
+    async def down():
+        try:
+            async for msg in upstream:
+                touch()
+                if isinstance(msg, bytes):
+                    await client_ws.send_bytes(msg)
+                else:
+                    await client_ws.send_text(msg)
+        except Exception:
+            pass
+        try:
+            await client_ws.close(ws_close_code(getattr(upstream, "close_code", None)))
+        except Exception:
+            pass
+
+    async def up():
+        code = 1000
+        try:
+            while True:
+                m = await client_ws.receive()
+                if m["type"] == "websocket.disconnect":
+                    code = m.get("code", 1000)
+                    break
+                touch()
+                if m.get("bytes") is not None:
+                    await upstream.send(m["bytes"])
+                elif m.get("text") is not None:
+                    await upstream.send(m["text"])
+        except Exception:
+            pass
+        try:
+            await upstream.close(ws_close_code(code))
+        except Exception:
+            pass
+
+    tasks = [asyncio.create_task(down()), asyncio.create_task(up())]
+    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    await asyncio.wait(tasks, timeout=5)
+    for t in tasks:
+        t.cancel()
 
 
 def _location(value: str, token: str) -> str:

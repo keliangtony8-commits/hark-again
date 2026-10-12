@@ -8,7 +8,7 @@ from ..tools import ToolContext, ToolResult, tool
       "工作区电脑里的网页服务（网站、看板、小工具、API 文档页）跑起来后，用它给用户一张预览卡：用户在手机/电脑上点开就能看、能用，"
       f"链接 {preview.TTL_HOURS} 小时内有效。服务要先用 run_command background=true 启动并监听 0.0.0.0"
       "（如 python3 -m http.server 8000 --bind 0.0.0.0、npm run dev -- --host 0.0.0.0、flask run --host 0.0.0.0）。"
-      "页面引用资源要用相对路径（以 / 开头的绝对路径会跳出预览；Vite 用 --base ./）；不转发 WebSocket，热更新要手动刷新。"
+      "页面引用资源要用相对路径（以 / 开头的绝对路径会跳出预览；Vite 用 --base ./）；WebSocket（热更新、Streamlit/Gradio）会照常转发。"
       "不给 port 就列出正在监听的端口（只有一个时直接用它）。想自己先看一眼效果，用结果里的“内部地址”交给 browser_open。",
       {"type": "object", "properties": {
           "port": {"type": "integer", "minimum": 1, "maximum": 65535},

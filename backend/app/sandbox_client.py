@@ -102,3 +102,15 @@ async def preview_send(project_id: str, port: int, method: str, path: str, query
     req = _preview.build_request(method, url, content=body or None,
                                  headers=[*headers, ("authorization", f"Bearer {settings.sandbox_token}")])
     return await _preview.send(req, stream=True)
+
+
+async def preview_ws(project_id: str, port: int, path: str, query: str, headers: list[tuple[str, str]],
+                     protocols: list[str]):
+    """和沙盒的预览 WebSocket 握手（sandbox/runner.py /preview 的 websocket 路由），返回 websockets 连接。
+    沙盒拒了（休眠 / 端口上没人）或连不上都抛异常。"""
+    import websockets
+    base = settings.sandbox_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
+    uri = f"{base}/preview/{project_id}/{port}/{path}" + (f"?{query}" if query else "")
+    return await websockets.connect(uri, subprotocols=protocols or None, open_timeout=15, ping_interval=None,
+                                    max_size=16 * 1024 * 1024, proxy=None,
+                                    additional_headers=[*headers, ("Authorization", f"Bearer {settings.sandbox_token}")])
