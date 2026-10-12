@@ -8,7 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 import logging
 
-from .. import conversation_title, file_mentions, init_command, live_turns, skill_mentions, steering, user_shell, workspaces
+from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, skill_mentions, steering, user_shell, workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -86,7 +86,7 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
             await db.flush()
         apply_choice(conv, event)
         user_msg = Message(conversation_id=conv.id, role="user",
-                           blocks=(text_to_blocks(text) if text else []) + files + _skills(text))
+                           blocks=(text_to_blocks(text) if text else []) + files + _skills(text) + _agents(text))
         db.add(user_msg)
         await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
@@ -108,7 +108,7 @@ async def _steer(event: dict) -> bool:
     if not isinstance(cid, str) or not steering.active(cid):
         return False
     if steering.reason(text, files=bool(event.get("attachments") or event.get("project_files")),
-                       skills=bool(_skills(text)),
+                       skills=bool(_skills(text)) or bool(_agents(text)),
                        command=user_shell.parse(text) is not None or init_command.parse(text) is not None):
         return False
     async with SessionLocal() as db:
@@ -216,6 +216,13 @@ def _skills(text: str) -> list[dict]:
     return skill_mentions.blocks(text)
 
 
+def _agents(text: str) -> list[dict]:
+    """text 里的 `@子助手` → agent 引用块（规则只在 app/agent_mentions.py）；`!命令` 不认。"""
+    if not text or user_shell.parse(text) is not None:
+        return []
+    return agent_mentions.blocks(text)
+
+
 async def _add_mentions(db, conv: Conversation, user_msg: Message, text: str) -> None:
     have = [b for b in user_msg.blocks if b.get("type") == "file"]
     taken = {b.get("id") for b in have if b.get("source") == "project"}
@@ -223,8 +230,9 @@ async def _add_mentions(db, conv: Conversation, user_msg: Message, text: str) ->
     extra = [b for b in extra if b["id"] not in taken][:MAX_FILES - len(have)]
     skills = [b for b in _skills(text)
               if b["id"] not in {x.get("id") for x in user_msg.blocks if x.get("type") == "skill"}]
-    if extra or skills:
-        user_msg.blocks = [*user_msg.blocks, *extra, *skills]  # 整体赋值，JSON 列才会被标脏
+    agents = agent_mentions.blocks(text, user_msg.blocks) if _agents(text) else []
+    if extra or skills or agents:
+        user_msg.blocks = [*user_msg.blocks, *extra, *skills, *agents]  # 整体赋值，JSON 列才会被标脏
         await db.commit()
 
 

@@ -23,6 +23,7 @@ import os
 import re
 from pathlib import Path
 
+from . import agent_mentions
 from .storage import hidden
 
 MENTIONS_MAX = 10      # 一条消息最多解析几个 @（再多就是在贴日志了）
@@ -50,6 +51,7 @@ def parse(text: str | None) -> list[str]:
     if not isinstance(text, str) or "@" not in text:
         return []
     clean = _CODE_RE.sub(lambda m: " " * len(m.group(0)), text)  # 代码里的 @scope/pkg、装饰器不算
+    clean = agent_mentions.blank(clean)  # @子助手 先按子助手认，不再当文件找（Gemini：代理优先）
     out: list[str] = []
     for m in MENTION_RE.finditer(clean):
         p = _unescape(m.group(1)).strip()

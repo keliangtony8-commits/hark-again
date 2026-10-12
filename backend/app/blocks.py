@@ -71,6 +71,13 @@ class SkillBlock(BaseModel):
     name: str
 
 
+class AgentBlock(BaseModel):
+    """用户消息里 `@子助手` 点名交给子助手（规则在 app/agent_mentions.py）：只是一枚标签，提示每轮由 agent/context 给。"""
+    type: Literal["agent"] = "agent"
+    id: str = "delegate"
+    name: str = "子助手"
+
+
 class ApprovalOption(BaseModel):
     id: str     # once | session | rule（主机命令）
     label: str
@@ -358,7 +365,7 @@ class FormBlock(BaseModel):
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
                         OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock, ChangesBlock,
-                        PlanReviewBlock, ShellBlock, SkillBlock],
+                        PlanReviewBlock, ShellBlock, SkillBlock, AgentBlock],
                   Field(discriminator="type")]
 
 
@@ -407,6 +414,8 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[文件：{b['name']}]")
         elif t == "skill":
             parts.append(f"[技能：{b['name']}]")
+        elif t == "agent":
+            parts.append("[交给子助手]")
         elif t == "job":
             state = {"running": "运行中（结束时你会收到通知，也可用 job_status 查看）", "done": "已完成", "failed": "失败",
                      "timed_out": "超时被终止", "cancelled": "已取消", "lost": "中断了"}.get(b.get("state"), "")

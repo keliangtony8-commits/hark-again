@@ -128,10 +128,10 @@ class _ComposerState extends ConsumerState<Composer> {
 
   void _trackMention() {
     final sel = _c.selection;
-    // $技能 哪儿都能用；@文件 要有工作区；!命令 里的 @ / $ 是给电脑的，都不弹
+    // $技能、@子助手 哪儿都能用（@文件 要有工作区）；!命令 里的 @ / $ 是给电脑的，都不弹
     final m = !sel.isValid || !sel.isCollapsed || shellCommandOf(_c.text) != null
         ? null
-        : mentionAt(_c.text, sel.baseOffset, sigils: {skillSigil, if (widget.workspace != null) fileSigil});
+        : mentionAt(_c.text, sel.baseOffset, sigils: const {skillSigil, fileSigil});
     final s = !sel.isValid || !sel.isCollapsed || _editing ? null : slashQueryAt(_c.text, sel.baseOffset);
     if ((m != _mention || s != _slash) && mounted) {
       setState(() {
@@ -199,7 +199,8 @@ class _ComposerState extends ConsumerState<Composer> {
 
   /// 生成中打了纯文字：发出去是补充给这一轮（不带附件 / 不是命令 / 不在编辑），否则仍只能停止。
   bool get _steering =>
-      widget.streaming && widget.canSteer && !_editing && _attachments.isEmpty && !_shell && _command == null && _c.text.trim().isNotEmpty;
+      widget.streaming && widget.canSteer && !_editing && _attachments.isEmpty && !_shell && _command == null && _c.text.trim().isNotEmpty &&
+      !mentionsAgent(_c.text); // 点名子助手是一件新的事：排成下一轮（服务器同样不插队）
 
   /// 整条是本机命令（不发消息）。
   bool get _local => _command?.local ?? false;
@@ -421,11 +422,20 @@ class _ComposerState extends ConsumerState<Composer> {
         onPick: _pickMention,
       );
     }
-    final files = ref.watch(projectFilesProvider(widget.workspace!));
+    final ws = widget.workspace;
+    final files = ws == null ? null : ref.watch(projectFilesProvider(ws));
+    final agent = agentMatches(m.query);
     return MentionList(
       key: const ValueKey('mention'),
-      items: [for (final f in rankMentions(files.value ?? const [], m.query)) MentionItem.file(f)],
-      empty: files.isLoading && !files.hasValue ? '正在找文件…' : '没有对得上的文件 · 发出去我也会按名字再找一次',
+      items: [
+        if (agent) MentionItem.agent(), // 子助手永远在第一行（Gemini：@名字先按代理认）
+        for (final f in rankMentions(files?.value ?? const [], m.query, max: agent ? mentionMax - 1 : mentionMax)) MentionItem.file(f),
+      ],
+      empty: files == null
+          ? '打 @$agentMention 可以把这件事交给子助手'
+          : files.isLoading && !files.hasValue
+              ? '正在找文件…'
+              : '没有对得上的文件 · 发出去我也会按名字再找一次',
       onPick: _pickMention,
     );
   }

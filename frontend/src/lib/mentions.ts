@@ -3,6 +3,8 @@
  *  @ 前面不能是英文字母/数字/下划线/点/反斜杠/@（邮箱不弹），中文紧挨着可以；遇到空白和标点结束。
  *  v1.81 `$技能`：同一套，打 $ 列出启用的技能，选中补成 `$id `；后端 app/skill_mentions.py（移植自 Codex `$skill`）把正文给模型。
  *  $ 前是英文字母/数字/下划线/$ 不弹（US$5、$$）。
+ *  v1.91 `@子助手`：打 @ 时第一行是“子助手”（没有工作区也列），选中补成 `@子助手 `；后端 app/agent_mentions.py（移植自 Gemini CLI
+ *  @agent）认出来，提示模型用 delegate 交给子助手。英文别名 @agent / @subagent 同样认。
  *  排序（学 Codex file-search 的思路）：文件名开头 > 文件名包含 > 路径包含 > 按顺序出现；同分新的在前、路径短的在前。 */
 import type { ProjectFile, Skill } from "./types";
 
@@ -12,6 +14,15 @@ export type MentionQuery = { start: number; end: number; query: string; sigil: S
 
 const STOP = /[\s,;!?()[\]{}"'`，。；：！？、（）【】《》“”‘’「」]/;
 const BLOCKED_BEFORE: Record<Sigil, RegExp> = { "@": /[A-Za-z0-9_.\\@]/, "$": /[A-Za-z0-9_$]/ };
+
+export const AGENT_MENTION = "子助手";
+const AGENT_ALIASES = ["子助手", "subagent", "agent"];
+/** 正在打的 @xxx 对得上子助手吗（空 = 刚打 @，也列）。 */
+export const agentMatches = (query: string) => { const q = query.trim().toLowerCase(); return AGENT_ALIASES.some((a) => a.startsWith(q)); };
+const AGENT_RE = /(?<![A-Za-z0-9_.\\@])@(子助手|subagent|agent)(?![A-Za-z0-9_\-/\\]|\.[A-Za-z0-9_])/i;
+const CODE_RE = /```[\s\S]*?(?:```|$)|`[^`\n]*`/g;
+/** 消息里有没有点名子助手（同后端 agent_mentions 规则；代码里的不算）。 */
+export const mentionsAgent = (text: string) => AGENT_RE.test(text.replace(CODE_RE, (m) => " ".repeat(m.length)));
 
 /** 光标前正在打的 @ / $（只认 sigils 里的）。 */
 export function mentionAt(text: string, caret: number, sigils: readonly Sigil[] = ["@"]): MentionQuery | null {

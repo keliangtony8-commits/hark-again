@@ -6,6 +6,7 @@ import LinksBlock from "./LinksBlock";
 import CodeBlock from "./CodeBlock";
 import FileBlock from "./FileBlock";
 import SkillChip from "./SkillChip";
+import AgentChip from "./AgentChip";
 import ApprovalBlock from "./ApprovalBlock";
 import BrowserBlock from "./BrowserBlock";
 import PageBlock from "./PageBlock";
@@ -30,6 +31,7 @@ export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Bl
   code: CodeBlock,
   file: FileBlock,
   skill: SkillChip,
+  agent: AgentChip,
   approval: ApprovalBlock,
   browser: BrowserBlock,
   page: PageBlock,

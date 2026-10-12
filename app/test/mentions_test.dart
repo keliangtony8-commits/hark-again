@@ -1,5 +1,5 @@
 // 输入框 @文件（v1.79，features/chat/mentions.dart）：规则（何时算在打 @、排序、补全文字、带空格的路径加引号）
-// + 输入框里打 @ 出候选、边打边筛、点一下补成 `@路径 `、邮箱不弹、!命令 不弹、没有工作区不弹。
+// + 输入框里打 @ 出候选、边打边筛、点一下补成 `@路径 `、邮箱不弹、!命令 不弹；@子助手（v1.91）没有工作区也列。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/chat/composer.dart';
 import 'package:assistant/features/chat/mentions.dart';
@@ -125,6 +125,7 @@ void main() {
     expect(find.byType(MentionList), findsNothing);
     await _type(tester, '看看@');
     expect(find.byType(MentionList), findsOneWidget);
+    expect(find.text('子助手'), findsOneWidget); // 刚打 @：子助手在第一行
     expect(find.text('planner.py'), findsOneWidget);
     expect(find.text('大纲.md'), findsOneWidget);
     await _type(tester, '看看@大');
@@ -149,10 +150,36 @@ void main() {
     expect(find.byType(MentionList), findsNothing);
   });
 
-  testWidgets('没有工作区（首页快捷输入框）：@ 不弹', (tester) async {
-    await _pump(tester, workspace: null);
+  testWidgets('没有工作区（首页快捷输入框）：@ 只列子助手，对不上给一行说明', (tester) async {
+    final sent = await _pump(tester, workspace: null);
     await _type(tester, '@pl');
-    expect(find.byType(MentionList), findsNothing);
+    expect(find.textContaining('打 @子助手'), findsOneWidget);
+    expect(find.text('plan.md'), findsNothing);
+    await _type(tester, '@子');
+    await tester.tap(find.text('子助手'));
+    await _settle(tester);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller!.text, '@子助手 ');
+    await _type(tester, '@子助手 查三家价格');
+    await tester.tap(find.bySemanticsLabel('发送'));
+    await _settle(tester);
+    expect(sent, ['@子助手 查三家价格']);
+  });
+
+  test('子助手：候选匹配与消息里认不认（同服务器 agent_mentions）', () {
+    expect(agentMatches(''), isTrue);
+    expect(agentMatches('子'), isTrue);
+    expect(agentMatches('AG'), isTrue);
+    expect(agentMatches('sub'), isTrue);
+    expect(agentMatches('pl'), isFalse);
+    expect(mentionsAgent('@子助手 查'), isTrue);
+    expect(mentionsAgent('请@agent。'), isTrue);
+    expect(mentionsAgent('@SubAgent go'), isTrue);
+    expect(mentionsAgent('me@agent.com'), isFalse);
+    expect(mentionsAgent('@agent.md'), isFalse);
+    expect(mentionsAgent('@agents'), isFalse);
+    expect(mentionsAgent('`@agent`'), isFalse);
+    expect(mentionsAgent('没有'), isFalse);
   });
 
   testWidgets(r'打 $ 出技能（没有工作区也行）、停用的不列、点一下补成 $id；!命令 不弹', (tester) async {

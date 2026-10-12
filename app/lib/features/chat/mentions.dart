@@ -4,6 +4,8 @@
 // 规则和服务器一致：@ 前面不能是英文字母/数字/下划线/点/反斜杠/@（邮箱不弹），中文紧挨着可以；遇到空白和标点就结束。
 // `$技能`（v1.81）：同一套候选条，打 $ 列出启用的技能，点一下补成 `$id `；服务器 app/skill_mentions.py（移植自 Codex
 // `$skill` 显式调用）认出来，把技能正文直接给模型。$ 前面是英文字母/数字/下划线/$ 不弹（US$5、$$）。
+// `@子助手`（v1.91）：打 @ 时候选条第一行是“子助手”，点一下补成 `@子助手 `；服务器 app/agent_mentions.py（移植自 Gemini CLI
+// @agent）认出来，提示模型用 delegate 交给子助手做。没有工作区也能用（只列这一行）。规则同服务器：@agent / @subagent / @子助手。
 // 排序学 Codex file-search 的思路（不移植 nucleo）：文件名开头 > 文件名包含 > 路径包含 > 按顺序出现的字母；同分看新旧、再看路径长短。
 import 'package:flutter/material.dart';
 
@@ -18,6 +20,22 @@ const mentionMax = 5;
 
 /// 文件 `@`、技能 `$`。
 const fileSigil = '@', skillSigil = r'$';
+
+/// `@子助手` 写进消息的名字，以及服务器也认的英文别名（app/agent_mentions.py NAMES）。
+const agentMention = '子助手';
+const agentAliases = ['子助手', 'subagent', 'agent'];
+
+/// 正在打的 @xxx 对得上子助手吗（空 = 刚打 @，也列）。
+bool agentMatches(String query) {
+  final q = query.trim().toLowerCase();
+  return agentAliases.any((a) => a.startsWith(q));
+}
+
+final _agentRe = RegExp(r'(?<![A-Za-z0-9_.\\@])@(子助手|subagent|agent)(?![A-Za-z0-9_\-/\\]|\.[A-Za-z0-9_])', caseSensitive: false);
+final _codeRe = RegExp(r'```[\s\S]*?(?:```|$)|`[^`\n]*`');
+
+/// 消息里有没有点名子助手（和服务器同一条规则；代码里的不算）。
+bool mentionsAgent(String text) => _agentRe.hasMatch(text.replaceAllMapped(_codeRe, (m) => ' ' * m[0]!.length));
 
 /// 光标前正在打的 `@xxx` / `$xxx`：start = 符号的位置，query = 符号后面到光标的文字。
 class MentionQuery {
@@ -123,6 +141,8 @@ class MentionItem {
 
   factory MentionItem.file(ProjectFile f) =>
       MentionItem(key: f.path, icon: projectFileIcon(f.mime), title: f.name, subtitle: projectFileLine(f), semantic: '引用 ${f.path}');
+  factory MentionItem.agent() => const MentionItem(
+      key: agentMention, icon: Icons.call_split_rounded, title: agentMention, subtitle: '交给子助手去做，只把结论交回来', semantic: '交给子助手');
   factory MentionItem.skill(Skill s) =>
       MentionItem(key: s.id, icon: Icons.auto_awesome_rounded, title: s.name, subtitle: s.description, semantic: '用技能 ${s.name}');
 }

@@ -1,3 +1,4 @@
+import { mentionsAgent } from "./mentions";
 import { slashOf } from "./slash";
 /**
  * 回答途中补充（v1.83，服务器 steering.py；对应 App models/message.dart 的 steer / beforePending）。
@@ -21,4 +22,5 @@ export function beforePending(ms: Message[], m: Message): Message[] {
 
 /** 输入框里这段能不能作为补充发出：纯文字、不是 !命令 / /init、没带附件、不在编辑。 */
 export const steerable = (text: string, opts: { files: number; shell: boolean; editing: boolean }) =>
-  !!text.trim() && opts.files === 0 && !opts.shell && !opts.editing && slashOf(text) === null;
+  !!text.trim() && opts.files === 0 && !opts.shell && !opts.editing && slashOf(text) === null
+  && !mentionsAgent(text); // 点名子助手是一件新的事：排成下一轮（后端同样不插队）

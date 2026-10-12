@@ -7,6 +7,8 @@ export type TableBlock = { type: "table"; title?: string; columns: string[]; row
 export type CodeBlock = { type: "code"; language?: string; title?: string; source: string; live?: boolean };
 /** v1.81 用户消息里 `$技能` 点名的技能（后端 app/skill_mentions.py）：只有 id + 名字，气泡上方一枚小标签。 */
 export type SkillBlock = { type: "skill"; id: string; name: string };
+/** v1.91 用户消息里 `@子助手` 点名交给子助手（后端 app/agent_mentions.py）：气泡上方一枚标签。 */
+export type AgentBlock = { type: "agent"; id?: string; name?: string };
 export type FileBlock = { type: "file"; source: "upload" | "project"; id: string; name: string; mime: string; size: number; project_id?: string | null };
 /** 审批卡。主机命令卡（v1.49 target = host）多带机器名、note（为什么要你看一眼；warn = 危险提示）、批准范围 options（第一个 = 批准按钮）、批准后 granted。 */
 export type ApprovalOption = { id: string; label: string };
@@ -97,7 +99,7 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   usage?: JobUsage | null };
 export type JobUsage = { cpu: number; cpu_seconds: number; memory: number; processes: number };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock | AgentBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

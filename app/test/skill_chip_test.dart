@@ -52,4 +52,23 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.byType(SkillChip), findsNothing);
   });
+
+  testWidgets('@子助手：agent 块解析 + 气泡上方子助手标签在技能前', (tester) async {
+    expect(Block.fromJson({'type': 'agent'}), isA<AgentBlock>());
+    expect((Block.fromJson({'type': 'agent', 'name': '子助手'}) as AgentBlock).name, '子助手');
+    await tester.pumpWidget(_host(Message.fromJson({
+      'id': 'u3',
+      'role': 'user',
+      'blocks': [
+        {'type': 'text', 'text': r'@子助手 按 $writing 写'},
+        {'type': 'skill', 'id': 'writing', 'name': '写作'},
+        {'type': 'agent', 'id': 'delegate', 'name': '子助手'},
+      ],
+    })));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(AgentChip), findsOneWidget);
+    expect(find.byType(SkillChip), findsOneWidget);
+    expect(find.text('子助手'), findsOneWidget);
+    expect(tester.getTopLeft(find.byType(AgentChip)).dx, lessThan(tester.getTopLeft(find.byType(SkillChip)).dx));
+  });
 }

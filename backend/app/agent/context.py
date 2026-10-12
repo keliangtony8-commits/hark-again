@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import command_env, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, command_env, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -70,14 +70,16 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
 
 def _render(blocks: list[dict], current: bool = False) -> str:
     """把一条消息转成给模型的文本：文本附件内联内容，图片给（缓存的）描述，其他文件只给名字；
-    `$技能` 点名的技能给当前正文（skill_mentions.render）；`/init` 当前这一问换成提示词、更早的只留一句（init_command）。"""
+    `$技能` 点名的技能给当前正文（skill_mentions.render）；`@子助手` 当前给提示（agent_mentions）；`/init` 当前这一问换成提示词、更早的只留一句（init_command）。"""
     if (note := init_command.of(blocks)) is not None:
         said = init_command.render(note) if current else init_command.record(note)
         blocks = [{"type": "text", "text": said}, *blocks[1:]]
-    text = blocks_to_text([b for b in blocks if b.get("type") not in ("file", "skill")])
+    text = blocks_to_text([b for b in blocks if b.get("type") not in ("file", "skill", "agent")])
     for b in blocks:
         if b.get("type") == "skill":
             text += "\n\n" + skill_mentions.render(b)
+    if any(b.get("type") == "agent" for b in blocks):  # `@子助手`：当前这一问给提示、更早的一句记录（agent_mentions）
+        text += "\n\n" + agent_mentions.render(current)
     for b in blocks:
         if b.get("type") != "file":
             continue

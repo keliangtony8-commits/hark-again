@@ -5,10 +5,10 @@ import { asFileBlock, attachSub, extOf, MAX_MESSAGE_FILES } from "../../lib/file
 import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
 import ProjectFilePicker from "../projects/ProjectFilePicker";
 import { useRecorder } from "../../hooks/useRecorder";
-import { IconBrain, IconCheck, IconClip, IconClose, IconCopy, IconDoc, IconGauge, IconMap, IconPlus, IconEdit, IconSwap, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconStop, IconTerminal } from "../../ui/icons";
+import { IconBrain, IconCheck, IconClip, IconClose, IconCopy, IconDoc, IconGauge, IconMap, IconPlus, IconEdit, IconSwap, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconSplit, IconStop, IconTerminal } from "../../ui/icons";
 import { shellCommandOf } from "../../lib/shell";
 import { Menu } from "../../ui/kit";
-import { applyMention, mentionAt, rankMentions, rankSkills, type MentionQuery, type Sigil } from "../../lib/mentions";
+import { AGENT_MENTION, MENTION_MAX, agentMatches, applyMention, mentionAt, rankMentions, rankSkills, type MentionQuery, type Sigil } from "../../lib/mentions";
 import type { ProjectFile, Skill } from "../../lib/types";
 import { projectFileLine } from "../projects/projectHome";
 import MentionList, { type MentionItem } from "./MentionList";
@@ -33,6 +33,7 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  *  打 @ → 顶部列出工作区文件（lib/mentions.ts）：↑↓ 选、Enter/Tab 补成 `@路径 `、Esc 收起；服务器发出时解析成引用。
  *  开头打 / → 列出斜杠命令（lib/slash.ts）：/init 原文发给服务器；本机命令（/new /compact /plan /copy /status）交给 onSlash
  *  （ChatScreen → slashActions.ts），不发消息，返回的一句提示显示在胶囊下方；点不接话的本机命令直接执行。
+ *  @ 的第一行是“子助手”（v1.91，没有工作区也列）：补成 `@子助手 `，后端 app/agent_mentions.py 让模型交给子助手做。
  *  打 $ → 列出启用的技能（没有工作区也行），补成 `$id `；服务器 app/skill_mentions.py 把技能正文直接给模型。 */
 export type EditDraft = { id: string; text: string; hasFiles: boolean };
 type Props = {
@@ -106,7 +107,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
   };
   /** 整条是 `!命令`（且没带附件）：发出去不问助手，直接在这段对话的电脑上跑（后端 user_shell）。 */
   const shell = !editing && files.length === 0 && shellCommandOf(text) !== null;
-  const sigils: Sigil[] = workspace ? ["$", "@"] : ["$"];
+  const sigils: Sigil[] = ["$", "@"];
   const found: MentionQuery | null = shellCommandOf(text) === null ? mentionAt(text, caret, sigils) : null;
   const slashQ = editing ? null : slashQueryAt(text, caret);
   const slash = slashQ !== null && closedAt !== 0 && rankSlash(slashQ, !!onSlash).length ? rankSlash(slashQ, !!onSlash) : null;
@@ -139,13 +140,18 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
       .then((files) => setWsFiles({ ws: workspace, files }))
       .catch(() => setWsFiles({ ws: workspace, files: [] }));
   }, [mention, workspace, wsFiles?.ws]);
-  const loaded = wsFiles && wsFiles.ws === workspace ? wsFiles.files : null;
+  const loaded = !workspace ? [] : wsFiles && wsFiles.ws === workspace ? wsFiles.files : null;
+  const agentRow = mention?.sigil === "@" && agentMatches(mention.query);
   const items: MentionItem[] | null = slash
     ? slash.map((c) => ({ key: c.name, icon: slashIcon(c.icon), title: slashToken(c), sub: slashSubtitle(c, disabled) }))
     : !mention ? null
     : mention.sigil === "$"
       ? skills && rankSkills(skills, mention.query).map((s) => ({ key: s.id, icon: <IconSpark size={14} />, title: s.name, sub: s.description }))
-      : loaded && rankMentions(loaded, mention.query).map((f) => ({ key: f.path, icon: <IconFile size={14} />, title: f.name, sub: projectFileLine(f) }));
+      : loaded && [
+          ...(agentRow ? [{ key: AGENT_MENTION, icon: <IconSplit size={14} />, title: AGENT_MENTION, sub: "交给子助手去做，只把结论交回来" }] : []),
+          ...rankMentions(loaded, mention.query, agentRow ? MENTION_MAX - 1 : MENTION_MAX)
+            .map((f) => ({ key: f.path, icon: <IconFile size={14} />, title: f.name, sub: projectFileLine(f) })),
+        ];
   const choice = Math.min(active, Math.max((items?.length ?? 1) - 1, 0));
   const pickMention = (key: string) => {
     if (!mention && !slash) return;
@@ -205,8 +211,8 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
         {mention && (mention.sigil === "$"
           ? <MentionList items={items} active={choice} onPick={pickMention} onHover={setActive} label="用技能"
               empty="没有对得上的技能 · 可以在“我的 › 技能”里新建" loading="正在读技能…" />
-          : <MentionList items={items} active={choice} onPick={pickMention} onHover={setActive} label="引用文件"
-              empty="没有对得上的文件 · 发出去我也会按名字再找一次" loading="正在找文件…" />)}
+          : <MentionList items={items} active={choice} onPick={pickMention} onHover={setActive} label={workspace ? "引用文件或交给子助手" : "交给子助手"}
+              empty={workspace ? "没有对得上的文件 · 发出去我也会按名字再找一次" : `打 @${AGENT_MENTION} 可以把这件事交给子助手`} loading="正在找文件…" />)}
         {!mention && !slash && !shell && command && (
           <div className="edit-bar shell-bar" key={`slash-${command.command.name}`}>
             {slashIcon(command.command.icon)}

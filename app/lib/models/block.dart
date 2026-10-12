@@ -61,6 +61,7 @@ sealed class Block {
         'job' => JobBlock.fromJson(j),
         'shell' => ShellBlock.fromJson(j),
         'skill' => SkillBlock(id: j['id'] as String? ?? '', name: j['name'] as String? ?? ''),
+        'agent' => AgentBlock(name: j['name'] as String? ?? '子助手'),
         'preview' => PreviewBlock.fromJson(j),
         'plan' => PlanBlock.fromJson(j),
         'delegate' => DelegateBlock.fromJson(j),
@@ -497,6 +498,12 @@ class DelegateTask {
 class SkillBlock extends Block {
   const SkillBlock({required this.id, required this.name});
   final String id, name;
+}
+
+/// 用户消息里 `@子助手` 点名交给子助手（v1.91，服务器 app/agent_mentions.py）：气泡上方一枚小标签。
+class AgentBlock extends Block {
+  const AgentBlock({this.name = '子助手'});
+  final String name;
 }
 
 class UnknownBlock extends Block {

@@ -31,6 +31,7 @@ class BlockView extends StatelessWidget {
         CodeBlock b => CodeBlockView(b),
         FileBlock b => FileBlockView(b),
         SkillBlock b => SkillChip(b),
+        AgentBlock b => AgentChip(b),
         ApprovalBlock b => ApprovalBlockView(b),
         BrowserBlock b => BrowserBlockView(b),
         PageBlock b => PageBlockView(b),

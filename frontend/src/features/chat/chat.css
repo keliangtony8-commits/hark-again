@@ -171,6 +171,7 @@
   color: var(--text-2); font-size: var(--fs-xs); text-decoration: none; max-width: 240px; transition: filter var(--dur) var(--ease); }
 .skill-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .skill-chip:hover { filter: brightness(.97); color: var(--text); }
+.skill-chip.is-static:hover { filter: none; color: var(--text-2); } /* @子助手 标签不可点 */
 .msg.user .msg-files { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2); }
 
 /* 语音录制：整行替换成录音条，主按钮位置不变（变成“完成”） */
