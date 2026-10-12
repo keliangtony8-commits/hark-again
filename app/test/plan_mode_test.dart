@@ -115,6 +115,10 @@ void main() {
     expect(find.text('已存为'), findsOneWidget);
     expect(find.text('a.md'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('方案已存到我的文件：plans/a.md')), findsOneWidget);
+    // v1.73：服务器存文件失败会把 path 清空（ToolResult.card）→ 这一行收起
+    await _show(t, _card(state: 'approved', path: ''), reply: (_, _) {});
+    await t.pumpAndSettle();
+    expect(find.text('已存为'), findsNothing);
   });
 
   testWidgets('等批准：正文 + 两个按钮走 onApproval；有结果后按钮收起、卡片收成一行可展开', (t) async {

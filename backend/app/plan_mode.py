@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from . import readonly_command
+from . import plan as checklist, readonly_command
 from .storage import safe_join
 
 DEFAULT = "default"
@@ -65,8 +65,10 @@ PROMPT = f"""# 当前处于计划模式（只读规划）
 
 CHILD_NOTE = "（用户处于计划模式：你只能做只读的查找和分析，改动类工具会被拒绝。把发现交回给主助手即可。）"
 
-LIFTED = (f"计划已批准，计划模式已退出。之前“只读、只规划”的约束立即解除：现在按批准的方案动手做，"
-          "从第一步开始；步骤多就先用 update_plan 列成清单。")
+LIFTED = "计划已批准，计划模式已退出。之前“只读、只规划”的约束立即解除：现在按批准的方案动手做，从第一步开始；"
+LIFTED_FREE = "步骤多就先用 update_plan 列成清单。"
+LIFTED_SEEDED = ("方案里的步骤已经列成进度清单（用户在聊天里看得到，第 1 步已标进行中）。做完一步就用 update_plan 传完整清单："
+                 "把它标 completed、下一步标 in_progress；步骤写得不合适可以改，并在 explanation 里说为什么。")
 REJECTED = "用户没有批准这个方案，仍在计划模式。别动手，也别马上再交一版：先问他想改哪里（或等他说），改好后再用 exit_plan_mode 交完整的新方案。"
 NOT_ACTIVE = f"现在不在计划模式，不需要 {TOOL}：直接做就行（高风险操作照常会请用户批准）。"
 
@@ -228,3 +230,85 @@ def approved_prompt(path: str, planning: bool) -> str:
                 "只有用户明确要“新方案”，或者这次是完全不同的事，才换个标题另起一份。")
     return (f"# 已批准的方案\n用户批准过的方案存在工作区 {path}，它是这件事的依据。接着做之前，如果上下文里已经看不到方案原文，先 read_file 读它；"
             "中途发现新需求或要换做法，先和用户确认，再更新这个文件，让它和实际做法一致。")
+
+
+# ---- 批准的方案 → 进度清单（v1.73）----
+# Gemini 的转场提示让模型批准后自己用 write_todos 把方案拆成清单；Codex 的 plan 模板要求方案“决策完备”（步骤写在方案里）。
+# 两者合起来：方案里本来就写了步骤，批准时由服务器直接把它们种成 update_plan 清单（省一次模型调用，用户立刻看到进度卡），
+# 之后照常由模型用 update_plan 打勾。认不出清楚的步骤（没有编号列表、太多、重复）就不种，退回“让模型自己列”。
+STEP_HEAD = re.compile(r"步骤|实施|执行|做法|流程|计划|阶段|todo|steps?|implementation|tasks?|phases?", re.I)
+_ORDERED = re.compile(r"^(\d{1,2})[.)、]\s+(.+)$")
+_BULLET = re.compile(r"^[-*+]\s+(?:\[[ xX]\]\s+)?(.+)$")
+_HEAD = re.compile(r"^#{1,6}\s+(.+?)\s*$")
+_FENCE = re.compile(r"^\s*(```|~~~)")
+
+
+def _step_text(raw: str) -> str:
+    """一条列表项 → 清单里的一句：去掉复选框、链接、行内代码记号；开头加粗的短语（“**改 runner**：……”）就只用它；太长截断。"""
+    t = re.sub(r"^\[[ xX]\]\s+", "", raw.strip())
+    if m := re.match(r"^(\*\*|__)(.+?)\1", t):
+        t = m.group(2)
+    t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", t)
+    t = re.sub(r"(\*\*|__|`)", "", t)
+    t = " ".join(t.split()).rstrip("：:;；。. ")
+    if len(t) > checklist.CONTENT_MAX:
+        t = t[:checklist.CONTENT_MAX - 1].rstrip() + "…"
+    return t
+
+
+def _groups(text: str) -> list[tuple[str, str, list[str]]]:
+    """方案里每一组顶格列表：(所在小节标题, ordered|bullet, 各项原文)。缩进的子项、续行、空行不打断一组；
+    标题、顶格正文、换了列表种类、代码块会结束一组。"""
+    out: list[tuple[str, str, list[str]]] = []
+    head, kind, items, fenced = "", "", [], False
+
+    def close():
+        nonlocal kind, items
+        if items:
+            out.append((head, kind, items))
+        kind, items = "", []
+
+    for line in text.split("\n"):
+        if _FENCE.match(line):
+            fenced = not fenced
+            close()
+            continue
+        if fenced or not line.strip() or line[0] in " \t":
+            continue
+        if m := _HEAD.match(line):
+            close()
+            head = m.group(1)
+            continue
+        m, k = _ORDERED.match(line), "ordered"
+        if not m:
+            m, k = _BULLET.match(line), "bullet"
+        if not m:
+            close()
+            continue
+        if kind and k != kind:
+            close()
+        kind = k
+        items.append(m.group(m.lastindex))
+    close()
+    return out
+
+
+def plan_steps(text: str) -> list[str]:
+    """批准的方案里的执行步骤（认不清就 []）。挑选顺序：步骤类小节里的编号列表 → 步骤类小节里的圆点列表 → 全文第一组编号列表。
+    要 2 到 ITEMS_MAX 步、去重后不变，才算。"""
+    groups = _groups(text)
+    picks = [g for g in groups if STEP_HEAD.search(g[0]) and g[1] == "ordered"] \
+        + [g for g in groups if STEP_HEAD.search(g[0]) and g[1] == "bullet"] \
+        + [g for g in groups if g[1] == "ordered"]
+    for _, _, items in picks:
+        steps = [s for s in (_step_text(i) for i in items) if s]
+        if 2 <= len(steps) <= checklist.ITEMS_MAX and len(set(steps)) == len(steps) == len(items):
+            return steps
+    return []
+
+
+def seed_items(steps: list[str]) -> list[dict]:
+    """种进清单的样子：第 1 步进行中，其余待做（plan.normalize 同一套校验）。"""
+    items, _ = checklist.normalize([{"content": s, "status": "in_progress" if n == 0 else "pending"}
+                                    for n, s in enumerate(steps)])
+    return items

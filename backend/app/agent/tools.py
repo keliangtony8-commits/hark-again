@@ -92,6 +92,8 @@ class ToolResult:
     failed: str = ""  # 非空 = 这一步没成（活动时间线记 error + 这句原因），内容照常交给模型
     # 改了工作区里的文件：file_edit.change() 的摘要（apply_patch 一次改几个文件 → 列表），随时间线那一步落库，两端显示 +N −M 与 diff
     change: dict | list[dict] | None = None
+    # 这次调用前用户批准过的那张卡要补的字段（执行后才知道的结果，如方案没存成 → {"path": ""}）；内核合并进卡，没批准卡就忽略
+    card: dict | None = None
 
 
 @dataclass

@@ -179,6 +179,9 @@ res = last_tool(requests[-1])
 assert res.startswith(P.LIFTED) and "没能存成文件" in res, res
 assert asyncio.run(conv_of(cid4)).mode == "default" and asyncio.run(conv_of(cid4)).plan_path is None
 assert not (wr / f"plans/{today}-满盘方案.md").exists()
+card = next(b for b in reply.blocks if b["type"] == "plan_review")
+assert card["state"] == "approved" and card["path"] == "", card                         # v1.73：没存成 → 卡上不显示“已存为”
+assert not any(i["origin"] == "written" for i in CF._from_message(reply, workspaces.PERSONAL))
 print("ok: quota full")
 
 for stp in ("downgrade", "upgrade"):

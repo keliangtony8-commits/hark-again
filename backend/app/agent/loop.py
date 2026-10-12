@@ -484,6 +484,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
     gate = t.risk(args, ctx) if t.risk else None
     if inspect.isawaitable(gate):  # 要查库才知道问不问的（主机命令的已存规则）
         gate = await gate
+    card_at = None  # 用户批准过的卡在回复里的位置：执行结果要补进卡的字段（ToolResult.card）合并到它
     if gate:
         ask = gate if isinstance(gate, Approval) else Approval(gate)
         try:
@@ -494,7 +495,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
         grant = None
         async for ev in _ask_approval(builder, ctx, ask.reason, args, card):
             if isinstance(ev, Granted):
-                grant = ev.option
+                grant, card_at = ev.option, ev.index
             else:
                 yield ev
         if grant is None:
@@ -519,7 +520,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
             args["form"] = reply.reply
 
     if t.quiet:  # 控制类工具：不进时间线，结果块直接上卡（同单例原地换）
-        async for ev in _quiet(t, call, ctx, builder, args):
+        async for ev in _quiet(t, call, ctx, builder, args, card_at):
             yield ToolResult(_with_notes(ev.content, notes), ev.blocks, ev.images) if isinstance(ev, ToolResult) else ev
         return
     yield ToolStatus(call.id, call.name, t.label, "running", rec.start(call.id, call.name, t.label, args))
@@ -543,6 +544,8 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
             yield builder.replace(i, b)
         else:
             yield builder.add(b)
+    if result.card and card_at is not None:
+        yield builder.update(card_at, **result.card)
     state = "error" if result.failed else "done"
     yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed, result.change) or {})
     content = _with_notes(result.content, notes)
@@ -555,12 +558,14 @@ def _with_notes(content: str, notes: list[str]) -> str:
     return f"{content}\n\n（{'；'.join(notes)}）" if notes else content
 
 
-async def _quiet(t, call, ctx: ToolContext, builder: MessageBuilder, args: dict):
+async def _quiet(t, call, ctx: ToolContext, builder: MessageBuilder, args: dict, card_at: int | None = None):
     try:
         result = await t.run(ctx, **args)
     except Exception as e:
         yield ToolResult(f"工具出错：{e}")
         return
+    if result.card and card_at is not None:
+        yield builder.update(card_at, **result.card)
     for b in result.blocks:
         i = builder.find(b)
         yield builder.replace(i, b) if i is not None else builder.add(b)
@@ -642,6 +647,7 @@ def form_answers(spec: dict, values: dict[str, str]) -> list[dict]:
 
 @dataclass
 class Granted:
+    index: int   # 卡在回复里的位置（执行后 ToolResult.card 合并进去）
     option: str  # 用户选的批准范围（卡上 options 的 id；没有选项的卡 = "once"）
 
 
@@ -662,4 +668,4 @@ async def _ask_approval(builder: MessageBuilder, ctx: ToolContext, reason: str, 
         return
     option = option if option in choices else (choices[0] if choices else "once")
     yield builder.update(index, state="approved", **({"granted": option} if choices else {}))
-    yield Granted(option)
+    yield Granted(index, option)
