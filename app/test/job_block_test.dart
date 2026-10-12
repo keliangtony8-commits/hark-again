@@ -83,6 +83,20 @@ void main() {
     expect(standsAlone(_running), isTrue);
   });
 
+  test('护栏自动停：算问题、不叫“已取消”，原因进读屏（v1.20）', () {
+    final stopped = JobInfo.fromJson({..._wire('cancelled', code: 143), 'stop_reason': '连续 20 分钟 没有任何新输出，判定卡住'});
+    expect(stopped.autoStopped, isTrue);
+    expect(jobStateLabel(stopped), '已自动停止');
+    expect(jobTone(stopped.state, autoStopped: stopped.autoStopped), JobTone.problem);
+    expect(jobSemantics(stopped), contains('已自动停止：连续 20 分钟'));
+    final byUser = JobInfo.fromJson({..._wire('cancelled'), 'stop_reason': null});
+    expect(byUser.autoStopped, isFalse);
+    expect(jobStateLabel(byUser), '已取消');
+    final b = Block.fromJson({'type': 'job', 'id': 'j', 'title': 't', 'command': 'c', 'state': 'cancelled', 'stop_reason': '输出超过 64 MB'}) as JobBlock;
+    expect(JobInfo.fromBlock(b).autoStopped, isTrue);
+    expect(JobInfo.fromBlock(b).withElapsed(const Duration(seconds: 3)).stopReason, '输出超过 64 MB');
+  });
+
   testWidgets('运行中轮询 → 结束 → 等接着说完 → 刷新对话一次', (tester) async {
     final api = _Api([
       _wire('running', tail: '第 1 轮'),
@@ -151,5 +165,19 @@ void main() {
     await tester.tap(find.text('完整日志'));
     await tester.pumpAndSettle();
     expect(find.text('装依赖'), findsNWidgets(2)); // 卡片 + 日志弹层标题
+  });
+
+  testWidgets('护栏停掉的卡：警示状态词 + 日志下写原因', (tester) async {
+    final api = _Api([_wire('cancelled')]);
+    await _pump(
+        tester,
+        api,
+        const JobBlock(id: 'j1', title: '爬取', command: 'python crawl.py', state: 'cancelled', exitCode: 143, tail: '第 37 页',
+            stopReason: '连续 20 分钟 没有任何新输出，判定卡住'));
+    expect(api.gets, isEmpty);
+    expect(find.text('已自动停止'), findsOneWidget);
+    expect(find.text('连续 20 分钟 没有任何新输出，判定卡住'), findsOneWidget);
+    expect(find.text('完整日志'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('已自动停止：连续 20 分钟')), findsOneWidget);
   });
 }

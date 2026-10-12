@@ -2,7 +2,7 @@
 
 - 每个项目一个长驻容器 sbx-<project_id>，工作目录挂载 data/projects/<id>
 - 资源限制：内存、CPU、进程数；去掉所有 Linux capability；禁止提权
-- 单条命令超时即杀；输出截断
+- 单条命令超时即杀；输出太长时给后端开头 + 结尾，完整输出写进工作区 .spill/（约定见 backend/app/spill.py）
 - 空闲超过 IDLE_MINUTES 的容器自动停止，省 VPS 内存（有后台任务在跑的不停）
 - 后台任务（/jobs/*）：后端把 .jobs/<id>/run.sh 写进工作区（脚本约定见 backend/app/jobs.py），
   这里只负责 setsid 脱离启动、查活、整组杀掉；日志和退出码都落在工作区文件里，
@@ -26,6 +26,8 @@ MEM = os.environ.get("SANDBOX_MEM", "1g")
 CPUS = float(os.environ.get("SANDBOX_CPUS", "1"))
 IDLE_MINUTES = int(os.environ.get("SANDBOX_IDLE_MINUTES", "30"))
 MAX_OUTPUT = 12000
+SPILL_MARK = "\n…（中间省略）…\n"  # 与 backend/app/spill.py MARK 相同
+SPILL_KEEP = 50
 
 client = docker.from_env()
 last_used: dict[str, float] = {}
@@ -91,9 +93,30 @@ def _exec(pid: str, command: str, timeout: int) -> dict:
     # coreutils timeout 负责杀超时进程；-k 再给 5 秒强杀
     res = c.exec_run(["timeout", "-k", "5", str(timeout), "bash", "-lc", command], workdir="/workspace", demux=False)
     out = (res.output or b"").decode("utf-8", "replace")
+    result = {"exit_code": res.exit_code, "timed_out": res.exit_code == 124, "output": out}
     if len(out) > MAX_OUTPUT:
-        out = out[:MAX_OUTPUT // 2] + "\n…（中间省略）…\n" + out[-MAX_OUTPUT // 2:]
-    return {"exit_code": res.exit_code, "timed_out": res.exit_code == 124, "output": out}
+        head, tail = out[:MAX_OUTPUT // 2], out[-MAX_OUTPUT // 2:]
+        result.update(output=head + SPILL_MARK + tail, omitted=len(out) - len(head) - len(tail), total=len(out))
+        try:
+            result["spill"] = _spill(pid, out)
+        except OSError:
+            pass
+    return result
+
+
+def _spill(pid: str, text: str) -> str:
+    """完整输出存进 /projects/<pid>/.spill/，返回工作区相对路径；只留最近 SPILL_KEEP 个。"""
+    d = f"/projects/{pid}/.spill"
+    os.makedirs(d, exist_ok=True)
+    name = time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + f"-run_command-{os.urandom(2).hex()}.txt"
+    with open(f"{d}/{name}", "w", encoding="utf-8") as f:
+        f.write(text)
+    for path in (d, f"{d}/{name}"):
+        os.chown(path, 1000, 1000)
+    old = sorted((e for e in os.scandir(d) if e.name.endswith(".txt")), key=lambda e: e.stat().st_mtime, reverse=True)
+    for e in old[SPILL_KEEP:]:
+        os.unlink(e.path)
+    return f".spill/{name}"
 
 
 @app.post("/exec", dependencies=[Depends(auth)])

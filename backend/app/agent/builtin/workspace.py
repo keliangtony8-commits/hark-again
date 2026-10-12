@@ -1,27 +1,19 @@
 """项目工作区：读写文件直接在后端做（快、零成本）；执行命令交给隔离沙盒。只在项目对话中可用。"""
 import httpx
 
-from ... import jobs, sandbox_client, vision
-from ...storage import hidden, is_text, mime_of, project_dir, safe_join
+from ... import command_guard, jobs, sandbox_client, spill, vision
+from ...config import settings
+from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
 
-import re
-
 MAX_READ = 12000
-
-# 需要你点头才执行的命令：会改动远端、发布或大面积删除
-RISKY = [
-    (r"\bgit\s+push\b", "推送代码到远端仓库"),
-    (r"\bgit\s+commit\b", "提交代码"),
-    (r"\brm\s+-[a-z]*r[a-z]*f|\brm\s+-[a-z]*f[a-z]*r", "递归强制删除文件"),
-    (r"\b(npm|pnpm|yarn)\s+publish\b|\btwine\s+upload\b", "发布软件包"),
-    (r"(curl|wget)[^|]*\|\s*(ba)?sh", "下载并直接执行脚本"),
-]
+MAX_READ_LIMIT = 20000
 
 
 def _command_risk(args: dict) -> str | None:
-    cmd = args.get("command", "")
-    return next((why for pat, why in RISKY if re.search(pat, cmd)), None)
+    """需要用户点头的命令弹审批卡；会被直接拦下的（block）不弹卡，run_command 里拒绝。规则全在 command_guard.py。"""
+    v = command_guard.verdict(args.get("command", ""))
+    return v.why if v is not None and v.level == "ask" else None
 _PATH = {"type": "string", "description": "相对项目根目录的路径"}
 
 
@@ -37,9 +29,15 @@ async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
     return ToolResult("\n".join(lines) or "（空）")
 
 
-@tool("read_file", "正在读文件", "读取项目里的文本文件；图片文件（jpg/png/webp/gif）会直接给你看。",
-      {"type": "object", "properties": {"path": _PATH}, "required": ["path"]}, scope="project")
-async def read_file(ctx: ToolContext, path: str) -> ToolResult:
+@tool("read_file", "正在读文件",
+      "读取项目里的文本文件；图片文件（jpg/png/webp/gif）会直接给你看。长文件用 offset / limit 分段读"
+      "（也能读被省略的长输出 .spill/… 和后台任务完整日志 .jobs/<id>/log）。",
+      {"type": "object", "properties": {
+          "path": _PATH,
+          "offset": {"type": "integer", "default": 0, "description": "从第几个字符开始（负数 = 从结尾倒数）"},
+          "limit": {"type": "integer", "default": MAX_READ, "maximum": MAX_READ_LIMIT, "description": "最多读多少字符"}},
+       "required": ["path"]}, scope="project")
+async def read_file(ctx: ToolContext, path: str, offset: int = 0, limit: int = MAX_READ) -> ToolResult:
     p = safe_join(project_dir(ctx.project_id), path)
     if not p.is_file():
         return ToolResult("文件不存在。")
@@ -48,10 +46,22 @@ async def read_file(ctx: ToolContext, path: str) -> ToolResult:
         if size > vision.TOOL_IMAGE_MAX_BYTES:
             return ToolResult(f"{path} 是图片，但太大（{size} B），先用 run_command 缩小再看。")
         return ToolResult(f"{path} 是图片（{size} B）。", images=[ToolImage(p.name, p.read_bytes())])
-    if not is_text(p.name):
+    if not looks_text(p):
         return ToolResult(f"{path} 不是文本文件（{p.stat().st_size} B），可以用 run_command 处理。")
     text = p.read_text(encoding="utf-8", errors="replace")
-    return ToolResult(text[:MAX_READ] + ("\n…（已截断）" if len(text) > MAX_READ else ""))
+    return ToolResult(page(text, offset, limit))
+
+
+def page(text: str, offset: int = 0, limit: int = MAX_READ) -> str:
+    """按字符分页：全文放得下原样返回；否则给这一段并说明位置和下一段从哪开始。"""
+    total = len(text)
+    limit = max(200, min(int(limit or MAX_READ), MAX_READ_LIMIT))
+    start = max(0, total + offset if offset < 0 else min(offset, total))
+    if start == 0 and total <= limit:
+        return text
+    end = min(total, start + limit)
+    more = f"下一段用 offset={end}" if end < total else "已到结尾"
+    return f"{text[start:end]}\n…（第 {start}–{end} 字符，共 {total} 字符；{more}）"
 
 
 @tool("write_file", "正在写文件", "在项目里创建或覆盖一个文本文件。",
@@ -71,23 +81,30 @@ async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
       "用于运行代码、测试、安装依赖、git 操作。前台单次最长 120 秒。"
       "预计超过一分钟的活（装大依赖、训练、批量下载/爬取、大构建、长时间脚本）用 background=true 放到后台："
       "立即返回任务 id，用户在聊天里看到实时日志、可以取消；结束时你会收到通知并在这段对话里接着说，"
-      "期间不要反复用 job_status 轮询。",
+      "期间不要反复用 job_status 轮询。后台任务连续 idle_timeout 秒没有任何输出会被判定卡住自动停掉。"
+      "毁系统的命令（rm -rf /、格式化、关机等）会被直接拦下。",
       {"type": "object", "properties": {
           "command": {"type": "string"},
           "timeout": {"type": "integer", "default": 60,
                       "description": "秒。前台最多 120；后台最多 3600（默认 3600）"},
           "background": {"type": "boolean", "default": False, "description": "放到后台跑"},
-          "title": {"type": "string", "description": "后台任务给用户看的一句话名字，如“安装依赖”“训练模型”"}},
+          "title": {"type": "string", "description": "后台任务给用户看的一句话名字，如“安装依赖”“训练模型”"},
+          "idle_timeout": {"type": "integer",
+                           "description": f"秒，仅后台：连续这么久没有新输出就判定卡住并停掉；默认 {settings.job_idle_seconds}，"
+                                          "确实会长时间不打印（不输出进度的训练、静默编译）就设 0"}},
        "required": ["command"]}, scope="project", risk=_command_risk)
 async def run_command(ctx: ToolContext, command: str, timeout: int | None = None, background: bool = False,
-                      title: str | None = None) -> ToolResult:
+                      title: str | None = None, idle_timeout: int | None = None) -> ToolResult:
+    if (v := command_guard.verdict(command)) is not None and v.level == "block":
+        return ToolResult(command_guard.refusal(v))
     if background:
         try:
             job = await jobs.start(ctx.db, project_id=ctx.project_id, command=command, title=title, timeout=timeout,
-                                   conversation_id=ctx.conversation_id, task_id=ctx.task_id)
+                                   idle_timeout=idle_timeout, conversation_id=ctx.conversation_id, task_id=ctx.task_id)
         except jobs.JobError as e:
             return ToolResult(f"没有启动：{e}")
-        return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（最长 {jobs.duration_text(job.timeout)}）。"
+        idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
+        return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（最长 {jobs.duration_text(job.timeout)}{idle}）。"
                           "用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。",
                           [jobs.block(job)])
     try:
@@ -96,7 +113,11 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         return ToolResult(f"沙盒没响应（{type(e).__name__}），命令没有执行。")
     timed_out = r.get("timed_out")
     status = "超时被终止" if timed_out else f"退出码 {r['exit_code']}"
-    out = r.get("output", "")
+    out = shown = r.get("output", "")
+    if spill.MARK in out:  # 沙盒那边输出太长：中间段省略，完整输出（能存下时）写进了工作区 .spill/
+        omitted = r.get("omitted", 0)
+        out = out.replace(spill.MARK, spill.notice(omitted, r.get("spill"), r.get("total", 0)))
+        shown = shown.replace(spill.MARK, f"\n…（中间省略 {omitted} 字符）…\n")
     hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
     return ToolResult(f"{status}\n{out}{hint}", [
-        {"type": "code", "language": "bash", "title": f"$ {command[:80]}", "source": f"{out.strip() or '（无输出）'}\n# {status}"}])
+        {"type": "code", "language": "bash", "title": f"$ {command[:80]}", "source": f"{shown.strip() or '（无输出）'}\n# {status}"}])

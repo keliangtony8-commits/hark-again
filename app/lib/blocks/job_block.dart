@@ -113,12 +113,12 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
   Widget build(BuildContext context) {
     final p = context.palette;
     final j = _job;
-    final tone = jobTone(j.state);
+    final tone = jobTone(j.state, autoStopped: j.autoStopped);
     final tail = jobTailLines(j.tail, Layout.jobLogLines);
     final small = context.text.labelSmall;
     return Semantics(
       container: true,
-      label: jobSemantics(JobInfo(id: j.id, title: j.title, command: j.command, state: j.state, exitCode: j.exitCode, elapsed: _elapsed)),
+      label: jobSemantics(j.withElapsed(_elapsed)),
       child: BlockFrame(
         padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x2, Sp.x1),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -159,6 +159,18 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
                 ),
               ),
             ),
+          ),
+          // 护栏停掉的原因（为什么停）：就在日志下面，和日志一起读
+          RiseSwitcher(
+            child: j.autoStopped
+                ? Padding(
+                    key: const ValueKey('reason'),
+                    padding: const EdgeInsets.only(top: Sp.x2, right: Sp.x2),
+                    child: ExcludeSemantics(
+                      child: Text(j.stopReason!, style: small?.copyWith(color: p.text2), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
+                : const SizedBox.shrink(key: ValueKey('none')),
           ),
           Row(children: [
             Expanded(

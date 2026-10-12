@@ -7,7 +7,8 @@ const jobFinal = {'done', 'failed', 'timed_out', 'cancelled', 'lost'};
 /// /api/jobs/{id} 的一次快照。
 class JobInfo {
   const JobInfo({required this.id, required this.title, required this.command, required this.state,
-      this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt});
+      this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt,
+      this.stopReason});
 
   factory JobInfo.fromJson(Map<String, dynamic> j) => JobInfo(
       id: j['id'] as String? ?? '',
@@ -19,7 +20,8 @@ class JobInfo {
       elapsed: Duration(seconds: (j['elapsed'] as num?)?.toInt() ?? 0),
       tail: j['tail'] as String? ?? '',
       startedAt: DateTime.tryParse(j['started_at'] as String? ?? '')?.toLocal(),
-      finishedAt: DateTime.tryParse(j['finished_at'] as String? ?? '')?.toLocal());
+      finishedAt: DateTime.tryParse(j['finished_at'] as String? ?? '')?.toLocal(),
+      stopReason: j['stop_reason'] as String?);
 
   /// 还没问过服务器时，用消息里落库的块先画出来。
   factory JobInfo.fromBlock(JobBlock b) => JobInfo(
@@ -31,14 +33,24 @@ class JobInfo {
       elapsed: b.startedAt == null ? Duration.zero : (b.finishedAt ?? DateTime.now()).difference(b.startedAt!),
       tail: b.tail ?? '',
       startedAt: b.startedAt,
-      finishedAt: b.finishedAt);
+      finishedAt: b.finishedAt,
+      stopReason: b.stopReason);
+
+  /// 换个用时（卡片跳秒用），其余不变。
+  JobInfo withElapsed(Duration d) => JobInfo(
+      id: id, title: title, command: command, state: state, exitCode: exitCode, followup: followup, elapsed: d,
+      tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason);
 
   final String id, title, command, state, followup, tail;
+  final String? stopReason;
   final int? exitCode;
   final Duration elapsed;
   final DateTime? startedAt, finishedAt;
 
   bool get running => !jobFinal.contains(state);
+
+  /// 服务器护栏停的（连续没输出判定卡住 / 输出过大）：算出了问题，不是“已取消”。
+  bool get autoStopped => state == 'cancelled' && (stopReason ?? '').isNotEmpty;
 
   /// 结束了，服务器还要在这段对话里接着说一轮（worker 几秒内跑）：卡片继续问，等它说完再刷新对话。
   bool get awaitingReply => !running && followup == 'pending';
@@ -46,7 +58,8 @@ class JobInfo {
 
 enum JobTone { running, ok, problem, quiet }
 
-JobTone jobTone(String state) => switch (state) {
+JobTone jobTone(String state, {bool autoStopped = false}) => switch (state) {
+      _ when autoStopped => JobTone.problem,
       'done' => JobTone.ok,
       'failed' || 'timed_out' || 'lost' => JobTone.problem,
       'cancelled' => JobTone.quiet,
@@ -59,7 +72,7 @@ String jobStateLabel(JobInfo j) => switch (j.state) {
       'done' => '已完成',
       'failed' => j.exitCode == null ? '失败' : '失败 · 退出码 ${j.exitCode}',
       'timed_out' => '超时被终止',
-      'cancelled' => '已取消',
+      'cancelled' => j.autoStopped ? '已自动停止' : '已取消',
       'lost' => '中断了',
       _ => j.state,
     };
@@ -80,4 +93,5 @@ String jobTailLines(String tail, int lines) {
 }
 
 /// 读屏：一句话说清这张卡。
-String jobSemantics(JobInfo j) => '后台任务 ${j.title}，${jobStateLabel(j)}，用时 ${jobDuration(j.elapsed)}';
+String jobSemantics(JobInfo j) =>
+    '后台任务 ${j.title}，${jobStateLabel(j)}${j.autoStopped ? '：${j.stopReason}' : ''}，用时 ${jobDuration(j.elapsed)}';

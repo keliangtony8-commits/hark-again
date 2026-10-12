@@ -4,8 +4,13 @@
   cmd.sh    用户/模型给的命令原文
   run.sh    包装脚本（script()）：timeout 作为进程组组长在后台跑 cmd.sh，pid 写进 pid，
             输出全进 log，结束把退出码原子地写进 exit
-  cancelled 取消标记（cancel() 先写它再叫沙盒整组杀，退出码因此算“已取消”而不是“失败”）
+  cancelled 取消标记，内容是谁停的：user | agent | guard（stop() 先写它再叫沙盒整组杀，退出码因此算“已取消”）
 沙盒服务只负责启动、查活、整组杀（sandbox/runner.py）；状态从文件读，所以沙盒服务、后端、worker 谁重启都不丢。
+
+护栏（guard_reason()，worker 每轮对运行中的任务查一次）：日志超过 job_log_max_mb → 停（防撑爆磁盘）；
+连续 idle_timeout 秒日志没长（mtime 没变；进度条的 \r 刷新也算有输出）→ 判定卡住停掉。停掉的原因记进 stop_reason，
+卡片和通知里都写明，助手照常在原对话接着说（它需要知道并决定怎么办）。思路参考了 deepseek-harness（MIT）jobs 的
+“kill 带 reason、结算时把原因并进结论”，以及 Codex CLI 的命令无输出超时。
 
 生命周期：start() → running →（文件里出现 exit：observe() / refresh()；或进程没了也没 exit：lost）→ settle()
 settle() 记下结论和日志尾巴、把聊天里那张任务卡改成最终状态，并把 followup 置 pending：
@@ -118,7 +123,7 @@ def duration_text(seconds: int) -> str:
     if seconds < 60:
         return f"{seconds} 秒"
     if seconds < 3600:
-        return f"{seconds // 60} 分 {seconds % 60} 秒"
+        return f"{seconds // 60} 分钟" if seconds % 60 == 0 else f"{seconds // 60} 分 {seconds % 60} 秒"
     return f"{seconds // 3600} 小时 {seconds % 3600 // 60} 分"
 
 
@@ -128,6 +133,8 @@ def block(job: Job) -> dict:
            "started_at": iso(job.created_at)}
     if job.state != "running":
         out.update(exit_code=job.exit_code, finished_at=iso(job.finished_at), tail=job.tail)
+        if job.stop_reason:
+            out["stop_reason"] = job.stop_reason
     return out
 
 
@@ -135,13 +142,37 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
     return {"id": job.id, "project_id": job.project_id, "conversation_id": job.conversation_id,
             "title": job.title, "command": job.command, "state": job.state, "exit_code": job.exit_code,
             "followup": job.followup, "started_at": iso(job.created_at), "finished_at": iso(job.finished_at),
-            "elapsed": elapsed(job), "log_size": log_size(job),
+            "elapsed": elapsed(job), "log_size": log_size(job), "stop_reason": job.stop_reason,
             "tail": log_tail(job, chars) if job.state == "running" or log_size(job) else job.tail}
 
 
 def describe(job: Job) -> str:
     code = "" if job.exit_code is None or job.state in ("done", "cancelled") else f"，退出码 {job.exit_code}"
-    return f"{job.id}「{job.title}」：{LABELS.get(job.state, job.state)}{code}，用时 {duration_text(elapsed(job))}"
+    label = f"被自动停止（{job.stop_reason}）" if job.stop_reason else LABELS.get(job.state, job.state)
+    return f"{job.id}「{job.title}」：{label}{code}，用时 {duration_text(elapsed(job))}"
+
+
+def log_path(job: Job) -> str:
+    """完整日志相对项目根的路径（read_file 能按 offset 分段读）。"""
+    return f"{JOBS_DIR}/{job.id}/log"
+
+
+def last_output_at(job: Job) -> datetime:
+    try:
+        return datetime.fromtimestamp((job_dir(job) / "log").stat().st_mtime, timezone.utc)
+    except FileNotFoundError:
+        return _aware(job.created_at)
+
+
+def guard_reason(job: Job, now: datetime | None = None) -> str | None:
+    """运行中的任务该不该被护栏停掉；该停返回给人看的原因。"""
+    now = now or datetime.now(timezone.utc)
+    if log_size(job) > settings.job_log_max_mb * 1024 * 1024:
+        return f"输出超过 {settings.job_log_max_mb} MB，防止撑爆磁盘"
+    idle = job.idle_timeout
+    if idle and (now - max(last_output_at(job), _aware(job.created_at))).total_seconds() >= idle:
+        return f"连续 {duration_text(idle)} 没有任何新输出，判定卡住"
+    return None
 
 
 async def running_count(db: AsyncSession, project_id: str) -> int:
@@ -149,8 +180,15 @@ async def running_count(db: AsyncSession, project_id: str) -> int:
                            .where(Job.project_id == project_id, Job.state == "running")) or 0
 
 
+def idle_limit(idle_timeout: int | None, timeout: int) -> int:
+    """None → 默认 job_idle_seconds；0 → 不判卡住；其余夹在 60 秒到任务时限之间。"""
+    if idle_timeout is None:
+        idle_timeout = settings.job_idle_seconds
+    return 0 if idle_timeout <= 0 or idle_timeout >= timeout else max(60, int(idle_timeout))
+
+
 async def start(db: AsyncSession, *, project_id: str, command: str, title: str | None = None,
-                timeout: int | None = None, conversation_id: str | None = None,
+                timeout: int | None = None, idle_timeout: int | None = None, conversation_id: str | None = None,
                 task_id: str | None = None) -> Job:
     command = command.strip()
     if not command:
@@ -160,7 +198,7 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     limit = max(10, min(int(timeout or settings.job_max_seconds), settings.job_max_seconds))
     job = Job(id=new_id(), project_id=project_id, conversation_id=conversation_id, task_id=task_id,
               title=(title or command.splitlines()[0]).strip()[:60] or "后台任务", command=command, timeout=limit,
-              created_at=datetime.now(timezone.utc))
+              idle_timeout=idle_limit(idle_timeout, limit), created_at=datetime.now(timezone.utc))
     d = job_dir(job)
     d.mkdir(parents=True)
     (d / "cmd.sh").write_text(command + "\n", encoding="utf-8")
@@ -210,6 +248,11 @@ async def refresh(db: AsyncSession, job: Job, check_alive: bool = False) -> Job:
         return job
     if (obs := observe(job)) is not None:
         await settle(db, job, *obs)
+    elif check_alive and (reason := guard_reason(job)):
+        try:
+            await stop(db, job, "guard", reason)
+        except JobError:
+            pass  # 沙盒暂时连不上：下一轮再停
     elif check_alive and elapsed(job) >= LOST_GRACE:
         try:
             alive = await sandbox_client.job_alive(job.project_id, job.id)
@@ -221,20 +264,31 @@ async def refresh(db: AsyncSession, job: Job, check_alive: bool = False) -> Job:
 
 
 async def cancel(db: AsyncSession, job: Job, by: str = "user") -> bool:
-    """取消运行中的任务：先写标记（结论算“已取消”），再叫沙盒整组杀。已经结束的返回 False。
+    """取消运行中的任务。已经结束的返回 False。
     by=agent：模型自己取消的，结束后不再“通知”它（它知道）；用户在卡片上取消的照常通知，让助手接一句。"""
     await refresh(db, job)
     if job.state != "running":
         return False
-    (job_dir(job) / "cancelled").write_text(by)
+    await stop(db, job, by)
+    return True
+
+
+async def stop(db: AsyncSession, job: Job, by: str, reason: str | None = None) -> None:
+    """先写标记（结论算“已取消”，reason 记进 stop_reason），再叫沙盒整组杀；杀不成就撤回标记并抛 JobError。"""
+    marker = job_dir(job) / "cancelled"
+    marker.write_text(by)
     try:
         await sandbox_client.cancel_job(job.project_id, job.id)
     except httpx.HTTPError as e:
-        raise JobError("沙盒没响应，没能取消，稍后再试") from e
-    await refresh(db, job, check_alive=True)
-    if job.state == "running" and not await _alive_or_unknown(job):
+        marker.unlink(missing_ok=True)
+        raise JobError("沙盒没响应，没能停掉，稍后再试") from e
+    if reason:
+        job.stop_reason = reason[:120]
+        await db.commit()
+    if (obs := observe(job)) is not None:
+        await settle(db, job, *obs)
+    elif not await _alive_or_unknown(job):
         await settle(db, job, "cancelled", None)
-    return True
 
 
 async def _alive_or_unknown(job: Job) -> bool:

@@ -38,11 +38,13 @@ export type FormBlock = { type: "form"; id: string; purpose?: "login" | "code" |
 /** 项目沙盒里的后台任务卡（后端 app/jobs.py）。运行中卡片自己轮询 /api/jobs/{id}（lib/jobs.ts）。 */
 export type JobState = "running" | "done" | "failed" | "timed_out" | "cancelled" | "lost";
 export type JobBlock = { type: "job"; id: string; title: string; command: string; state: JobState;
-  started_at?: string | null; finished_at?: string | null; exit_code?: number | null; tail?: string | null };
+  started_at?: string | null; finished_at?: string | null; exit_code?: number | null; tail?: string | null;
+  /** 被服务器护栏自动停掉的原因（卡住没输出 / 输出过大）；用户或助手取消的没有。 */
+  stop_reason?: string | null };
 /** /api/jobs/{id} 的快照。followup=pending：结束了，服务器还要在这段对话里接着说一轮。 */
 export type JobInfo = { id: string; title: string; command: string; state: JobState; exit_code?: number | null;
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
-  started_at?: string | null; finished_at?: string | null };
+  started_at?: string | null; finished_at?: string | null; stop_reason?: string | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
   | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的

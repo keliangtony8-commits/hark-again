@@ -102,7 +102,7 @@ class BrowserBlock extends Block {
 /// 项目沙盒里的后台任务卡（后端 app/jobs.py）。块里是落库时的状态；运行中由卡片自己轮询 /api/jobs/{id}（models/job.dart）。
 class JobBlock extends Block {
   const JobBlock({required this.id, required this.title, required this.command, required this.state,
-      this.startedAt, this.finishedAt, this.exitCode, this.tail});
+      this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason});
   factory JobBlock.fromJson(Map<String, dynamic> j) => JobBlock(
       id: j['id'] as String? ?? '',
       title: j['title'] as String? ?? '后台任务',
@@ -111,11 +111,15 @@ class JobBlock extends Block {
       startedAt: DateTime.tryParse(j['started_at'] as String? ?? '')?.toLocal(),
       finishedAt: DateTime.tryParse(j['finished_at'] as String? ?? '')?.toLocal(),
       exitCode: (j['exit_code'] as num?)?.toInt(),
-      tail: j['tail'] as String?);
+      tail: j['tail'] as String?,
+      stopReason: j['stop_reason'] as String?);
   final String id, title, command, state;
   final DateTime? startedAt, finishedAt;
   final int? exitCode;
   final String? tail;
+
+  /// 被服务器护栏自动停掉的原因（卡住没输出 / 输出过大）；用户或助手取消的没有。
+  final String? stopReason;
 }
 
 class PageBlock extends Block {

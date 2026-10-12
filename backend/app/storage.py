@@ -15,7 +15,7 @@ TEXT_EXT = {".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".tsx", ".html"
 
 
 # 工作区里不给用户/模型当“文件”看的目录：git 内部、后台任务的脚本和日志（jobs.py）
-HIDDEN_DIRS = frozenset({".git", ".jobs"})
+HIDDEN_DIRS = frozenset({".git", ".jobs", ".spill"})  # .spill：长输出落盘（spill.py）
 
 
 def hidden(rel_parts) -> bool:
@@ -53,6 +53,24 @@ def project_file(pid: str, rel: str) -> Path | None:
 
 def is_text(name: str) -> bool:
     return Path(name).suffix.lower() in TEXT_EXT
+
+
+def looks_text(path: Path) -> bool:
+    """扩展名认识，或看开头 4 KB：没有 NUL、按 UTF-8 解得开（日志、没扩展名的脚本、Makefile 这类）。"""
+    if is_text(path.name):
+        return True
+    try:
+        with path.open("rb") as f:
+            head = f.read(4096)
+    except OSError:
+        return False
+    if b"\0" in head:
+        return False
+    try:
+        head.decode("utf-8")
+    except UnicodeDecodeError as e:
+        return e.start >= len(head) - 3  # 只是切在一个多字节字中间
+    return True
 
 
 def mime_of(name: str) -> str:

@@ -8,12 +8,13 @@ import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
-from .. import vision
+from .. import spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
 from .tools import REGISTRY, ToolContext, ToolResult, schemas
 
 MAX_STEPS = 6  # 防止工具死循环烧钱
+SELF_PAGED = {"read_file"}  # 自己按 offset 分页的工具，结果不再落盘截断
 
 
 @dataclass
@@ -198,7 +199,10 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
         if not builder.has(b):
             yield builder.add(b)
     yield ToolStatus(call.id, call.name, t.label, "done")
-    yield ToolResult(result.content, images=result.images)
+    content = result.content
+    if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）
+        content = spill.bound(content, settings.tool_result_max, ctx.project_id, call.name)
+    yield ToolResult(content, images=result.images)
 
 @dataclass
 class Asked:

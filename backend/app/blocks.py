@@ -76,6 +76,7 @@ class JobBlock(BaseModel):
     finished_at: str | None = None
     exit_code: int | None = None
     tail: str | None = None  # 结束时日志的最后一段
+    stop_reason: str | None = None  # 被护栏自动停掉的原因（卡住 / 输出过大），state=cancelled
 
 
 class PageBlock(BaseModel):
@@ -263,7 +264,9 @@ def blocks_to_text(blocks: list[dict]) -> str:
         elif t == "job":
             state = {"running": "运行中（结束时你会收到通知，也可用 job_status 查看）", "done": "已完成", "failed": "失败",
                      "timed_out": "超时被终止", "cancelled": "已取消", "lost": "中断了"}.get(b.get("state"), "")
-            code = f"，退出码 {b['exit_code']}" if b.get("exit_code") not in (None, 0) else ""
+            if b.get("stop_reason"):
+                state = f"被自动停止（{b['stop_reason']}）"
+            code = f"，退出码 {b['exit_code']}" if b.get("exit_code") not in (None, 0) and b.get("state") != "cancelled" else ""
             tail = f"\n最后的输出：\n{b['tail'][-600:]}" if b.get("tail") else ""
             parts.append(f"[后台任务 {b['id']}「{b['title']}」——{state}{code}]{tail}")
         elif t == "draft":

@@ -1,0 +1,9 @@
+本项目借鉴了以下开源项目的设计（只借思路与结构，未整段复制代码；如后续直接移植代码，会在对应文件头保留原许可证声明）：
+
+- deepseek-ai/deepseek-harness — MIT License, Copyright (c) 2026 DeepSeek
+  https://github.com/deepseek-ai/deepseek-harness
+  参考：packages/spill（长输出开头/结尾保留 + 全文落盘 + 读回提示）→ backend/app/spill.py；
+        packages/jobs（kill 带原因、结算时并入结论；job_output 有界等待）→ backend/app/jobs.py、agent/builtin/jobs.py
+- openai/codex（Codex CLI）— Apache License 2.0
+  https://github.com/openai/codex
+  参考：命令安全分类（拆分 shell 为简单命令逐段判断）→ backend/app/command_guard.py

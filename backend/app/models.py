@@ -240,7 +240,8 @@ class Job(Base):
     """项目沙盒里的后台任务（app/jobs.py 是唯一入口）：装依赖、训练、爬取这类超过一条命令时限的活。
     进程、日志、退出码都在工作区 .jobs/<id>/ 里，这里只记归属和结论。
     state: running | done | failed | timed_out | cancelled | lost（容器重启/进程消失，没留下退出码）
-    followup: none | pending（结束了，等 worker 在原对话里接着回一句）| done | seen（模型自己查过结果）| skipped"""
+    followup: none | pending（结束了，等 worker 在原对话里接着回一句）| done | seen（模型自己查过结果）| skipped
+    idle_timeout: 连续这么多秒没有新输出就判定卡住并停掉（0 = 不判）；stop_reason: 被护栏自动停掉的原因（state=cancelled）"""
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(32), index=True)
@@ -253,5 +254,7 @@ class Job(Base):
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     followup: Mapped[str] = mapped_column(String(16), default="none", server_default="none")
     tail: Mapped[str] = mapped_column(Text, default="", server_default="")  # 结束时日志的最后一段
+    idle_timeout: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    stop_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

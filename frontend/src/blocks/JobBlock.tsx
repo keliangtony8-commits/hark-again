@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "../lib/api";
-import { JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAwaitingReply, jobDuration, jobFromBlock, jobRunning, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
+import { JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobAwaitingReply, jobDuration, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
 import type { JobBlock as T, JobInfo } from "../lib/types";
 import { Sheet } from "../ui/kit";
 import { IconAlert, IconCheck, IconCopy, IconStop } from "../ui/icons";
@@ -52,12 +52,13 @@ export default function JobBlock({ block }: { block: T }) {
   };
 
   const running = jobRunning(job);
-  const tone = jobTone(job.state);
+  const stopped = jobAutoStopped(job);
+  const tone = jobTone(job.state, stopped);
   const elapsed = running ? job.elapsed + (Date.now() - polledAt) / 1000 : job.elapsed;
   const tail = jobTailLines(job.tail);
   const label = jobAwaitingReply(job) ? `${jobStateLabel(job)} · 助手在看结果` : jobStateLabel(job);
   return (
-    <div className={`card blk-job tone-${tone}`} role="group" aria-label={`后台任务 ${job.title}，${jobStateLabel(job)}，用时 ${jobDuration(elapsed)}`}>
+    <div className={`card blk-job tone-${tone}`} role="group" aria-label={jobSemantics(job, elapsed)}>
       <div className="blk-job-head">
         <span key={tone} className="blk-job-mark">
           {tone === "running" ? <i className="job-dot" /> : tone === "ok" ? <IconCheck size={16} /> : tone === "problem" ? <IconAlert size={16} /> : <IconStop size={14} />}
@@ -67,6 +68,7 @@ export default function JobBlock({ block }: { block: T }) {
       </div>
       <div className="blk-job-cmd">$ {job.command.split("\n")[0]}</div>
       <pre className={`blk-job-log ${tail ? "" : "is-empty"}`}>{tail || (running ? "等待输出…" : "（没有输出）")}</pre>
+      {stopped && <p className="blk-job-reason" aria-hidden>{job.stop_reason}</p>}
       <div className="blk-job-foot">
         <span key={label} className="blk-job-state">{label}</span>
         {running
