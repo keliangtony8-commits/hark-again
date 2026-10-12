@@ -9,7 +9,8 @@ const jobFinal = {'done', 'failed', 'timed_out', 'cancelled', 'lost'};
 class JobInfo {
   const JobInfo({required this.id, required this.title, required this.command, required this.state,
       this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt,
-      this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage});
+      this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage, this.memoryMax,
+      this.memoryPeak, this.box});
 
   factory JobInfo.fromJson(Map<String, dynamic> j) => JobInfo(
       id: j['id'] as String? ?? '',
@@ -26,7 +27,10 @@ class JobInfo {
       keepAlive: j['keep_alive'] as bool? ?? false,
       restarts: (j['restarts'] as num?)?.toInt() ?? 0,
       restartAt: DateTime.tryParse(j['restart_at'] as String? ?? '')?.toLocal(),
-      usage: JobUsage.tryParse(j['usage']));
+      usage: JobUsage.tryParse(j['usage']),
+      memoryMax: _bytes(j['memory_max']),
+      memoryPeak: _bytes(j['memory_peak']),
+      box: JobBox.tryParse(j['box']));
 
   /// 还没问过服务器时，用消息里落库的块先画出来。
   factory JobInfo.fromBlock(JobBlock b) => JobInfo(
@@ -41,13 +45,15 @@ class JobInfo {
       finishedAt: b.finishedAt,
       stopReason: b.stopReason,
       keepAlive: b.keepAlive,
-      restarts: b.restarts);
+      restarts: b.restarts,
+      memoryMax: b.memoryMax,
+      memoryPeak: b.memoryPeak);
 
   /// 换个用时（卡片跳秒用），其余不变。
   JobInfo withElapsed(Duration d) => JobInfo(
       id: id, title: title, command: command, state: state, exitCode: exitCode, followup: followup, elapsed: d,
       tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason, keepAlive: keepAlive,
-      restarts: restarts, restartAt: restartAt, usage: usage);
+      restarts: restarts, restartAt: restartAt, usage: usage, memoryMax: memoryMax, memoryPeak: memoryPeak, box: box);
 
   final String id, title, command, state, followup, tail;
   final String? stopReason;
@@ -64,14 +70,54 @@ class JobInfo {
   /// v1.90 现在占多少（后端 app/job_usage.py）：只有进程确实在跑、问得到沙盒时才有；null = 不知道（不是 0）。
   final JobUsage? usage;
 
+  /// v1.92（后端 app/job_memory.py）：给它单独定的内存上限、采样看到的峰值（字节，null = 没设 / 没采到）；
+  /// box = 整台沙盒此刻的内存（只有在跑时才有），快满了卡片提醒。
+  final int? memoryMax, memoryPeak;
+  final JobBox? box;
+
   bool get running => !jobFinal.contains(state);
 
   /// 服务器护栏停的（连续没输出判定卡住 / 输出过大）：算出了问题，不是“已取消”。
   bool get autoStopped => state == 'cancelled' && (stopReason ?? '').isNotEmpty;
 
+  /// 卡片日志下面要写原因：护栏停的、内存超限 / 打满被结束的、常驻服务放弃重启的。
+  bool get showsReason => !running && (stopReason ?? '').isNotEmpty;
+
+  /// 内存到了自己上限的 [jobMemNear] 以上（再涨就会被结束）。
+  bool get memoryNear => memoryMax != null && usage != null && usage!.memory >= memoryMax! * jobMemNear;
+
+  /// 在跑，且整台沙盒内存用到 [jobBoxTight] 以上。
+  bool get boxTight => running && box != null && box!.used >= box!.limit * jobBoxTight;
+
   /// 结束了，服务器还要在这段对话里接着说一轮（worker 几秒内跑）：卡片继续问，等它说完再刷新对话。
   bool get awaitingReply => !running && followup == 'pending';
 }
+
+int? _bytes(Object? v) => v is num && v > 0 ? v.toInt() : null;
+
+/// 整台沙盒的内存（不含可回收的文件缓存）。
+class JobBox {
+  const JobBox({required this.used, required this.limit});
+
+  static JobBox? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final used = raw['used'], limit = raw['limit'];
+    if (used is! num || limit is! num || used < 0 || limit <= 0) return null;
+    return JobBox(used: used.toInt().clamp(0, limit.toInt()), limit: limit.toInt());
+  }
+
+  final int used, limit;
+  int get percent => (used * 100 / limit).round();
+}
+
+/// 到自己内存上限的这个比例，卡片上的内存字变成警示色（同后端 job_memory.NEAR）。
+const jobMemNear = 0.8;
+
+/// 整台沙盒内存用到这个比例，卡片提醒“快满了”（同后端 job_memory.TIGHT）。
+const jobBoxTight = 0.9;
+
+/// 卡片上“快满了”那句。
+String jobBoxLabel(JobBox b) => '这台电脑内存已用 ${b.percent}%（${formatSize(b.used)} / ${formatSize(b.limit)}），再涨系统会强制结束进程';
 
 /// 一个后台任务（整个进程组）此刻的资源占用。cpu = 占这台电脑 CPU 配额的百分比（和电脑卡的 CPU 一个口径）。
 class JobUsage {
@@ -110,8 +156,11 @@ String jobUsageLabel(JobUsage u) => [
       if (u.processes > 1) '${u.processes} 个进程',
     ].join(' · ');
 
-/// 任务卡 CPU 条右边那段：内存 120.0 MB · 3 个进程。
-String jobMemoryLabel(JobUsage u) => ['内存 ${formatSize(u.memory)}', if (u.processes > 1) '${u.processes} 个进程'].join(' · ');
+/// 任务卡 CPU 条右边那段：内存 120.0 MB（设了上限：120.0 MB / 512.0 MB）· 3 个进程。
+String jobMemoryLabel(JobUsage u, {int? max}) => [
+      '内存 ${formatSize(u.memory)}${max != null ? ' / ${formatSize(max)}' : ''}',
+      if (u.processes > 1) '${u.processes} 个进程',
+    ].join(' · ');
 
 /// 读屏：占用 CPU 35%，内存 120.0 MB，3 个进程。
 String jobUsageSemantics(JobUsage u) =>
@@ -143,6 +192,7 @@ String jobStateLabel(JobInfo j) => switch (j.state) {
 String jobFootLabel(JobInfo j) => [
       jobStateLabel(j),
       if (j.keepAlive && j.restarts > 0) '已自动重启 ${j.restarts} 次',
+      if (!j.running && j.memoryPeak != null) '内存峰值 ${formatSize(j.memoryPeak!)}',
       if (j.awaitingReply) '助手在看结果',
     ].join(' · ');
 
@@ -172,6 +222,8 @@ String jobTailLines(String tail, int lines) {
 
 /// 读屏：一句话说清这张卡。
 String jobSemantics(JobInfo j) =>
-    '${j.keepAlive ? '常驻任务' : '后台任务'} ${j.title}，${jobStateLabel(j)}${j.autoStopped ? '：${j.stopReason}' : ''}'
+    '${j.keepAlive ? '常驻任务' : '后台任务'} ${j.title}，${jobStateLabel(j)}${j.showsReason ? '：${j.stopReason}' : ''}'
     '${j.keepAlive && j.restarts > 0 ? '，已自动重启 ${j.restarts} 次' : ''}，用时 ${jobDuration(j.elapsed)}'
-    '${j.running && j.usage != null ? '，${jobUsageSemantics(j.usage!)}' : ''}';
+    '${j.running && j.usage != null ? '，${jobUsageSemantics(j.usage!)}' : ''}'
+    '${j.running && j.memoryMax != null ? '，内存上限 ${formatSize(j.memoryMax!)}' : ''}'
+    '${j.boxTight ? '，${jobBoxLabel(j.box!)}' : ''}';

@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, event, false
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, event, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .blocks import blocks_to_text
@@ -310,7 +310,9 @@ class Job(Base):
     idle_timeout: 连续这么多秒没有新输出就判定卡住并停掉（0 = 不判）；stop_reason: 被护栏自动停掉的原因（state=cancelled）
     v1.80 常驻（keep_alive）：不限时、不判卡住，意外退出由 app/job_restart.py 决定何时拉起；整个监护期间 state 一直是 running。
       restarts 自动重启过几次（给人看）；crash_streak 连着“没跑满 1 分钟就退出”的次数（退避与放弃用）；
-      restart_at 不为空 = 进程已退出、正在等这个时刻重启；run_started_at 这一次进程的启动时刻（判丢失宽限、算这次跑了多久）"""
+      restart_at 不为空 = 进程已退出、正在等这个时刻重启；run_started_at 这一次进程的启动时刻（判丢失宽限、算这次跑了多久）
+    v1.92 memory_max 给这个任务单独定的内存上限（字节，NULL = 只受整台沙盒上限约束；超了由 app/job_memory.py 结束它）；
+      memory_peak worker 采样看到的最高内存（PSS，字节；结论里给人和模型看，判断该给多大）"""
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(32), index=True)
@@ -334,3 +336,5 @@ class Job(Base):
     crash_streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     restart_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     run_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    memory_max: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    memory_peak: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

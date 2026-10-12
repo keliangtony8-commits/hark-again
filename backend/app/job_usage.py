@@ -8,7 +8,8 @@
     沙盒连不上 / 电脑没开 / 进程已经没了 → 这个任务没有 usage（不是 0）。
   - wire(u)：{cpu 占本沙盒 CPU 配额百分比, cpu_seconds 累计 CPU 秒, memory 字节（PSS）, processes 进程数}。
   - text(u)：给模型的一句（job_status 用），例如“现在占 CPU 35%、内存约 120 MB（3 个进程）”。
-采样规则（进程组、PSS、含已收走的子进程节拍）在 sandbox/runner.py GROUPS_PY / group_usage。
+  - box(ws)：v1.92 同一次采样顺带拿到的整台沙盒内存 {used, limit}（BOX_FRESH_S 内有效；job_memory 判断“快满了”用）。
+采样规则（进程组、PSS、含已收走的子进程节拍）在 sandbox/runner.py GROUPS_PY / group_usage / box_usage。
 
 参考：deepseek-harness / Codex / Gemini CLI 都在本机跑命令，没有逐任务资源统计，无代码可搬；
 口径借 `top`（CPU 按两次采样之差）和 `smem`（PSS 摊共享页）。
@@ -22,10 +23,27 @@ from . import jobs, sandbox_client
 from .models import Job
 
 CACHE_S = 3.0
+BOX_FRESH_S = 30.0
 FIELDS = ("cpu", "cpu_seconds", "memory", "processes")
 
 _cache: dict[str, tuple[float, tuple[int, ...], dict[int, dict]]] = {}
 _inflight: dict[tuple[str, tuple[int, ...]], asyncio.Future] = {}
+_box: dict[str, tuple[float, dict]] = {}
+
+
+def box_wire(b) -> dict | None:
+    if not isinstance(b, dict):
+        return None
+    used, limit = b.get("used"), b.get("limit")
+    if type(used) is not int or type(limit) is not int or used < 0 or limit <= 0:
+        return None
+    return {"used": min(used, limit), "limit": limit}
+
+
+def box(ws: str) -> dict | None:
+    """最近一次采样看到的整台沙盒内存；太旧或没采过 → None。"""
+    hit = _box.get(ws)
+    return hit[1] if hit and time.monotonic() - hit[0] < BOX_FRESH_S else None
 
 
 def pgid(job: Job) -> int | None:
@@ -88,6 +106,10 @@ async def _fetch(ws: str, want: tuple[int, ...]) -> dict[int, dict]:
             if isinstance(r, dict) and isinstance(r.get("pgid"), int) and (w := wire(r)) is not None:
                 got[r["pgid"]] = w
         _cache[ws] = (time.monotonic(), want, got)
+        if (b := box_wire(raw.get("box") if isinstance(raw, dict) else None)) is not None:
+            _box[ws] = (time.monotonic(), b)
+        else:
+            _box.pop(ws, None)
         fut.set_result(got)
         return got
     except BaseException as e:
@@ -123,5 +145,7 @@ def forget(ws: str | None = None) -> None:
     """测试用 / 电脑重启后：丢掉缓存。"""
     if ws is None:
         _cache.clear()
+        _box.clear()
     else:
         _cache.pop(ws, None)
+        _box.pop(ws, None)

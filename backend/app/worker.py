@@ -20,7 +20,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import card_snooze, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
+from . import card_snooze, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -112,6 +112,8 @@ async def tick() -> None:
         try:
             if done := await jobs.tick(db):
                 log.info("jobs settled: %s", ", ".join(done))
+            if capped := await job_memory.tick(db):  # v1.92 采样记峰值；超过自己内存上限的结束掉
+                log.info("jobs over memory limit: %s", ", ".join(capped))
             if scripts := await script_tasks.settle_ready(db):  # 定时脚本的后台任务结束了：记结果、按 notify 告诉用户
                 log.info("script tasks settled: %s", ", ".join(scripts))
             await jobs.follow_ups(db)

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "../lib/api";
-import { JOB_CPU_HOT, JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobCpuLabel, jobMemoryLabel, jobUsage, jobAwaitingReply, jobDuration, jobFootLabel, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
+import { JOB_CPU_HOT, JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobBox, jobBoxLabel, jobBoxTight, jobCpuLabel, jobMemoryLabel, jobMemoryMax, jobMemoryNear, jobShowsReason, jobUsage, jobAwaitingReply, jobDuration, jobFootLabel, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
 import type { JobBlock as T, JobInfo } from "../lib/types";
 import { Sheet } from "../ui/kit";
-import { IconAlert, IconCheck, IconCopy, IconStop } from "../ui/icons";
+import { IconAlert, IconCheck, IconChip, IconCopy, IconStop } from "../ui/icons";
 import { useBlockActions } from "./actions";
 
 /** 后台任务卡（App blocks/job_block.dart 同一套行为）：运行中每 2 秒问一次进度、用时每秒本地跳、可取消；
@@ -69,13 +69,16 @@ export default function JobBlock({ block }: { block: T }) {
       </div>
       <div className="blk-job-cmd">$ {job.command.split("\n")[0]}</div>
       <pre className={`blk-job-log ${tail ? "" : "is-empty"}`}>{tail || (running ? "等待输出…" : "（没有输出）")}</pre>
-      {stopped && <p className="blk-job-reason" aria-hidden>{job.stop_reason}</p>}
+      {jobShowsReason(job) && <p className="blk-job-reason" aria-hidden>{job.stop_reason}</p>}
       {usage && (  /* v1.90 在跑时它占多少：问不到就不出现（不画成 0）；读屏句子已在卡片 aria-label 里 */
         <div className={`blk-job-usage ${usage.cpu >= JOB_CPU_HOT ? "is-hot" : ""}`} aria-hidden>
           <span className="blk-job-cpu">CPU {jobCpuLabel(usage.cpu)}</span>
           <div className="meter blk-job-meter"><span style={{ transform: `scaleX(${Math.min(1, usage.cpu / 100)})` }} /></div>
-          <span className="blk-job-mem">{jobMemoryLabel(usage)}</span>
+          <span className={`blk-job-mem ${jobMemoryNear(job) ? "is-near" : ""}`}>{jobMemoryLabel(usage, jobMemoryMax(job))}</span>
         </div>
+      )}
+      {jobBoxTight(job) && (  /* v1.92 整台沙盒内存快满了：系统会先结束普通后台任务 */
+        <p className="blk-job-tight" aria-hidden><IconChip size={14} />{jobBoxLabel(jobBox(job.box)!)}</p>
       )}
       <div className="blk-job-foot">
         <span key={label} className="blk-job-state">{label}</span>

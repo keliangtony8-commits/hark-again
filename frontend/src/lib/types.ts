@@ -88,7 +88,9 @@ export type JobBlock = { type: "job"; id: string; title: string; command: string
   /** 被服务器护栏自动停掉的原因（卡住没输出 / 输出过大）；用户或助手取消的没有。 */
   stop_reason?: string | null;
   /** v1.80 常驻任务（后端 app/job_restart.py）：意外退出自动重启；restarts = 重启过几次。 */
-  keep_alive?: boolean | null; restarts?: number | null };
+  keep_alive?: boolean | null; restarts?: number | null;
+  /** v1.92 给它单独定的内存上限 / 结束时的内存峰值（字节，后端 app/job_memory.py）。 */
+  memory_max?: number | null; memory_peak?: number | null };
 /** /api/jobs/{id} 的快照。followup=pending：结束了，服务器还要在这段对话里接着说一轮。 */
 export type JobInfo = { id: string; title: string; command: string; state: JobState; exit_code?: number | null;
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
@@ -96,7 +98,10 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   /** v1.80 常驻：restart_at 不为空 = 进程刚退出、等这个时刻重启（state 仍是 running）。老服务器没有这三个字段。 */
   keep_alive?: boolean; restarts?: number; restart_at?: string | null;
   /** v1.90 现在占多少（后端 app/job_usage.py）：进程确实在跑、问得到沙盒才有；null/缺 = 不知道（不是 0）。cpu = 占配额 %。 */
-  usage?: JobUsage | null };
+  usage?: JobUsage | null;
+  /** v1.92 内存上限 / 峰值（字节）；box = 整台沙盒此刻的内存（在跑才有），快满了卡片提醒。 */
+  memory_max?: number | null; memory_peak?: number | null; box?: JobBox | null };
+export type JobBox = { used: number; limit: number };
 export type JobUsage = { cpu: number; cpu_seconds: number; memory: number; processes: number };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
   | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock | AgentBlock;

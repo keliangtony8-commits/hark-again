@@ -34,7 +34,10 @@ async def _get(db, job_id: str) -> Job:
 async def get_job(job_id: str, tail: int = jobs.TAIL_CHARS, db=Depends(get_session)):
     job = await jobs.refresh(db, await _get(db, job_id))
     # v1.90 运行中的任务卡顺带看到它占多少 CPU / 内存（job_usage 有缓存，卡片轮询不会每次都去采样）
-    return {**jobs.wire(job, chars=max(200, min(tail, 20000))), "usage": await job_usage.of(job)}
+    usage = await job_usage.of(job)
+    # v1.92 整台沙盒内存（同一次采样拿到的）：快满时任务卡提醒
+    return {**jobs.wire(job, chars=max(200, min(tail, 20000))), "usage": usage,
+            "box": job_usage.box(job.project_id) if usage else None}
 
 
 @router.post("/{job_id}/cancel")

@@ -6,6 +6,8 @@
             输出全进 log，结束把退出码原子地写进 exit
   cancelled 取消标记，内容是谁停的：user | agent | guard（stop() 先写它再叫沙盒整组杀，退出码因此算“已取消”）
   oom       run.sh 写的：任务期间容器 cgroup 的 OOM 计数涨了（内存超上限，内核杀了进程）→ 结论里写明原因
+  memcap    v1.92 app/job_memory.py 写的：超过给它单独定的内存上限（memory_max），先写它再整组杀；内容就是给人看的原因。
+            结论算失败（常驻任务照崩溃处理、按 job_restart 退避重启），不是“已取消”
 沙盒服务只负责启动、查活、整组杀（sandbox/runner.py）；状态从文件读，所以沙盒服务、后端、worker 谁重启都不丢。
 
 护栏（guard_reason()，worker 每轮对运行中的任务查一次）：日志超过 job_log_max_mb → 停（防撑爆磁盘）；
@@ -21,6 +23,8 @@ worker 的 follow_ups() 随后在原对话里带着结果再跑一轮（像有�
 v1.39 移植自 deepseek-harness tool-jobs（MIT）：job_status 只给上次看过之后的新输出（read_new，游标 read_offset）；
 同一对话一起结束的任务并成一轮通知；用户两次发言之间连着叫醒有上限（job_followup_wakes），超出的结论置 held，
 用户下次说话时并进那一轮（take_held）。
+v1.92 内存：普通后台任务 run.sh 把自己的 oom_score_adj 调高 OOM_ADJ（子进程继承），整台沙盒内存打满时内核先杀它们、
+保住常驻服务；单任务上限与“快满了”的提醒见 app/job_memory.py。
 v1.80 常驻任务（keep_alive，对标 Manus Cloud Computer 的“常开进程 / 24 小时 bot”）：不限时（timeout 0）、不判卡住；
 进程意外退出（非零 / OOM / 容器重启进程没了）→ job_restart.decide 给出等待秒数，restart_at 到点由 worker 的 tick 重新叫沙盒
 跑同一个 run.sh（日志追加，中间插一行“第 N 次重启”）；正常退出（0）照普通任务结算；连续很快就崩到上限 → 结算为失败并通知助手。
@@ -73,6 +77,13 @@ def job_dir(job: Job) -> Path:
 OOM_COUNT = ("sed -n 's/^oom_kill //p' /sys/fs/cgroup/memory.events 2>/dev/null || "
              "sed -n 's/^oom_kill //p' /sys/fs/cgroup/memory/memory.oom_control 2>/dev/null")
 OOM_REASON = "内存超过这台电脑的上限，被系统强制结束"
+OOM_ADJ = 500           # 普通后台任务的 oom_score_adj（调高不需要特权；常驻服务保持 0）
+MEMCAP = "memcap"
+MEMCAP_PREFIX = "内存超过给它定的上限"  # job_memory.reason() 的开头：describe 据此给出路
+
+
+def memcap_hint() -> str:
+    return "超过了给它单独定的内存上限：改成分批/流式处理、减小 batch，确实需要更多就把 memory_limit 调大再跑。"
 
 
 def oom_hint(limit: int | None = None) -> str:
@@ -82,15 +93,17 @@ def oom_hint(limit: int | None = None) -> str:
             "还不够就告诉用户这台电脑内存不够，可以在 .env 调大 SANDBOX_MEM。")
 
 
-def script(job_id: str, timeout: int) -> str:
+def script(job_id: str, timeout: int, keep_alive: bool = False) -> str:
     """run.sh：从工作区根目录跑；timeout 自成进程组（取消时整组杀），-k 5 超时后再给 5 秒强杀。
     timeout 0 = 不限时（GNU timeout 的 0 就是关掉计时，仍做进程组组长）——常驻任务用。
-    日志用 >> 追加：常驻任务重启接着写同一份；轮转时后端直接截断它（O_APPEND 写入跟着新末尾走）。"""
+    日志用 >> 追加：常驻任务重启接着写同一份；轮转时后端直接截断它（O_APPEND 写入跟着新末尾走）。
+    普通任务先把自己的 oom_score_adj 调高（子进程继承）：内存打满时内核优先杀它们，常驻服务留下。"""
     j = f"{JOBS_DIR}/{job_id}"
     return (
         "#!/bin/bash\n"
         'cd "$(dirname "$0")/../.." || exit 1\n'
         f"J={j}\n"
+        + ("" if keep_alive else f"echo {OOM_ADJ} > /proc/self/oom_score_adj 2>/dev/null\n") +
         f"before=$({OOM_COUNT})\n"
         f'timeout -k 5 {int(timeout)} bash -l "$J/cmd.sh" >> "$J/log" 2>&1 < /dev/null &\n'
         'echo $! > "$J/pid"\n'
@@ -111,7 +124,7 @@ def observe(job: Job) -> tuple[str, int | None] | None:
         return None
     if (d / "cancelled").exists():
         return "cancelled", code
-    if (d / "oom").exists():
+    if (d / MEMCAP).exists() or (d / "oom").exists():
         return "failed", code
     if code == 124:
         return "timed_out", code
@@ -229,7 +242,11 @@ def block(job: Job) -> dict:
            "started_at": iso(job.created_at)}
     if job.keep_alive:
         out.update(keep_alive=True, restarts=job.restarts)
+    if job.memory_max:
+        out["memory_max"] = job.memory_max
     if job.state != "running":
+        if job.memory_peak:
+            out["memory_peak"] = job.memory_peak
         out.update(exit_code=job.exit_code, finished_at=iso(job.finished_at), tail=job.tail)
         if job.stop_reason:
             out["stop_reason"] = job.stop_reason
@@ -243,7 +260,8 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
             "elapsed": elapsed(job), "log_size": log_size(job), "stop_reason": job.stop_reason,
             "tail": log_tail(job, chars) if job.state == "running" or log_size(job) else job.tail,
             "keep_alive": bool(job.keep_alive), "restarts": job.restarts or 0,
-            "restart_at": iso(job.restart_at) if job.state == "running" else None}
+            "restart_at": iso(job.restart_at) if job.state == "running" else None,
+            "memory_max": job.memory_max, "memory_peak": job.memory_peak}
 
 
 def describe(job: Job) -> str:
@@ -251,12 +269,19 @@ def describe(job: Job) -> str:
     label = f"被自动停止（{job.stop_reason}）" if job.stop_reason else LABELS.get(job.state, job.state)
     if job.stop_reason == OOM_REASON:  # 不是我们停的，是内核：给模型一条出路
         label = f"失败：{OOM_REASON}"
+    elif (job.stop_reason or "").startswith(MEMCAP_PREFIX):
+        label = f"失败：{job.stop_reason}"
     if job.keep_alive and job.state == "running":
         label = "常驻，进程刚退出、等待自动重启" if job.restart_at else "常驻，运行中"
     if job.keep_alive and job.restarts:
         label += f"（已自动重启 {job.restarts} 次）"
     line = f"{job.id}「{job.title}」：{label}{code}，用时 {duration_text(elapsed(job))}"
-    return f"{line}。{oom_hint()}" if job.stop_reason == OOM_REASON else line
+    if job.memory_peak and job.state != "running":
+        line += f"，内存峰值约 {quota.size_text(job.memory_peak)}"
+    if job.stop_reason == OOM_REASON:
+        return f"{line}。{oom_hint()}"
+    return f"{line}。{memcap_hint()}" if (job.stop_reason or "").startswith(MEMCAP_PREFIX) else line
+
 
 
 def log_path(job: Job) -> str:
@@ -320,7 +345,7 @@ def idle_limit(idle_timeout: int | None, timeout: int) -> int:
 
 async def start(db: AsyncSession, *, project_id: str, command: str, title: str | None = None,
                 timeout: int | None = None, idle_timeout: int | None = None, conversation_id: str | None = None,
-                task_id: str | None = None, keep_alive: bool = False) -> Job:
+                task_id: str | None = None, keep_alive: bool = False, memory_max: int | None = None) -> Job:
     command = command.strip()
     if not command:
         raise JobError("命令是空的")
@@ -335,11 +360,11 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     job = Job(id=new_id(), project_id=project_id, conversation_id=conversation_id, task_id=task_id,
               title=(title or command.splitlines()[0]).strip()[:60] or "后台任务", command=command, timeout=limit,
               idle_timeout=0 if keep_alive else idle_limit(idle_timeout, limit), created_at=now,
-              keep_alive=keep_alive, run_started_at=now)
+              keep_alive=keep_alive, run_started_at=now, memory_max=memory_max or None)
     d = job_dir(job)
     d.mkdir(parents=True)
     (d / "cmd.sh").write_text(command + "\n", encoding="utf-8")
-    (d / "run.sh").write_text(script(job.id, limit), encoding="utf-8")
+    (d / "run.sh").write_text(script(job.id, limit, keep_alive), encoding="utf-8")
     try:
         await _launch(db, project_id, job.id)
     except httpx.HTTPError as e:
@@ -376,8 +401,11 @@ async def settle(db: AsyncSession, job: Job, state: str, exit_code: int | None) 
     job.state, job.exit_code = state, exit_code
     job.finished_at = datetime.now(timezone.utc)
     job.restart_at = None
-    if state == "failed" and not job.stop_reason and (job_dir(job) / "oom").exists():
-        job.stop_reason = OOM_REASON
+    if state == "failed" and not job.stop_reason:
+        if cap := _read(job_dir(job) / MEMCAP):
+            job.stop_reason = cap[:120]
+        elif (job_dir(job) / "oom").exists():
+            job.stop_reason = OOM_REASON
     job.tail = log_tail(job, KEEP_TAIL)
     by_agent = state == "cancelled" and _read(job_dir(job) / "cancelled") == "agent"
     if job.followup == "none" and not by_agent and job.conversation_id and await db.get(Conversation, job.conversation_id):
@@ -433,10 +461,11 @@ async def _end(db: AsyncSession, job: Job, state: str, exit_code: int | None) ->
 def _relaunch_files(job: Job) -> None:
     """重启前清掉上一次进程留下的结论文件，日志里插一行分隔（接着追加）。"""
     d = job_dir(job)
-    for name in ("exit", "exit.tmp", "oom", "pid"):
+    why = _read(d / MEMCAP) or (OOM_REASON if (d / "oom").exists() else "")
+    for name in ("exit", "exit.tmp", "oom", MEMCAP, "pid"):
         (d / name).unlink(missing_ok=True)
     with (d / "log").open("a", encoding="utf-8") as f:
-        f.write(f"\n—— 第 {job.restarts + 1} 次重启 ——\n")
+        f.write(f"\n—— 第 {job.restarts + 1} 次重启{f'（上次：{why}）' if why else ''} ——\n")
 
 
 async def _relaunch(db: AsyncSession, job: Job) -> None:

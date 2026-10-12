@@ -160,9 +160,9 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
               ),
             ),
           ),
-          // 护栏停掉的原因（为什么停）：就在日志下面，和日志一起读
+          // 停掉 / 失败的原因（护栏、内存超限或打满、放弃重启）：就在日志下面，和日志一起读
           RiseSwitcher(
-            child: j.autoStopped
+            child: j.showsReason
                 ? Padding(
                     key: const ValueKey('reason'),
                     padding: const EdgeInsets.only(top: Sp.x2, right: Sp.x2),
@@ -178,9 +178,25 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
                 ? Padding(
                     key: const ValueKey('usage'),
                     padding: const EdgeInsets.only(top: Sp.x2, right: Sp.x2),
-                    child: _UsageLine(j.usage!),
+                    child: _UsageLine(j.usage!, max: j.memoryMax, near: j.memoryNear),
                   )
                 : const SizedBox.shrink(key: ValueKey('nousage')),
+          ),
+          // v1.92 整台沙盒内存快满了：提醒一句（系统先结束普通后台任务）
+          RiseSwitcher(
+            child: j.boxTight
+                ? Padding(
+                    key: const ValueKey('tight'),
+                    padding: const EdgeInsets.only(top: Sp.x2, right: Sp.x2),
+                    child: ExcludeSemantics(
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Icon(Icons.memory_rounded, size: Fs.sm, color: p.warning),
+                        const SizedBox(width: Sp.x1),
+                        Expanded(child: Text(jobBoxLabel(j.box!), style: small?.copyWith(color: p.warning), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      ]),
+                    ),
+                  )
+                : const SizedBox.shrink(key: ValueKey('roomy')),
           ),
           Row(children: [
             Expanded(
@@ -209,10 +225,12 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
   }
 }
 
-/// CPU 35%  ▬▬▬▬▭▭▭▭  内存 120.0 MB · 3 个进程
+/// CPU 35%  ▬▬▬▬▭▭▭▭  内存 120.0 MB / 512.0 MB · 3 个进程（快到上限时内存字变警示色）
 class _UsageLine extends StatelessWidget {
-  const _UsageLine(this.u);
+  const _UsageLine(this.u, {this.max, this.near = false});
   final JobUsage u;
+  final int? max;
+  final bool near;
 
   @override
   Widget build(BuildContext context) {
@@ -225,7 +243,9 @@ class _UsageLine extends StatelessWidget {
           const SizedBox(width: Sp.x2),
           Expanded(child: MeterBar(value: u.cpu / 100, height: Sp.x1, color: hot ? p.warning : p.text2)),
           const SizedBox(width: Sp.x2),
-          Flexible(child: Text(jobMemoryLabel(u), style: small, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Flexible(
+              child: Text(jobMemoryLabel(u, max: max),
+                  style: near ? small?.copyWith(color: p.warning) : small, maxLines: 1, overflow: TextOverflow.ellipsis)),
         ]),
     );
   }

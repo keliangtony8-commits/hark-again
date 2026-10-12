@@ -1043,7 +1043,24 @@ for p, (g, ticks, rss) in b.items():
     e["ticks"] += ticks
     e["memory"] += pss(p, rss)
     e["processes"] += 1
-print(json.dumps({"tck": tck, "seconds": t1 - t0, "groups": list(groups.values())}))
+def box():
+    # v1.92 整台沙盒的内存：cgroup v2 memory.current − inactive_file（可回收的文件缓存不算，和 docker stats 一个口径），v1 兜底
+    for cur, lim, stat, key in (("memory.current", "memory.max", "memory.stat", "inactive_file"),
+                                ("memory/memory.usage_in_bytes", "memory/memory.limit_in_bytes", "memory/memory.stat",
+                                 "total_inactive_file")):
+        try:
+            used = int(open("/sys/fs/cgroup/" + cur).read())
+            raw = open("/sys/fs/cgroup/" + lim).read().strip()
+            limit = None if raw == "max" else int(raw)
+            for line in open("/sys/fs/cgroup/" + stat):
+                k, v = line.split()
+                if k == key:
+                    used -= int(v)
+            return {"used": max(0, used), "limit": limit}
+        except (OSError, ValueError):
+            continue
+    return None
+print(json.dumps({"tck": tck, "seconds": t1 - t0, "groups": list(groups.values()), "box": box()}))
 """
 
 
@@ -1071,6 +1088,21 @@ def group_usage(text: str, cpus: float = CPUS) -> list[dict]:
     return out[:GROUPS_MAX]
 
 
+BOX_LIMIT_MAX = 1 << 50  # cgroup v1 “不限”是个天文数字：当成没上限
+
+
+def box_usage(text: str) -> dict | None:
+    """GROUPS_PY 输出里整台沙盒的内存 → {used, limit}（v1.92，判断“快满了”用）；没有上限或读不到 → None。"""
+    try:
+        b = json.loads(text.strip().splitlines()[-1])["box"]
+        used, limit = b["used"], b["limit"]
+    except (ValueError, IndexError, KeyError, TypeError):
+        return None
+    if type(used) is not int or type(limit) is not int or used < 0 or not 0 < limit < BOX_LIMIT_MAX:
+        return None
+    return {"used": min(used, limit), "limit": limit}
+
+
 @app.get("/sandboxes/{pid}/groups", dependencies=[Depends(auth)])
 async def groups(pid: str, pgid: list[int] = Query(default=[])):
     """这些进程组现在占多少（后台任务卡、“这台电脑”里的任务行用）。没在跑 → state off、空列表（不为看用量开机）。"""
@@ -1088,7 +1120,7 @@ async def groups(pid: str, pgid: list[int] = Query(default=[])):
             out = (c.exec_run(cmd).output or b"").decode("utf-8", "replace")
         except Exception:  # noqa: BLE001
             return {"state": "running", "groups": []}
-        return {"state": "running", "groups": group_usage(out)}
+        return {"state": "running", "groups": group_usage(out), "box": box_usage(out)}
     return await asyncio.to_thread(go)
 
 

@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, command_env, command_guard, computer, deliver, file_edit, file_seen, foreground, jobs, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, command_env, command_guard, computer, deliver, file_edit, file_seen, foreground, job_memory, jobs, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -340,6 +340,9 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
           "timeout": {"type": "integer", "default": 60,
                       "description": "秒。前台最多 120；后台最多 3600（默认 3600）"},
           "background": {"type": "boolean", "default": False, "description": "放到后台跑"},
+          "memory_limit": {"type": "string",
+                           "description": "仅后台：这个任务最多用多少内存，如 \"512m\"、\"2g\"；超了就结束它（常驻服务会自动重启）。"
+                                          "可能吃很多内存的活（大数据处理、训练）建议设，免得撑满整台电脑连带别的服务被系统杀掉"},
           "keep_alive": {"type": "boolean", "default": False,
                          "description": "仅后台：常驻服务，意外退出 / 电脑重启后自动拉起，不限时（忽略 timeout、idle_timeout）"},
           "stdin": {"type": "string", "description": f"仅前台：传给命令标准输入的文本，最多 {sandbox_client.STDIN_MAX // 1024} KB"},
@@ -350,7 +353,7 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
        "required": ["command"]}, risk=_command_risk)
 async def run_command(ctx: ToolContext, command: str, timeout: int | None = None, background: bool = False,
                       title: str | None = None, idle_timeout: int | None = None, stdin: str | None = None,
-                      keep_alive: bool = False) -> ToolResult:
+                      keep_alive: bool = False, memory_limit: str | None = None) -> ToolResult:
     background = background or bool(keep_alive)  # 常驻一定在后台
     if (heredoc := patching.from_command(command)) is not None and not background:
         # Codex 的模型习惯在 shell 里写 apply_patch <<'EOF'：沙盒里没有这个命令，整条就是它时直接按补丁改（同 Codex invocation.rs）
@@ -363,19 +366,26 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         if stdin is not None:
             return ToolResult("后台任务不接受 stdin：把输入写进工作区文件，命令里用 < 文件 读。")
         try:
+            cap = job_memory.parse(memory_limit)
+        except ValueError as e:
+            return ToolResult(f"没有启动：{e}", failed="参数有误")
+        try:
             job = await jobs.start(ctx.db, project_id=ctx.workspace, command=command, title=title, timeout=timeout,
                                    idle_timeout=idle_timeout, conversation_id=ctx.conversation_id, task_id=ctx.task_id,
-                                   keep_alive=bool(keep_alive))
+                                   keep_alive=bool(keep_alive), memory_max=cap)
         except jobs.JobError as e:
             return ToolResult(f"没有启动：{e}", failed=f"没有启动：{e}")
+        capped = f"内存上限 {quota.size_text(cap)}；" if cap else ""
         if job.keep_alive:
-            return ToolResult(f"已在后台启动常驻任务 {job.id}「{job.title}」：不限时，意外退出或电脑重启后会自动拉起。"
+            return ToolResult(f"已在后台启动常驻任务 {job.id}「{job.title}」：{capped}不限时，意外退出或电脑重启后会自动拉起。"
                               "它监听端口的话可用 preview_port 给用户预览链接；用 job_status 看日志，改了代码用 restart_service 重启，cancel_job 停。"
                               "现在简短告诉用户它在跑什么。", [jobs.block(job)])
         idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
-        return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（最长 {jobs.duration_text(job.timeout)}{idle}）。"
+        return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（{capped}最长 {jobs.duration_text(job.timeout)}{idle}）。"
                           "用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。",
                           [jobs.block(job)])
+    if memory_limit:
+        return ToolResult("memory_limit 只对后台任务有效：要限内存就加 background=true 放到后台跑。", failed="参数有误")
     if stdin is not None and len(stdin.encode()) > sandbox_client.STDIN_MAX:
         return ToolResult(f"stdin 太长（上限 {sandbox_client.STDIN_MAX // 1024} KB）：先写进工作区文件，命令里用 < 文件 读。")
     title = f"$ {command[:80]}"
