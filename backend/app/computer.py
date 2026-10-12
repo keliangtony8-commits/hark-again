@@ -41,6 +41,16 @@ HOME = workspaces.HOME_DIR
 CACHE = f"{HOME}/.cache"
 TOOLS_MAX = 200  # 工具清单最多列这么多（用户级装几百个包也不至于）
 PROCESS_MAX = 8
+# 沙盒停机原因（sandbox/runner.py stopped_by / 命令结果 woke）→ 给模型的那句话。两端的文案在各自 computer 模型里
+WAKE_TEXT = {"idle": "空闲太久自动休眠过", "room": "为给其它工作区腾内存休眠过"}
+
+
+def wake_note(reason) -> str:
+    """命令把休眠的电脑开起来时附在结果后面：之前前台起的程序（开发服务器等）都已经停了。"""
+    if reason not in WAKE_TEXT:
+        return ""
+    return (f"\n（这台电脑刚才{WAKE_TEXT[reason]}，这条命令把它重新开机了：文件和装过的软件都在，"
+            "但之前在前台起的程序（开发服务器、nohup 的进程）已经停了，需要的话重新启动；长期要跑的用 background=true）")
 
 
 def storage_breakdown(root: Path, running: set[str] = frozenset()) -> dict:
@@ -117,6 +127,9 @@ def sandbox_wire(raw: dict | None) -> dict:
     return {"state": state, "memory_used": raw.get("memory_used"), "memory_limit": raw.get("memory_limit"),
             "started_at": _ts(raw.get("started_at")), "last_used_at": _ts(raw.get("last_used")),
             "idle_minutes": raw.get("idle_minutes"), "outdated": bool(raw.get("outdated")),
+            # v1.74 我们停的才有：idle 空闲休眠 / room 给其它工作区腾内存（沙盒服务重启后不记得，为 null）
+            "stopped_by": raw.get("stopped_by") if state == "stopped" and raw.get("stopped_by") in WAKE_TEXT else None,
+            "stopped_at": _ts(raw.get("stopped_at")) if state == "stopped" else None,
             "cpu_percent": raw.get("cpu_percent"), "oom_kills": int(raw.get("oom_kills") or 0),
             "processes": [p for p in (raw.get("processes") or []) if isinstance(p, dict)][:PROCESS_MAX]}
 

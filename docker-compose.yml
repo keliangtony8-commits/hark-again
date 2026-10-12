@@ -45,6 +45,7 @@ services:
       HOST_PROJECTS_DIR: ${HOST_DATA_DIR}/projects
       SANDBOX_MEM: ${SANDBOX_MEM:-1g}
       SANDBOX_IDLE_MINUTES: ${SANDBOX_IDLE_MINUTES:-30}
+      SANDBOX_MAX_RUNNING: ${SANDBOX_MAX_RUNNING:-3}
       SANDBOX_NETWORK: assistant-sandboxes
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

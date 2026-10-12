@@ -84,6 +84,19 @@ void main() {
     expect(computerMemoryRatio(sleep), isNull);
     expect(computerHint(sleep), isNull);
 
+    // v1.74 休眠原因：给其它工作区腾内存 / 空闲；不认识的原因当没说
+    Map<String, dynamic> slept(Object? by) {
+      final j = _status(state: 'stopped', job: false);
+      (j['sandbox'] as Map)['stopped_by'] = by;
+      return j;
+    }
+    final room = ComputerStatus.fromJson(slept('room'));
+    expect(room.stoppedBy, ComputerStopReason.room);
+    expect(computerDetail(room), '给正在用的其它工作区腾内存，先休眠了，用到时自动开机 · 文件 120.0 MB');
+    expect(ComputerStatus.fromJson(slept('idle')).stoppedBy, ComputerStopReason.idle);
+    expect(computerDetail(ComputerStatus.fromJson(slept('idle'))), '空闲 30 分钟自动休眠，用到时自动开机 · 文件 120.0 MB');
+    expect(ComputerStatus.fromJson(slept('weird')).stoppedBy, isNull);
+
     final none = ComputerStatus.fromJson(_status(state: 'none', job: false));
     expect(computerDetail(none), startsWith('第一次跑命令时开机'));
 

@@ -7,7 +7,7 @@ import 'preview.dart';
 class ComputerStatus {
   const ComputerStatus({required this.workspace, required this.state, this.memoryUsed, this.memoryLimit, this.startedAt,
       this.idleMinutes, this.outdated = false, this.diskUsed = 0, this.diskPartial = false, this.jobs = const [],
-      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off'});
+      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy});
 
   factory ComputerStatus.fromJson(Map<String, dynamic> j) {
     final sb = (j['sandbox'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -18,6 +18,7 @@ class ComputerStatus {
       memoryLimit: (sb['memory_limit'] as num?)?.toInt(),
       startedAt: DateTime.tryParse(sb['started_at'] as String? ?? '')?.toLocal(),
       idleMinutes: (sb['idle_minutes'] as num?)?.toInt(),
+      stoppedBy: switch (sb['stopped_by']) { 'idle' => ComputerStopReason.idle, 'room' => ComputerStopReason.room, _ => null },
       outdated: sb['outdated'] == true,
       diskUsed: (j['disk_used'] as num?)?.toInt() ?? 0,
       diskPartial: j['disk_partial'] == true,
@@ -47,6 +48,9 @@ class ComputerStatus {
   /// running 运行中 / stopped 空闲休眠 / none 还没开过机 / unreachable 沙盒服务连不上
   final String state;
   final int? memoryUsed, memoryLimit, idleMinutes;
+
+  /// 休眠的原因（v1.74，只在 stopped 且是服务器停的时有；沙盒服务重启后不记得 → null）。
+  final ComputerStopReason? stoppedBy;
   final DateTime? startedAt;
   final bool outdated, diskPartial;
   final int diskUsed;
@@ -72,6 +76,9 @@ class ComputerStatus {
   bool get running => state == 'running';
   bool get reachable => state != 'unreachable';
 }
+
+/// 电脑为什么休眠：idle 空闲太久；room 同时开机的电脑到上限，给正在用的其它工作区腾内存（sandbox/runner.py MAX_RUNNING）。
+enum ComputerStopReason { idle, room }
 
 /// 正在跑的一个程序（按 CPU 排）。
 class ComputerProcess {
@@ -139,11 +146,17 @@ String computerDetail(ComputerStatus s) {
           '内存 ${formatSize(s.memoryUsed!)}${s.memoryLimit != null ? ' / ${formatSize(s.memoryLimit!)}' : ''}',
         disk,
       ].join(' · '),
-    'stopped' => '${s.idleMinutes != null ? '空闲 ${s.idleMinutes} 分钟自动休眠，' : ''}用到时自动开机 · $disk',
+    'stopped' => '${_sleepReason(s)}用到时自动开机 · $disk',
     'none' => '第一次跑命令时开机 · $disk',
     _ => '服务器上的沙盒服务没在跑，命令和后台任务暂时用不了 · $disk',
   };
 }
+
+String _sleepReason(ComputerStatus s) => switch (s.stoppedBy) {
+      ComputerStopReason.room => '给正在用的其它工作区腾内存，先休眠了，',
+      _ when s.idleMinutes != null => '空闲 ${s.idleMinutes} 分钟自动休眠，',
+      _ => '',
+    };
 
 /// 行尾小字：有任务在跑说几个；在跑但空闲说“空闲”；镜像更新过说“下次用到时更新”。
 String? computerHint(ComputerStatus s) {

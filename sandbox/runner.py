@@ -7,6 +7,9 @@
 - 容器里的家目录在工作区 .home（镜像 /etc/profile.d/workspace.sh）：pip/npm 用户级安装都落在工作区，
   所以容器可以随时删掉重建——镜像更新后（预装清单变了），旧容器在下次用到时自动换成新镜像（有后台任务在跑的不换）
 - 空闲超过 IDLE_MINUTES 的容器自动停止，省 VPS 内存（有后台任务在跑的不停）
+- 同时开机的容器最多 MAX_RUNNING 台（v1.74，学 E2B 的容量上限，但满了不拒绝）：要开一台新的时，按最久没用先停
+  “闲着的”（ROOM_GRACE_S 内没用过、没有前台命令/预览连接、没有后台任务）；都在忙就照开（软上限）。
+  停机原因（idle 空闲 / room 让位）记在 stopped_by，状态页说清楚；下一条命令把它开起来时结果带 woke，提醒模型之前前台起的程序已停
 - 端口预览（/sandboxes/<id>/ports、/preview/<id>/<port>/…）：容器都接在专用网络 SANDBOX_NETWORK 上（本服务也在），
   这里能直连容器里起的网页服务；后端带签名链接把用户的请求转进来（见 backend/app/preview.py），容器端口从不对外暴露
 - 后台任务（/jobs/*）：后端把 .jobs/<id>/run.sh 写进工作区（脚本约定见 backend/app/jobs.py），
@@ -40,6 +43,8 @@ IMAGE = os.environ.get("SANDBOX_IMAGE", "assistant-sandbox:latest")
 MEM = os.environ.get("SANDBOX_MEM", "1g")
 CPUS = float(os.environ.get("SANDBOX_CPUS", "1"))
 IDLE_MINUTES = int(os.environ.get("SANDBOX_IDLE_MINUTES", "30"))
+MAX_RUNNING = int(os.environ.get("SANDBOX_MAX_RUNNING", "3"))  # 同时开机上限；0 = 不限
+ROOM_GRACE_S = 60  # 这么久之内用过的不让位：两条命令之间、预览页刚刷新过都算在用
 MAX_OUTPUT = 12000
 SPILL_MARK = "\n…（中间省略）…\n"  # 与 backend/app/spill.py MARK 相同
 PROJECTS_ROOT = "/projects"  # 本服务容器里挂载的全部工作区
@@ -57,6 +62,10 @@ NETWORK = os.environ.get("SANDBOX_NETWORK", "assistant-sandboxes")
 
 client = docker.from_env()
 last_used: dict[str, float] = {}
+in_use: dict[str, int] = {}  # 正在跑前台命令 / 开着预览 WebSocket 的容器（计数），让位时跳过
+stopped_by: dict[str, tuple[str, float]] = {}  # 我们停掉的容器：(idle | room, 何时)；再开机时挪进 woke
+woke: dict[str, str] = {}  # 刚从休眠里开起来、还没告诉过模型的：pid → 当初的停机原因
+_room_lock = threading.Lock()  # 数开机台数 → 停 → 开 要一气呵成，别两条请求同时挤进来都以为有空位
 oom_seen: dict[str, int] = {}  # 每个容器上次看到的 OOM 杀进程次数：前台命令退出 137 时比一比，判断是不是内存打满
 app = FastAPI()
 
@@ -211,6 +220,11 @@ def _check_pid(pid: str) -> str:
 
 def _container(pid: str):
     _check_pid(pid)
+    with _room_lock:
+        return _open(pid)
+
+
+def _open(pid: str):
     name = f"sbx-{pid}"
     try:
         c = client.containers.get(name)
@@ -218,9 +232,13 @@ def _container(pid: str):
             c.remove(force=True)  # 装的东西都在工作区里，换镜像不丢
             raise NotFound(name)
         if c.status != "running":
+            _make_room(pid)
             c.start()
+            _woken(pid)
         return c
     except NotFound:
+        _make_room(pid)
+        _woken(pid)
         host_dir = os.path.join(HOST_PROJECTS, pid)
         os.makedirs(f"/projects/{pid}", exist_ok=True)
         os.chown(f"/projects/{pid}", 1000, 1000)
@@ -233,6 +251,66 @@ def _container(pid: str):
             cap_drop=["ALL"], security_opt=["no-new-privileges"],
             labels={"assistant.sandbox": "1"}, **extra,
         )
+
+
+def room_order(running: dict[str, float], busy_now: set[str], limit: int, now: float) -> tuple[int, list[str]]:
+    """要再开一台时：还得停几台、按什么顺序挑（最久没用的在前）。running = 已开机的 {pid: 上次用}（不含要开的那台）；
+    busy_now = 正在跑前台命令 / 开着预览的；ROOM_GRACE_S 内用过的也不挑。后台任务要查容器，调用方挑的时候再问。"""
+    need = len(running) + 1 - limit
+    if limit <= 0 or need <= 0:
+        return 0, []
+    order = sorted((t, p) for p, t in running.items() if p not in busy_now and now - t >= ROOM_GRACE_S)
+    return need, [p for _, p in order]
+
+
+def _make_room(pid: str) -> None:
+    """开机前腾位置（持 _room_lock 调用）：超过 MAX_RUNNING 就停最久没用的闲容器；挑不出就照开（软上限）。"""
+    if MAX_RUNNING <= 0:
+        return
+    try:
+        cs = client.containers.list(filters={"label": "assistant.sandbox=1"})
+    except Exception:  # noqa: BLE001 — 数不出来就不腾，照常开
+        return
+    now = time.time()
+    running = {c.name[4:]: last_used.get(c.name[4:], 0.0) for c in cs if c.name.startswith("sbx-") and c.name[4:] != pid}
+    need, order = room_order(running, {p for p, n in in_use.items() if n > 0}, MAX_RUNNING, now)
+    for other in order:
+        if need <= 0:
+            break
+        if _busy(other):  # 后台任务在跑：算它在用
+            continue
+        try:
+            client.containers.get(f"sbx-{other}").stop(timeout=5)
+        except NotFound:
+            pass
+        except Exception:  # noqa: BLE001 — 停不掉就挑下一台
+            continue
+        last_used.pop(other, None)
+        stopped_by[other] = ("room", now)
+        need -= 1
+
+
+def _woken(pid: str) -> None:
+    """容器刚开机：之前是我们停的就记下原因，等下一条命令告诉模型。"""
+    reason = stopped_by.pop(pid, None)
+    if reason:
+        woke[pid] = reason[0]
+
+
+class _Using:
+    """with _Using(pid): 这段时间容器在用，让位时跳过。"""
+    def __init__(self, pid: str):
+        self.pid = pid
+
+    def __enter__(self):
+        in_use[self.pid] = in_use.get(self.pid, 0) + 1
+
+    def __exit__(self, *exc):
+        n = in_use.get(self.pid, 1) - 1
+        if n > 0:
+            in_use[self.pid] = n
+        else:
+            in_use.pop(self.pid, None)
 
 
 def _network():
@@ -297,8 +375,14 @@ _WRAP = ('echo $$ > /tmp/.exec-{tok}; '
 
 def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: str | None = None,
           sink: Sink | None = None) -> dict:
+    with _Using(pid):
+        return _run(pid, command, timeout, stdin, tok, sink)
+
+
+def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | None, sink: Sink | None) -> dict:
     c = _container(pid)
     last_used[pid] = time.time()
+    was = woke.pop(pid, None)
     if pid not in oom_seen:  # 服务刚重启：先记下现有计数，别把以前的 OOM 算到这条命令头上
         oom_seen[pid] = _oom_count(c) or 0
     tok = tok or os.urandom(6).hex()
@@ -344,6 +428,8 @@ def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: s
     c.exec_run(["rm", "-f", f"/tmp/.exec-{tok}"], detach=True)
     last_used[pid] = time.time()
     result = {"exit_code": code, "timed_out": code == 124, "output": buf.text()}
+    if was:
+        result["woke"] = was
     if code == 137:  # 被 SIGKILL：看 cgroup 计数有没有涨，涨了就是内存超上限被内核杀的
         n = _oom_count(c)
         if n is not None and n > oom_seen.get(pid, 0):
@@ -495,6 +581,7 @@ async def job_start(body: JobIn):
     def go():
         c = _container(body.project_id)
         last_used[body.project_id] = time.time()
+        woke.pop(body.project_id, None)  # 任务是新起的，不用提醒“之前的程序停了”
         if c.exec_run(["test", "-f", f".jobs/{jid}/run.sh"], workdir="/workspace").exit_code != 0:
             raise HTTPException(404, "job script missing")
         c.exec_run(["setsid", "-f", "bash", f".jobs/{jid}/run.sh"], workdir="/workspace", detach=True)
@@ -556,6 +643,8 @@ async def remove(pid: str):
             pass
         last_used.pop(pid, None)
         oom_seen.pop(pid, None)
+        stopped_by.pop(pid, None)
+        woke.pop(pid, None)
     await asyncio.to_thread(go)
     return {"ok": True}
 
@@ -640,12 +729,14 @@ async def status(pid: str):
     def go() -> dict:
         out = {"state": "none", "memory_used": None, "memory_limit": None, "cpu_percent": None, "started_at": None,
                "outdated": False, "idle_minutes": IDLE_MINUTES, "last_used": last_used.get(pid), "processes": [],
-               "oom_kills": 0}
+               "oom_kills": 0, "max_running": MAX_RUNNING}
         try:
             c = client.containers.get(f"sbx-{pid}")
         except NotFound:
             return out
         out.update(state="running" if c.status == "running" else "stopped", outdated=_outdated(c))
+        if c.status != "running" and pid in stopped_by:
+            out.update(stopped_by=stopped_by[pid][0], stopped_at=stopped_by[pid][1])
         if c.status == "running":
             out.update(_stats(c), started_at=_started(c), processes=_processes(c), oom_kills=_oom_count(c) or 0)
         return out
@@ -873,7 +964,8 @@ async def preview_ws(ws: WebSocket, pid: str, port: int, path: str):
     def touch():  # 预览页开着、有来往 = 在用，别空闲回收（jupyter-server-proxy 的 _record_activity）
         last_used[pid] = time.time()
     try:
-        await ws_relay(ws, upstream, touch)
+        with _Using(pid):  # 连着就别让位给别的工作区
+            await ws_relay(ws, upstream, touch)
     finally:
         await upstream.close()
 
@@ -887,11 +979,15 @@ async def _reaper():
                 if await asyncio.to_thread(_busy, pid):  # 后台任务还在跑：算它在用
                     last_used[pid] = now
                     continue
+                if in_use.get(pid):  # 前台命令跑得比空闲时限还久 / 预览一直连着
+                    last_used[pid] = now
+                    continue
                 try:
                     await asyncio.to_thread(client.containers.get(f"sbx-{pid}").stop, timeout=5)
                 except NotFound:
                     pass
                 last_used.pop(pid, None)
+                stopped_by[pid] = ("idle", now)
 
 
 def _adopt() -> None:

@@ -177,6 +177,7 @@ write_env() {
     env_set BROWSER_SHM 512mb
     env_set SANDBOX_MEM 512m
     env_set SANDBOX_IDLE_MINUTES 10
+    env_set SANDBOX_MAX_RUNNING 2
   else
     env_set COMPOSE_PROFILES gateway
     # 标准档走网关：清空直连变量（key 回落到 LITELLM_MASTER_KEY）

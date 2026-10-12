@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from ... import apply_patch as patching, command_guard, deliver, file_edit, file_seen, jobs, quota, sandbox_client, spill, term_text, vision, workspace_search, workspaces
+from ... import apply_patch as patching, command_guard, computer, deliver, file_edit, file_seen, jobs, quota, sandbox_client, spill, term_text, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -402,6 +402,7 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
     if r.get("oom"):
         hint = f"\n（{jobs.oom_hint(r.get('memory_limit'))}）"
+    hint += computer.wake_note(r.get("woke"))
     # 命令可能刚写了大东西：重数一遍（线程里跑，最多数 20 万项），满了 / 快满了才有一句
     hint += await asyncio.to_thread(quota.model_note, ctx.workspace, True)
     return ToolResult(f"{status}\n{out}{hint}", [

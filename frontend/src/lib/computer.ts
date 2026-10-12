@@ -6,10 +6,13 @@ import { jobDuration } from "./jobs";
 import type { JobInfo } from "./types";
 
 export type ComputerState = "running" | "stopped" | "none" | "unreachable";
+export type ComputerStopReason = "idle" | "room";
 export type ComputerStatus = {
   workspace: string; name: string;
   sandbox: { state: ComputerState; memory_used?: number | null; memory_limit?: number | null; started_at?: string | null;
     last_used_at?: string | null; idle_minutes?: number | null; outdated?: boolean;
+    // v1.74 休眠原因：idle 空闲太久 / room 给其它工作区腾内存（只在 stopped 且是服务器停的时有）
+    stopped_by?: ComputerStopReason | null; stopped_at?: string | null;
     cpu_percent?: number | null; oom_kills?: number; processes?: ComputerProcess[] };
   disk_used: number; disk_partial: boolean; running_jobs: JobInfo[];
   storage?: ComputerStorage; tools?: InstalledTool[];
@@ -50,10 +53,16 @@ export function computerDetail(c: ComputerStatus): string {
     case "running":
       return [sb.cpu_percent != null ? `CPU ${Math.round(sb.cpu_percent)}%` : "", sb.memory_used != null ? `内存 ${formatSize(sb.memory_used)}${sb.memory_limit != null ? ` / ${formatSize(sb.memory_limit)}` : ""}` : "", disk]
         .filter(Boolean).join(" · ");
-    case "stopped": return `${sb.idle_minutes != null ? `空闲 ${sb.idle_minutes} 分钟自动休眠，` : ""}用到时自动开机 · ${disk}`;
+    case "stopped": return `${sleepReason(c)}用到时自动开机 · ${disk}`;
     case "none": return `第一次跑命令时开机 · ${disk}`;
     default: return `服务器上的沙盒服务没在跑，命令和后台任务暂时用不了 · ${disk}`;
   }
+}
+
+function sleepReason(c: ComputerStatus): string {
+  const sb = c.sandbox;
+  if (sb.stopped_by === "room") return "给正在用的其它工作区腾内存，先休眠了，";
+  return sb.idle_minutes != null ? `空闲 ${sb.idle_minutes} 分钟自动休眠，` : "";
 }
 
 export function computerHint(c: ComputerStatus): string | null {
