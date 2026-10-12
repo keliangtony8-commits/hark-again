@@ -19,6 +19,7 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'chat_controller.dart';
+import 'conversation_files.dart';
 import 'conversation_share.dart';
 import 'history.dart';
 
@@ -124,6 +125,7 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel> {
         SheetAction(Icons.edit_outlined, '重命名', onTap: () => _rename(c)),
         SheetAction(c.pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded, c.pinned ? '取消置顶' : '置顶',
             onTap: () => _run(() => _ctl.setPinned(c.id, !c.pinned))),
+        SheetAction(Icons.folder_copy_outlined, '全部文件', onTap: () => showConversationFiles(context, c.id)),
         SheetAction(Icons.public_rounded, '分享为网页', onTap: () => showConversationShare(context, c.id)),
         SheetAction(Icons.ios_share_rounded, '导出 Markdown', onTap: () => _export(c)),
         SheetAction(Icons.delete_outline_rounded, '删除', danger: true, onTap: () => _delete(c)),

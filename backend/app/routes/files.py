@@ -2,12 +2,14 @@
 下载支持 ?token=，因为 <img>/<a> 标签无法带 Authorization 头。"""
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import asyncio
+import shutil
 
-from .. import computer, quota, reply_files, storage, workspaces
+from .. import computer, conversation_files, quota, reply_files, storage, workspaces
 from ..db import get_session
 from ..auth import require_query_token, require_user
 from ..config import settings
@@ -114,3 +116,32 @@ async def save_reply(mid: str, body: SaveReply, db: AsyncSession = Depends(get_s
         raise HTTPException(404, str(e))
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+# ---- 本对话全部文件（conversation_files.py）：清单 + 一键打包 ----
+async def _conversation_files(db: AsyncSession, cid: str):
+    from sqlalchemy import select
+    from ..models import Conversation, Message
+    conv = await db.get(Conversation, cid)
+    if conv is None:
+        raise HTTPException(404, "没有这个对话")
+    msgs = (await db.scalars(select(Message).where(Message.conversation_id == cid)
+                             .order_by(Message.created_at, Message.id))).all()
+    return conv, await asyncio.to_thread(conversation_files.collect, conv, msgs)
+
+
+@router.get("/api/conversations/{cid}/files", dependencies=auth)
+async def list_conversation_files(cid: str, db: AsyncSession = Depends(get_session)):
+    conv, items = await _conversation_files(db, cid)
+    return {**conversation_files.summary(items), "files": items}
+
+
+@router.get("/api/conversations/{cid}/files.zip", dependencies=[Depends(require_query_token)])
+async def zip_conversation_files(cid: str, db: AsyncSession = Depends(get_session)):
+    conv, items = await _conversation_files(db, cid)
+    try:
+        out, tmp = await asyncio.to_thread(conversation_files.bundle, items, conv.title)
+    except conversation_files.BundleError as e:
+        raise HTTPException(409, str(e))
+    return FileResponse(out, media_type="application/zip", filename=out.name,
+                        background=BackgroundTask(shutil.rmtree, tmp, ignore_errors=True))

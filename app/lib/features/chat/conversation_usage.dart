@@ -15,6 +15,7 @@ import '../../ui/motion.dart';
 import '../me/usage_screen.dart' show ModelUsageList;
 import '../../ui/sheets.dart';
 import 'chat_controller.dart';
+import 'conversation_files.dart';
 import 'conversation_share.dart';
 
 final conversationUsageProvider = FutureProvider.autoDispose.family<UsageTotal, String>((ref, id) async =>
@@ -89,7 +90,17 @@ class ConversationUsageSheet extends ConsumerWidget {
               padding: const EdgeInsets.only(left: Sp.x1),
               child: Row(children: [
                 Expanded(child: Text('本对话用量', style: context.text.titleLarge)),
-                // 当前对话的分享入口：从用量页换到分享页（同一位置的 Sheet，不叠两层）
+                // 当前对话的文件 / 分享入口：从用量页换到对应 Sheet（同一位置，不叠两层）
+                IconButton(
+                  tooltip: '本对话全部文件',
+                  icon: const Icon(Icons.folder_copy_outlined),
+                  onPressed: () {
+                    final nav = Navigator.of(context);
+                    final root = nav.context;
+                    nav.pop();
+                    showConversationFiles(root, id);
+                  },
+                ),
                 IconButton(
                   tooltip: '分享为网页',
                   icon: const Icon(Icons.public_rounded),
