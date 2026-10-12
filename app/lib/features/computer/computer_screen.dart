@@ -1,6 +1,6 @@
 // 电脑详情页：我的 → 我的电脑（个人工作区，v1.25）和项目首屏点“电脑”进来的 /projects/<id>/computer（v1.27）共用。
 // 页头一句说明 → “状态”（ComputerSection：运行/休眠、CPU/内存、内存打满警示、后台任务、重启；运行中一直刷新）
-// → “正在运行的程序”（ProcessSection）→ “磁盘”（StorageSection：按用途拆开、点“文件”开文件弹层、装过的工具、清理）
+// → “正在监听的端口”（PortsSection，v1.30：点一下预览网页）→ “正在运行的程序”（ProcessSection）→ “磁盘”（StorageSection：按用途拆开、点“文件”开文件弹层、装过的工具、清理）
 // → 个人电脑才有的“浏览器登录”（v1.26 BrowserSessionsSection）。下拉刷新一起刷。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,9 +38,10 @@ class ComputerScreen extends ConsumerWidget {
                 : '这个项目专用的云端 Linux：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。',
           ),
           ComputerSection(ws: ws, title: '状态', pollAlways: true),
-          ProcessSection(ws: ws, delay: Motion.stagger(1)),
-          StorageSection(ws: ws, delay: Motion.stagger(2), onFiles: () => showProjectFiles(context, ws)),
-          if (personal) BrowserSessionsSection(delay: Motion.stagger(3)),
+          PortsSection(ws: ws, delay: Motion.stagger(1)),
+          ProcessSection(ws: ws, delay: Motion.stagger(2)),
+          StorageSection(ws: ws, delay: Motion.stagger(3), onFiles: () => showProjectFiles(context, ws)),
+          if (personal) BrowserSessionsSection(delay: Motion.stagger(4)),
         ]),
       ),
     );

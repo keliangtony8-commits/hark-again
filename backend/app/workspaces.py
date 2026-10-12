@@ -16,7 +16,8 @@ HOME_DIR = ".home"  # 工作区里的家目录（隐藏）：pip/npm 用户级�
 ENVIRONMENT = (f"沙盒是非 root 的 Debian（没有 sudo/apt），已预装：{PREINSTALLED}。"
                "Python 包直接 pip install、Node 命令行工具 npm i -g：都装进工作区（~/.local），以后的对话和后台任务都能接着用，"
                "容器重建也不丢，不用每次重装；项目自己的依赖照常用 .venv / node_modules。"
-               "缺系统软件就换 pip/npm 上的替代品，实在没有就告诉用户需要往沙盒镜像里加什么。")
+               "缺系统软件就换 pip/npm 上的替代品，实在没有就告诉用户需要往沙盒镜像里加什么。"
+               "做了网页/小工具要给用户看：后台启动服务（监听 0.0.0.0）后用 preview_port 出预览卡，别让用户自己找端口。")
 
 PERSONAL = "me"
 PERSONAL_NAME = "我的文件"

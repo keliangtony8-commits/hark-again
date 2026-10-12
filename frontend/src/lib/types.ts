@@ -11,6 +11,8 @@ export type ApprovalBlock = { type: "approval"; id: string; title: string; detai
 export type BrowserHandoff = { id: string; reason: string; state: "pending" | "done" | "cancelled" | "expired" };
 export type BrowserBlock = { type: "browser"; session: string; site?: string; live?: boolean; handoff?: BrowserHandoff | null };
 export type PageBlock = { type: "page"; slug: string; title: string; url: string };
+/** 端口预览（v1.30，app/preview.py）：工作区里跑着的网页服务，链接带期限。 */
+export type PreviewBlock = { type: "preview"; workspace: string; port: number; url: string; title?: string | null; command?: string; expires_at?: string | null };
 export type StatsBlock = { type: "stats"; items: { label: string; value: string; note?: string | null }[] };
 /** 记忆卡：本轮回复记住/改了/忘掉了什么（= backend blocks.MemoryBlock）。“已撤销”不在块里，见 lib/memory.ts memoryCardState。 */
 export type MemoryBlock = {
@@ -50,7 +52,7 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
   started_at?: string | null; finished_at?: string | null; stop_reason?: string | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

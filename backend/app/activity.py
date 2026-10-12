@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from .wire_time import iso
 
 # 摘要从这些参数里取，按顺序第一个有值的（值是列表就拼前几个）。新工具想上时间线摘要，参数名用这些之一即可。
-DETAIL_KEYS = ("command", "url", "query", "path", "paths", "job_id", "title", "name", "skill", "server", "tool", "reason")
+DETAIL_KEYS = ("command", "url", "query", "port", "path", "paths", "job_id", "title", "name", "skill", "server", "tool", "reason")
 DETAIL_MAX = 120
 NOTE_MAX = 160
 KEEP = 40  # 一条回复最多记这么多步（MAX_STEPS 6 × 每步可多个调用；再多只是噪音）

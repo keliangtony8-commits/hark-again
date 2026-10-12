@@ -45,9 +45,12 @@ services:
       HOST_PROJECTS_DIR: ${HOST_DATA_DIR}/projects
       SANDBOX_MEM: ${SANDBOX_MEM:-1g}
       SANDBOX_IDLE_MINUTES: ${SANDBOX_IDLE_MINUTES:-30}
+      SANDBOX_NETWORK: assistant-sandboxes
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOST_DATA_DIR}/projects:/projects
+    # sandboxes：每个工作区的容器也接在这个网络上，端口预览从这里直连容器（容器端口从不映射到宿主机）
+    networks: [default, sandboxes]
     restart: unless-stopped
 
   # 云浏览器：唯一运行 Chromium 的服务，不对外；登录状态存在 data/browser
@@ -114,3 +117,7 @@ services:
 volumes:
   pgdata:
   caddy_data:
+
+networks:
+  sandboxes:
+    name: assistant-sandboxes

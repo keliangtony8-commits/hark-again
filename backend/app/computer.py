@@ -4,7 +4,8 @@ status(db, ws) 把三处事实拼在一起，只读不启动：
   - 沙盒容器（sandbox_client.status）：running 运行中 / stopped 空闲休眠了 / none 还没开过机 / unreachable 沙盒服务连不上；
     运行中带内存已用/上限、开机时间、镜像是否过期（下次用到会自动换新）；
   - 工作区占用的磁盘（含隐藏的 .home 装的包、.jobs 日志——这些都真占 VPS 的盘）；
-  - 正在跑的后台任务（jobs.wire，带日志尾巴，前端可取消、看日志）。
+  - 正在跑的后台任务（jobs.wire，带日志尾巴，前端可取消、看日志）；
+  - 在监听的端口（v1.30，只在运行中时问沙盒；旁边“预览”按钮走 POST …/computer/preview，规则在 preview.py）。
 v1.27 补齐“像一台电脑”的那几样：CPU（占配额的百分比）、正在跑的程序（按 CPU 排前 8）、内存打满被系统杀过几次（OOM）、
 磁盘按用途拆开（文件 / 装的软件 / 任务日志 / 长输出存档 / 下载缓存）、装过的工具清单（pip / npm 用户级安装，直接读工作区
 ~/.local，不用开机）；cleanup(db, ws) 一键清掉能安全删的：长输出存档 .spill、已结束任务的日志目录（卡片和结论里的
@@ -23,7 +24,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import jobs, sandbox_client, workspaces
+from . import jobs, preview, sandbox_client, workspaces
 from .models import Job
 from .storage import project_dir
 from .wire_time import iso
@@ -161,7 +162,13 @@ async def status(db: AsyncSession, ws: str) -> dict:
     root = project_dir(ws)
     parts = await asyncio.to_thread(storage_breakdown, root, {j.id for j in running})
     used = sum(parts[k] for k in ("files", "installed", "logs", "spill", "cache"))
-    return {"workspace": ws, "name": name, "sandbox": sandbox_wire(raw), "disk_used": used,
+    ports: list[dict] = []
+    if raw is not None and raw.get("state") == "running":
+        try:
+            ports = (await preview.listening(ws))["ports"]
+        except preview.PreviewError:
+            pass
+    return {"ports": ports, "workspace": ws, "name": name, "sandbox": sandbox_wire(raw), "disk_used": used,
             "disk_partial": parts.pop("partial"), "storage": parts,
             "tools": await asyncio.to_thread(installed_tools, root),
             "running_jobs": [jobs.wire(j, chars=600) for j in running]}

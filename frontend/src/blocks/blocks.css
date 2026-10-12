@@ -257,3 +257,13 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-job-sheet-meta { margin: 0 0 var(--sp-3); font-size: var(--fs-xs); color: var(--text-3); }
 .blk-job-full { margin: 0; max-height: 60vh; overflow: auto; font: var(--fs-xs)/1.5 var(--font-mono); color: var(--text-2); white-space: pre-wrap; word-break: break-all; }
 @media (prefers-reduced-motion: reduce) { .job-dot, .blk-job-mark, .blk-job-state, .blk-job-reason { animation: none; } }
+/* 端口预览卡（v1.30）：复用网页卡的标题栏；展开后卡里嵌实时页面 */
+.blk-preview { max-width: 560px; }
+.blk-preview-icon { color: var(--ink); display: grid; place-items: center; }
+.blk-preview-icon.is-off { color: var(--text-3); }
+.blk-preview-exp { color: var(--text-3); font-size: var(--fs-xs); }
+.blk-preview-exp.is-off { color: var(--warning); }
+.blk-preview-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); padding: 0 var(--sp-2) var(--sp-2); }
+.blk-preview-frame { height: 420px; border-top: 1px solid var(--border); background: var(--surface); --rise: 6px; animation: rise var(--dur) var(--ease); }
+.blk-preview-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+@media (prefers-reduced-motion: reduce) { .blk-preview-frame { animation: none; } }

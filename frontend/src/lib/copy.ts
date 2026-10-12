@@ -18,6 +18,7 @@ export function copyText(blocks: Block[]): string {
       ].join("\n");
       case "links": return b.items.map((i) => `- ${i.title ?? i.label ?? i.url} ${i.url}`).join("\n");
       case "page": return `${b.title} ${b.url}`;
+      case "preview": return `${b.title || `端口 ${b.port}`} ${b.url}`;
       case "stats": return b.items.map((i) => `${i.label}：${i.value}${i.note ? `（${i.note}）` : ""}`).join("\n");
       case "file": return `[文件：${b.name}]`;
       case "draft": return b.body.trim();

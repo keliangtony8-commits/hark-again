@@ -4,9 +4,11 @@ import { CLEANUP_TEXT, type CleanupResult, EMPTY_STORAGE, type InstalledTool, ty
   processLine, processTitle, storageRows, toolsSummary } from "../../lib/computer";
 import { formatSize } from "../../lib/files";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
-import { IconChevron, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt } from "../../ui/icons";
+import { IconGlobe, IconExternal, IconCopy, IconChevron, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt } from "../../ui/icons";
 import { Section, Sheet } from "../../ui/kit";
 import type { ComputerCtl } from "./useComputer";
+import { type PreviewLink, portLine, portTitle } from "../../lib/preview";
+import { copyLink } from "../../lib/pages";
 
 /** 电脑页的“正在运行的程序”和“磁盘”（v1.27，= App features/computer/computer_details.dart），与状态一节共用 ctl。 */
 export function ProcessSection({ ctl, enter }: { ctl: ComputerCtl; enter?: number }) {
@@ -21,6 +23,50 @@ export function ProcessSection({ ctl, enter }: { ctl: ComputerCtl; enter?: numbe
             <span className="row-icon"><IconBolt /></span>
             <div className="row-body"><div className="row-title computer-proc">{processTitle(p)}</div>
               <div className="row-sub">{processLine(p)}</div></div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+/** 正在监听的端口（v1.30）：打开 = 签一条预览链接、新标签页开；复制 = 签好复制。只听本机的写明“打不开”、不给按钮。 */
+export function PortsSection({ ws, ctl, enter }: { ws: string; ctl: ComputerCtl; enter?: number }) {
+  const [busy, setBusy] = useState<number | null>(null);
+  const [copied, setCopied] = useState<number | null>(null);
+  const s = ctl.s;
+  const list = s && s.sandbox.state === "running" ? s.ports ?? [] : [];
+  if (!list.length) return null;
+  const go = async (port: number, copy: boolean) => {
+    // 先开空白标签页再填地址：等接口回来再 window.open 会被浏览器当成弹窗拦掉
+    const tab = copy ? null : window.open("", "_blank");
+    setBusy(port);
+    try {
+      const r = await http.post<PreviewLink>(`${computerPath(ws)}/preview`, { port });
+      if (copy) { if (await copyLink(r.url)) setCopied(port); }
+      else if (tab) { tab.opener = null; tab.location.href = r.url; }
+    } catch (e) {
+      tab?.close();
+      void noticeDialog("没能打开预览", e instanceof Error ? e.message : undefined);
+    }
+    setBusy(null);
+  };
+  return (
+    <Section title="正在监听的端口" enter={enter} action={<span className="section-note">{list.length}</span>}>
+      <div className="list">
+        {list.map((p) => (
+          <div key={p.port} className="row">
+            <span className="row-icon"><IconGlobe size={16} /></span>
+            <div className="row-body"><div className="row-title">{portTitle(p.port)}</div>
+              <div className="row-sub">{p.loopback && <><span className="row-problem">打不开</span> · </>}{portLine(p)}</div></div>
+            {!p.loopback && (
+              <span className="row-trail computer-port-actions">
+                <button className="icon-btn" aria-label={`复制端口 ${p.port} 的预览链接`} disabled={busy !== null} onClick={() => go(p.port, true)}>
+                  {copied === p.port ? "✓" : <IconCopy />}</button>
+                <button className="btn btn-sm btn-ghost" disabled={busy !== null} onClick={() => go(p.port, false)}>
+                  <IconExternal /> {busy === p.port ? "正在打开" : "预览"}</button>
+              </span>
+            )}
           </div>
         ))}
       </div>

@@ -1,6 +1,7 @@
 // 工作区的“电脑”（服务器 app/computer.py；App models/computer.dart 同一套规则）：状态词、说明行、内存比例、行尾小字、重启说明；
 // v1.27 CPU、内存打满警示、程序行、磁盘拆分、清理、装过的工具。
 import { formatSize } from "./files";
+import type { ListeningPort } from "./preview";
 import { jobDuration } from "./jobs";
 import type { JobInfo } from "./types";
 
@@ -12,6 +13,7 @@ export type ComputerStatus = {
     cpu_percent?: number | null; oom_kills?: number; processes?: ComputerProcess[] };
   disk_used: number; disk_partial: boolean; running_jobs: JobInfo[];
   storage?: ComputerStorage; tools?: InstalledTool[];
+  ports?: ListeningPort[]; // v1.30 在监听的端口（只在运行中时有）
 };
 export type ComputerProcess = { pid: number; cpu: number; memory: number; elapsed: number; command: string };
 export type ComputerStorage = { files: number; installed: number; logs: number; spill: number; cache: number; cleanable: number };

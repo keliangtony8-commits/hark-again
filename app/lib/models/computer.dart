@@ -2,11 +2,12 @@
 // 容器状态、CPU/内存、磁盘（按用途拆开）、正在跑的程序和后台任务、装过的工具、内存打满被杀过几次（v1.27）。纯规则——状态词、说明行、内存比例、读屏句子；网页版 lib/computer.ts 同一套。
 import '../ui/format.dart';
 import 'job.dart';
+import 'preview.dart';
 
 class ComputerStatus {
   const ComputerStatus({required this.workspace, required this.state, this.memoryUsed, this.memoryLimit, this.startedAt,
       this.idleMinutes, this.outdated = false, this.diskUsed = 0, this.diskPartial = false, this.jobs = const [],
-      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const []});
+      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const []});
 
   factory ComputerStatus.fromJson(Map<String, dynamic> j) {
     final sb = (j['sandbox'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -32,6 +33,10 @@ class ComputerStatus {
         for (final x in (j['tools'] as List? ?? const []))
           if (x is Map) InstalledTool.fromJson(x.cast<String, dynamic>())
       ],
+      ports: [
+        for (final x in (j['ports'] as List? ?? const []))
+          if (x is Map) ListeningPort.fromJson(x.cast<String, dynamic>())
+      ],
     );
   }
 
@@ -51,6 +56,9 @@ class ComputerStatus {
   final List<ComputerProcess> processes;
   final ComputerStorage storage;
   final List<InstalledTool> tools;
+
+  /// 在监听的端口（v1.30，只在运行中时有）：旁边“预览”= POST …/computer/preview 签链接。
+  final List<ListeningPort> ports;
 
   bool get running => state == 'running';
   bool get reachable => state != 'unreachable';

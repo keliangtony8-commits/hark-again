@@ -47,6 +47,7 @@ sealed class Block {
         'order' => OrderBlock.fromJson(j),
         'form' => FormBlock.fromJson(j),
         'job' => JobBlock.fromJson(j),
+        'preview' => PreviewBlock.fromJson(j),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -148,6 +149,23 @@ class JobBlock extends Block {
 class PageBlock extends Block {
   const PageBlock({required this.slug, required this.title, required this.url});
   final String slug, title, url;
+}
+
+/// 端口预览卡（后端 PreviewBlock）：工作区里跑着的网页服务，链接带期限。文案规则在 models/preview.dart。
+class PreviewBlock extends Block {
+  const PreviewBlock({required this.workspace, required this.port, required this.url, this.title, this.command = '', this.expiresAt});
+  factory PreviewBlock.fromJson(Map<String, dynamic> j) => PreviewBlock(
+        workspace: j['workspace'] as String? ?? '',
+        port: (j['port'] as num?)?.toInt() ?? 0,
+        url: j['url'] as String? ?? '',
+        title: j['title'] as String?,
+        command: j['command'] as String? ?? '',
+        expiresAt: DateTime.tryParse(j['expires_at'] as String? ?? '')?.toLocal(),
+      );
+  final String workspace, url, command;
+  final int port;
+  final String? title;
+  final DateTime? expiresAt;
 }
 
 class StatItem {
@@ -425,6 +443,7 @@ String copyText(List<Block> blocks) => [
             ].join('\n'),
           LinksBlock(:final items) => [for (final i in items) '- ${i.title ?? i.label ?? i.url} ${i.url}'].join('\n'),
           PageBlock(:final title, :final url) => '$title $url',
+          PreviewBlock(:final port, :final title, :final url) => '${title ?? '端口 $port'} $url',
           FileBlock(:final name) => '[文件：$name]',
           StatsBlock(:final items) => [for (final i in items) '${i.label}：${i.value}${i.note != null && i.note!.isNotEmpty ? '（${i.note}）' : ''}'].join('\n'),
           DraftBlock(:final body) => body.trim(),

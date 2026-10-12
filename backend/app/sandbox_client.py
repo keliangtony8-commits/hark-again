@@ -80,3 +80,25 @@ async def cancel_job(project_id: str, job_id: str) -> None:
 
 async def job_alive(project_id: str, job_id: str) -> bool:
     return bool((await _job("alive", project_id, job_id)).get("alive"))
+
+
+async def ports(project_id: str) -> dict:
+    """容器里在监听的端口 {state: running|off, ports:[{port, loopback, pid, command}]}，只看不开机。连不上抛 httpx.HTTPError。"""
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(f"{settings.sandbox_url}/sandboxes/{project_id}/ports",
+                        headers={"Authorization": f"Bearer {settings.sandbox_token}"})
+        r.raise_for_status()
+        return r.json()
+
+
+_preview = httpx.AsyncClient(timeout=httpx.Timeout(60, connect=5))
+
+
+async def preview_send(project_id: str, port: int, method: str, path: str, query: bytes,
+                       headers: list[tuple[str, str]], body: bytes) -> httpx.Response:
+    """把一次预览请求交给沙盒转进容器（sandbox/runner.py /preview）。返回还没读正文的响应：调用方边读边回，读完 aclose()。
+    连不上沙盒抛 httpx.HTTPError；响应头 x-sandbox-preview 缺失 = 是沙盒自己拒的（休眠 503 / 端口上没人 502）。"""
+    url = httpx.URL(f"{settings.sandbox_url}/preview/{project_id}/{port}/{path}" + (f"?{query.decode()}" if query else ""))
+    req = _preview.build_request(method, url, content=body or None,
+                                 headers=[*headers, ("authorization", f"Bearer {settings.sandbox_token}")])
+    return await _preview.send(req, stream=True)

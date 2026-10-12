@@ -57,6 +57,12 @@ class ComputerNotifier extends AsyncNotifier<ComputerStatus> {
     return (j['freed'] as num?)?.toInt() ?? 0;
   }
 
+  /// 端口预览：签一条带期限的链接（POST …/computer/preview），返回网址。服务没在听 / 只听本机 → ApiError（409，原因写好了）。
+  Future<String> preview(int port) async {
+    final j = (await _api.post('$_path/preview', {'port': port}) as Map).cast<String, dynamic>();
+    return j['url'] as String? ?? '';
+  }
+
   Future<void> cancelJob(String id) async {
     await _api.post('/api/jobs/$id/cancel');
     await reload();

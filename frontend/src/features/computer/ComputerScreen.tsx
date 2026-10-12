@@ -5,7 +5,7 @@ import { PERSONAL_WORKSPACE, isPersonalWorkspace } from "../../lib/workspace";
 import { Page, PageHeader, PageIntro } from "../../ui/kit";
 import ProjectFiles from "../projects/ProjectFiles";
 import BrowserSessionsSection from "./BrowserSessionsSection";
-import { ProcessSection, StorageSection } from "./ComputerDetails";
+import { PortsSection, ProcessSection, StorageSection } from "./ComputerDetails";
 import ComputerSection from "./ComputerSection";
 import { useComputer } from "./useComputer";
 
@@ -25,9 +25,10 @@ export default function ComputerScreen() {
         line={personal ? "主聊天和定时任务用的云端 Linux：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。"
           : "这个项目专用的云端 Linux：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。"} />
       <ComputerSection ws={ws} title="状态" enter={1} ctl={ctl} />
-      <ProcessSection ctl={ctl} enter={2} />
-      <StorageSection ws={ws} ctl={ctl} enter={3} onFiles={() => setFiles(true)} />
-      {personal && <BrowserSessionsSection enter={4} />}
+      <PortsSection ws={ws} ctl={ctl} enter={2} />
+      <ProcessSection ctl={ctl} enter={3} />
+      <StorageSection ws={ws} ctl={ctl} enter={4} onFiles={() => setFiles(true)} />
+      {personal && <BrowserSessionsSection enter={5} />}
       {files && <ProjectFiles projectId={ws} onClose={() => setFiles(false)} />}
     </Page>
   );

@@ -7,6 +7,8 @@
 - 容器里的家目录在工作区 .home（镜像 /etc/profile.d/workspace.sh）：pip/npm 用户级安装都落在工作区，
   所以容器可以随时删掉重建——镜像更新后（预装清单变了），旧容器在下次用到时自动换成新镜像（有后台任务在跑的不换）
 - 空闲超过 IDLE_MINUTES 的容器自动停止，省 VPS 内存（有后台任务在跑的不停）
+- 端口预览（/sandboxes/<id>/ports、/preview/<id>/<port>/…）：容器都接在专用网络 SANDBOX_NETWORK 上（本服务也在），
+  这里能直连容器里起的网页服务；后端带签名链接把用户的请求转进来（见 backend/app/preview.py），容器端口从不对外暴露
 - 后台任务（/jobs/*）：后端把 .jobs/<id>/run.sh 写进工作区（脚本约定见 backend/app/jobs.py），
   这里只负责 setsid 脱离启动、查活、整组杀掉；日志和退出码都落在工作区文件里，
   所以这个服务或后端重启都不丢任务状态
@@ -23,9 +25,11 @@ import threading
 import time
 
 import docker
+import httpx
 from docker.errors import NotFound
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 
 TOKEN = os.environ["SANDBOX_TOKEN"]
@@ -39,6 +43,9 @@ SPILL_MARK = "\n…（中间省略）…\n"  # 与 backend/app/spill.py MARK 相
 SPILL_KEEP = 50
 STDIN_MAX = 64 * 1024  # 走环境变量（base64），单个变量上限 128 KB，留足余量
 FLUSH_S = 0.5          # 实时输出多久推一批：太密只是白占带宽
+# 沙盒容器接的专用网络（docker-compose.yml 的 sandboxes 网络，本服务也接在上面）：端口预览靠它直连容器。
+# 网络不存在（不在 compose 里跑）就退回 Docker 默认网络，只是预览连不上
+NETWORK = os.environ.get("SANDBOX_NETWORK", "assistant-sandboxes")
 
 client = docker.from_env()
 last_used: dict[str, float] = {}
@@ -116,13 +123,37 @@ def _container(pid: str):
         os.makedirs(f"/projects/{pid}", exist_ok=True)
         os.chown(f"/projects/{pid}", 1000, 1000)
         oom_seen[pid] = 0  # 新容器的 cgroup 计数从 0 开始
+        extra = {"network": NETWORK} if _network() else {}
         return client.containers.run(
             IMAGE, name=name, detach=True, working_dir="/workspace",
             volumes={host_dir: {"bind": "/workspace", "mode": "rw"}},
             mem_limit=MEM, nano_cpus=int(CPUS * 1e9), pids_limit=256,
             cap_drop=["ALL"], security_opt=["no-new-privileges"],
-            labels={"assistant.sandbox": "1"},
+            labels={"assistant.sandbox": "1"}, **extra,
         )
+
+
+def _network():
+    try:
+        return client.networks.get(NETWORK)
+    except Exception:  # noqa: BLE001 — 没有专用网络：照常建容器，只是不能预览
+        return None
+
+
+def _address(c) -> str | None:
+    """容器在专用网络上的 IP；旧版建的容器不在这个网络上就先接上（不用重建，文件和进程都不动）。"""
+    nets = (c.attrs.get("NetworkSettings") or {}).get("Networks") or {}
+    if NETWORK not in nets:
+        net = _network()
+        if net is None:
+            return None
+        try:
+            net.connect(c)
+            c.reload()
+        except Exception:  # noqa: BLE001
+            return None
+        nets = (c.attrs.get("NetworkSettings") or {}).get("Networks") or {}
+    return (nets.get(NETWORK) or {}).get("IPAddress") or None
 
 
 def _outdated(c) -> bool:
@@ -444,6 +475,114 @@ async def cleanup(pid: str):
         except (ValueError, IndexError):
             return 0
     return {"freed": await asyncio.to_thread(go)}
+
+
+# 在监听的 TCP 端口 + 是哪个程序：容器里跑一小段 Python（镜像自带），读 /proc/net/tcp{,6} 的 LISTEN 行，
+# 再按 socket inode 对回 /proc/<pid>/fd，得到命令行。只监听 127.0.0.1 / ::1 的标 loopback——别的容器（包括这里）连不到它，
+# 要让用户预览得改绑 0.0.0.0。
+PORTS_PY = r"""
+import json, os
+ports = {}
+LOOP = {"0100007F", "00000000000000000000000001000000", "0000000000000000FFFF00000100007F"}
+for f in ("/proc/net/tcp", "/proc/net/tcp6"):
+    try:
+        rows = open(f).read().splitlines()[1:]
+    except OSError:
+        continue
+    for row in rows:
+        p = row.split()
+        if len(p) < 10 or p[3] != "0A":
+            continue
+        addr, port = p[1].rsplit(":", 1)
+        e = ports.setdefault(int(port, 16), {"loopback": True, "inodes": set()})
+        e["loopback"] = e["loopback"] and addr in LOOP
+        e["inodes"].add(p[9])
+owner = {}
+for pid in filter(str.isdigit, os.listdir("/proc")):
+    try:
+        fds = os.listdir(f"/proc/{pid}/fd")
+    except OSError:
+        continue
+    for fd in fds:
+        try:
+            link = os.readlink(f"/proc/{pid}/fd/{fd}")
+        except OSError:
+            continue
+        if link.startswith("socket:["):
+            owner.setdefault(link[8:-1], pid)
+out = []
+for port in sorted(ports):
+    e = ports[port]
+    pid = next((owner[i] for i in e["inodes"] if i in owner), None)
+    cmd = ""
+    if pid:
+        try:
+            cmd = open(f"/proc/{pid}/cmdline", "rb").read().replace(b"\0", b" ").decode("utf-8", "replace").strip()
+        except OSError:
+            pass
+    out.append({"port": port, "loopback": e["loopback"], "pid": int(pid) if pid else None, "command": cmd[:200]})
+print(json.dumps(out))
+"""
+PORTS_MAX = 20
+
+
+def parse_ports(text: str) -> list[dict]:
+    try:
+        rows = json.loads(text.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return []
+    return [r for r in rows if isinstance(r, dict) and isinstance(r.get("port"), int)][:PORTS_MAX]
+
+
+@app.get("/sandboxes/{pid}/ports", dependencies=[Depends(auth)])
+async def ports(pid: str):
+    """容器里在监听的端口。没在跑 → state 不是 running、列表空（不为看端口开机）。"""
+    _check_pid(pid)
+
+    def go() -> dict:
+        c = _existing(pid)
+        if c is None:
+            return {"state": "off", "ports": []}
+        out = (c.exec_run(["python3", "-c", PORTS_PY]).output or b"").decode("utf-8", "replace")
+        return {"state": "running", "ports": parse_ports(out)}
+    return await asyncio.to_thread(go)
+
+
+# 转发时不往下传的头：逐跳头（RFC 9110 §7.6.1）、本服务的鉴权、目标 Host
+_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "trailers",
+        "transfer-encoding", "upgrade", "host", "authorization", "content-length"}
+_OWN = {"date", "server"}  # uvicorn 自己会加，上游的去掉免得重复
+BODY_MAX = 32 * 1024 * 1024
+_proxy = httpx.AsyncClient(timeout=httpx.Timeout(60, connect=5), follow_redirects=False)
+
+
+@app.api_route("/preview/{pid}/{port}/{path:path}", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+               dependencies=[Depends(auth)])
+async def preview(pid: str, port: int, path: str, request: Request):
+    """把请求原样转给容器里 port 上的服务，响应边收边回（大文件、长轮询都行）。不开机：休眠了 503 asleep；
+    端口上没人 502 no_service。响应头加 X-Sandbox-Preview 方便后端区分“服务自己的 502”和“连不上”。"""
+    _check_pid(pid)
+    if not 1 <= port <= 65535:
+        raise HTTPException(400, "bad port")
+    c = await asyncio.to_thread(_existing, pid)
+    if c is None:
+        raise HTTPException(503, "asleep")
+    host = await asyncio.to_thread(_address, c) or c.name
+    last_used[pid] = time.time()  # 有人在看预览 = 在用，别空闲回收
+    url = httpx.URL(f"http://{host}:{port}/{path}" + (f"?{request.url.query}" if request.url.query else ""))
+    headers = [(k, v) for k, v in request.headers.items() if k.lower() not in _HOP]
+    body = await request.body()  # 一次读完：分块转发的空请求体会让一些开发服务器（http.server）错位
+    if len(body) > BODY_MAX:
+        raise HTTPException(413, "too_large")
+    req = _proxy.build_request(request.method, url, headers=headers, content=body or None)
+    try:
+        r = await _proxy.send(req, stream=True)
+    except httpx.HTTPError:
+        raise HTTPException(502, "no_service")
+    out = [(k, v) for k, v in r.headers.multi_items() if k.lower() not in _HOP | _OWN]
+    resp = StreamingResponse(r.aiter_raw(), status_code=r.status_code, background=BackgroundTask(r.aclose))
+    resp.raw_headers = [(k.encode("latin-1"), v.encode("latin-1")) for k, v in out] + [(b"x-sandbox-preview", b"1")]
+    return resp
 
 
 async def _reaper():

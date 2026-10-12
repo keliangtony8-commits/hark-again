@@ -100,6 +100,18 @@ class PageBlock(BaseModel):
     url: str
 
 
+class PreviewBlock(BaseModel):
+    """工作区电脑里跑着的网页服务的预览链接（app/preview.py 签发，preview_port 工具产出）：打开 / 复制链接，
+    网页版还能在卡里直接看。链接带期限，过期后打开是“链接失效”页。"""
+    type: Literal["preview"] = "preview"
+    workspace: str
+    port: int
+    url: str
+    title: str | None = None  # 是什么：“个人记账网页”；没有就显示“端口 8000”
+    command: str = ""  # 在这个端口上听的程序（卡上小字）
+    expires_at: str | None = None
+
+
 class StatItem(BaseModel):
     label: str  # 小字标签：“今日最高”“日落”“本月花费”
     value: str  # 大字数值，原样显示（带单位）：“26°C”“18:42”“¥12.30”
@@ -237,7 +249,7 @@ class FormBlock(BaseModel):
 
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
-                        OrderBlock, FormBlock, JobBlock],
+                        OrderBlock, FormBlock, JobBlock, PreviewBlock],
                   Field(discriminator="type")]
 
 
@@ -262,6 +274,8 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append("\n".join(i["url"] for i in b["items"]))
         elif t == "page":
             parts.append(f"[网页「{b['title']}」{b['url']}，slug: {b['slug']}]")
+        elif t == "preview":
+            parts.append(f"[网页预览「{b.get('title') or ''}」端口 {b['port']}：{b['url']}（{b.get('expires_at') or ''} 前有效）]")
         elif t == "approval":
             parts.append(f"[审批：{b['title']}——{b['state']}]")
         elif t == "form":

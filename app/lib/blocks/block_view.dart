@@ -11,6 +11,7 @@ import 'form_block.dart';
 import 'interactive_blocks.dart';
 import 'job_block.dart';
 import 'memory_block.dart';
+import 'preview_block.dart';
 
 class BlockView extends StatelessWidget {
   const BlockView(this.block, {super.key});
@@ -35,6 +36,7 @@ class BlockView extends StatelessWidget {
         OrderBlock b => OrderBlockView(b),
         FormBlock b => FormBlockView(b),
         JobBlock b => JobBlockView(b),
+        PreviewBlock b => PreviewBlockView(b),
         UnknownBlock _ => const SizedBox.shrink(), // 新版服务器的新卡片：旧 App 安静忽略
       };
 }

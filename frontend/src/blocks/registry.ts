@@ -14,6 +14,7 @@ import { DraftBlock, ImagesBlock, SummaryBlock } from "./ContentBlocks";
 import { OrderBlock, ProductsBlock } from "./CommerceBlocks";
 import FormBlock from "./FormBlock";
 import JobBlock from "./JobBlock";
+import PreviewBlock from "./PreviewBlock";
 
 // 新增一种卡片：写组件 → 在这里登记。渲染器和聊天流程不用改。
 export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Block, { type: K }> }> } = {
@@ -34,6 +35,7 @@ export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Bl
   order: OrderBlock,
   form: FormBlock,
   job: JobBlock,
+  preview: PreviewBlock,
 };
 
 /** 卡片类块（v0.84，和 App models/block.dart standsAlone 同一份名单）：要扫一眼或要点的，单独成卡、占满聊天区，不套在回复卡里。 */

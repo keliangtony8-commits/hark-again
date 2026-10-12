@@ -5,12 +5,18 @@
 //   磁盘                              清理 12 MB
 //     文件 / 装的软件 / 任务日志 / 长输出存档 / 下载缓存（0 字节的不列，行尾是大小）
 //     装过的工具  pip 12 个 · npm 2 个  →  弹层列出名字和版本
+//   正在监听的端口（v1.30）     ← 只在运行中且有端口时出现
+//     端口 8000  python3 -m http.server …       ↗   点 = 签预览链接并用浏览器打开；长按 = 复制链接
+//     端口 5173  只监听本机，预览打不开（要监听 0.0.0.0）  ← 警示“打不开”，不可点
 // “清理”先确认，删的东西由服务器 app/computer.py cleanup 定（存档、已结束任务日志、缓存），文案规则在 models/computer.dart。
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
+import '../../core/links.dart';
 import '../../models/computer.dart';
+import '../../models/preview.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
@@ -45,6 +51,74 @@ class ProcessSection extends ConsumerWidget {
                       icon: Icons.terminal_rounded,
                       title: processTitle(p),
                       subtitle: processLine(p),
+                    ),
+                ]),
+              ]),
+            ),
+    );
+  }
+}
+
+/// 正在监听的端口：点一下预览。
+class PortsSection extends ConsumerStatefulWidget {
+  const PortsSection({super.key, required this.ws, this.delay = Duration.zero});
+  final String ws;
+  final Duration delay;
+
+  @override
+  ConsumerState<PortsSection> createState() => _PortsSectionState();
+}
+
+class _PortsSectionState extends ConsumerState<PortsSection> {
+  int? _busy;
+
+  Future<void> _go(ListeningPort port, {bool copy = false}) async {
+    setState(() => _busy = port.port);
+    try {
+      final url = await ref.read(computerProvider(widget.ws).notifier).preview(port.port);
+      if (!mounted) return;
+      if (copy) {
+        Clipboard.setData(ClipboardData(text: url));
+        showToast(context, '预览链接已复制（24 小时内有效）');
+      } else {
+        await openUrl(url);
+      }
+    } on ApiError catch (e) {
+      if (mounted) showToast(context, e.isNetwork ? '没连上服务器' : e.message);
+    } finally {
+      if (mounted) setState(() => _busy = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = ref.watch(computerProvider(widget.ws)).value;
+    final list = s != null && s.running ? s.ports : const <ListeningPort>[];
+    return RiseSwitcher(
+      child: list.isEmpty
+          ? const SizedBox.shrink(key: ValueKey('noports'))
+          : FadeSlideIn(
+              key: const ValueKey('ports'),
+              delay: widget.delay,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                SectionTitle('正在监听的端口', count: list.length),
+                GlassGroup(children: [
+                  for (final p in list)
+                    RowTile(
+                      key: ValueKey('port-${p.port}'),
+                      icon: Icons.language_rounded,
+                      title: portTitle(p.port),
+                      subtitle: p.loopback ? '只监听本机，要让服务监听 0.0.0.0' : portLine(p),
+                      problem: p.loopback ? '打不开' : null,
+                      trailing: p.loopback
+                          ? null
+                          : SwapSwitcher(
+                              child: _busy == p.port
+                                  ? const RowHint('正在打开', key: ValueKey('busy'))
+                                  : const Icon(Icons.open_in_new_rounded, size: 18, key: ValueKey('open')),
+                            ),
+                      onTap: p.loopback || _busy != null ? null : () => _go(p),
+                      onLongPress: p.loopback || _busy != null ? null : () => _go(p, copy: true),
                     ),
                 ]),
               ]),
