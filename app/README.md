@@ -15,7 +15,7 @@ lib/
   ui/adaptive.dart      自适应：context.window（compact <600 / medium / expanded ≥840）；一级导航各尺寸都是浮动顶栏，宽度只影响页面内部（聊天双栏）
   ui/sub_page.dart      子页面外框 SubPage（Backdrop + 透明 Scaffold + GlassAppBar 毛玻璃标题栏，extendBodyBehindAppBar 让位）：所有非一级页面只用它，不写 AppBar
   ui/kit.dart           共用零件：FloatingFooter（底部浮条让位：量出高度加进 MediaQuery.padding.bottom）、PageBody、ListGroup、RowTile、AppCard、EmptyHint、AsyncBody（加载/失败/空三态）、SwipeToDelete、Pill
-  ui/sheets.dart        底部弹层：showAppSheet / showAppScrollSheet（唯一入口，外框 GlassSheet 玻璃）、showFormSheet（字段表单）、showActionSheet（操作/选择）、showAppDialog（居中玻璃对话框，唯一入口）、confirmDanger（两颗等宽胶囊）
+  ui/sheets.dart        底部弹层：showAppSheet / showAppScrollSheet（唯一入口，外框 GlassSheet 玻璃；长列表弹层随内容高度、最高 85% 屏高，内容 = Column(min) + SheetList，v1.18）、showFormSheet（字段表单）、showActionSheet（操作/选择）、showAppDialog（居中玻璃对话框，唯一入口）、confirmDanger（两颗等宽胶囊）
   ui/format.dart        文件大小、相对时间、金额（formatMoney）、token（formatTokens）
   core/links.dart       打开外部链接（url_launcher 只在这里）
   core/share.dart       系统分享面板（share_plus 只在这里）：shareTextFile

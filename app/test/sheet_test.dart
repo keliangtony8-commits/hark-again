@@ -58,17 +58,32 @@ void main() {
     expect(find.byType(GlassSheet), findsNothing);
   });
 
-  testWidgets('可拖动弹层：列表拿到同一个 ScrollController，框撑满', (tester) async {
-    ScrollController? got;
-    await tester.pumpWidget(_app((c) => showAppScrollSheet<void>(c, builder: (_, scroll) {
-          got = scroll;
-          return ListView(controller: scroll, children: [for (var i = 0; i < 30; i++) ListTile(title: Text('行 $i'))]);
-        })));
-    await tester.tap(find.text('打开'));
+  testWidgets('长列表弹层：短内容就是短弹层，长内容封顶在 85% 屏高并在里面滚', (tester) async {
+    Future<void> open(int n) async {
+      await tester.pumpWidget(_app((c) => showAppScrollSheet<void>(c, builder: (_) => Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('标题'),
+            SheetList(children: [for (var i = 0; i < n; i++) ListTile(title: Text('行 $i'))]),
+          ]))));
+      await tester.tap(find.text('打开'));
+      await tester.pumpAndSettle();
+    }
+
+    final screen = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    await open(3);
+    final short = tester.getSize(find.byType(GlassSheet)).height;
+    expect(short, lessThan(screen * 0.5)); // 不再固定开到 60%，下面不空一大片
+    expect(find.text('行 2'), findsOneWidget);
+    Navigator.of(tester.element(find.byType(GlassSheet))).pop();
     await tester.pumpAndSettle();
-    expect(find.byType(GlassSheet), findsOneWidget);
-    expect(got, isNotNull);
+
+    await open(60);
+    final tall = tester.getSize(find.byType(GlassSheet)).height;
+    expect(tall, lessThanOrEqualTo(screen * 0.85 + 0.5));
+    expect(tall, greaterThan(screen * 0.8));
     expect(find.text('行 0'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -600));
+    await tester.pumpAndSettle();
+    expect(find.text('行 0'), findsNothing); // 封顶后在里面滚
   });
 
   testWidgets('危险确认：玻璃对话框（真模糊 + 磨砂遮罩），两颗等宽胶囊，动作是实心危险色', (tester) async {

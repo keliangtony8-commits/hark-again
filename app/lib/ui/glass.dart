@@ -413,11 +413,8 @@ class FrostScrim extends StatelessWidget {
 /// 底部弹层的玻璃框：上圆角 Radii.card、真模糊、glassSheet 着色、顶部发丝边、居中把手，底部让出手势条。
 /// 页面不直接用它——走 ui/sheets.dart 的 showAppSheet / showAppScrollSheet。
 class GlassSheet extends StatelessWidget {
-  const GlassSheet({super.key, required this.child, this.fill = false});
-  final Widget child;
-
-  /// true = 撑满父级给的高度（可拖动弹层）；false = 随内容高度。
-  final bool fill;
+  const GlassSheet({super.key, required this.child});
+  final Widget child; // 随内容高度；放不下时由内容自己滚（showAppScrollSheet + SheetList）
 
   @override
   Widget build(BuildContext context) {
@@ -433,7 +430,7 @@ class GlassSheet extends StatelessWidget {
       // 透明 Material：里面 ListTile 的水波纹画在玻璃之上，而不是被着色盖住
       child: Material(
         type: MaterialType.transparency,
-        child: Column(mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: Sp.x3),
           child: Center(
@@ -446,7 +443,7 @@ class GlassSheet extends StatelessWidget {
           ),
         ),
         // 底部安全区由这里统一让出（键盘弹起时 paddingOf 自动归零），内容里的 SafeArea 不再重复加
-        if (fill) Expanded(child: _noBottom(context, child)) else Flexible(child: _noBottom(context, child)),
+        Flexible(child: _noBottom(context, child)),
         SizedBox(height: MediaQuery.paddingOf(context).bottom),
         ]),
       ),

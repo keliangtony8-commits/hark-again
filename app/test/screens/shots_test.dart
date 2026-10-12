@@ -574,6 +574,12 @@ void main() {
       await _shot(tester, '$mode-save-picker');
       Navigator.of(tester.element(find.text('存到哪个项目'))).pop();
       await tester.pumpAndSettle();
+      // 点一下较早的回复 → 露出它自己的操作行（v1.17）；先往回翻让它整条在视野里
+      await tester.dragFrom(const Offset(200, 400), const Offset(0, 500));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('今天的日额度', findRichText: true).first, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      await _shot(tester, '$mode-chat-revealed');
       await tester.runAsync(() => container.read(chatProvider('').notifier).open('c2'));
       await _shot(tester, '$mode-chat-shop');
       await tester.dragFrom(const Offset(200, 400), const Offset(0, 600)); // 往回翻：商品宫格

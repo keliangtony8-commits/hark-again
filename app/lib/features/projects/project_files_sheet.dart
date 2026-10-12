@@ -50,14 +50,12 @@ Future<List<FileBlock>?> pickProjectFiles(BuildContext context, String projectId
         {Set<String> taken = const {}, int room = maxMessageFiles}) =>
     showAppScrollSheet<List<FileBlock>>(
       context,
-      initial: 0.7,
-      builder: (_, scroll) => _FilePicker(projectId: projectId, scroll: scroll, taken: taken, room: room),
+      builder: (_) => _FilePicker(projectId: projectId, taken: taken, room: room),
     );
 
 class _FilePicker extends ConsumerStatefulWidget {
-  const _FilePicker({required this.projectId, required this.scroll, required this.taken, required this.room});
+  const _FilePicker({required this.projectId, required this.taken, required this.room});
   final String projectId;
-  final ScrollController scroll;
   final Set<String> taken;
   final int room;
 
@@ -85,7 +83,7 @@ class _FilePickerState extends ConsumerState<_FilePicker> {
   Widget build(BuildContext context) {
     final files = ref.watch(projectFilesProvider(widget.projectId));
     final list = files.value ?? const <ProjectFile>[];
-    return Column(children: [
+    return Column(mainAxisSize: MainAxisSize.min, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x1),
         child: Row(children: [
@@ -103,15 +101,13 @@ class _FilePickerState extends ConsumerState<_FilePicker> {
           child: Text('我读的是文件当前的内容，之后改了也会读到新的。', style: context.text.bodySmall),
         ),
       ),
-      Expanded(
-        child: switch (files) {
+      switch (files) {
           AsyncData(:final value) when value.isEmpty => const EmptyHint(
             icon: Icons.folder_open_rounded,
             title: '文件夹是空的',
             text: '先在项目的“文件”里上传资料，再回来引用。',
           ),
-          AsyncData() => ListView(
-            controller: widget.scroll,
+          AsyncData() => SheetList(
             padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x3),
             children: [
               ListGroup(children: [
@@ -131,7 +127,6 @@ class _FilePickerState extends ConsumerState<_FilePicker> {
           AsyncError(:final error) => EmptyHint(icon: Icons.cloud_off_rounded, title: '加载失败', text: '$error'),
           _ => const Padding(padding: EdgeInsets.all(Sp.x4), child: SkeletonList()),
         },
-      ),
       SafeArea(
         top: false,
         child: Padding(
@@ -190,14 +185,12 @@ class _PickRow extends StatelessWidget {
 
 Future<void> showProjectFiles(BuildContext context, String projectId) => showAppScrollSheet<void>(
   context,
-  initial: 0.7,
-  builder: (_, scroll) => _ProjectFiles(projectId: projectId, scroll: scroll),
+  builder: (_) => _ProjectFiles(projectId: projectId),
 );
 
 class _ProjectFiles extends ConsumerStatefulWidget {
-  const _ProjectFiles({required this.projectId, required this.scroll});
+  const _ProjectFiles({required this.projectId});
   final String projectId;
-  final ScrollController scroll;
 
   @override
   ConsumerState<_ProjectFiles> createState() => _ProjectFilesState();
@@ -229,6 +222,7 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
     final provider = projectFilesProvider(widget.projectId);
     final files = ref.watch(provider);
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x3, Sp.x2),
@@ -260,15 +254,13 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
             ],
           ),
         ),
-        Expanded(
-          child: switch (files) {
+        switch (files) {
             AsyncData(:final value) when value.isEmpty => const EmptyHint(
               icon: Icons.folder_open_rounded,
               title: '文件夹是空的',
               text: '上传资料后，在这个项目里聊天时我可以直接读它们，也能在沙箱里跑代码处理。',
             ),
-            AsyncData(:final value) => ListView(
-              controller: widget.scroll,
+            AsyncData(:final value) => SheetList(
               padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x5),
               children: [
                 ListGroup(
@@ -296,7 +288,6 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
             AsyncError(:final error) => EmptyHint(icon: Icons.cloud_off_rounded, title: '加载失败', text: '$error'),
             _ => const Padding(padding: EdgeInsets.all(Sp.x4), child: SkeletonList()),
           },
-        ),
       ],
     );
   }

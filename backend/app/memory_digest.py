@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import llm
 from .config import settings
 from .models import Memory, MemoryDigest
+from .wire_time import iso
 
 INPUT_CHARS = 12000   # 送给模型的记忆原文上限
 DIGEST_ID = "me"
@@ -50,7 +51,7 @@ async def _memories(db: AsyncSession) -> list[Memory]:
 def _wire(d: MemoryDigest | None, mems: list[Memory]) -> dict:
     if d is None:
         return {"text": None, "generated_at": None, "count": 0, "memories": len(mems), "stale": False}
-    return {"text": d.text, "generated_at": d.created_at.isoformat(), "count": d.memory_count,
+    return {"text": d.text, "generated_at": iso(d.created_at), "count": d.memory_count,
             "memories": len(mems), "stale": d.fingerprint != fingerprint(mems)}
 
 

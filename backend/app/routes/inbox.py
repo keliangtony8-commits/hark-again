@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import require_user
 from ..db import get_session
 from ..models import HomeCard
+from ..wire_time import iso
 
 router = APIRouter(prefix="/api/inbox", tags=["inbox"], dependencies=[Depends(require_user)])
 
@@ -37,7 +38,7 @@ async def summary(db: AsyncSession) -> dict:
         "latest": None if latest is None else {
             "id": latest.id, "kind": latest.kind, "title": latest.title,
             "headline": latest.headline, "gist": latest.gist,
-            "conversation_id": latest.conversation_id, "created_at": latest.created_at.isoformat(),
+            "conversation_id": latest.conversation_id, "created_at": iso(latest.created_at),
         },
     }
 

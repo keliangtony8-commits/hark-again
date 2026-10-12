@@ -9,6 +9,7 @@ from ..auth import require_user
 from ..config import settings
 from ..db import get_session
 from ..models import Conversation, Message
+from ..wire_time import iso
 from .inbox import mark_read
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"], dependencies=[Depends(require_user)])
@@ -18,7 +19,7 @@ SNIPPET = 36  # 命中位置前后各取多少字
 
 def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
     """hit = (命中的消息 id, 摘录)：客户端据此打开对话后滚到那条消息并闪一下。"""
-    out = {"id": c.id, "title": c.title, "pinned": c.pinned, "model": c.model, "updated_at": c.updated_at.isoformat()}
+    out = {"id": c.id, "title": c.title, "pinned": c.pinned, "model": c.model, "updated_at": iso(c.updated_at)}
     if hit:
         out["message_id"], out["snippet"] = hit
     return out

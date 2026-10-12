@@ -88,8 +88,8 @@ FIXTURES = {
         {"id": "c1", "title": "DeepSeek 和 GPT 的价格对比", "pinned": True, "updated_at": NOW},
         {"id": "c2", "title": "周末去杭州的安排", "pinned": False, "updated_at": "2026-10-10T18:00:00+08:00"},
         {"id": "c3", "title": "论文摘要润色", "pinned": False, "updated_at": "2026-10-08T09:00:00+08:00"},
-        {"id": "c4", "title": "寄快递", "pinned": False, "updated_at": "Thu 2026-10-08 8:00 AM CST (UTC+08:00)"},
-        {"id": "c5", "title": "帮我准备今天", "pinned": False, "updated_at": "Wed 2026-10-07 8:00 AM CST (UTC+08:00)"},
+        {"id": "c4", "title": "寄快递", "pinned": False, "updated_at": "2026-10-08T08:00:00+08:00"},
+        {"id": "c5", "title": "帮我准备今天", "pinned": False, "updated_at": "2026-10-07T08:00:00+08:00"},
     ],
     # v0.87：助手缺信息时的信息表单（候选、选填、多行）
     "/api/conversations/c4": {"model": None, "messages": [
@@ -122,8 +122,8 @@ FIXTURES = {
         {"id": "m4", "role": "assistant", "created_at": "2026-10-11T10:20:04+08:00", "blocks": [
             TEXT("够。按你现在每天约 40 次对话算，DeepSeek 一个月大约 ¥12，留出的余量还能跑每天的简报和面板刷新。")]},
         # v0.84：卡片块单独成卡（不套回复卡），正文段仍是回复卡
-        {"id": "m5", "role": "user", "blocks": [TEXT("顺便帮我买那副 QCY 耳机")], "created_at": "Sun 2026-10-11 10:25 AM CST (UTC+08:00)"},
-        {"id": "m6", "role": "assistant", "created_at": "Sun 2026-10-11 10:25 AM CST (UTC+08:00)", "blocks": [
+        {"id": "m5", "role": "user", "blocks": [TEXT("顺便帮我买那副 QCY 耳机")], "created_at": "2026-10-11T10:25:00+08:00"},
+        {"id": "m6", "role": "assistant", "created_at": "2026-10-11T10:25:00+08:00", "blocks": [
             TEXT("券后 ¥229，送到学校南门驿站。确认后我去付款。"),
             {"type": "order", "id": "o1", "merchant": "QCY 京东自营旗舰店",
              "items": [{"name": "QCY HT08 主动降噪耳机", "price": "¥239.00", "qty": 1, "note": "黑色"}],
@@ -163,7 +163,7 @@ FIXTURES = {
     "/api/tasks/t2/runs": [
         {"id": "r1", "trigger": "schedule", "status": "ok", "error": None, "conversation_id": "c1", "started_at": NOW, "finished_at": NOW, "duration_ms": 8200},
         {"id": "r2", "trigger": "manual", "status": "error", "error": "搜索服务超时", "conversation_id": None,
-         "started_at": "Sat 2026-10-10 8:00 AM CST (UTC+08:00)", "finished_at": "Sat 2026-10-10 8:01 AM CST (UTC+08:00)", "duration_ms": 60000},
+         "started_at": "2026-10-10T08:00:00+08:00", "finished_at": "2026-10-10T08:01:00+08:00", "duration_ms": 60000},
     ],
     "/api/catalog/skills": [
         {"id": "s1", "name": "网页调研", "description": "多来源搜索后汇总", "body": "", "builtin": True, "enabled": True},
@@ -183,6 +183,24 @@ FIXTURES = {
         {"id": "pg2", "slug": "cv", "title": "个人简历", "url": "https://example.com/p/cv", "updated": 1791500000, "published": False},
     ],
 }
+
+
+
+def _check_times(v, where="FIXTURES"):
+    """假数据里的时间必须是带时区的 ISO（和真服务器 wire_time 一致）；写成别的格式浏览器会猜，日期分隔就错。"""
+    from datetime import datetime
+    if isinstance(v, dict):
+        for k, x in v.items():
+            if isinstance(x, str) and (k.endswith("_at") or k == "created_at"):
+                assert datetime.fromisoformat(x).tzinfo, f"{where}.{k} 没带时区：{x}"
+            _check_times(x, f"{where}.{k}")
+    elif isinstance(v, list):
+        for i, x in enumerate(v):
+            _check_times(x, f"{where}[{i}]")
+
+
+_check_times(FIXTURES)
+_check_times(BANNER_ITEM, "BANNER_ITEM")
 
 
 def serve() -> str:

@@ -236,13 +236,13 @@ class _McpRow extends ConsumerWidget {
     final tools = ref.read(apiProvider).get('/api/connectors/mcp/${s.id}/tools');
     await showAppScrollSheet<void>(
       context,
-      builder: (ctx, scroll) => FutureBuilder(
+      builder: (ctx) => FutureBuilder(
           future: tools,
           builder: (ctx, snap) {
             if (snap.hasError) return EmptyHint(icon: Icons.cloud_off_rounded, title: '连不上', text: '${snap.error}');
             if (!snap.hasData) return const Padding(padding: EdgeInsets.all(Sp.x5), child: SkeletonList());
             final list = snap.data as List;
-            return ListView(controller: scroll, padding: const EdgeInsets.only(bottom: Sp.x5), children: [
+            return Column(mainAxisSize: MainAxisSize.min, children: [SheetList(padding: const EdgeInsets.only(bottom: Sp.x5), children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x5, Sp.x3),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -263,7 +263,7 @@ class _McpRow extends ConsumerWidget {
                     subtitle: Text('${t['description'] ?? ''}', maxLines: 3, overflow: TextOverflow.ellipsis),
                   ),
                 ),
-            ]);
+            ])]);
           },
         ),
     );

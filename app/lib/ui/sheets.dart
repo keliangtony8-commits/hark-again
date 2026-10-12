@@ -1,7 +1,7 @@
 // 弹层与对话框：表单、操作菜单、危险确认。所有“填几个字段 / 选一个操作 / 确认一下”都走这里，
 // 页面不再各自拼 showModalBottomSheet / showDialog，版式、玻璃材质、动效和键盘避让全 App 一致。
 //   showAppSheet        随内容高度的底部弹层（菜单、表单、选择器、小卡片）
-//   showAppScrollSheet  可拖动的长列表弹层（工具列表、项目文件）
+//   showAppScrollSheet  长列表弹层：随内容高度、封顶后内部滚动（工具列表、项目文件、选项目）
 //   showAppDialog       居中对话框（短确认、一句话提示）：磨砂遮罩 + GlassDialog + PopTransition
 // 弹层套 ui/glass.dart 的 GlassSheet，对话框套 GlassDialog；showModalBottomSheet / showDialog / showMenu /
 // PopupMenuButton 只允许出现在本文件（test/sheet_test.dart 的架构守卫）。
@@ -20,23 +20,39 @@ Future<T?> showAppSheet<T>(BuildContext context, {required WidgetBuilder builder
       builder: (ctx) => GlassSheet(child: builder(ctx)),
     );
 
-/// 可拖动的长列表弹层：[builder] 拿到的 ScrollController 必须交给里面的列表，拖动和滚动才连贯。
+/// 长列表弹层（工具列表、项目文件、选项目）：高度随内容，最高到屏幕的 [max]，再长就在里面滚。
+/// 以前固定开到 60–70% 屏高，三个项目的选择器下面空一大片；现在短列表就是短弹层，数据到了高度平滑长出来。
+/// [builder] 返回 Column(mainAxisSize: min)：标题等固定部分 + 一个 [SheetList]（或 Flexible 包住的空态/骨架）。
 Future<T?> showAppScrollSheet<T>(
   BuildContext context, {
-  required Widget Function(BuildContext context, ScrollController scroll) builder,
-  double initial = 0.6,
-  double max = 0.95,
+  required WidgetBuilder builder,
+  double max = 0.85,
 }) =>
     showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: initial,
-        maxChildSize: max,
-        builder: (ctx, scroll) => GlassSheet(fill: true, child: builder(ctx, scroll)),
+      builder: (ctx) => ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * max),
+        child: GlassSheet(
+          child: AnimatedSize(
+            duration: ctx.motion(Motion.base),
+            curve: Motion.ease,
+            alignment: Alignment.topCenter,
+            child: builder(ctx),
+          ),
+        ),
       ),
     );
+
+/// [showAppScrollSheet] 里的列表：内容少就收拢，内容多就占满剩下的高度并滚动。
+class SheetList extends StatelessWidget {
+  const SheetList({super.key, this.padding = const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x4), required this.children});
+  final EdgeInsetsGeometry padding;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Flexible(child: ListView(shrinkWrap: true, padding: padding, children: children));
+}
 
 /// 表单里的一个输入框。
 class FieldSpec {

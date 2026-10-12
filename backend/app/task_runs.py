@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import system_alerts
 from .config import settings
 from .models import Conversation, HomeCard, ScheduledTask, TaskRun
+from .wire_time import iso
 
 KEEP = 30
 ERROR_MAX = 500
@@ -128,10 +129,7 @@ async def history(db: AsyncSession, task_id: str, limit: int = KEEP) -> list[dic
     return [_wire(run, conv_id) for run, conv_id in rows]
 
 
-def _iso(d: datetime | None) -> str | None:
-    if d is None:
-        return None
-    return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).isoformat()
+_iso = iso
 
 
 def _wire(run: TaskRun, conversation_id: str | None) -> dict:

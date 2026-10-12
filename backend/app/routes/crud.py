@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_user
 from ..db import Base, get_session
+from ..wire_time import wire
 
 
 def _dump(obj: Base) -> dict[str, Any]:
@@ -19,7 +20,7 @@ def _dump(obj: Base) -> dict[str, Any]:
         if c.info.get("private"):
             continue
         v = getattr(obj, c.name)
-        out[c.name] = v.isoformat() if hasattr(v, "isoformat") else v
+        out[c.name] = wire(v)
     return out
 
 
@@ -38,7 +39,7 @@ def crud_router(prefix: str, model: type[Base], create: type[BaseModel], update:
     r = APIRouter(prefix=prefix, dependencies=[Depends(require_user)])
 
     def _iso(d: dict[str, Any]) -> dict[str, Any]:
-        return {k: v.isoformat() if hasattr(v, "isoformat") else v for k, v in d.items()}
+        return {k: wire(v) for k, v in d.items()}
 
     async def out_many(db: AsyncSession, objs: list[Base]) -> list[dict[str, Any]]:
         more = await annotate(db, objs) if annotate and objs else {}

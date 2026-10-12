@@ -51,8 +51,7 @@ Future<void> saveReplyToProject(BuildContext context, WidgetRef ref, {required S
     }
     final chosen = await showAppScrollSheet<String>(
       context,
-      initial: 0.5,
-      builder: (_, scroll) => _ProjectPicker(projects: saveTargets(projects), scroll: scroll),
+      builder: (_) => _ProjectPicker(projects: saveTargets(projects)),
     );
     if (chosen == null) return;
     pid = chosen;
@@ -69,12 +68,11 @@ Future<void> saveReplyToProject(BuildContext context, WidgetRef ref, {required S
 }
 
 class _ProjectPicker extends StatelessWidget {
-  const _ProjectPicker({required this.projects, required this.scroll});
+  const _ProjectPicker({required this.projects});
   final List<Project> projects;
-  final ScrollController scroll;
 
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+  Widget build(BuildContext context) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x1),
           child: Text('存到哪个项目', style: context.text.titleLarge),
@@ -83,10 +81,7 @@ class _ProjectPicker extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x3),
           child: Text('存成一份 Markdown，项目里的对话都能引用。', style: context.text.bodySmall),
         ),
-        Expanded(
-          child: ListView(
-            controller: scroll,
-            padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x4),
+        SheetList(
             children: [
               ListGroup(children: [
                 for (final (i, p) in projects.indexed)
@@ -104,7 +99,6 @@ class _ProjectPicker extends StatelessWidget {
                   ),
               ]),
             ],
-          ),
         ),
       ]);
 }

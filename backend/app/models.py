@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .blocks import blocks_to_text
 from .db import Base
+from .wire_time import iso
 
 
 def _now() -> datetime:
@@ -54,8 +55,7 @@ class Message(Base):
         created_at 一律带时区（SQLite 读回来是无时区的，按 UTC 补上），客户端按本地日期画日期分隔。"""
         out = {"id": self.id, "role": self.role, "blocks": self.blocks}
         if self.created_at:
-            at = self.created_at if self.created_at.tzinfo else self.created_at.replace(tzinfo=timezone.utc)
-            out["created_at"] = at.isoformat()
+            out["created_at"] = iso(self.created_at)
         if self.status and self.status != "done":
             out["status"] = self.status
         return out

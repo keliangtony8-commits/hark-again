@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
 from .models import Secret
+from .wire_time import iso
 
 _f = Fernet(settings.vault_key.encode()) if settings.vault_key else None
 
@@ -60,4 +61,4 @@ def reveal(secret: Secret) -> str:
 def public(s: Secret) -> dict:
     return {"id": s.id, "kind": s.kind, "name": s.name, "username": s.username, "hosts": s.hosts,
             "header_name": s.header_name,
-            "header_prefix": s.header_prefix, "preview": s.preview, "created_at": s.created_at.isoformat()}
+            "header_prefix": s.header_prefix, "preview": s.preview, "created_at": iso(s.created_at)}
