@@ -139,3 +139,4 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v1.73：后端批准时种计划清单卡（现有 PlanBlock 原样显示）；存文件失败时 path 被清空 → “已存为”一行收起（plan_mode_test 覆盖）。
 - v1.74：ComputerStatus.stoppedBy（ComputerStopReason idle/room）；休眠说明行 room → “给正在用的其它工作区腾内存，先休眠了，用到时自动开机”（computer_test 覆盖）。网页版 lib/computer.ts 同一句。
 - v1.77 用户命令：models/shell.dart（shellCommandOf/状态词/用时/读屏）、blocks/shell_block.dart（沿用后台任务卡样子，JobStatusMark 公开共用，完整输出 sheet + 复制）、composer `!命令` 提示条 + 发送钮换终端图标“在电脑上运行”。测试 test/user_shell_test.dart。
+- v1.79 输入框 @文件：features/chat/mentions.dart（mentionAt 何时算在打 @、rankMentions 排序、applyMention 补成 `@路径 `、MentionList 候选行 FadeSlideIn 错峰）；composer 监听光标，胶囊顶部位置优先级 @候选 > 编辑条 > 命令条；文件列表用 projectFilesProvider。只补文字，服务器 app/file_mentions.py 解析成引用。测试 test/mentions_test.dart。

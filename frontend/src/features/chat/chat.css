@@ -331,3 +331,15 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .ctx-rule-status { flex: 0 1 auto; min-width: 0; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctx-rule.is-warn svg, .ctx-rule.is-warn .ctx-rule-status { color: var(--warning); }
 @media (prefers-reduced-motion: reduce) { .ctx-rule { animation: none; } }
+
+/* @文件 候选（lib/mentions.ts）：和编辑条同位置；每行错峰 rise，选中行 --tile 底 */
+.mention-list { list-style: none; margin: 0; padding: 0 0 var(--sp-1); display: flex; flex-direction: column; }
+.mention-item { display: flex; align-items: center; gap: var(--sp-2); min-height: 32px; padding: 0 var(--sp-2); border-radius: var(--r-sm);
+  font-size: var(--fs-sm); color: var(--text-2); cursor: pointer; animation: rise var(--dur) var(--ease) both; animation-delay: calc(var(--stagger) * var(--i, 0));
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.mention-item.on { background: var(--tile); color: var(--text); }
+.mention-item > svg { flex: none; }
+.mention-name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
+.mention-sub { flex: 1; min-width: 0; color: var(--text-3); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mention-empty { min-height: 28px; }
+@media (prefers-reduced-motion: reduce) { .mention-item { animation: none; transition: none; } }

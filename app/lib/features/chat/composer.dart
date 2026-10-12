@@ -9,6 +9,7 @@
 //   focusNode：外面要知道聚焦状态时传进来（LaunchComposer 用它开关整页磨砂）。
 // workspace：这段对话的工作区（core/workspace.dart；项目 = 项目文件，主聊天 = 我的文件）。“添加附件”多一个从它选
 // （features/projects pickProjectFiles，不上传，只带引用）；null = 没有这个来源（如首页的快捷输入框）。
+// 打 @ → 顶部列出工作区文件（features/chat/mentions.dart），点一下补成 `@路径 `；服务器发出时解析成引用（app/file_mentions.py）。
 // 上传、转写走 core/media.dart；这里只管交互状态。
 import 'dart:async';
 import 'dart:io';
@@ -28,8 +29,11 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../../core/workspace.dart';
+import '../../core/resource.dart';
+import '../../models/resources.dart';
 import '../projects/project_files_sheet.dart';
 import 'attachment_tray.dart';
+import 'mentions.dart';
 
 /// 正在编辑的那条用户消息。hasFiles：带附件的消息文字清空也能发（只剩附件）。
 class EditDraft {
@@ -96,11 +100,35 @@ class _ComposerState extends ConsumerState<Composer> {
   var _voice = _Voice.idle;
   Timer? _ticker;
   int _seconds = 0;
+  MentionQuery? _mention; // 光标前正在打的 @xxx（没有工作区 / 在打命令时不算）
 
   Media get _media => ref.read(mediaProvider);
 
   @override
+  void initState() {
+    super.initState();
+    _c.addListener(_trackMention); // 光标挪动（不改字）也要更新
+  }
+
+  void _trackMention() {
+    final sel = _c.selection;
+    final m = widget.workspace == null || !sel.isValid || !sel.isCollapsed || shellCommandOf(_c.text) != null
+        ? null
+        : mentionAt(_c.text, sel.baseOffset);
+    if (m != _mention && mounted) setState(() => _mention = m);
+  }
+
+  void _pickMention(ProjectFile f) {
+    final m = _mention;
+    if (m == null) return;
+    final (text, caret) = applyMention(_c.text, m, f.path);
+    _c.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: caret));
+    _focus.requestFocus();
+  }
+
+  @override
   void dispose() {
+    _c.removeListener(_trackMention);
     _c.dispose();
     _ownFocus?.dispose();
     _ticker?.cancel();
@@ -277,7 +305,9 @@ class _ComposerState extends ConsumerState<Composer> {
             duration: context.motion(Motion.base),
             curve: Motion.ease,
             alignment: Alignment.topCenter,
-            child: _editing
+            child: _mention != null
+                ? _mentionList()
+                : _editing
                 ? _EditBar(onCancel: widget.onCancelEdit)
                 : _shell
                 ? const _ShellBar(key: ValueKey('shell'))
@@ -292,6 +322,16 @@ class _ComposerState extends ConsumerState<Composer> {
           ),
         ]),
       );
+
+  Widget _mentionList() {
+    final files = ref.watch(projectFilesProvider(widget.workspace!));
+    return MentionList(
+      key: const ValueKey('mention'),
+      files: rankMentions(files.value ?? const [], _mention!.query),
+      loading: files.isLoading && !files.hasValue,
+      onPick: _pickMention,
+    );
+  }
 
   Widget _inputRow(Palette p) => Row(key: const ValueKey('input'), crossAxisAlignment: CrossAxisAlignment.end, children: [
         IconButton(

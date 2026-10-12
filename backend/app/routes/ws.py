@@ -5,7 +5,7 @@ import contextlib
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .. import conversation_title, live_turns, user_shell, workspaces
+from .. import conversation_title, file_mentions, live_turns, user_shell, workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -71,7 +71,7 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
         if workspaces.is_personal(pid) or not isinstance(pid, str):
             pid = None  # 主聊天：对话不属于任何项目（个人工作区不是项目）
         files = _attachments(event.get("attachments") or [])
-        files += await _project_files(db, pid, event.get("project_files") or [], MAX_FILES - len(files))
+        files += await _project_files(db, pid, event.get("project_files") or [], MAX_FILES - len(files), text)
         if not text and not files:
             return
         if conv is None:
@@ -101,6 +101,8 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
         except RewindError as e:
             await emit({"type": "error", "message": str(e)})
             return
+        if isinstance(text, str):  # 编辑后的文字里新写的 @路径：补上引用（原有附件保留，不重复）
+            await _add_mentions(db, conv, user_msg, text)
         if "model" in event or "reasoning" in event:  # “换个模型 / 思考强度重答”：和 user.message 一样记到对话上
             apply_choice(conv, event)
             await db.commit()
@@ -134,12 +136,25 @@ def _attachments(ids: list[str]) -> list[dict]:
     return out
 
 
-async def _project_files(db, pid: str | None, paths: list, room: int) -> list[dict]:
+async def _add_mentions(db, conv: Conversation, user_msg: Message, text: str) -> None:
+    have = [b for b in user_msg.blocks if b.get("type") == "file"]
+    taken = {b.get("id") for b in have if b.get("source") == "project"}
+    extra = await _project_files(db, conv.project_id, [], MAX_FILES, text)
+    if extra := [b for b in extra if b["id"] not in taken][:MAX_FILES - len(have)]:
+        user_msg.blocks = [*user_msg.blocks, *extra]  # 整体赋值，JSON 列才会被标脏
+        await db.commit()
+
+
+async def _project_files(db, pid: str | None, paths: list, room: int, text: str = "") -> list[dict]:
     """“引用工作区文件”：只认这段对话所在工作区（项目 / 主聊天 = 个人工作区）里真实存在的文件（相对路径，去重）。
+    paths = 选择器选的；text 里的 `@路径`（file_mentions，学 Gemini @ 命令）接在后面一起认；`!命令` 不解析（那是给电脑的）。
     消息里只存引用（source=project，id=相对路径，project_id=工作区 id）；内容每轮由 context 从磁盘读。"""
     pid = workspaces.of(pid)
-    if room <= 0 or not isinstance(paths, list) or await workspaces.name(db, pid) is None:
+    if room <= 0 or await workspaces.name(db, pid) is None:
         return []
+    paths = paths if isinstance(paths, list) else []
+    if text and user_shell.parse(text) is None:
+        paths = [*paths, *await asyncio.to_thread(file_mentions.paths, text, project_file_root(pid))]
     out, seen = [], set()
     for rel in paths:
         if not isinstance(rel, str) or rel in seen or len(out) >= room:
