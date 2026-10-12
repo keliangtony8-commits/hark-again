@@ -67,6 +67,15 @@ class Settings(BaseSettings):
     subagent_minutes: float = 10
     # 上文窗口（token）：一轮里上文过窗口的 80% 就先剪长工具结果、不够再把较早的步骤压成摘要（agent/compact.py）。
     # context_tokens = 默认；model_context = 按别名覆盖，如 {"smart": 256000}。窗口填小于真实值只会早点压，不会出错
+    # 模型调用的重试（app/llm_retry.py，移植自 deepseek-harness 的 retry-policy）：限流 / 服务器错 / 超时 / 断网 / 空回复
+    # 才重试，指数退避 500 ms 起、最长 10 s、±10% 抖动；0 = 不重试。供应商给的 Retry-After 超过上限就不等（直接失败或换备用模型）。
+    # llm_idle_seconds = 流式回复多久没新数据算超时（Codex 默认 300 s；我们手机端等不了那么久）。
+    # model_fallbacks = 别名 → 备用别名，如 {"smart": "fast"}：重试用完仍失败，这一轮改用备用模型（Gemini CLI 的 flash 回退）
+    llm_max_retries: int = 5
+    llm_retry_initial_ms: int = 500
+    llm_retry_max_ms: int = 10_000
+    llm_idle_seconds: float = 120
+    model_fallbacks: dict[str, str] = {}
     context_tokens: int = 128_000
     model_context: dict[str, int] = {}
     stt_model: str = "stt"      # 语音识别别名（gateway 模式走 OpenAI 音频接口）

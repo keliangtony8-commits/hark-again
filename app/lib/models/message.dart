@@ -1,5 +1,6 @@
 import 'activity.dart';
 import 'block.dart';
+import 'retry_notice.dart';
 
 /// 用户消息的发送状态（只存在于本机；服务器来的消息都是 sent）。
 /// queued：没连上，连上自动发；failed：等太久或发出后断线没回音，要用户点“重发”。
@@ -17,7 +18,8 @@ class Message {
       this.createdAt,
       this.thought = '',
       this.thinkFrom,
-      this.thinkTo});
+      this.thinkTo,
+      this.retry});
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
       id: j['id'] as String,
@@ -48,6 +50,9 @@ class Message {
   /// 第一段 / 最近一段思考到达的本机时间：算“已思考 N 秒”。同样只活在本次会话里。
   final DateTime? thinkFrom, thinkTo;
 
+  /// 模型调用失败、服务器正在自动重试 / 已换备用模型（WS turn.retry，models/retry_notice.dart）：只挂在生成中的占位消息上。
+  final RetryNotice? retry;
+
   bool get isUser => role == 'user';
 
   /// 追加一段思考，超长只留尾部（思考可能有几万字，界面只看最近的）。[at] = 到达时间（测试可注入）。
@@ -69,7 +74,14 @@ class Message {
   bool get unsent => outbox != Outbox.sent;
 
   Message copyWith(
-          {List<Block>? blocks, List<ActivityStep>? steps, bool? pending, Outbox? outbox, String? thought, DateTime? thinkFrom, DateTime? thinkTo}) =>
+          {List<Block>? blocks,
+          List<ActivityStep>? steps,
+          bool? pending,
+          Outbox? outbox,
+          String? thought,
+          DateTime? thinkFrom,
+          DateTime? thinkTo,
+          RetryNotice? Function()? retry}) =>
       Message(
       id: id,
       role: role,
@@ -81,7 +93,8 @@ class Message {
       createdAt: createdAt,
       thought: thought ?? this.thought,
       thinkFrom: thinkFrom ?? this.thinkFrom,
-      thinkTo: thinkTo ?? this.thinkTo);
+      thinkTo: thinkTo ?? this.thinkTo,
+      retry: retry != null ? retry() : this.retry);
 }
 
 /// 第 i 条消息前要不要画日期分隔：第一条有时间的消息、或与上一条有时间的消息不在同一个本地日。

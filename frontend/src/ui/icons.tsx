@@ -50,6 +50,7 @@ export const IconMic = (p: P) => <S {...p} d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 
 export const IconCheck = (p: P) => <S {...p} d="M5 12.5l4.5 4.5L19 7.5" />;
 export const IconSpeaker = (p: P) => <S size={16} {...p} d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />;
 export const IconStop = (p: P) => <S size={16} {...p} d="M7 7h10v10H7z" />;
+export const IconSwap = (p: P) => <S size={16} {...p} d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5" />;
 export const IconRefresh = (p: P) => <S size={16} {...p} d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4" />;
 export const IconSearch = (p: P) => <S size={16} {...p} d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4" />;
 export const IconPin = (p: P) => <S size={16} {...p} d="M9 4h6l-1 5 3 3v2H7v-2l3-3zM12 14v6" />;

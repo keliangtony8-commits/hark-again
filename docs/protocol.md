@@ -35,9 +35,10 @@
 | `block.update` | `index`, `block` | 整块替换（审批卡状态变化） |
 | `tool.status` | `id`, `name`, `label`, `state: running\|done\|error\|denied`, `step?` | 工具进度条 + 活动时间线（v1.28）：`step = {id, tool, title, detail, state, at, ms?, note?, change?}`（v1.34 `change = {path, added, removed, diff, created?, hidden?}`：write_file / edit_file 成功时带，diff 为去掉文件头的 unified diff，≤120 行/6000 字，hidden = 密钥类文件不给 diff）（backend/app/activity.py；detail 只取命令/路径/网址/搜索模式（v1.35 glob/grep 的 pattern）等白名单参数；denied = 没批准/没填表，不经过 running；v1.46 `name = compact_context`（标题“整理上文”）= 一轮之内上文快满时的压缩，不是模型调的工具，done 时 detail 换成结果说明）。客户端按 `id` 合并进 pending 消息的 steps |
 | `thinking.delta` | `text` | 推理模型的思考片段（v0.65）：追加到生成中的占位消息上临时展示（客户端只留尾部 2000 字），**不属于任何块、服务器不存、`message.done` 里没有**；老服务器/非推理模型不发 |
+| `turn.retry` | `attempt`, `max`, `delay_ms`, `reason`, `code`, `fallback?`, `fallback_label?` | v1.50 模型调用失败、服务器正在自动重试（backend/app/llm_retry.py：限流 / 服务器错 / 超时 / 断网 / 空答复才重试，指数退避）。重试前服务器先用 `block.update` 把这次已流出的半截文字撤回（块清空但不删，重试的文字接着写进同一块）。`fallback` = 重试用完、这一轮改用的备用模型别名（此时 `attempt=0`，`fallback_label` 为其中文名）。**不属于任何块、不存库**；客户端挂在占位消息上一行提示：普通重试在下一个 `block.start`/`block.delta`/`thinking.delta`/`tool.status` 到达时收起，备用模型提示留到 `message.done`。老服务器不发 |
 | `message.done` | `message: {id, role, blocks, status?, created_at?, steps?}` | 一轮结束，以它为准落盘。`status: "stopped"` = 被停止的半截回复（等待中的审批卡变 `expired`） |
 | `message.stopped` | `conversation_id` | 还没产出任何内容就被停止：不存回复，用户消息留着（可“重试”） |
-| `error` | `message` | 本轮失败 |
+| `error` | `message` | 本轮失败（v1.50 起 `message` 是给人看的中文：密钥无效 / 额度用完 / 对话太长 / 重试多次仍失败…，见 llm_retry.user_text） |
 
 ## 3. 消息块（`blocks.py` 是定义源）
 每条消息 = `blocks: Block[]`，按 `type` 区分。客户端遇到不认识的 type 必须忽略，不能崩。

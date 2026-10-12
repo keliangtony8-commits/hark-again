@@ -1,3 +1,4 @@
+import type { RetryNotice } from "./retry";
 // 与 backend/app/blocks.py 一一对应：这是前后端唯一契约
 export type TextBlock = { type: "text"; text: string };
 export type LinksBlock = { type: "links"; items: { url: string; label?: string; title?: string }[] };
@@ -90,7 +91,9 @@ export type Outbox = "queued" | "failed";
 /** created_at：服务器时间（带时区 ISO）；本地刚发的 = 发出时刻；生成中的占位没有。用于聊天里的日期分隔。 */
 /** thought：推理模型的思考（thinking.delta 累积，只留尾部），服务器不存；message.done 时接到正式消息上（本次会话可展开回看）。
  *  thinkFrom/thinkTo：第一段 / 最近一段思考到达的本机时间（ms），算“已思考 N 秒”。 */
-export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopped"; pending?: boolean; steps?: ActivityStep[]; outbox?: Outbox; created_at?: string; thought?: string; thinkFrom?: number; thinkTo?: number };
+export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopped"; pending?: boolean; steps?: ActivityStep[]; outbox?: Outbox; created_at?: string; thought?: string; thinkFrom?: number; thinkTo?: number;
+  /** 模型调用失败在自动重试 / 已换备用模型（v1.50 turn.retry，lib/retry.ts）：只在生成中的占位消息上。 */
+  retry?: RetryNotice };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
 export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; updated_at: string; snippet?: string; message_id?: string };
 
@@ -100,6 +103,7 @@ export type ServerEvent =
   | { type: "block.update"; index: number; block: Block }
   | { type: "block.delta"; index: number; text: string }
   | { type: "thinking.delta"; text: string }
+  | { type: "turn.retry"; attempt: number; max: number; delay_ms: number; reason: string; code?: string; fallback?: string; fallback_label?: string }
   | ({ type: "tool.status" } & ToolRun)
   | { type: "message.done"; message: Message }
   | { type: "message.stopped"; conversation_id: string }

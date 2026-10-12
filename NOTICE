@@ -48,3 +48,5 @@
   移植到 backend/app/agent/subagent.py、backend/app/agent/builtin/delegate.py（v1.48）
 - openai/codex codex-rs/execpolicy/src/{decision.rs,policy.rs}、codex-rs/core/src/exec_policy.rs（UnlessTrusted/Never 判定、BANNED_PREFIX_SUGGESTIONS、prefix_rule 建议推导与“能否覆盖全部命令”检查）、core/src/command_canonicalization.rs、core/src/tools/sandboxing.rs（with_cached_approval）— Apache-2.0, Copyright 2025 OpenAI, modified；google-gemini/gemini-cli packages/core/src/tools/tools.ts（ProceedAlways / ProceedAlwaysAndSave 两级“都允许”）— Apache-2.0, Copyright 2025 Google LLC, modified
   移植到 backend/app/host_policy.py、backend/app/host_mode.py（v1.49）
+- deepseek-ai/deepseek-harness packages/llm/llm/src/{retry-policy.ts,error.ts}、llm-deepseek/src/transport.ts、llm-pi-ai/src/stream.ts（classifyPiAiError）、llm-retry/src/index.ts（localDelay、Retry-After 上限）— MIT License, Copyright (c) 2026 DeepSeek, adapted；openai/codex codex-rs/core/src/responses_retry.rs（服务器建议只定时长不加次数、重试时告诉前端）— Apache-2.0, Copyright 2025 OpenAI, modified；google-gemini/gemini-cli packages/core/src/utils/retry.ts（持续失败换备用模型、次数清零）— Apache-2.0, Copyright 2025 Google LLC, modified
+  移植到 backend/app/llm_retry.py、backend/app/agent/loop.py（v1.50）

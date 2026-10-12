@@ -301,3 +301,10 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 /* 本对话全部文件（ConversationFilesSheet）：行逐项上浮进场（切筛选时整列表重放），不在了的行淡掉不可点 */
 .conv-files .row { animation: rise var(--dur) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) { .conv-files .row { animation: none; } }
+
+/* 模型调用重试提示（v1.50，RetryLine.tsx）：和 .thought-toggle 一样的小灰字行，图标 warning 色 */
+.retry-line { display: flex; align-items: center; gap: var(--sp-2); width: 86%; padding: var(--sp-2) var(--sp-4); color: var(--text-3);
+  font-size: var(--fs-sm); animation: rise var(--dur) var(--ease) both; }
+.retry-icon { display: inline-flex; color: var(--warning); animation: icon-pop var(--dur) var(--ease) both; }
+.retry-text { animation: rise var(--dur) var(--ease) both; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+@media (prefers-reduced-motion: reduce) { .retry-line, .retry-icon, .retry-text { animation: none; } }

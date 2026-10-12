@@ -31,7 +31,7 @@
 import logging
 import math
 
-from .. import llm
+from .. import llm, llm_retry
 from ..config import settings
 
 log = logging.getLogger(__name__)
@@ -208,6 +208,8 @@ def is_overflow(e: BaseException) -> bool:
     if isinstance(body, dict):
         err = body.get("error") if isinstance(body.get("error"), dict) else body
         code += " " + str(err.get("code") or "") + " " + str(err.get("message") or "")
+    if llm_retry.is_context_exceeded(code + " " + str(e)):  # deepseek-harness error.ts 的措辞分类（llm_retry.py）
+        return True
     text = (code + " " + str(e)).lower()
     return any(k in text for k in ("context_length_exceeded", "context length", "context window", "maximum context",
                                    "too many tokens", "prompt is too long", "input is too long", "上下文长度", "超出上下文"))

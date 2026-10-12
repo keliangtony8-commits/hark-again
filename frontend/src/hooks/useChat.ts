@@ -5,6 +5,7 @@ import { OUTBOX_GIVE_UP_MS, outbox } from "../lib/outbox";
 import { ChatSocket, type LinkStatus } from "../lib/socket";
 import type { Block, FileBlock, Message, OutgoingFile, ServerEvent, TextBlock } from "../lib/types";
 import { mergeStep, stepFromStatus } from "../lib/activity";
+import { mergeRetry, RETRY_CLEARS_ON, retryNotice } from "../lib/retry";
 import { asFileBlock } from "../lib/files";
 import { useConversations } from "./useConversations";
 
@@ -83,6 +84,8 @@ export function useChat(projectId?: string) {
   }, []);
 
   const onEvent = (e: ServerEvent) => {
+    // 模型又开始产出：普通重试的提示收起（换备用模型的提示留到这一轮结束）
+    if (RETRY_CLEARS_ON.has(e.type)) patchPending((p) => (p.retry && !p.retry.fallback ? { ...p, retry: undefined } : p));
     switch (e.type) {
       case "message.start": {
         const cur = threadRef.current.id;
@@ -111,6 +114,11 @@ export function useChat(projectId?: string) {
           return { ...p, blocks };
         });
         break;
+      case "turn.retry": {
+        const n = retryNotice(e);
+        patchPending((p) => ({ ...p, retry: mergeRetry(p.retry, n) }));
+        break;
+      }
       case "thinking.delta":
         patchPending((p) => { const now = Date.now(); return { ...p, thought: keepTail((p.thought ?? "") + e.text), thinkFrom: p.thinkFrom ?? now, thinkTo: now }; });
         break;

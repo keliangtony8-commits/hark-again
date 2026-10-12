@@ -6,13 +6,19 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
+import httpx
 from openai import AsyncOpenAI
 
-from . import usage
+from . import llm_retry, usage
 from .config import settings
+from .llm_retry import EmptyResponse
 
+# SDK 自带的重试关掉（max_retries=0）：重试由 llm_retry 一处决定——流式那边要先撤回半截文字、告诉客户端“正在重试”，
+# SDK 悄悄重试做不到。read 超时 = 流式两次数据之间最多等多久（空闲超时，Codex stream_idle_timeout）。
 client = AsyncOpenAI(base_url=settings.llm_base_url,
-                     api_key=settings.llm_api_key or settings.litellm_master_key or "none")
+                     api_key=settings.llm_api_key or settings.litellm_master_key or "none",
+                     max_retries=0,
+                     timeout=httpx.Timeout(connect=15.0, read=settings.llm_idle_seconds, write=60.0, pool=15.0))
 
 
 def upstream(alias: str) -> str:
@@ -61,7 +67,9 @@ class Turn:
 
 async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
                       model: str | None = None) -> AsyncIterator[str | Reasoning | Turn]:
-    """流式产出文本片段(str) / 思考片段(Reasoning)，最后产出一个 Turn（含完整文本与工具调用）。"""
+    """流式产出文本片段(str) / 思考片段(Reasoning)，最后产出一个 Turn（含完整文本与工具调用）。
+    正常结束却一个字、一个工具调用都没有 → 抛 EmptyResponse（可重试；内核 agent/loop.py 决定重试还是收下空回复）。
+    不在这里重试：已经吐给客户端的半截文字得由内核撤回。"""
     kwargs = {"tools": tools} if tools else {}
     model = model or settings.default_model
     stream = await client.chat.completions.create(
@@ -95,6 +103,8 @@ async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
         if last_usage is not None:
             await usage.record(model, "chat", last_usage.prompt_tokens or 0, last_usage.completion_tokens or 0)
     turn.tool_calls = [calls[i] for i in sorted(calls)]
+    if not turn.text.strip() and not turn.tool_calls:
+        raise EmptyResponse("模型回了个空答复")
     if last_usage is not None:
         turn.prompt = last_usage.prompt_tokens or 0
         turn.tokens = turn.prompt + (last_usage.completion_tokens or 0)
@@ -114,7 +124,8 @@ async def complete(messages: list[dict], model: str | None = None, kind: str = "
     kwargs: dict = {"tools": tools, "tool_choice": "none"} if tools else {}
     if max_tokens:
         kwargs["max_tokens"] = max_tokens
-    r = await client.chat.completions.create(model=upstream(model), messages=messages, **kwargs)
+    r = await llm_retry.retry_call(  # 限流 / 服务器错 / 断网按 llm_retry 的策略重试；超长等原样抛给调用方
+        lambda: client.chat.completions.create(model=upstream(model), messages=messages, **kwargs))
     if r.usage:
         await usage.record(model, kind, r.usage.prompt_tokens or 0, r.usage.completion_tokens or 0)
     if strict and r.choices and getattr(r.choices[0], "finish_reason", None) == "length":

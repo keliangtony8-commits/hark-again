@@ -23,6 +23,7 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../projects/save_reply.dart';
 import 'activity_view.dart';
+import 'retry_line.dart';
 import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
@@ -192,6 +193,12 @@ class MessageView extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: RiseSwitcher(
             child: activity ? ActivitySummary(key: const ValueKey('activity'), steps: message.steps, pending: message.pending) : null),
+      ),
+      // 模型调用失败在自动重试 / 换了备用模型（v1.50）：只在生成中出现，回复完成随占位消息一起换掉
+      ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: RiseSwitcher(
+            child: message.pending && message.retry != null ? RetryLine(key: const ValueKey('retry'), notice: message.retry!) : null),
       ),
       _tappable(
         AnimatedSize(

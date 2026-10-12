@@ -30,6 +30,7 @@ import '../../models/block.dart';
 import '../../models/export.dart';
 import '../../models/message.dart';
 import '../../models/resources.dart';
+import '../../models/retry_notice.dart';
 import '../../theme/tokens.dart';
 import 'chat_cache.dart';
 
@@ -224,6 +225,11 @@ class ChatController extends Notifier<ChatState> {
   }
 
   void _onEvent(Map<String, dynamic> e) {
+    // 模型又开始产出：普通重试的提示收起（换备用模型的提示留到这一轮结束）
+    if (RetryNotice.clearsOn.contains(e['type'])) {
+      final last = state.messages.lastOrNull;
+      if (last != null && last.pending && last.retry != null && !last.retry!.isFallback) _patchPending((m) => m.copyWith(retry: () => null));
+    }
     switch (e['type']) {
       case 'message.start':
         if (state.activeId != null && state.activeId != e['conversation_id']) return; // 别的会话的事件
@@ -251,6 +257,12 @@ class ChatController extends Notifier<ChatState> {
           final cur = i < m.blocks.length ? m.blocks[i] : const TextBlock('');
           return m.copyWith(blocks: _setAt(m.blocks, i, cur is TextBlock ? cur.append(e['text'] as String) : cur));
         });
+      case 'turn.retry':
+        final n = RetryNotice.fromJson(e);
+        // 已经换过备用模型：之后的普通重试不盖掉“改用了哪个模型”（文字里照样能看出在重试）
+        _patchPending((m) => m.copyWith(retry: () => m.retry?.isFallback == true && !n.isFallback
+            ? RetryNotice(attempt: n.attempt, max: n.max, delayMs: n.delayMs, reason: n.reason, code: n.code, fallback: m.retry!.fallback, fallbackLabel: m.retry!.fallbackLabel)
+            : n));
       case 'thinking.delta':
         _patchPending((m) => m.think(e['text'] as String? ?? ''));
       case 'tool.status':

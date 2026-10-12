@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 
-from .. import activity, browser_files, plan, spill, vision
+from .. import activity, browser_files, llm_retry, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
 from . import approvals, compact, loop_guard, supersede
@@ -76,11 +76,23 @@ class Thinking:
 
 
 @dataclass
+class Retry:
+    """模型调用失败、正在自动重试（llm_retry.py）：只给客户端一行临时提示，不进 MessageBuilder、不落库。
+    attempt/max = 第几次 / 最多几次；delay_ms = 等多久再试；fallback = 重试用完、这一轮改用的备用模型别名（此时 attempt=0）。"""
+    attempt: int
+    max: int
+    delay_ms: int
+    reason: str
+    code: str
+    fallback: str | None = None
+
+
+@dataclass
 class Done:
     blocks: list[dict]
 
 
-Event = BlockStart | BlockUpdate | TextDelta | ToolStatus | Thinking | Done
+Event = BlockStart | BlockUpdate | TextDelta | ToolStatus | Thinking | Retry | Done
 
 
 def carry(old: dict, new: dict) -> dict:
@@ -147,6 +159,32 @@ class MessageBuilder:
     def break_text(self) -> None:
         self._text_open = False
 
+    def mark(self) -> tuple[int, str, bool]:
+        """一次模型调用开始前的文字状态：调用失败要重试时，据它撤回这次已经吐出去的半截文字（rollback）。"""
+        last = self.blocks[-1]["text"] if self._text_open and self.blocks else ""
+        return len(self.blocks), last, self._text_open
+
+    def rollback(self, mark: tuple[int, str, bool]) -> list[Event]:
+        """撤回 mark 之后流出来的文字（失败的半截输出不进回复、不回传模型——deepseek-harness llm-retry）。
+        客户端已按下标收到块，不能删块：新开的文字块清空并保持打开（重试的文字接着写进同一块），
+        原来开着的块恢复成当时的文字。流式期间只会产生文字，不会有别的块。"""
+        count, last, was_open = mark
+        out: list[Event] = []
+        if len(self.blocks) > count:  # 这次新开了一个文字块
+            for i in range(count, len(self.blocks)):
+                if self.blocks[i]["type"] == "text" and self.blocks[i]["text"]:
+                    self.blocks[i] = {"type": "text", "text": ""}
+                    out.append(BlockUpdate(i, dict(self.blocks[i])))
+            self._text_open = self.blocks[-1]["type"] == "text"
+        elif was_open and self.blocks and self.blocks[-1]["text"] != last:
+            self.blocks[-1] = {**self.blocks[-1], "text": last}
+            out.append(BlockUpdate(len(self.blocks) - 1, dict(self.blocks[-1])))
+        return out
+
+    def final(self) -> list[dict]:
+        """正常说完时落库的块：去掉空文字块（重试撤回后可能留下的空壳）。"""
+        return [b for b in self.blocks if not (b["type"] == "text" and not b["text"].strip())]
+
     def partial(self) -> list[dict]:
         """被打断时能落库的块：去掉空文字块，还在等的审批卡（含订单卡）标为 expired（它再也等不到答复了），
         还在跑的实时块去掉 live（命令已随这一轮被停掉），浏览器卡上还在等的接管条标 expired。"""
@@ -193,6 +231,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     guard = loop_guard.LoopGuard()  # 原地打转：第一次提醒模型，第二次停下（loop_guard.py）
     squeeze = compact.Compactor(len(messages), model, tools)  # 上文快满：剪长工具结果 / 压成检查点（compact.py）
     overflowed = False  # 供应商报“上文超长”时强制压一次再重试；成功调用一次后复位
+    retry_policy, retries, tried = llm_retry.policy(), 0, {model or settings.default_model}  # 调用失败的重试（llm_retry.py）
     max_steps, spent, step = max(1, limits.max_steps), 0, 0
     while True:
         over = step >= max_steps - 1 or 0 < limits.turn_tokens <= spent \
@@ -207,6 +246,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         turn: Turn | None = None
         said, chant = "", 0
         at = len(messages)
+        mark = builder.mark()
         try:
             async with aclosing(stream_turn(messages, None if over else tools, model)) as items:
                 async for item in items:
@@ -221,18 +261,45 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                         if chant := guard.content(item):
                             break  # 复读：不等它说完（关闭流，已花的 token 照记）
         except Exception as e:
-            if overflowed or said or not compact.is_overflow(e):
+            failure = llm_retry.classify(e)
+            if failure.code != llm_retry.CONTEXT and not compact.is_overflow(e):
+                retries += 1
+                delay = llm_retry.next_delay(retry_policy, failure, retries)
+                fallback = None if delay is not None else \
+                    (llm_retry.fallback_for(model or settings.default_model, tried) if llm_retry.can_fall_back(failure) else None)
+                if delay is None and fallback is None:
+                    if failure.code == llm_retry.EMPTY:  # 空答复重试用完：照旧收下（这一步什么也没说），不当成错误
+                        turn = Turn()
+                    else:
+                        raise
+                else:
+                    for ev in builder.rollback(mark):  # 半截输出撤回（Codex/deepseek：失败的部分不留在回复和上文里）
+                        yield ev
+                    guard.recovered()
+                    if over and step:
+                        messages.pop()  # WRAP_UP 下一圈会重新加
+                    if fallback:  # Gemini onPersistent429：换备用模型，次数清零
+                        model, retries = fallback, 0
+                        tried.add(fallback)
+                        ctx.model = fallback
+                        yield Retry(0, retry_policy.max_retries, 0, llm_retry.reason(failure), failure.code, fallback)
+                    else:
+                        yield Retry(retries, retry_policy.max_retries, int(delay), llm_retry.reason(failure), failure.code)
+                        await asyncio.sleep(delay / 1000)  # 用户点停止 = 任务取消，这里直接结束
+                    continue
+            elif overflowed or said:
                 raise
-            overflowed = True  # 上文超长：强制压一次，压动了就重试这一步（deepseek-harness overflow recovery）
-            out: dict = {}
-            async for ev in _compact(squeeze, messages, seen, builder, force=True, out=out):
-                yield ev
-            if not out.get("changed"):
-                raise
-            if over and step:
-                messages.pop()  # WRAP_UP 下一圈会重新加
-            continue
-        overflowed = False
+            else:
+                overflowed = True  # 上文超长：强制压一次，压动了就重试这一步（deepseek-harness overflow recovery）
+                out: dict = {}
+                async for ev in _compact(squeeze, messages, seen, builder, force=True, out=out):
+                    yield ev
+                if not out.get("changed"):
+                    raise
+                if over and step:
+                    messages.pop()  # WRAP_UP 下一圈会重新加
+                continue
+        overflowed, retries = False, 0
         step += 1
         if chant:
             builder.break_text()

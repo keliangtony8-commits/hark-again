@@ -6,6 +6,7 @@ import { speechSupported, stopIfSpeaking, toggleSpeech, useSpeechPhase } from ".
 import type { Message } from "../../lib/types";
 import { ThinkingCard, ThoughtSummary } from "./Thought";
 import ActivitySummary from "./Activity";
+import RetryLine from "./RetryLine";
 import CopyButton from "../../ui/CopyButton";
 import SaveReplyButton from "../projects/SaveReplyButton";
 import { IconCheck, IconClose, IconCopy, IconEdit, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
@@ -97,6 +98,8 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
       {!empty && message.thought?.trim() && <ThoughtSummary message={message} />}
       {/* 活动时间线（v1.28）：用过工具就多一行“用了 N 步”，生成中有完成的步骤就出现 */}
       {steps.length > 0 && (!message.pending || steps.some((t) => t.state !== "running")) && <ActivitySummary steps={steps} pending={message.pending} />}
+      {/* 模型调用失败在自动重试 / 换了备用模型（v1.50）：只在生成中出现 */}
+      {message.pending && message.retry && <RetryLine notice={message.retry} />}
       {empty ? (message.thought?.trim()
         ? <ThinkingCard message={message} />
         : <div className="thinking glass-chip"><span /><span /><span /></div>) : segments.map((s, i) => s.card ? (

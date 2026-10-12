@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, usage, vision
+from .. import host_mode, jobs, llm_retry, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -36,6 +36,9 @@ def to_wire(ev: loop.Event) -> dict:
             return {"type": "tool.status", "id": id, "name": name, "label": label, "state": state, "step": step}
         case loop.Thinking(text):
             return {"type": "thinking.delta", "text": text}
+        case loop.Retry(attempt, max_, delay_ms, reason, code, fallback):
+            out = {"type": "turn.retry", "attempt": attempt, "max": max_, "delay_ms": delay_ms, "reason": reason, "code": code}
+            return {**out, "fallback": fallback, "fallback_label": settings.chat_models.get(fallback, fallback)} if fallback else out
     raise ValueError(ev)
 
 
@@ -129,9 +132,9 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         with contextlib.suppress(Exception):
             await db.rollback()  # 工具可能停在半个事务里
     except Exception as e:  # 模型/网关错误：上报，不吞掉
-        await emit({"type": "error", "message": f"模型调用失败：{e}"})
+        await emit({"type": "error", "message": llm_retry.user_text(e)})  # 重试也救不回来：说人话（鉴权 / 额度 / 太长 / …）
         return None
-    blocks = builder.partial() if status == "stopped" else builder.blocks
+    blocks = builder.partial() if status == "stopped" else builder.final()
     reply = None
     if blocks:
         reply = Message(conversation_id=cid, role="assistant", blocks=blocks, status=status,
