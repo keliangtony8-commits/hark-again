@@ -114,10 +114,34 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
   );
 }
 
+/** 打开着的弹层（最上面的在末尾）：Esc 只关最上面那层（v1.16）。 */
+const openSheets: symbol[] = [];
+
 export function Sheet({ title, onClose, children, actions }: { title: string; onClose: () => void; children: ReactNode; actions?: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  // v1.16：弹层是模态框——打开时焦点移进来（键盘/读屏从标题开始），Esc 关最上面一层，关掉后焦点回到打开它的键。
+  useEffect(() => {
+    const me = Symbol("sheet");
+    openSheets.push(me);
+    const back = document.activeElement as HTMLElement | null;
+    if (!box.current?.contains(document.activeElement)) box.current?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || openSheets[openSheets.length - 1] !== me || e.defaultPrevented) return;
+      e.preventDefault();
+      close.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      openSheets.splice(openSheets.indexOf(me), 1);
+      if (back?.isConnected) back.focus({ preventScroll: true });
+    };
+  }, []);
   return (
     <div className="sheet-scrim" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+      <div ref={box} tabIndex={-1} className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
         <div className="sheet-grip" />
         <h2>{title}</h2>
         {children}
@@ -179,15 +203,18 @@ export function Menu({ trigger, items, label = "更多" }: { trigger: ReactNode;
     if (!open) return;
     const close = (e: Event) => {
       const inside = (n: EventTarget | null) => !!n && (ref.current?.contains(n as Node) || pop.current?.contains(n as Node));
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !inside(e.target)) setOpen(false);
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !inside(e.target)) {
+        if (e instanceof KeyboardEvent) e.preventDefault(); // Esc 先关菜单，别连带关掉菜单所在的弹层（Sheet 跳过已处理的 Esc）
+        setOpen(false);
+      }
     };
     const away = () => setOpen(false); // 页面滚动 / 窗口变化：菜单会和触发键脱节，直接收起
     document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
+    document.addEventListener("keydown", close, true);
     window.addEventListener("resize", away);
     document.addEventListener("scroll", away, true);
     return () => {
-      document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", close);
+      document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", close, true);
       window.removeEventListener("resize", away); document.removeEventListener("scroll", away, true);
     };
   }, [open]);

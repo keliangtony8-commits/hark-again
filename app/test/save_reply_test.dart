@@ -89,6 +89,24 @@ void main() {
     expect(find.byTooltip(saveReplyLabel), findsNothing);
   });
 
+  testWidgets('操作条顺序和网页一致：复制 · 重新生成 · 存到项目文件（v1.16）', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: Scaffold(
+          body: MessageView(const Message(id: 'm1', role: 'assistant', blocks: [TextBlock('好')]),
+              last: true, onRegenerate: () {}, onSave: () {}),
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(seconds: 1));
+    double x(String tip) => tester.getCenter(find.byTooltip(tip)).dx;
+    expect(x('复制') < x('重新生成'), isTrue);
+    expect(x('重新生成') < x(saveReplyLabel), isTrue);
+  });
+
   testWidgets('项目对话：一点就存进本项目，不弹选择', (tester) async {
     final api = _Api();
     await _pump(tester, api, projectId: 'p1');

@@ -46,9 +46,10 @@ export function DialogHost() {
   useEffect(() => {
     if (!p) return;
     okRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") settle(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    // 捕获阶段 + preventDefault：确认框盖在弹层上时，Esc 只关确认框（Sheet 跳过已处理的 Esc）
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); settle(false); } };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   }, [p]);
   if (!p) return null;
   const { title, text, action, danger } = p.opts;

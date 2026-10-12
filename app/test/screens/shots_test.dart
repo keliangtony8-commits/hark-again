@@ -566,6 +566,14 @@ void main() {
       router.go('/chat');
       await tester.runAsync(() => container.read(chatProvider('').notifier).open('c1'));
       await _shot(tester, '$mode-chat');
+      // 主聊天里存回复 → 先选项目（v1.16）
+      await tester.tap(find.byTooltip('存到项目文件').last);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200))); // 项目列表是真异步
+      await tester.pumpAndSettle();
+      expect(find.text('存到哪个项目'), findsOneWidget);
+      await _shot(tester, '$mode-save-picker');
+      Navigator.of(tester.element(find.text('存到哪个项目'))).pop();
+      await tester.pumpAndSettle();
       await tester.runAsync(() => container.read(chatProvider('').notifier).open('c2'));
       await _shot(tester, '$mode-chat-shop');
       await tester.dragFrom(const Offset(200, 400), const Offset(0, 600)); // 往回翻：商品宫格

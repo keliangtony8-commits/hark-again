@@ -478,6 +478,27 @@ class _RenderSizeReporter extends RenderProxyBox {
   }
 }
 
+/// 横向滚动条的右缘渐隐（v1.16）：最后 [width] 宽从全显淡到透明，提示“右边还有”，不再被容器边硬切。
+/// [width] 取滚动列表的右内边距，没溢出时内容到不了这一截，看不出任何变化。只改透明度，深浅色通用。
+class EdgeFadeEnd extends StatelessWidget {
+  const EdgeFadeEnd({super.key, required this.child, this.width = Sp.x3});
+  final Widget child;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = context.palette.text;
+    return ShaderMask(
+      shaderCallback: (r) => LinearGradient(
+        colors: [ink, ink.withValues(alpha: 0)],
+        stops: [r.width <= width ? 0 : 1 - width / r.width, 1],
+      ).createShader(r),
+      blendMode: BlendMode.dstIn,
+      child: child,
+    );
+  }
+}
+
 /// 长内容折起：最多露出 [maxHeight] 高，底边渐隐提示“还有”（摘要卡展开前）。只在确实很长时用。
 class FoldedBox extends StatelessWidget {
   const FoldedBox({super.key, required this.maxHeight, required this.child});

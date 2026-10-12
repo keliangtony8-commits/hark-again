@@ -9,6 +9,7 @@ import '../../models/block.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
+import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/glass.dart';
 
@@ -49,7 +50,8 @@ class AttachmentTray extends StatelessWidget {
             ? const SizedBox(width: double.infinity)
             : SizedBox(
                 height: _Removable.extent,
-                child: ListView.builder(
+                child: EdgeFadeEnd( // 名片多了往右滚：右缘渐隐，不被输入框边硬切
+                  child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: Sp.x3),
                   itemCount: items.length,
@@ -62,6 +64,7 @@ class AttachmentTray extends StatelessWidget {
                       child: items[i].asThumb ? _Thumb(items[i]) : _Chip(items[i]),
                     ),
                   ),
+                ),
                 ),
               ),
       );

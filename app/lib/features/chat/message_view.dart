@@ -253,8 +253,6 @@ class _ReplyActions extends StatelessWidget {
     final items = <Widget>[
       if (text.isNotEmpty) CopyAction(text: text),
       if (spoken.isNotEmpty) _SpeakButton(id: id, text: spoken),
-      if (text.isNotEmpty && onSave != null)
-        QuietAction(icon: const Icon(Icons.drive_folder_upload_outlined), tooltip: saveReplyLabel, onPressed: onSave),
       AnimatedSwitcher(
         duration: context.motion(Motion.fast),
         child: onRegenerate == null
@@ -266,6 +264,9 @@ class _ReplyActions extends StatelessWidget {
                 onPressed: onRegenerate,
               ),
       ),
+      // 把回复带走（存到项目文件）排在“就地重来”之后，和网页同序：复制 · 朗读 · 重新生成 · 存到项目文件（v1.16）
+      if (text.isNotEmpty && onSave != null)
+        QuietAction(icon: const Icon(Icons.drive_folder_upload_outlined), tooltip: saveReplyLabel, onPressed: onSave),
       if (stopped)
         Padding(
           padding: const EdgeInsets.only(left: Sp.x1),

@@ -154,7 +154,10 @@
 
 .composer-row { display: flex; align-items: flex-end; gap: var(--sp-1); }
 .composer-row .icon-btn { color: var(--text-3); }
-.attach-row { display: flex; gap: var(--sp-2); overflow-x: auto; padding: var(--sp-1) var(--sp-1) 0; }
+.attach-row { display: flex; gap: var(--sp-2); overflow-x: auto; padding: var(--sp-1) var(--sp-3) 0 var(--sp-1); scrollbar-width: none;
+  /* v1.16：名片多了往右滚——右缘最后 sp-3（= 右内边距）渐隐，不被输入框边硬切；没溢出时内容到不了这一截（App EdgeFadeEnd 同款） */
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--sp-3)), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--sp-3)), transparent); }
+.attach-row::-webkit-scrollbar { display: none; }
 .attach { display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 220px; flex: none; padding: var(--sp-1); border-radius: var(--r-md); background: var(--tile); font-size: var(--fs-xs); animation: rise 200ms var(--ease); }
 .attach-ext { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; background: var(--tile); color: var(--text-2); font-size: 9px; font-weight: var(--fw-strong); flex: none; }
 .attach-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

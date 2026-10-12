@@ -74,6 +74,7 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .sheet { width: 100%; max-width: 560px; max-height: 88dvh; overflow-y: auto; background: var(--glass-sheet); border: 1px solid var(--glass-border); border-bottom: 0;
   border-radius: var(--r-card) var(--r-card) 0 0; padding: var(--sp-2) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom)); box-shadow: var(--elev-raised);
   -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); animation: slideup calc(var(--dur) * 1.5) var(--ease); }
+.sheet:focus { outline: none; } /* 打开时程序把焦点放进来，不画焦点框 */
 .sheet-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--glass-border); margin: var(--sp-1) auto var(--sp-4); }
 .sheet h2 { margin: 0 0 var(--sp-4); font-size: var(--fs-lg); font-weight: var(--fw-title); }
 .sheet .desc { margin-left: 0; margin-right: 0; }

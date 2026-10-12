@@ -221,6 +221,10 @@ def api(route):
                     {"model": "fast", "calls": 18, "prompt_tokens": 34000, "completion_tokens": 8000, "cost": 0.41}]},
                 "conversations": [{"id": "c1", "title": "DeepSeek 和 GPT 的价格对比", "calls": 9, "tokens": 21000, "cost": 0.22}]}
         return route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+    if path.endswith("/save-to-project"):  # v1.16：存回复的回执（和服务器 reply_files.save 同形）
+        body = {"project_id": "pr1", "project_name": "考研数学", "path": "API 价格对比.md", "name": "API 价格对比.md",
+                "size": 1840, "mime": "text/markdown"}
+        return route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
     body = FIXTURES.get(path, [] if route.request.method == "GET" else {})
     route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
@@ -268,6 +272,28 @@ def main():
                         page.wait_for_timeout(700)
                         page.screenshot(path=str(OUT / f"{name}-{theme}-banner.png"))
                         FIXTURES["/api/inbox"] = INBOX_IDLE
+                # v1.16：项目里的对话——回复下“存到项目文件”→ 已存进一行；输入框“项目里的文件”选择弹层 → 待发名片
+                page.goto(base + "/#/projects/pr1")
+                page.wait_for_timeout(600)
+                # 手机上历史收在抽屉里（第一处同名文字不可见）→ 点首屏“最近的对话”那行
+                (page.get_by_text("DeepSeek 和 GPT 的价格对比").first if name == "desktop"
+                 else page.locator(".project-home button.row", has_text="DeepSeek 和 GPT 的价格对比")).click()
+                page.wait_for_timeout(800)
+                page.locator(".msg.assistant.last").get_by_label("存到项目文件").click()
+                page.wait_for_timeout(500)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-project-saved.png"))
+                page.get_by_label("添加附件").first.click()
+                page.wait_for_timeout(300)
+                page.get_by_role("menuitem", name="项目里的文件").click()
+                page.wait_for_timeout(600)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-project-picker.png"))
+                boxes = page.get_by_role("checkbox")
+                boxes.nth(0).click()
+                boxes.nth(1).click()
+                page.wait_for_timeout(300)
+                page.get_by_text("引用 2 个文件").click()
+                page.wait_for_timeout(600)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-project-refs.png"))
                 page.goto(base + "/#/chat")
                 page.wait_for_timeout(500)
                 if name == "desktop":
@@ -279,6 +305,12 @@ def main():
                     page.get_by_text("DeepSeek 和 GPT 的价格对比").first.click()
                 page.wait_for_timeout(800)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-chat.png"))
+                # v1.16：主聊天里存回复 → 先选项目
+                page.locator(".msg.assistant.last").get_by_label("存到项目文件").click()
+                page.wait_for_timeout(600)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-save-picker.png"))
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(300)
                 if name == "phone":
                     page.get_by_role("button", name="历史", exact=True).click()
                     page.wait_for_timeout(400)
