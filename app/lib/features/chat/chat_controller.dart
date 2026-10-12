@@ -489,8 +489,7 @@ class ChatController extends Notifier<ChatState> {
       'conversation_id': state.activeId,
       if (projectId.isNotEmpty) 'project_id': projectId,
       'text': plainText(m.blocks),
-      'attachments': [for (final f in m.blocks.whereType<FileBlock>()) if (f.source != 'project') f.id],
-      'project_files': [for (final f in m.blocks.whereType<FileBlock>()) if (f.source == 'project') f.id],
+      ..._wireFiles(m.blocks),
       'client_id': m.id,
       ..._modelField(),
     });
@@ -608,7 +607,7 @@ class ChatController extends Notifier<ChatState> {
   void send(String text, {List<FileBlock> files = const []}) {
     if (text.trim().isEmpty && files.isEmpty) return;
     if (state.busy) {
-      if (state.canSteer && files.isEmpty && text.trim().isNotEmpty) _steer(text.trim());
+      if (state.canSteer) _steer(text.trim(), files);
       return;
     }
     final blocks = <Block>[if (text.trim().isNotEmpty) TextBlock(text.trim()), ...files];
@@ -617,17 +616,26 @@ class ChatController extends Notifier<ChatState> {
     _flush();
   }
 
+  /// 消息里的附件 → user.message 的线格式：上传的进 attachments，工作区文件进 project_files。
+  static Map<String, List<String>> _wireFiles(List<Block> blocks) => {
+        'attachments': [for (final f in blocks.whereType<FileBlock>()) if (f.source != 'project') f.id],
+        'project_files': [for (final f in blocks.whereType<FileBlock>()) if (f.source == 'project') f.id],
+      };
+
   /// 本机还没拿到服务器 id 的消息的 id 前缀。
   static const localPrefix = 'local-';
 
-  /// 生成中补一句：立刻插在生成中那条前面；线不通就标失败（“重发”= 挪到末尾排成下一轮）。
-  void _steer(String text) {
-    final m = Message(id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: [TextBlock(text)], steer: true, createdAt: DateTime.now());
+  /// 生成中补一句（文字和 / 或附件，v1.93 服务器 steering 也收附件）：立刻插在生成中那条前面；
+  /// 线不通就标失败（“重发”= 挪到末尾排成下一轮）。附件和普通发送同一个线格式（_wireFiles）。
+  void _steer(String text, List<FileBlock> files) {
+    final blocks = <Block>[if (text.isNotEmpty) TextBlock(text), ...files];
+    final m = Message(id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: blocks, steer: true, createdAt: DateTime.now());
     final ok = _socket.send({
       'type': 'user.message',
       'conversation_id': state.activeId,
       if (projectId.isNotEmpty) 'project_id': projectId,
       'text': text,
+      ..._wireFiles(blocks),
       'steer': true,
       'client_id': m.id,
     });

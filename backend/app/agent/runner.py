@@ -190,7 +190,7 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
     ctx = ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort,
                       plan=plan)
     if inbox is not None:
-        inbox.start()  # 历史已拼好：从这一刻起补充的话只经收件箱进来，不会和历史重复
+        inbox.start(model)  # 历史已拼好：从这一刻起补充的话只经收件箱进来，不会和历史重复
     try:
         async for ev in loop.run(system, history, ctx, builder, model, inbox=inbox):
             if isinstance(ev, loop.Done):

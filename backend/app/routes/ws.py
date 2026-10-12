@@ -9,7 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import logging
 
 from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, skill_mentions, steering, user_shell, workspaces
-from ..agent import approvals
+from ..agent import approvals, context
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
 from ..blocks import FileBlock, text_to_blocks
@@ -39,7 +39,7 @@ async def ws_endpoint(ws: WebSocket):
             event = await ws.receive_json()
             match event.get("type"):
                 case "user.message":
-                    # 回答途中补充（steering）：插得进正在跑的那一轮就插，插不进（已收尾 / 带附件 / 命令）照常排队成下一轮
+                    # 回答途中补充（steering）：插得进正在跑的那一轮就插，插不进（已收尾 / 插满 / !命令、@子助手）照常排队成下一轮
                     if not (event.get("steer") and await _steer(event)):
                         live_turns.enqueue(_handle_user_message, event, conn)
                 case "message.regenerate":
@@ -101,26 +101,31 @@ def _client_id(event: dict) -> dict:
 
 
 async def _steer(event: dict) -> bool:
-    """回答途中补充：只收纯文字（steering.reason），交给正在跑的那一轮（steering.offer），
-    存成 status=steer 的用户消息（created_at = 收下那一刻，早于这一轮的回复），在这一轮的事件流里推 turn.steered。
+    """回答途中补充：文字、附件、@文件、$技能都能插（steering.reason；!命令、/init、@子助手 排队），交给正在跑的那一轮
+    （steering.offer，模型看到的内容按“当前这一问”渲染：context.render_now），存成 status=steer 的用户消息
+    （块和普通提问一样；created_at = 收下那一刻，早于这一轮的回复），在这一轮的事件流里推 turn.steered。
     返回 False = 没插进去，调用方照常排队。"""
     cid, text = event.get("conversation_id"), (event.get("text") or "").strip()
     if not isinstance(cid, str) or not steering.active(cid):
         return False
-    if steering.reason(text, files=bool(event.get("attachments") or event.get("project_files")),
-                       skills=bool(_skills(text)) or bool(_agents(text)),
+    ids, picked = event.get("attachments") or [], event.get("project_files") or []
+    ids, picked = (ids if isinstance(ids, list) else []), (picked if isinstance(picked, list) else [])
+    if steering.reason(text, files=len(ids) + len(picked), agent=bool(_agents(text)),
                        command=user_shell.parse(text) is not None or init_command.parse(text) is not None):
         return False
     async with SessionLocal() as db:
         conv = await db.get(Conversation, cid)
         if conv is None:
             return False
-        files = await _project_files(db, conv.project_id, [], 1, text)  # 写了 @文件：要带文件内容，排队走完整的一轮
-        if files:
+        files = _attachments(ids)
+        files += await _project_files(db, conv.project_id, picked, MAX_FILES - len(files), text)
+        if not text and not files:  # 附件全是假的：交给排队那条路去拒
             return False
-        msg = Message(id=uuid.uuid4().hex, conversation_id=cid, role="user", blocks=text_to_blocks(text),
-                      status=steering.STEER)
-        if (item := steering.offer(cid, text, msg.id)) is None:  # 不 await 地收下：模型下一次调用前就能读到
+        blocks = (text_to_blocks(text) if text else []) + files + _skills(text)
+        rich = any(b.get("type") != "text" for b in blocks)
+        content = await context.render_now(blocks, steering.model_of(cid)) if rich else text
+        msg = Message(id=uuid.uuid4().hex, conversation_id=cid, role="user", blocks=blocks, status=steering.STEER)
+        if (item := steering.offer(cid, text, msg.id, content)) is None:  # 不 await 地收下：模型下一次调用前就能读到
             return False
         msg.created_at = item.at
         db.add(msg)

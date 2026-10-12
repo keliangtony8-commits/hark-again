@@ -197,9 +197,9 @@ class _ComposerState extends ConsumerState<Composer> {
     return (!widget.busy || _steering) && !_uploading && _hasContent;
   }
 
-  /// 生成中打了纯文字：发出去是补充给这一轮（不带附件 / 不是命令 / 不在编辑），否则仍只能停止。
+  /// 生成中有字或附件：发出去是补充给这一轮（v1.93 附件也行；不是命令 / 不在编辑），否则仍只能停止。
   bool get _steering =>
-      widget.streaming && widget.canSteer && !_editing && _attachments.isEmpty && !_shell && _command == null && _c.text.trim().isNotEmpty &&
+      widget.streaming && widget.canSteer && !_editing && !_shell && _command == null && _hasContent &&
       !mentionsAgent(_c.text); // 点名子助手是一件新的事：排成下一轮（服务器同样不插队）
 
   /// 整条是本机命令（不发消息）。

@@ -98,6 +98,16 @@ def _render(blocks: list[dict], current: bool = False) -> str:
     return text
 
 
+async def render_now(blocks: list[dict], model: str | None = None) -> str | list[dict]:
+    """一条“当前这一问”给模型的内容（回答途中补充带附件时用，steering）：和 build_history 对当前这一问的处理一致——
+    能看图的模型给文字 + 原图，不能看图的先补描述（缓存）再给文字。"""
+    pixels = vision.accepts_images(model or settings.default_model)
+    if not pixels and any(vision.is_image(b) for b in blocks):
+        await vision.describe_missing(blocks)
+    text = _render(blocks, current=True)
+    return vision.content_with_images(text, blocks) if pixels else text
+
+
 def _project_ref(b: dict) -> str:
     """用户在消息里点名的项目文件：按当前磁盘内容给（文本内联到 ATTACH_CHARS，其余提示用文件工具）。"""
     rel, ws = b.get("id", ""), b.get("project_id") or ""

@@ -9,7 +9,9 @@
 - 收件箱按对话登记：调用方（routes/ws._answer）登记（open_inbox），runner 拼好历史、开跑模型的那一刻才开始收
   （start；早了会和刚落库的历史重复），收尾时关上（close）。关上那一刻还没被读走的
   （模型已经交代完、或预算到头 / 被叫停）交还给调用方，由它另起一轮回答（routes/ws._answer）。
-- 能插的只有纯文字：带附件、@文件、$技能、!命令 的走原来的排队（ws 判断后调 offer）。
+- 能插的（v1.93，学 Codex steer_input 收完整的 UserInput：文字 + 图片 + 提及）：文字、上传的附件（图片 / 文件）、
+  @工作区文件、$技能；模型看到的内容由调用方按“当前这一问”渲染好放进 Item.content（context.render_now：
+  图片能看原图就给原图）。只有 !命令、/init、@子助手 还走排队——它们是一件新的事，不是补充。
 - 消息照常存成用户消息（status = STEER，客户端在气泡下标“回答途中补充”），created_at 取收下那一刻：
   早于这一轮的回复（回复在收尾时才落库），历史顺序 = 提问 → 补充 → 回复，和模型实际看到的一致。
 - 单线程 asyncio：push / take / close 都不 await，彼此之间没有竞争。"""
@@ -26,6 +28,7 @@ class Item:
     text: str
     message_id: str
     at: datetime
+    content: str | list = ""  # 模型看到的这条用户消息（纯文字 = text；带附件 = 文字 + 附件内容 / 原图）
 
 
 @dataclass
@@ -34,9 +37,10 @@ class Inbox:
     live: bool = False  # 正在收：runner 开跑模型时 start()，close() 关
     taken: int = 0
     items: list[Item] = field(default_factory=list)
+    model: str | None = None  # 这一轮实际用的别名（带图的补充按它决定给原图还是描述）
 
-    def start(self) -> None:
-        self.live = True
+    def start(self, model: str | None = None) -> None:
+        self.live, self.model = True, model
 
     def pending(self) -> bool:
         return bool(self.items)
@@ -68,25 +72,32 @@ def close(box: Inbox | None) -> list[Item]:
     return box.take()
 
 
-def reason(text: str, *, files: bool = False, skills: bool = False, command: bool = False) -> str | None:
-    """这句话为什么不能插（None = 能插）。"""
-    if not text.strip():
+def reason(text: str, *, files: int = 0, command: bool = False, agent: bool = False) -> str | None:
+    """这句话为什么不能插（None = 能插）。files = 带的附件数（上传 + 选的工作区文件；不算 @路径，那要读盘才知道）。"""
+    if not text.strip() and files <= 0:
         return "empty"
-    if files or skills or command:
+    if command or agent:
         return "rich"
     if len(text) > STEER_CHARS:
         return "long"
     return None
 
 
-def offer(conversation_id: str | None, text: str, message_id: str) -> Item | None:
-    """把一句话交给正在跑的那一轮；没在跑 / 已收尾 / 这一轮插满了 → None（调用方排队成下一轮）。"""
+def offer(conversation_id: str | None, text: str, message_id: str, content: str | list | None = None) -> Item | None:
+    """把一句话交给正在跑的那一轮；没在跑 / 已收尾 / 这一轮插满了 → None（调用方排队成下一轮）。
+    content = 模型看到的内容（None = 就是这句文字）。"""
     box = _open.get(conversation_id or "")
     if box is None or not box.live or box.taken + len(box.items) >= STEER_MAX:
         return None
-    item = Item(text.strip(), message_id, datetime.now(timezone.utc))
+    item = Item(text.strip(), message_id, datetime.now(timezone.utc), text.strip() if content is None else content)
     box.items.append(item)
     return item
+
+
+def model_of(conversation_id: str | None) -> str | None:
+    """正在跑的那一轮用的别名（None = 没在跑或没记）。"""
+    box = _open.get(conversation_id or "")
+    return box.model if box is not None and box.live else None
 
 
 def active(conversation_id: str | None) -> bool:

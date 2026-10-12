@@ -426,14 +426,16 @@ export function useChat(projectId?: string) {
   const send = useCallback((text: string, files: OutgoingFile[] = []) => {
     if (!text.trim() && files.length === 0) return;
     if (busy) {
-      if (!canSteer || files.length > 0 || !text.trim()) return;
-      // 途中补充：立刻插在生成中那条前面；线不通就标失败（“重发”= 挪到末尾排成下一轮）
+      if (!canSteer) return;
+      // 途中补充（文字和 / 或附件，v1.93）：立刻插在生成中那条前面；线不通就标失败（“重发”= 挪到末尾排成下一轮）
       const id = `local-${crypto.randomUUID()}`;
+      const blocks: Block[] = [...(text.trim() ? [{ type: "text" as const, text: text.trim() }] : []), ...files.map(asFileBlock)];
       const ok = link === "open" && !!socket.current?.send({
-        type: "user.message", conversation_id: thread.id, project_id: projectId, text: text.trim(), steer: true, client_id: id,
+        type: "user.message", conversation_id: thread.id, project_id: projectId, text: text.trim(),
+        attachments: fileIds(blocks, "upload"), project_files: fileIds(blocks, "project"), steer: true, client_id: id,
       });
       setError(null);
-      const m: Message = { id, role: "user", blocks: [{ type: "text", text: text.trim() }], created_at: new Date().toISOString(),
+      const m: Message = { id, role: "user", blocks, created_at: new Date().toISOString(),
         ...(ok ? { status: STEER_STATUS } : { outbox: "failed" as const }) };
       setMessages((ms) => beforePending(ms, m));
       return;

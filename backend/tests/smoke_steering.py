@@ -1,6 +1,6 @@
 # 冒烟：回答途中补充（app/steering.py，v1.83，学 Codex steer）。模拟模型（不打真接口）。
 # 正在答 → 用户补一句 → 下一次调模型前作为用户消息并进来、本要收尾也再来一圈 → 库里顺序 提问/补充/回复 →
-# turn.steered 推给订阅者（带 client_id，快照里也有）→ 没在答 / 带附件 / !命令 / $技能 / 太长 → 不插（排队，message.start 带回 client_id）→
+# turn.steered 推给订阅者（带 client_id，快照里也有）→ 没在答 / !命令 / /init / 太长 → 不插（带附件的见 smoke_steer_attachments）（排队，message.start 带回 client_id）→
 # 预算到头没读到 → 紧接着另起一轮回答它 → 点了停止不自动接 → 一轮最多插 STEER_MAX 句 → 下一轮历史里有这句。
 # 运行：python tests/smoke_steering.py
 import os, sys, asyncio, subprocess, tempfile
@@ -70,7 +70,7 @@ async def main():
     settings.turn_offline_minutes = 30
 
     # 0) 规则
-    assert steering.reason("") == "empty" and steering.reason("x", files=True) == "rich"
+    assert steering.reason("") == "empty" and steering.reason("x", command=True) == "rich" and steering.reason("", files=1) is None
     assert steering.reason("x" * (steering.STEER_CHARS + 1)) == "long" and steering.reason("对了，用中文") is None
     box = steering.open_inbox("c0")
     assert steering.offer("c0", "早了", "m") is None, "历史还没拼好时不收"
@@ -110,7 +110,7 @@ async def main():
     b = Client()
     t2 = live_turns.enqueue(rws._handle_user_message, {"type": "user.message", "conversation_id": cid, "text": "再来"}, b.conn)
     await asyncio.wait_for(entered.wait(), 5)
-    for bad in ({"text": "!ls"}, {"text": "看图", "attachments": ["x"]}, {"text": "x" * (steering.STEER_CHARS + 1)}):
+    for bad in ({"text": "!ls"}, {"text": "/init"}, {"text": "x" * (steering.STEER_CHARS + 1)}):
         assert not await rws._steer({"conversation_id": cid, "steer": True, **bad}), bad
     # 插不进的照常排队：message.start 带回 client_id
     c = Client()

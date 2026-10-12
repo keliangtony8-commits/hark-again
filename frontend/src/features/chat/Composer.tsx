@@ -171,7 +171,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
     setCaret(el.selectionStart === el.selectionEnd ? el.selectionStart : -1);
   };
 
-  // 生成中打了纯文字：发出去是补充给这一轮（lib/steer.ts），否则仍只能停止
+  // 生成中有字或附件：发出去是补充给这一轮（lib/steer.ts），否则仍只能停止
   const steering = streaming && canSteer && steerable(text, { files: files.length, shell, editing: !!editing });
   const canSend = local ? runsNow && !uploading : (!disabled || steering) && (editing
     ? !!text.trim() || editing.hasFiles

@@ -111,6 +111,33 @@ void main() {
     expect(ms.map(_text).toList(), ['写个计划', '好', '再细一点', '按周排', '第一周……']);
   });
 
+  test('生成中带附件补充（v1.93）：附件按线格式发出（上传 / 工作区分开），气泡带附件块；只发附件也行', () async {
+    final (c, socket) = _make();
+    final ctl = await _streaming(c, socket);
+    const img = FileBlock(source: 'upload', id: 'up1', name: '红.png', mime: 'image/png', size: 10);
+    const doc = FileBlock(source: 'project', id: 'plan.md', name: 'plan.md', mime: 'text/markdown', size: 5, projectId: 'me');
+    ctl.send(' 参考这个 ', files: [img, doc]);
+    var sent = socket.sent.last;
+    expect(sent['steer'], true);
+    expect(sent['text'], '参考这个');
+    expect(sent['attachments'], ['up1']);
+    expect(sent['project_files'], ['plan.md']);
+    var ms = c.read(chatProvider('')).messages;
+    final bubble = ms[ms.length - 2];
+    expect(bubble.steer, true);
+    expect(bubble.blocks.whereType<FileBlock>().map((f) => f.id), ['up1', 'plan.md']);
+    expect(ms.last.pending, true);
+
+    ctl.send('', files: [img]);
+    sent = socket.sent.last;
+    expect(sent['steer'], true);
+    expect(sent['text'], '');
+    expect(sent['attachments'], ['up1']);
+    ms = c.read(chatProvider('')).messages;
+    expect(ms[ms.length - 2].blocks.single, isA<FileBlock>());
+    expect(ms.last.pending, true);
+  });
+
   test('别的设备补充的：按 id 补在生成中那条前面；快照里的也补上、本机未认领的乐观气泡以快照为准', () async {
     final (c, socket) = _make();
     await _streaming(c, socket);

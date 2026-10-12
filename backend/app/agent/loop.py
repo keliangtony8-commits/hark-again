@@ -260,7 +260,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     while True:
         if inbox is not None and inbox.pending():  # 用户在途中补了话：作为新的用户消息接在后面（Codex pending input）
             builder.break_text()
-            messages += [{"role": "user", "content": it.text} for it in inbox.take()]
+            messages += [{"role": "user", "content": it.content or it.text} for it in inbox.take()]
         over = step >= max_steps - 1 or 0 < limits.turn_tokens <= spent \
             or (limits.deadline is not None and time.monotonic() >= limits.deadline)
         if over and step:  # 预算到了：最后一步不给工具，让模型交代进度（第一步就是最后一步时不用交代）
