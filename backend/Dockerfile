@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 WORKDIR /srv
-# ffmpeg：把 App 的 m4a、网页的 webm 录音转成语音识别接口收的 wav
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+# ffmpeg：把 App 的 m4a、网页的 webm 录音转成语音识别接口收的 wav；ripgrep：grep 工具的预筛加速（没有也能用，走纯 Python）
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ripgrep && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY alembic.ini .

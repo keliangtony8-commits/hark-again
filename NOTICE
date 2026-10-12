@@ -4,6 +4,8 @@
   https://github.com/deepseek-ai/deepseek-harness
   参考：packages/spill（长输出开头/结尾保留 + 全文落盘 + 读回提示）→ backend/app/spill.py；
         packages/jobs（kill 带原因、结算时并入结论；job_output 有界等待）→ backend/app/jobs.py、agent/builtin/jobs.py
+        packages/fs/tool-fs-search（rg argv 规矩：--no-config、--regexp=、--glob= 排除 VCS 目录、路径放 -- 之后；glob 按修改时间排序、
+        内联上限 + 格式化结果整份落盘、include 单一正向 glob 校验）→ backend/app/workspace_search.py（移植为 Python）
 - openai/codex（Codex CLI）— Apache License 2.0
   https://github.com/openai/codex
   参考：命令安全分类（拆分 shell 为简单命令逐段判断）→ backend/app/command_guard.py

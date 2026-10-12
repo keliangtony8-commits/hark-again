@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from ... import command_guard, deliver, file_edit, jobs, quota, sandbox_client, spill, vision, workspaces
+from ... import command_guard, deliver, file_edit, jobs, quota, sandbox_client, spill, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -20,7 +20,7 @@ def _command_risk(args: dict, ctx=None) -> str | None:
 _PATH = {"type": "string", "description": "相对工作区根目录的路径"}
 
 
-@tool("list_files", "正在查看文件", "列出工作区里的文件。",
+@tool("list_files", "正在查看文件", "列出工作区里的文件（最多 300 项）。按名字找文件用 glob，按内容找用 grep。",
       {"type": "object", "properties": {"path": {**_PATH, "default": ""}}})
 async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
     root = project_dir(ctx.workspace)
@@ -30,6 +30,46 @@ async def list_files(ctx: ToolContext, path: str = "") -> ToolResult:
     items = [p for p in sorted(base.rglob("*")) if not hidden(p.relative_to(root).parts)][:300]
     lines = [f"{p.relative_to(root)}{'/' if p.is_dir() else f'  ({p.stat().st_size} B)'}" for p in items]
     return ToolResult("\n".join(lines) or "（空）")
+
+
+@tool("glob", "正在找文件",
+      "按文件名模式在工作区里找文件，新改的排前面，带大小和修改时间。"
+      "*.py 匹配任意深度的文件名；带 / 的按路径匹配，如 src/**/*.ts、docs/*.md；{a,b} 二选一。"
+      "隐藏目录（.git/.jobs/.spill/.home）和 node_modules 这类依赖目录默认不搜，path 明确指进去才搜。"
+      "找文件别用 run_command find/ls -R。",
+      {"type": "object", "properties": {
+          "pattern": {"type": "string", "description": "文件名模式，如 **/*.py、report*.pdf"},
+          "path": {**_PATH, "default": "", "description": "从哪个目录开始找（默认工作区根）"}},
+       "required": ["pattern"]})
+async def glob(ctx: ToolContext, pattern: str, path: str = "") -> ToolResult:
+    try:
+        return ToolResult(await asyncio.to_thread(workspace_search.glob, ctx.workspace, pattern, path))
+    except workspace_search.SearchError as e:
+        return ToolResult(str(e), failed=e.short)
+
+
+@tool("grep", "正在搜索内容",
+      "按正则在工作区文件内容里搜，结果按文件分组、带行号（路径:行号），之后用 read_file 看上下文或 edit_file 修改。"
+      "找代码定义/调用、配置项、日志里的报错都用它，别用 run_command grep。"
+      "include 限定文件（一个 glob，如 *.py 或 *.{ts,tsx}）；只按字面找设 fixed=true；context 给命中前后几行。"
+      "二进制文件、超过 5 MB 的文件、隐藏目录和依赖目录默认跳过（path 明确指进去就搜，比如 .jobs/<id>/log）。",
+      {"type": "object", "properties": {
+          "pattern": {"type": "string", "description": "正则（Python 语法），如 def \\w+_user、TODO|FIXME"},
+          "path": {**_PATH, "default": "", "description": "目录或单个文件（默认整个工作区）"},
+          "include": {"type": "string", "default": "", "description": "只搜文件名匹配这个 glob 的文件"},
+          "ignore_case": {"type": "boolean", "default": False},
+          "fixed": {"type": "boolean", "default": False, "description": "pattern 当普通文字，不当正则"},
+          "context": {"type": "integer", "default": 0, "maximum": workspace_search.CONTEXT_MAX,
+                      "description": "每处命中前后各带几行"}},
+       "required": ["pattern"]})
+async def grep(ctx: ToolContext, pattern: str, path: str = "", include: str = "", ignore_case: bool = False,
+               fixed: bool = False, context: int = 0) -> ToolResult:
+    try:
+        text = await asyncio.to_thread(workspace_search.grep, ctx.workspace, pattern, path, include,
+                                       ignore_case, fixed, context)
+    except workspace_search.SearchError as e:
+        return ToolResult(str(e), failed=e.short)
+    return ToolResult(text)
 
 
 @tool("read_file", "正在读文件",
