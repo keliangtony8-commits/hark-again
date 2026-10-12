@@ -30,3 +30,11 @@ a.computer-status { color: inherit; text-decoration: none; }
 .svc-dot.is-gave_up { background: var(--warning); animation: icon-pop var(--dur-fast) var(--ease); }
 .svc-problem { color: var(--warning); }
 @media (prefers-reduced-motion: reduce) { .svc-dot, .svc-dot.is-gave_up { animation: none; } }
+/* v1.94 内存去哪了：每行名字 + 大小同一行，下面归属 / 占比和一条占比细条（沿用 .meter 的长出 / 平滑过渡）；最大的那个在快满时换警示色 */
+.computer-mem { align-items: flex-start; text-align: left; color: inherit; width: 100%; }
+button.computer-mem { transition: background var(--dur-fast) var(--ease); }
+button.computer-mem:hover { background: var(--tile); }
+.computer-mem-head { display: flex; align-items: baseline; gap: var(--sp-3); min-width: 0; }
+.computer-mem-head .row-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.computer-mem .row-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.computer-warn { color: var(--warning); }

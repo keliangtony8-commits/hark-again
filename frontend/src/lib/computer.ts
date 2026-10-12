@@ -20,6 +20,7 @@ export type ComputerStatus = {
   ports?: ListeningPort[]; // v1.30 在监听的端口（只在运行中时有）
   // v1.31 磁盘配额（服务器 app/quota.py）：上限字节（null = 不限）；ok / tight ≥85% / full 满了（新文件写不进、后台任务会被停）/ off
   disk_limit?: number | null; disk_level?: DiskLevel;
+  memory?: MemoryView | null; // v1.94 内存去哪了（服务器 app/memory_view.py，只在运行中有）
 };
 export type DiskLevel = "ok" | "tight" | "full" | "off";
 /** 常驻服务的健康：up 在跑 / restarting 进程退出了、等自动重启 / gave_up 已停止自动重启（或别的意外结束）。 */
@@ -144,8 +145,11 @@ export function computerOomNote(c: ComputerStatus): string | null {
   return `内存不够，系统强制结束过 ${n} 个程序${cap}。分批处理或重启能缓过来`;
 }
 
-export function processTitle(p: ComputerProcess): string {
-  const c = p.command.trim();
+export const processTitle = (p: ComputerProcess) => commandTitle(p.command);
+
+/** 命令去掉开头程序的路径：“/usr/bin/python3 a.py” → “python3 a.py”。 */
+export function commandTitle(command: string): string {
+  const c = command.trim();
   const sp = c.indexOf(" ");
   const head = sp < 0 ? c : c.slice(0, sp);
   return (head.split("/").pop() ?? head) + (sp < 0 ? "" : c.slice(sp));
@@ -177,3 +181,41 @@ export function toolsSummary(tools: InstalledTool[]): string {
   const pip = tools.filter((t) => t.kind === "pip").length, npm = tools.length - pip;
   return [pip ? `pip ${pip} 个` : "", npm ? `npm ${npm} 个` : ""].filter(Boolean).join(" · ");
 }
+
+// ---- v1.94 内存去哪了（= App models/computer.dart 同名规则）----
+export type MemoryOwner = "job" | "service" | "process";
+export type MemoryRow = { kind: MemoryOwner; title: string; memory: number; processes: number; share: number; id?: string; pid?: number };
+export type MemoryView = { used: number; limit: number | null; rows: MemoryRow[]; other: number };
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n || 0));
+export const memoryRowKey = (r: MemoryRow) => r.id ?? `pid-${r.pid}`;
+export const memoryRatio = (v: MemoryView) => (v.limit && v.limit > 0 ? clamp01(v.used / v.limit) : null);
+/** 和状态块的内存条同一个门槛。 */
+export const memoryTight = (v: MemoryView) => (memoryRatio(v) ?? 0) >= COMPUTER_MEMORY_TIGHT;
+export const memoryOtherShare = (v: MemoryView) => (v.used > 0 ? clamp01(v.other / v.used) : 0);
+
+/** 这一节要不要出现：电脑在跑、有谁可排。 */
+export function memoryViewOf(s: ComputerStatus): MemoryView | null {
+  const m = s.memory;
+  return s.sandbox.state === "running" && m && (m.rows ?? []).length ? m : null;
+}
+
+export const memoryViewLine = (v: MemoryView) => `已用 ${formatSize(v.used)}${v.limit != null ? `，上限 ${formatSize(v.limit)}` : ""}`;
+export const memoryRowTitle = (r: MemoryRow) => (r.kind === "job" || r.kind === "service" ? r.title : commandTitle(r.title));
+export const memoryPercent = (share: number) => (share > 0 && share < 0.01 ? "不到 1%" : `${Math.round(clamp01(share) * 100)}%`);
+
+export function memoryTightNote(v: MemoryView): string | null {
+  if (!memoryTight(v)) return null;
+  const top = v.rows[0];
+  const who = top ? `，最大的是「${memoryRowTitle(top)}」（约 ${formatSize(top.memory)}），先停它最管用` : "";
+  return `快满了：再涨系统会强制结束程序（先结束普通后台任务）${who}`;
+}
+
+export const memoryRowLine = (r: MemoryRow) => [
+  r.kind === "job" ? "后台任务" : r.kind === "service" ? "常驻服务" : r.pid != null ? `程序 · PID ${r.pid}` : "程序",
+  ...(r.processes > 1 ? [`${r.processes} 个进程`] : []),
+  `占 ${memoryPercent(r.share)}`,
+].join(" · ");
+
+export const MEMORY_OTHER_TITLE = "其它";
+export const memoryOtherLine = (v: MemoryView) => `系统和零碎小程序 · 占 ${memoryPercent(memoryOtherShare(v))}`;

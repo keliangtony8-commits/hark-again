@@ -6,6 +6,11 @@
 //     已用 2.6 GB，上限 3 GB（v1.31 配额，服务器不限时不出现）  ▬▬▬▬▬▬▬▭  快满 / 满了 → 条变警示色 + 一句后果
 //     文件 / 装的软件 / 任务日志 / 长输出存档 / 下载缓存（0 字节的不列，行尾是大小）
 //     装过的工具  pip 12 个 · npm 2 个  →  弹层列出名字和版本
+//   内存（v1.94）              ← 只在运行中且排得出是谁占的时出现（服务器 app/memory_view.py）
+//     已用 800 MB，上限 1 GB  ▬▬▬▬▬▬▭  快满了 → 条变警示色 + 点名最大的那个
+//     大任务      后台任务 · 2 个进程 · 占 44%       350 MB   ▬▬▬▬▭  点 = 看它的完整日志
+//     python bot.py  程序 · PID 9 · 占 15%            120 MB
+//     其它        系统和零碎小程序 · 占 41%           330 MB
 //   正在监听的端口（v1.30）     ← 只在运行中且有端口时出现
 //     端口 8000  python3 -m http.server …       ↗   点 = 签预览链接并用浏览器打开；长按 = 复制链接
 //     端口 5173  只监听本机，预览打不开（要监听 0.0.0.0）  ← 警示“打不开”，不可点
@@ -14,9 +19,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../blocks/job_block.dart';
 import '../../core/api.dart';
 import '../../core/links.dart';
 import '../../models/computer.dart';
+import '../../models/job.dart';
 import '../../models/preview.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -57,6 +64,156 @@ class ProcessSection extends ConsumerWidget {
               ]),
             ),
     );
+  }
+}
+
+/// 内存去哪了（v1.94）：整台已用 + 按大小排的占用者，每行一条占比细条；后台任务 / 服务点了看日志。
+class MemorySection extends ConsumerWidget {
+  const MemorySection({super.key, required this.ws, this.delay = Duration.zero});
+  final String ws;
+  final Duration delay;
+
+  JobInfo? _job(ComputerStatus s, MemoryRow r) {
+    if (r.id == null) return null;
+    for (final j in s.jobs) {
+      if (j.id == r.id) return j;
+    }
+    for (final v in s.services) {
+      if (v.job.id == r.id) return v.job;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(computerProvider(ws)).value;
+    final v = s == null ? null : memoryViewOf(s);
+    return RiseSwitcher(
+      child: v == null
+          ? const SizedBox.shrink(key: ValueKey('nomem'))
+          : FadeSlideIn(
+              key: const ValueKey('mem'),
+              delay: delay,
+              child: Semantics(
+                container: true,
+                label: memorySemantics(v),
+                excludeSemantics: true,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const SectionTitle('内存'),
+                  GlassGroup(children: [
+                    _MemoryHead(v),
+                    for (final (i, r) in v.rows.indexed)
+                      _MemoryRowTile(
+                        key: ValueKey('mem-${r.key}'),
+                        icon: switch (r.owner) {
+                          MemoryOwner.job => Icons.work_outline_rounded,
+                          MemoryOwner.service => Icons.dns_outlined,
+                          MemoryOwner.process => Icons.terminal_rounded,
+                        },
+                        title: memoryRowTitle(r),
+                        line: memoryRowLine(r),
+                        bytes: r.memory,
+                        share: r.share,
+                        warn: i == 0 && v.tight,
+                        onTap: switch (_job(s!, r)) { final j? => () => showJobLog(context, ref, j), _ => null },
+                      ),
+                    if (v.other > 0)
+                      _MemoryRowTile(
+                        key: const ValueKey('mem-other'),
+                        icon: Icons.blur_on_rounded,
+                        title: memoryOtherTitle,
+                        line: memoryOtherLine(v),
+                        bytes: v.other,
+                        share: v.otherShare,
+                      ),
+                  ]),
+                ]),
+              ),
+            ),
+    );
+  }
+}
+
+/// 头一行：已用 / 上限 + 条；快满了条变警示色、下面一句点名最大的（与磁盘配额行同一画法）。
+class _MemoryHead extends StatelessWidget {
+  const _MemoryHead(this.v);
+  final MemoryView v;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final line = memoryViewLine(v);
+    final note = memoryTightNote(v);
+    final color = v.tight ? p.warning : p.text2;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2), // 与 RowTile 同一条行首线
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.memory_rounded, size: Layout.rowIcon, color: color),
+        const SizedBox(width: Sp.x4),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SwapSwitcher(child: Text(line, key: ValueKey(line), style: context.text.titleMedium)),
+            if (v.ratio != null)
+              Padding(
+                padding: const EdgeInsets.only(top: Sp.x2),
+                child: MeterBar(value: v.ratio!, height: Sp.x1, color: color),
+              ),
+            RiseSwitcher(
+              child: note == null
+                  ? const SizedBox.shrink(key: ValueKey('nonote'))
+                  : Padding(
+                      key: const ValueKey('note'),
+                      padding: const EdgeInsets.only(top: Sp.x2),
+                      child: Text(note, style: context.text.bodySmall?.copyWith(color: p.warning)),
+                    ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+/// 一个占用者：图标 · 名字 / 归属与占比 · 大小，下面一条占比细条（数变了条平滑走过去）。
+class _MemoryRowTile extends StatelessWidget {
+  const _MemoryRowTile(
+      {super.key, required this.icon, required this.title, required this.line, required this.bytes, required this.share, this.warn = false, this.onTap});
+  final IconData icon;
+  final String title, line;
+  final int bytes;
+  final double share;
+  final bool warn;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final size = formatSize(bytes);
+    final tile = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: Layout.rowIcon, color: warn ? p.warning : p.text2),
+        const SizedBox(width: Sp.x4),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+              Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.titleMedium)),
+              const SizedBox(width: Sp.x3),
+              SwapSwitcher(child: RowHint(size, key: ValueKey(size))),
+            ]),
+            Padding(
+              padding: const EdgeInsets.only(top: Sp.x1),
+              child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: Sp.x2),
+              child: MeterBar(value: share, height: Sp.x1, color: warn ? p.warning : p.text2),
+            ),
+          ]),
+        ),
+      ]),
+    );
+    return onTap == null ? tile : InkWell(onTap: onTap, child: tile);
   }
 }
 

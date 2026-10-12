@@ -7,7 +7,7 @@ import 'preview.dart';
 class ComputerStatus {
   const ComputerStatus({required this.workspace, required this.state, this.memoryUsed, this.memoryLimit, this.startedAt,
       this.idleMinutes, this.outdated = false, this.diskUsed = 0, this.diskPartial = false, this.jobs = const [],
-      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy, this.services = const []});
+      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy, this.services = const [], this.memory});
 
   factory ComputerStatus.fromJson(Map<String, dynamic> j) {
     final sb = (j['sandbox'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -44,6 +44,7 @@ class ComputerStatus {
         for (final x in (j['ports'] as List? ?? const []))
           if (x is Map) ListeningPort.fromJson(x.cast<String, dynamic>())
       ],
+      memory: j['memory'] is Map ? MemoryView.fromJson((j['memory'] as Map).cast<String, dynamic>()) : null,
     );
   }
 
@@ -78,6 +79,9 @@ class ComputerStatus {
   /// 档位 ok / tight（≥85%，提醒）/ full（满了：新文件写不进、后台任务会被停）/ off。
   final int? diskLimit;
   final String diskLevel;
+
+  /// v1.94 内存去哪了（服务器 app/memory_view.py）：只在运行中有。
+  final MemoryView? memory;
   bool get diskFull => diskLevel == 'full';
   bool get diskTight => diskLevel == 'tight' || diskFull;
 
@@ -281,8 +285,11 @@ String? computerDiskNote(ComputerStatus s) => switch (s.diskLevel) {
     };
 
 /// 程序行：标题是命令（去掉 /usr/bin/ 之类的路径），副标题是 CPU · 内存 · 运行多久。
-String processTitle(ComputerProcess p) {
-  final c = p.command.trim();
+String processTitle(ComputerProcess p) => commandTitle(p.command);
+
+/// 命令去掉开头程序的路径：“/usr/bin/python3 a.py” → “python3 a.py”。
+String commandTitle(String command) {
+  final c = command.trim();
   final sp = c.indexOf(' ');
   final head = sp < 0 ? c : c.substring(0, sp);
   return head.split('/').last + (sp < 0 ? '' : c.substring(sp));
@@ -313,3 +320,100 @@ String toolsSummary(List<InstalledTool> tools) {
   final pip = tools.where((t) => t.kind == 'pip').length, npm = tools.length - pip;
   return [if (pip > 0) 'pip $pip 个', if (npm > 0) 'npm $npm 个'].join(' · ');
 }
+
+// ---- v1.94 内存去哪了（服务器 app/memory_view.py；网页版 lib/computer.ts 同一套）----
+
+/// 一行的归属：后台任务 / 常驻服务（整个进程组算一个，点了打开它）/ 不属于任务的程序（对话里直接跑的、nohup 的）。
+enum MemoryOwner { job, service, process }
+
+class MemoryRow {
+  const MemoryRow({required this.owner, required this.title, required this.memory, this.id, this.pid, this.processes = 1, this.share = 0});
+  factory MemoryRow.fromJson(Map<String, dynamic> j) => MemoryRow(
+        owner: switch (j['kind']) { 'job' => MemoryOwner.job, 'service' => MemoryOwner.service, _ => MemoryOwner.process },
+        title: j['title'] as String? ?? '',
+        memory: (j['memory'] as num?)?.toInt() ?? 0,
+        id: j['id'] as String?,
+        pid: (j['pid'] as num?)?.toInt(),
+        processes: (j['processes'] as num?)?.toInt() ?? 1,
+        share: ((j['share'] as num?)?.toDouble() ?? 0).clamp(0, 1).toDouble(),
+      );
+  final MemoryOwner owner;
+  final String title;
+  final int memory, processes;
+  final String? id;
+  final int? pid;
+
+  /// 占已用的比例（0–1）。
+  final double share;
+  String get key => id ?? 'pid-$pid';
+}
+
+class MemoryView {
+  const MemoryView({required this.used, this.limit, this.rows = const [], this.other = 0});
+  factory MemoryView.fromJson(Map<String, dynamic> j) => MemoryView(
+        used: (j['used'] as num?)?.toInt() ?? 0,
+        limit: (j['limit'] as num?)?.toInt(),
+        rows: [
+          for (final x in (j['rows'] as List? ?? const []))
+            if (x is Map) MemoryRow.fromJson(x.cast<String, dynamic>())
+        ],
+        other: (j['other'] as num?)?.toInt() ?? 0,
+      );
+  final int used, other;
+  final int? limit;
+
+  /// 从大到小，最多 6 行。
+  final List<MemoryRow> rows;
+
+  double? get ratio => limit == null || limit! <= 0 ? null : (used / limit!).clamp(0, 1).toDouble();
+
+  /// 和状态块的内存条同一个门槛。
+  bool get tight => (ratio ?? 0) >= computerMemoryTight;
+
+  /// 其它占已用的比例。
+  double get otherShare => used <= 0 ? 0 : (other / used).clamp(0, 1).toDouble();
+}
+
+/// 这一节要不要出现：电脑在跑、有谁可排（只剩“其它”时状态块那条内存条已经够了）。
+MemoryView? memoryViewOf(ComputerStatus s) {
+  final m = s.memory;
+  return s.running && m != null && m.rows.isNotEmpty ? m : null;
+}
+
+/// 头一行：“已用 800 MB，上限 1 GB”。
+String memoryViewLine(MemoryView v) => '已用 ${formatSize(v.used)}${v.limit != null ? '，上限 ${formatSize(v.limit!)}' : ''}';
+
+/// 快满时的一句（点名最大的那个）；平时 null。
+String? memoryTightNote(MemoryView v) {
+  if (!v.tight) return null;
+  final top = v.rows.isEmpty ? null : v.rows.first;
+  final who = top == null ? '' : '，最大的是「${memoryRowTitle(top)}」（约 ${formatSize(top.memory)}），先停它最管用';
+  return '快满了：再涨系统会强制结束程序（先结束普通后台任务）$who';
+}
+
+String memoryRowTitle(MemoryRow r) => r.owner == MemoryOwner.process ? commandTitle(r.title) : r.title;
+
+/// 行的副标题：“后台任务 · 3 个进程 · 占 42%”。
+String memoryRowLine(MemoryRow r) => [
+      switch (r.owner) {
+        MemoryOwner.job => '后台任务',
+        MemoryOwner.service => '常驻服务',
+        MemoryOwner.process => r.pid != null ? '程序 · PID ${r.pid}' : '程序',
+      },
+      if (r.processes > 1) '${r.processes} 个进程',
+      '占 ${memoryPercent(r.share)}',
+    ].join(' · ');
+
+String memoryPercent(double share) => share > 0 && share < 0.01 ? '不到 1%' : '${(share * 100).round()}%';
+
+const memoryOtherTitle = '其它';
+
+String memoryOtherLine(MemoryView v) => '系统和零碎小程序 · 占 ${memoryPercent(v.otherShare)}';
+
+/// 读屏一句话。
+String memorySemantics(MemoryView v) => [
+      memoryViewLine(v),
+      ?memoryTightNote(v),
+      for (final r in v.rows) '${memoryRowTitle(r)}，${formatSize(r.memory)}，${memoryRowLine(r)}',
+      if (v.other > 0) '$memoryOtherTitle ${formatSize(v.other)}',
+    ].join('；');

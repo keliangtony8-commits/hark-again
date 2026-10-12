@@ -1,10 +1,14 @@
 import { useState } from "react";
 import { http } from "../../lib/api";
 import { CLEANUP_TEXT, type CleanupResult, type ComputerStatus, EMPTY_STORAGE, type InstalledTool, type StorageKey, cleanupDone, cleanupLabel,
-  computerDiskLine, computerDiskNote, computerDiskRatio, computerPath, diskTight, processLine, processTitle, storageRows, toolsSummary } from "../../lib/computer";
+  computerDiskLine, computerDiskNote, computerDiskRatio, computerPath, diskTight, processLine, processTitle, storageRows, toolsSummary,
+  MEMORY_OTHER_TITLE, type MemoryRow, memoryOtherLine, memoryOtherShare, memoryRatio, memoryRowKey, memoryRowLine, memoryRowTitle,
+  memoryTight, memoryTightNote, memoryViewLine, memoryViewOf } from "../../lib/computer";
+import { JobLog } from "../../blocks/JobBlock";
+import type { JobInfo } from "../../lib/types";
 import { formatSize } from "../../lib/files";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
-import { IconGlobe, IconExternal, IconCopy, IconChevron, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt, IconDisk } from "../../ui/icons";
+import { IconGlobe, IconExternal, IconCopy, IconChevron, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt, IconDisk, IconChip, IconServer, IconTerminal, IconMore } from "../../ui/icons";
 import { Section, Sheet } from "../../ui/kit";
 import type { ComputerCtl } from "./useComputer";
 import { type PreviewLink, portLine, portTitle } from "../../lib/preview";
@@ -26,6 +30,65 @@ export function ProcessSection({ ctl, enter }: { ctl: ComputerCtl; enter?: numbe
           </div>
         ))}
       </div>
+    </Section>
+  );
+}
+
+/** 内存去哪了（v1.94，= App MemorySection）：整台已用 + 按大小排的占用者，每行一条占比细条；后台任务 / 服务点了看日志。 */
+export function MemorySection({ ctl, enter }: { ctl: ComputerCtl; enter?: number }) {
+  const [log, setLog] = useState<JobInfo | null>(null);
+  const s = ctl.s;
+  const v = s ? memoryViewOf(s) : null;
+  if (!s || !v) return null;
+  const tight = memoryTight(v);
+  const note = memoryTightNote(v);
+  const ratio = memoryRatio(v);
+  const jobOf = (r: MemoryRow): JobInfo | null =>
+    r.id ? (s.running_jobs.find((j) => j.id === r.id) ?? (s.services ?? []).find((j) => j.id === r.id) ?? null) : null;
+  const icon = (r: MemoryRow) => (r.kind === "job" ? <IconChip /> : r.kind === "service" ? <IconServer /> : <IconTerminal />);
+  const bar = (share: number, warn: boolean) => (
+    <div className={`meter computer-meter${warn ? " meter-near" : ""}`}><span style={{ transform: `scaleX(${share})` }} /></div>
+  );
+  return (
+    <Section title="内存" enter={enter}>
+      <div className="list">
+        <div className={`row computer-quota${tight ? " is-tight" : ""}`} role="group" aria-label={[memoryViewLine(v), note].filter(Boolean).join("，")}>
+          <span className="row-icon"><IconChip /></span>
+          <div className="row-body" aria-hidden>
+            <div key={memoryViewLine(v)} className="row-title computer-state">{memoryViewLine(v)}</div>
+            {ratio != null && <div className={`meter computer-meter${tight ? " meter-near" : ""}`}><span style={{ transform: `scaleX(${ratio})` }} /></div>}
+            {note && <div className="computer-oom">{note}</div>}
+          </div>
+        </div>
+        {v.rows.map((r, i) => {
+          const job = jobOf(r);
+          const warn = i === 0 && tight;
+          const body = (<>
+            <span className={`row-icon${warn ? " computer-warn" : ""}`}>{icon(r)}</span>
+            <div className="row-body">
+              <div className="computer-mem-head"><span className={`row-title${r.kind === "process" ? " computer-proc" : ""}`}>{memoryRowTitle(r)}</span>
+                <span key={r.memory} className="row-hint computer-hint">{formatSize(r.memory)}</span></div>
+              <div className="row-sub">{memoryRowLine(r)}</div>
+              {bar(r.share, warn)}
+            </div>
+          </>);
+          return job
+            ? <button key={memoryRowKey(r)} className="row computer-mem" onClick={() => setLog(job)} aria-label={`${memoryRowTitle(r)}，${formatSize(r.memory)}，${memoryRowLine(r)}，看日志`}>{body}</button>
+            : <div key={memoryRowKey(r)} className="row computer-mem">{body}</div>;
+        })}
+        {v.other > 0 && (
+          <div className="row computer-mem">
+            <span className="row-icon"><IconMore /></span>
+            <div className="row-body">
+              <div className="computer-mem-head"><span className="row-title">{MEMORY_OTHER_TITLE}</span>
+                <span key={v.other} className="row-hint computer-hint">{formatSize(v.other)}</span></div>
+              <div className="row-sub">{memoryOtherLine(v)}</div>
+              {bar(memoryOtherShare(v), false)}
+            </div>
+          </div>
+        )}
+      </div>
+      {log && <JobLog job={log} onClose={() => setLog(null)} />}
     </Section>
   );
 }

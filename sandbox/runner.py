@@ -843,34 +843,43 @@ def _stats(c) -> dict:
 
 
 # 进程表：按 CPU 排；自己这条查看命令不算。ps 来自镜像里的 procps。
-_PS = "ps -eo pid=,pcpu=,rss=,etimes=,args= --sort=-pcpu 2>/dev/null"
+# v1.94 多一列 pgid（后端把进程归到后台任务名下，算“内存去哪了”），并另给一份按内存排的（memory_top）。
+_PS = "ps -eo pid=,pgid=,pcpu=,rss=,etimes=,args= --sort=-pcpu 2>/dev/null"
 PROCESS_MAX = 8
 
 
-def parse_ps(text: str, limit: int = PROCESS_MAX) -> list[dict]:
+def parse_ps(text: str, limit: int | None = PROCESS_MAX) -> list[dict]:
+    """ps 输出 → [{pid, pgid, cpu, memory(RSS 字节), elapsed, command}]，保持 ps 的顺序（按 CPU）；limit=None 全要。"""
     out = []
     for line in text.splitlines():
-        parts = line.split(None, 4)
-        if len(parts) < 5 or not parts[0].isdigit():
+        parts = line.split(None, 5)
+        if len(parts) < 6 or not parts[0].isdigit():
             continue
-        pid, cpu, rss, et, args = parts
+        pid, pg, cpu, rss, et, args = parts
         if args.startswith(("ps -eo", "sleep infinity")) or "/sys/fs/cgroup/memory" in args:
             continue  # 查看命令本身、容器的占位进程
         try:
-            out.append({"pid": int(pid), "cpu": float(cpu), "memory": int(rss) * 1024, "elapsed": int(et),
-                        "command": args[:200]})
+            out.append({"pid": int(pid), "pgid": int(pg), "cpu": float(cpu), "memory": int(rss) * 1024,
+                        "elapsed": int(et), "command": args[:200]})
         except ValueError:
             continue
-        if len(out) >= limit:
+        if limit is not None and len(out) >= limit:
             break
     return out
 
 
-def _processes(c) -> list[dict]:
+def process_tables(text: str) -> dict:
+    """{processes: 按 CPU 前 PROCESS_MAX, memory_top: 按内存前 PROCESS_MAX}（同一次 ps）。"""
+    rows = parse_ps(text, None)
+    return {"processes": rows[:PROCESS_MAX],
+            "memory_top": sorted(rows, key=lambda r: (-r["memory"], r["pid"]))[:PROCESS_MAX]}
+
+
+def _processes(c) -> dict:
     try:
-        return parse_ps((c.exec_run(["bash", "-c", _PS]).output or b"").decode("utf-8", "replace"))
+        return process_tables((c.exec_run(["bash", "-c", _PS]).output or b"").decode("utf-8", "replace"))
     except Exception:  # noqa: BLE001
-        return []
+        return {"processes": [], "memory_top": []}
 
 
 def _started(c) -> float | None:
@@ -889,7 +898,7 @@ async def status(pid: str):
     def go() -> dict:
         out = {"state": "none", "memory_used": None, "memory_limit": None, "cpu_percent": None, "started_at": None,
                "outdated": False, "idle_minutes": IDLE_MINUTES, "last_used": last_used.get(pid), "processes": [],
-               "oom_kills": 0, "max_running": MAX_RUNNING}
+               "memory_top": [], "oom_kills": 0, "max_running": MAX_RUNNING}
         try:
             c = client.containers.get(f"sbx-{pid}")
         except NotFound:
@@ -898,7 +907,7 @@ async def status(pid: str):
         if c.status != "running" and pid in stopped_by:
             out.update(stopped_by=stopped_by[pid][0], stopped_at=stopped_by[pid][1])
         if c.status == "running":
-            out.update(_stats(c), started_at=_started(c), processes=_processes(c), oom_kills=_oom_count(c) or 0)
+            out.update(**_stats(c), **_processes(c), started_at=_started(c), oom_kills=_oom_count(c) or 0)
         return out
     return await asyncio.to_thread(go)
 

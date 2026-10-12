@@ -34,10 +34,10 @@ load_builtin()
 class NotFound(Exception):
     pass
 containers: dict = {}
-PS = ("    1  0.0  1000     99 sleep infinity\n"
-      "   42 87.5 204800    185 python train.py --epochs 10\n"
-      "   43  3.0  10240     20 node server.js\n"
-      "   77  0.0   3000      0 ps -eo pid=,pcpu=,rss=,etimes=,args= --sort=-pcpu\n"
+PS = ("    1     1  0.0  1000     99 sleep infinity\n"
+      "   42    42 87.5 204800    185 python train.py --epochs 10\n"
+      "   43    43  3.0  10240     20 node server.js\n"
+      "   77    77  0.0   3000      0 ps -eo pid=,pgid=,pcpu=,rss=,etimes=,args= --sort=-pcpu\n"
       "garbage line\n")
 class FakeContainer:
     def __init__(self, status, oom="2"):
@@ -79,14 +79,15 @@ assert runner.cpu_percent({"cpu_stats": {"cpu_usage": {"total_usage": 5}, "syste
                            "precpu_stats": {"cpu_usage": {"total_usage": 5}, "system_cpu_usage": 1}}, 1) is None
 ps = runner.parse_ps(PS)
 assert [p["pid"] for p in ps] == [42, 43], ps
-assert ps[0] == {"pid": 42, "cpu": 87.5, "memory": 204800 * 1024, "elapsed": 185, "command": "python train.py --epochs 10"}
-assert len(runner.parse_ps("\n".join(f"{i} 1.0 10 5 job{i}" for i in range(1, 20)))) == runner.PROCESS_MAX
+assert ps[0] == {"pid": 42, "pgid": 42, "cpu": 87.5, "memory": 204800 * 1024, "elapsed": 185, "command": "python train.py --epochs 10"}
+assert len(runner.parse_ps("\n".join(f"{i} {i} 1.0 10 5 job{i}" for i in range(1, 20)))) == runner.PROCESS_MAX
 assert runner.mem_bytes("1g") == 2**30 and runner.mem_bytes("512m") == 512 * 2**20 and runner.mem_bytes("1.5G") == int(1.5 * 2**30)
 assert runner.mem_bytes("lots") is None
 c = FakeContainer("running"); c.name = "sbx-me"; containers["sbx-me"] = c
 s = asyncio.run(runner.status("me"))
 assert s["state"] == "running" and s["cpu_percent"] == runner.cpu_percent(c.stats()) and s["memory_used"] == 500, s
 assert [p["pid"] for p in s["processes"]] == [42, 43] and s["oom_kills"] == 2, s
+assert [p["pid"] for p in s["memory_top"]] == [42, 43], s  # v1.94 按内存排的那份
 c.status = "exited"
 s = asyncio.run(runner.status("me"))
 assert s["state"] == "stopped" and s["processes"] == [] and s["oom_kills"] == 0 and s["cpu_percent"] is None, s
