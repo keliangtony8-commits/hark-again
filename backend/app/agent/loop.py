@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 
-from .. import activity, browser_files, spill, vision
+from .. import activity, browser_files, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
 from . import compact, loop_guard, supersede
@@ -95,7 +95,7 @@ class MessageBuilder:
         out.append(TextDelta(len(self.blocks) - 1, delta))
         return out
 
-    SINGLETONS = {"browser"}  # 一条回复里同一个会话只需要一张的卡片（浏览器实时画面：按 session 区分）
+    SINGLETONS = {"browser", "plan"}  # 一条回复里只需要一张的卡片：浏览器实时画面（按 session 区分）、计划清单（plan.py）
 
     def find(self, block: dict) -> int | None:
         """同一张单例卡已在回复里 → 它的位置。"""
@@ -139,7 +139,17 @@ class MessageBuilder:
                 b = {k: v for k, v in b.items() if k != "live"}
             if isinstance(h := b.get("handoff"), dict) and h.get("state") == "pending":
                 b = {**b, "handoff": {**h, "state": "expired"}}  # 等用户接管的条：这一轮停了，再也等不到交还
+            b = plan.settle(b)  # 计划卡定格：没做完的步骤不再闪“进行中”
             out.append({**b, "state": "expired"} if b.get("state") == "pending" and "id" in b else b)
+        return out
+
+    def settle(self) -> list[Event]:
+        """这一轮正常说完：计划卡定格（plan.settle）。"""
+        out: list[Event] = []
+        for i, b in enumerate(self.blocks):
+            if b.get("type") == "plan" and not b.get("settled"):
+                self.blocks[i] = plan.settle(b)
+                out.append(BlockUpdate(i, self.blocks[i]))
         return out
 
     def steps(self, stopped: bool = False) -> list[dict]:
@@ -248,6 +258,8 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
             guard.recovered()
             messages.append({"role": "user", "content": loop_guard.nudge(guard.detail)})
 
+    for ev in builder.settle():
+        yield ev
     yield Done(builder.blocks)
 
 
@@ -326,6 +338,10 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
                 return
             args["form"] = reply.reply
 
+    if t.quiet:  # 控制类工具：不进时间线，结果块直接上卡（同单例原地换）
+        async for ev in _quiet(t, call, ctx, builder, args):
+            yield ev
+        return
     yield ToolStatus(call.id, call.name, t.label, "running", rec.start(call.id, call.name, t.label, args))
     live = _Live(builder)
     try:
@@ -353,6 +369,18 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）
         content = spill.bound(content, settings.tool_result_max, ctx.workspace, call.name)
     yield ToolResult(content, images=result.images)
+
+async def _quiet(t, call, ctx: ToolContext, builder: MessageBuilder, args: dict):
+    try:
+        result = await t.run(ctx, **args)
+    except Exception as e:
+        yield ToolResult(f"工具出错：{e}")
+        return
+    for b in result.blocks:
+        i = builder.find(b)
+        yield builder.replace(i, b) if i is not None else builder.add(b)
+    yield ToolResult(result.content)
+
 
 class _Live:
     """一次工具执行期间的实时块：工具 ctx.live(block) 推来的，第一次插入回复，之后原地替换。

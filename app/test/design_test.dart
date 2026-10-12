@@ -56,6 +56,7 @@ void main() {
       'lib/features/chat/message_view.dart': 1, // 生成中进度
       'lib/features/me/task_detail.dart': 1, // 运行中脉冲
       'lib/blocks/job_block.dart': 1, // 后台任务运行中脉冲
+      'lib/blocks/plan_block.dart': 1, // 计划清单“进行中”那一步的脉冲（v1.47）
       'lib/features/computer/computer_section.dart': 1, // 电脑里正在跑的后台任务脉冲（v1.25）
       'lib/blocks/basic_blocks.dart': 1, // 前台命令运行中脉冲（v1.24）
       'lib/features/projects/project_files_sheet.dart': 1, // 处理中脉冲

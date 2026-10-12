@@ -276,3 +276,31 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-preview-frame { height: 420px; border-top: 1px solid var(--border); background: var(--surface); --rise: 6px; animation: rise var(--dur) var(--ease); }
 .blk-preview-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
 @media (prefers-reduced-motion: reduce) { .blk-preview-frame { animation: none; } }
+/* 计划清单卡（v1.47）：墨色进度条；进行中闪点复用 .job-dot（不新增强调色） */
+.blk-plan { max-width: 640px; padding: var(--sp-3) var(--sp-4); }
+.blk-plan-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: var(--sp-2); min-height: 28px; cursor: pointer; }
+.blk-plan-head:disabled { cursor: default; }
+.blk-plan-head:focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; border-radius: var(--r-sm); }
+.blk-plan-title { flex: 1; font-weight: var(--fw-title); }
+.blk-plan-progress { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; animation: fade var(--dur) var(--ease); }
+.blk-plan-chev { display: grid; color: var(--text-3); transition: transform var(--dur) var(--ease); }
+.blk-plan-chev.is-open { transform: rotate(180deg); }
+.blk-plan-body { animation: rise var(--dur) var(--ease); }
+.blk-plan-meter { margin-top: var(--sp-2); height: 4px; border-radius: var(--r-full); background: var(--tile); overflow: hidden; }
+.blk-plan-meter > span { display: block; height: 100%; background: var(--text-2); transform-origin: left; transition: transform var(--dur-slow) var(--ease); }
+.blk-plan-why { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text-2); animation: rise var(--dur) var(--ease); }
+.blk-plan-steps { list-style: none; margin: var(--sp-1) 0 0; padding: 0; }
+.blk-plan-step { display: flex; align-items: flex-start; gap: var(--sp-2); padding-top: var(--sp-2); animation: rise var(--dur) var(--ease) both; }
+.blk-plan-mark { flex: none; width: 18px; height: 18px; margin-top: 2px; display: grid; place-items: center; border-radius: var(--r-full);
+  animation: icon-pop var(--dur) var(--ease); }
+.blk-plan-mark.is-todo { box-shadow: inset 0 0 0 1.5px var(--text-3); }
+.blk-plan-mark.is-now { box-shadow: inset 0 0 0 1.5px var(--text-2); }
+.blk-plan-mark.is-now::after { content: ""; width: 8px; height: 8px; border-radius: var(--r-full); background: var(--text-2); }
+.blk-plan-mark.is-done { background: var(--text-2); color: var(--surface); }
+.blk-plan-text { flex: 1; min-width: 0; color: var(--text-2); transition: color var(--dur) var(--ease); }
+.is-in-progress .blk-plan-text { color: var(--text); font-weight: var(--fw-title); }
+.is-completed .blk-plan-text { color: var(--text-3); text-decoration: line-through; }
+@media (prefers-reduced-motion: reduce) {
+  .blk-plan-body, .blk-plan-why, .blk-plan-step, .blk-plan-mark, .blk-plan-progress { animation: none; }
+  .blk-plan-chev, .blk-plan-meter > span, .blk-plan-text { transition: none; }
+}

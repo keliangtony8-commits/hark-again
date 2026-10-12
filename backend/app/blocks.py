@@ -101,6 +101,19 @@ class JobBlock(BaseModel):
     stop_reason: str | None = None  # 被护栏自动停掉的原因（卡住 / 输出过大），state=cancelled
 
 
+class PlanItem(BaseModel):
+    content: str
+    status: Literal["pending", "in_progress", "completed"] = "pending"
+
+
+class PlanBlock(BaseModel):
+    """v1.47 计划清单（app/plan.py，update_plan 产出）：一条回复里一张，随模型更新原地换；settled = 这一轮已结束（不再闪“进行中”）。"""
+    type: Literal["plan"] = "plan"
+    items: list[PlanItem] = []
+    explanation: str | None = None  # 最近一次改计划的原因
+    settled: bool = False
+
+
 class PageBlock(BaseModel):
     """生成的网页：预览 + 打开 + 复制链接。"""
     type: Literal["page"] = "page"
@@ -258,12 +271,17 @@ class FormBlock(BaseModel):
 
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
-                        OrderBlock, FormBlock, JobBlock, PreviewBlock],
+                        OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock],
                   Field(discriminator="type")]
 
 
 def text_to_blocks(text: str) -> list[dict]:
     return [TextBlock(text=text).model_dump()]
+
+
+def plan_text(b: dict) -> str:
+    from .plan import history_text  # 规则只在 plan.py
+    return history_text(b)
 
 
 def blocks_to_text(blocks: list[dict]) -> str:
@@ -305,6 +323,9 @@ def blocks_to_text(blocks: list[dict]) -> str:
             code = f"，退出码 {b['exit_code']}" if b.get("exit_code") not in (None, 0) and b.get("state") != "cancelled" else ""
             tail = f"\n最后的输出：\n{b['tail'][-600:]}" if b.get("tail") else ""
             parts.append(f"[后台任务 {b['id']}「{b['title']}」——{state}{code}]{tail}")
+        elif t == "plan":
+            if line := plan_text(b):
+                parts.append(line)
         elif t == "draft":
             parts.append(f"[草稿「{b['title']}」]\n{b['body']}")
         elif t == "summary":

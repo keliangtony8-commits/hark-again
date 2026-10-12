@@ -49,6 +49,7 @@ sealed class Block {
         'form' => FormBlock.fromJson(j),
         'job' => JobBlock.fromJson(j),
         'preview' => PreviewBlock.fromJson(j),
+        'plan' => PlanBlock.fromJson(j),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -333,6 +334,29 @@ class OrderBlock extends Block {
   bool get placed => state == 'placed';
 }
 
+/// 计划清单（后端 app/plan.py，update_plan 产出，v1.47）：一条回复里一张，助手边做边勾。文案规则在 models/plan.dart。
+class PlanBlock extends Block {
+  const PlanBlock({required this.items, this.explanation, this.settled = false});
+  factory PlanBlock.fromJson(Map<String, dynamic> j) => PlanBlock(
+      items: [for (final i in (j['items'] as List? ?? [])) if (i is Map<String, dynamic>) PlanItem.fromJson(i)],
+      explanation: j['explanation'] as String?,
+      settled: j['settled'] == true);
+  final List<PlanItem> items;
+  final String? explanation; // 最近一次改计划的原因
+  final bool settled; // 这一轮已结束：没做完的步骤定格，不再闪“进行中”
+}
+
+enum PlanStatus { pending, inProgress, completed }
+
+class PlanItem {
+  const PlanItem(this.content, this.status);
+  factory PlanItem.fromJson(Map<String, dynamic> j) => PlanItem(
+      j['content'] as String? ?? '',
+      switch (j['status']) { 'in_progress' => PlanStatus.inProgress, 'completed' => PlanStatus.completed, _ => PlanStatus.pending });
+  final String content;
+  final PlanStatus status;
+}
+
 class UnknownBlock extends Block {
   const UnknownBlock(this.type);
   final String type;
@@ -351,7 +375,7 @@ class ReplySegment {
 }
 
 bool standsAlone(Block b) => switch (b) {
-      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() => true,
+      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || PlanBlock() => true,
       _ => false,
     };
 

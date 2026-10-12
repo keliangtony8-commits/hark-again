@@ -81,6 +81,7 @@ class Tool:
     # 执行前要问用户的表单（如登录卡）：返回表单卡（不带 id/state）或 None = 不用问。
     # 用户填完，值以 form=FormReply 传给 run；取消则不执行。模型传来的 form 参数一律丢弃。
     form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None
+    quiet: bool = False  # 控制类工具（update_plan）：不进活动时间线、不亮“正在…”，用户看它自己的卡片就够了（Codex 的 builtin control tool）
 
     def available(self, ctx: ToolContext) -> bool:
         if self.scope == "project":
@@ -95,9 +96,9 @@ REGISTRY: dict[str, Tool] = {}
 
 def tool(name: str, label: str, description: str, parameters: dict, scope: str = "always",
          risk: "Callable[[dict, ToolContext], str | None] | None" = None, card: Callable[[dict], dict] | None = None,
-         form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None):
+         form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None, quiet: bool = False):
     def deco(fn):
-        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form)
+        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form, quiet)
         return fn
     return deco
 
