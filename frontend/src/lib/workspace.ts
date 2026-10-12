@@ -20,3 +20,7 @@ export const workspaceEmptyText = (ws: string) => isPersonalWorkspace(ws)
 export const workspacePickEmptyText = (ws: string) => isPersonalWorkspace(ws)
   ? "先在“我的 → 我的文件”里上传资料，再回来引用。"
   : "先在项目的“文件”里上传资料，再回来引用。";
+
+/** 工作区里一个文件的下载路径（未带 token，交给 fileUrl）：每段路径各自编码——唯一规则（= App core/workspace.dart workspaceFilePath）。 */
+export const workspaceFilePath = (ws: string, rel: string) =>
+  `/api/projects/${ws}/files/${rel.split("/").map(encodeURIComponent).join("/")}`;

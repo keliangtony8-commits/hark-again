@@ -69,6 +69,13 @@ class Handoff(BaseModel):
     state: Literal["pending", "done", "cancelled", "expired"] = "pending"
 
 
+class BrowserFile(BaseModel):
+    """浏览器和工作区之间搬过的一个文件（app/browser_files.py）：upload = 传到网页上的工作区文件，download = 网页下载、存进工作区的。"""
+    kind: Literal["upload", "download"]
+    name: str
+    path: str  # 工作区相对路径（downloads/报告.pdf）
+
+
 class BrowserBlock(BaseModel):
     """云浏览器实时画面卡：显示截图，用户可点击/打字接管。"""
     type: Literal["browser"] = "browser"
@@ -76,6 +83,8 @@ class BrowserBlock(BaseModel):
     site: str | None = None  # 打开的网站主域名（卡头显示）
     live: bool = False  # browser_open 正在打开页面（还没画面时客户端显示“正在打开”，不当作没开）
     handoff: Handoff | None = None  # v1.29 助手在等用户接管（验证码、滑块、扫码、MFA）
+    files: list[BrowserFile] = []  # v1.32 这条回复里传上去/下载下来的文件（最近 8 条）
+    workspace: str | None = None  # files 所在工作区 id（项目 id / me），客户端点文件用它打开
 
 
 class JobBlock(BaseModel):

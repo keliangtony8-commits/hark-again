@@ -6,8 +6,14 @@
 - 截图 + 鼠标/键盘：给你“实时画面 + 接管”用
 - 安全：只允许 http(s)，内网/回环地址的请求一律拦截（防 SSRF 打到你的数据库）
 - 空闲 15 分钟自动关闭会话
+- 文件（v1.32）：POST /upload 把后端传来的工作区文件放进网页的文件框（<input type=file> 直接设；
+  别的按钮先等“选文件”对话框再设）；页面触发的下载存到 DOWNLOADS/<会话>/，GET /downloads 列出、
+  取走后 DELETE——后端把它搬进工作区 downloads/（app/browser_files.py），这里只是中转，关会话就清掉
 """
 import asyncio
+import base64
+import shutil
+import uuid
 import ipaddress
 import json
 import os
@@ -17,7 +23,7 @@ import time
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from pydantic import BaseModel
 
@@ -28,12 +34,16 @@ VIEW = {"width": 1280, "height": 800}
 MAX_TEXT = 6000
 # 同时开着的会话上限（小 VPS 设 1）：超出时把最久没用的会话存好登录状态后关掉
 MAX_SESSIONS = max(1, int(os.environ.get("BROWSER_MAX_SESSIONS", "3")))
+DOWNLOADS = "/tmp/browser-downloads"
+UPLOAD_MAX = 20 * 1024 * 1024  # 一次上传的总字节（后端 browser_files.UPLOAD_MAX_MB 同值）
+DOWNLOAD_MAX = 200 * 1024 * 1024  # 单个下载超过就丢掉，只回报名字
 
 app = FastAPI()
 _pw = None
 _browser: Browser | None = None
 _sessions: dict[str, tuple[BrowserContext, Page]] = {}
 _used: dict[str, float] = {}
+_downloads: dict[str, list[dict]] = {}  # 会话 → [{id, name, size, state downloading|done|failed, error}]
 _restored: set[str] = set()  # 这次是从存好的登录状态恢复出来的会话（goto 回报给后端，模型知道“沿用了登录”）
 _lock = asyncio.Lock()
 
@@ -84,13 +94,15 @@ async def _session(name: str) -> Page:
             path = _state_path(name)
             saved = os.path.exists(path)
             ctx = await _browser.new_context(viewport=VIEW, locale="zh-CN", timezone_id="Asia/Shanghai",
-                                             storage_state=path if saved else None)
+                                             storage_state=path if saved else None, accept_downloads=True)
             if saved:
                 _restored.add(name)
             else:
                 _restored.discard(name)
             await ctx.route("**/*", _guard)
+            ctx.on("page", lambda p, n=name: _watch(n, p))  # 弹出的新标签页里的下载也要收
             page = await ctx.new_page()
+            _watch(name, page)
             _sessions[name] = (ctx, page)
     _used[name] = time.time()
     return _sessions[name][1]
@@ -105,6 +117,43 @@ async def _evict(name: str) -> None:
     ctx, _ = _sessions.pop(name)
     _used.pop(name, None)
     await ctx.close()
+    _drop_downloads(name)
+
+
+# ---- 下载中转 ----
+_watched: set[int] = set()
+
+
+def _watch(name: str, page) -> None:
+    if id(page) in _watched:
+        return
+    _watched.add(id(page))
+    page.on("download", lambda d: asyncio.ensure_future(_keep(name, d)))
+
+
+async def _keep(name: str, download) -> None:
+    """把一个下载存到中转目录。超过 DOWNLOAD_MAX 删掉，只留名字和原因。"""
+    did = uuid.uuid4().hex[:12]
+    fname = os.path.basename(download.suggested_filename or "") or "download"
+    item = {"id": did, "name": fname[:120], "size": 0, "state": "downloading", "error": ""}
+    _downloads.setdefault(name, []).append(item)
+    path = os.path.join(DOWNLOADS, name, did)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        await download.save_as(path)
+        item["size"] = os.path.getsize(path)
+        if item["size"] > DOWNLOAD_MAX:
+            os.remove(path)
+            item.update(state="failed", error=f"文件太大（超过 {DOWNLOAD_MAX // 1024 // 1024} MB），没留")
+        else:
+            item["state"] = "done"
+    except Exception as e:
+        item.update(state="failed", error=f"下载失败：{str(e)[:120]}")
+
+
+def _drop_downloads(name: str) -> None:
+    _downloads.pop(name, None)
+    shutil.rmtree(os.path.join(DOWNLOADS, name), ignore_errors=True)
 
 
 def _state_path(name: str) -> str:
@@ -145,12 +194,15 @@ SNAPSHOT_JS = """
   const out = []; let n = 0;
   document.querySelectorAll('[data-ref]').forEach(e => e.removeAttribute('data-ref'));
   for (const el of document.querySelectorAll(sel)) {
+    // 文件框常被藏起来（样式化的“上传”按钮盖在上面），照样编号：browser_upload 直接往里放文件
+    const file = el.tagName === 'INPUT' && el.type === 'file';
     const r = el.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight * 3) continue;
-    const st = getComputedStyle(el); if (st.visibility === 'hidden' || st.display === 'none') continue;
+    if (!file && (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight * 3)) continue;
+    const st = getComputedStyle(el); if (!file && (st.visibility === 'hidden' || st.display === 'none')) continue;
     const ref = String(++n); el.setAttribute('data-ref', ref);
-    const val = el.type === 'password' ? '' : el.value;  // 密码框的值绝不进快照
-    const name = (el.getAttribute('aria-label') || el.innerText || val || el.placeholder || el.title || el.alt || '').trim().replace(/\\s+/g, ' ').slice(0, 80);
+    const val = el.type === 'password' || file ? '' : el.value;  // 密码框的值绝不进快照
+    const label = file ? ((el.labels && el.labels[0] && el.labels[0].innerText) || el.accept || '选择文件') : '';
+    const name = (el.getAttribute('aria-label') || el.innerText || val || el.placeholder || el.title || el.alt || label || '').trim().replace(/\\s+/g, ' ').slice(0, 80);
     out.push({ ref, tag: el.tagName.toLowerCase(), type: el.type || '', name });
     if (n >= 150) break;
   }
@@ -189,6 +241,17 @@ class LoginIn(BaseModel):
     submit: bool = True
 
 
+class UploadFile(BaseModel):
+    name: str
+    mime: str = "application/octet-stream"
+    data: str               # base64
+
+
+class UploadIn(BaseModel):
+    ref: str
+    files: list[UploadFile]
+
+
 class PointIn(BaseModel):
     x: float                # 0..1，相对截图宽度
     y: float
@@ -207,7 +270,9 @@ async def goto(name: str, body: GotoIn):
     try:
         await page.goto(body.url, timeout=30000, wait_until="domcontentloaded")
     except Exception as e:
-        raise HTTPException(502, f"打不开：{e}")
+        if "Download is starting" not in str(e):  # 网址直接是个文件：不是打不开，是下载了（后端随后取走）
+            raise HTTPException(502, f"打不开：{e}")
+        await page.wait_for_timeout(1500)
     await _save(name)
     snap = await _snapshot(page)
     snap["restored"] = name in _restored
@@ -269,6 +334,70 @@ async def login(name: str, body: LoginIn):
     return await _snapshot(page)
 
 
+@app.post("/sessions/{name}/upload", dependencies=[Depends(auth)])
+async def upload(name: str, body: UploadIn):
+    """把文件放进网页：ref 是 <input type=file> 就直接设；是“上传”按钮之类就点它、等选文件对话框再设。"""
+    page = await _session(_check_name(name))
+    try:
+        payload = [{"name": os.path.basename(f.name) or "file", "mimeType": f.mime, "buffer": base64.b64decode(f.data, validate=True)}
+                   for f in body.files]
+    except ValueError:
+        raise HTTPException(400, "文件数据不是 base64")
+    if not payload:
+        raise HTTPException(400, "没有文件")
+    if sum(len(f["buffer"]) for f in payload) > UPLOAD_MAX:
+        raise HTTPException(413, f"一次最多传 {UPLOAD_MAX // 1024 // 1024} MB")
+    el = page.locator(f'[data-ref="{body.ref}"]')
+    try:
+        kind = await el.evaluate("e => e.tagName.toLowerCase() + ':' + (e.type || '')", timeout=8000)
+        if kind == "input:file":
+            if len(payload) > 1 and not await el.evaluate("e => e.multiple"):
+                raise HTTPException(400, "这个文件框一次只收一个文件")
+            await el.set_input_files(payload, timeout=8000)
+        else:
+            async with page.expect_file_chooser(timeout=8000) as info:
+                await el.click(timeout=8000)
+            chooser = await info.value
+            if len(payload) > 1 and not chooser.is_multiple():
+                raise HTTPException(400, "这个上传框一次只收一个文件")
+            await chooser.set_files(payload, timeout=8000)
+        await page.wait_for_timeout(800)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"上传失败（{str(e)[:160]}）：ref 要是文件框或点了会弹出选文件的按钮")
+    await _save(name)
+    return await _snapshot(page)
+
+
+@app.get("/sessions/{name}/downloads", dependencies=[Depends(auth)])
+async def downloads(name: str):
+    """还没被后端取走的下载（含正在下的、失败的）。"""
+    return {"downloads": [dict(d) for d in _downloads.get(_check_name(name), [])]}
+
+
+@app.get("/sessions/{name}/downloads/{did}", dependencies=[Depends(auth)])
+async def download_file(name: str, did: str):
+    _check_name(name)
+    item = next((d for d in _downloads.get(name, []) if d["id"] == did), None)
+    path = os.path.join(DOWNLOADS, name, did)
+    if not item or item["state"] != "done" or not os.path.isfile(path):
+        raise HTTPException(404)
+    return FileResponse(path, filename=item["name"])
+
+
+@app.delete("/sessions/{name}/downloads/{did}", dependencies=[Depends(auth)])
+async def download_done(name: str, did: str):
+    """后端取走了（或不要了）：删中转文件。"""
+    _check_name(name)
+    _downloads[name] = [d for d in _downloads.get(name, []) if d["id"] != did]
+    try:
+        os.remove(os.path.join(DOWNLOADS, name, re.sub(r"[^0-9a-f]", "", did)))
+    except FileNotFoundError:
+        pass
+    return {"ok": True}
+
+
 # ---- 实时画面与人工接管 ----
 @app.get("/sessions/{name}/screen", dependencies=[Depends(auth)])
 async def screen(name: str):
@@ -318,6 +447,7 @@ async def close(name: str, forget: bool = False):
                 ctx, _ = _sessions.pop(name)
                 _used.pop(name, None)
                 await ctx.close()
+                _drop_downloads(name)
             else:
                 await _evict(name)
         _restored.discard(name)

@@ -5,10 +5,15 @@ import asyncio, os, sys, tempfile, types
 saved, closed = [], []
 
 
+class Page(str):
+    def on(self, *a): pass
+
+
 class Ctx:
     def __init__(self, n): self.n = n
     async def route(self, *a): pass
-    async def new_page(self): return f"page-{self.n}"
+    def on(self, *a): pass
+    async def new_page(self): return Page(f"page-{self.n}")
     async def storage_state(self, path): saved.append(os.path.basename(path))
     async def close(self): closed.append(self.n)
 

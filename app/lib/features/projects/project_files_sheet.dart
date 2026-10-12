@@ -34,10 +34,8 @@ String projectFileLine(ProjectFile f) {
 }
 
 /// 打开项目文件（带 token 的下载地址，交给系统）——唯一入口。
-Future<void> openProjectFile(WidgetRef ref, String projectId, ProjectFile f) {
-  final path = f.path.split('/').map(Uri.encodeComponent).join('/');
-  return openUrl(ref.read(apiProvider).fileUrl('/api/projects/$projectId/files/$path'));
-}
+Future<void> openProjectFile(WidgetRef ref, String projectId, ProjectFile f) =>
+    openUrl(ref.read(apiProvider).fileUrl(workspaceFilePath(projectId, f.path)));
 
 /// 项目文件在消息里的样子：source=project 的文件块（id = 相对路径）。服务器只认这个对话所在项目里真实存在的文件。
 FileBlock projectFileBlock(String projectId, ProjectFile f) =>

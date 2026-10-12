@@ -9,7 +9,12 @@ export type ApprovalBlock = { type: "approval"; id: string; title: string; detai
 /** 云浏览器实时画面：session = 按网站起的会话名（旧卡 main），site = 网站，live = 还在打开（v1.26）。 */
 /** 助手请你接管浏览器（backend browser_handoff）：pending → done / cancelled / expired；交还 = form.reply（id 即它）。 */
 export type BrowserHandoff = { id: string; reason: string; state: "pending" | "done" | "cancelled" | "expired" };
-export type BrowserBlock = { type: "browser"; session: string; site?: string; live?: boolean; handoff?: BrowserHandoff | null };
+/** 浏览器和工作区之间搬过的文件（v1.32，backend app/browser_files.py）：upload = 传到网页上的工作区文件，download = 网页下载、存进工作区的。 */
+export type BrowserFile = { kind: "upload" | "download"; name: string; path: string };
+export type BrowserBlock = {
+  type: "browser"; session: string; site?: string; live?: boolean; handoff?: BrowserHandoff | null;
+  files?: BrowserFile[]; workspace?: string | null;
+};
 export type PageBlock = { type: "page"; slug: string; title: string; url: string };
 /** 端口预览（v1.30，app/preview.py）：工作区里跑着的网页服务，链接带期限。 */
 export type PreviewBlock = { type: "preview"; workspace: string; port: number; url: string; title?: string | null; command?: string; expires_at?: string | null };

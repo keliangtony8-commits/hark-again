@@ -31,3 +31,12 @@ String browserScreenSemantics({required bool control, required bool paused, Stri
   if (paused) return '$where画面已暂停，点一下继续';
   return control ? '$where实时画面，已接管，点哪里就点网页哪里' : '$where实时画面';
 }
+
+/// 卡上文件小条的第二行：传上去的 → “已传到网页”；下载的 → “已存到 downloads”（所在文件夹）。
+String browserFileLine(BrowserFile f) {
+  if (f.uploaded) return '已传到网页';
+  final slash = f.path.lastIndexOf('/');
+  return slash > 0 ? '已存到 ${f.path.substring(0, slash)}' : '已存到工作区';
+}
+
+String browserFileSemantics(BrowserFile f) => '${f.name}，${browserFileLine(f)}，点开查看';

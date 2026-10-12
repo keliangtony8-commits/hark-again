@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 
-from .. import activity, spill, vision
+from .. import activity, browser_files, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
 from .tools import REGISTRY, ToolContext, ToolResult, no_live, schemas
@@ -60,6 +60,21 @@ class Done:
 Event = BlockStart | BlockUpdate | TextDelta | ToolStatus | Thinking | Done
 
 
+def carry(old: dict, new: dict) -> dict:
+    """同一张单例卡（同会话的浏览器画面）换新时留下的历史：搬过的文件清单合并、接管条（新卡没带时）保留。
+    别的块原样返回 new。"""
+    if new.get("type") not in MessageBuilder.SINGLETONS or old.get("type") != new.get("type") \
+            or old.get("session") != new.get("session"):
+        return new
+    out = dict(new)
+    if old.get("files") or new.get("files"):
+        out["files"] = browser_files.card_files(old.get("files"), new.get("files"))
+        out["workspace"] = new.get("workspace") or old.get("workspace")
+    if "handoff" not in out and old.get("handoff"):
+        out["handoff"] = old["handoff"]
+    return out
+
+
 @dataclass
 class MessageBuilder:
     blocks: list[dict] = field(default_factory=list)
@@ -100,7 +115,8 @@ class MessageBuilder:
         return BlockUpdate(index, self.blocks[index])
 
     def replace(self, index: int, block: dict) -> Event:
-        """整块换掉（实时块换成最终块：旧字段如 live 不能残留）。"""
+        """整块换掉（实时块换成最终块：旧字段如 live 不能残留）。单例卡换新时带上旧卡的历史（carry）。"""
+        block = carry(self.blocks[index], block)
         self.blocks[index] = block
         self._text_open = False
         return BlockUpdate(index, block)
@@ -241,7 +257,9 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     if (ev := live.settle(blocks.pop(0) if blocks and live.index is not None else None)) is not None:
         yield ev
     for b in blocks:
-        if not builder.has(b):
+        if (i := builder.find(b)) is not None:  # 同会话的浏览器卡已在回复里：换成最新状态（carry 保留历史）
+            yield builder.replace(i, b)
+        else:
             yield builder.add(b)
     state = "error" if result.failed else "done"
     yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed) or {})

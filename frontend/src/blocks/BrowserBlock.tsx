@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { fileUrl, http } from "../lib/api";
 import {
-  HANDOFF_CANCEL, HANDOFF_DONE, HANDOFF_TITLE, browserScreenLabel, controlLabel, handoffStateLine, screenInterval, screenShouldPause,
+  HANDOFF_CANCEL, HANDOFF_DONE, HANDOFF_TITLE, browserFileLabel, browserFileLine, browserScreenLabel, controlLabel, handoffStateLine, screenInterval, screenShouldPause,
 } from "../lib/browserView";
 import type { BrowserBlock as T } from "../lib/types";
 import { useBlockActions } from "./actions";
-import { IconGlobe, IconHand, IconSend } from "../ui/icons";
+import { workspaceFilePath } from "../lib/workspace";
+import { IconChevron, IconDownload, IconGlobe, IconHand, IconSend, IconUpload } from "../ui/icons";
 
 /** 云浏览器实时画面：只在卡片可见、页面在前台时刷新截图，节奏见 lib/browserView（操作中快、打开中中、看着慢，
  *  只是看着 2 分钟后暂停，点一下继续）。点“接管”后点画面 = 点网页，下方输入框 = 键盘。
  *  每个请求带卡上的会话名（v1.26 按网站分会话），卡头写网站名；block.live = 还在打开：没画面时显示“正在打开”，不当作没开。
- *  v1.29 接管交还：block.handoff pending = 助手在等你 → 自动接管、出“需要你来”条，完成/做不了走 replyForm(id, {} | null)。 */
+ *  v1.29 接管交还：block.handoff pending = 助手在等你 → 自动接管、出“需要你来”条，完成/做不了走 replyForm(id, {} | null)。
+ *  v1.32 画面下列出这条回复传到网页上的 / 网页下载存进工作区的文件（block.files），点开 = 工作区文件。 */
 export default function BrowserBlock({ block }: { block: T }) {
   const session = block.session || "main";
   const { replyForm } = useBlockActions();
@@ -104,6 +106,19 @@ export default function BrowserBlock({ block }: { block: T }) {
         )}
         {paused && <div className="blk-browser-paused">画面已暂停，点一下继续</div>}
       </div>
+      {!!block.files?.length && block.workspace && (
+        <ul className="blk-browser-files">
+          {block.files.map((f) => (
+            <li key={`${f.kind}:${f.path}`}>
+              <a href={fileUrl(workspaceFilePath(block.workspace!, f.path))} target="_blank" rel="noreferrer" aria-label={browserFileLabel(f)}>
+                {f.kind === "upload" ? <IconUpload size={16} /> : <IconDownload size={16} />}
+                <span className="blk-browser-file-text"><b>{f.name}</b><small>{browserFileLine(f)}</small></span>
+                <IconChevron />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
       {control && (
         <div className="blk-browser-keys">
           <input value={keys} onChange={(e) => setKeys(e.target.value)} placeholder="先点画面里的输入框，再在这里打字"

@@ -8,12 +8,15 @@
 
 接管（v1.29）：图形验证码、滑块、扫码、人机验证、要手机批准的登录，模型调 browser_handoff(reason)：
 同会话的画面卡上出“需要你来”条（handoff pending），这一步挂起等用户在画面里弄完点“交还”（复用表单通道 form.reply），
-交还后重新读页面接着做；点“做不了”/ 10 分钟没人回 → 告诉模型别再弹。定时任务里没人能接管，直接说明。"""
+交还后重新读页面接着做；点“做不了”/ 10 分钟没人回 → 告诉模型别再弹。定时任务里没人能接管，直接说明。
+
+文件（v1.32，规则在 app/browser_files.py）：browser_upload 把工作区文件放进网页的文件框；页面触发的下载在每个动作之后
+自动搬进工作区 downloads/（_after），模型被告知路径；搬过的文件记在画面卡的 files 上（用户点了能打开）。"""
 import re
 import time
 import uuid
 
-from ... import browser_client, browser_sessions, vault
+from ... import browser_client, browser_files, browser_sessions, vault
 from ...browser_sessions import Tab
 from ...config import settings
 from .. import approvals
@@ -41,11 +44,27 @@ def _render(snap: dict, tab: Tab) -> str:
             + f"\n\n页面文字：\n{snap.get('text', '')}")
 
 
-def _card(tab: Tab, live: bool = False) -> dict:
+def _card(tab: Tab, live: bool = False, files: list[dict] | None = None, ws: str | None = None) -> dict:
     block = {"type": "browser", "session": tab.session, "site": browser_sessions.site_of(tab.url) or None}
     if live:
         block["live"] = True
+    if files:
+        block["files"], block["workspace"] = files, ws
     return {k: v for k, v in block.items() if v is not None}
+
+
+async def _after(ctx: ToolContext, tab: Tab, text: str, card: bool = False) -> ToolResult:
+    """每个浏览器动作之后：把页面触发的下载搬进工作区。有搬到的 → 告诉模型并在画面卡上记一笔。"""
+    moved = await browser_files.collect(ctx.workspace, tab.session)
+    if moved.note:
+        text = f"{moved.note}\n{text}"
+    blocks = [_card(tab, files=moved.files, ws=ctx.workspace)] if (card or moved.files) else []
+    return ToolResult(text, blocks)
+
+
+async def _act(ctx: ToolContext, method: str, path: str, json: dict | None = None) -> ToolResult:
+    r = await _snap(ctx, method, path, json)
+    return ToolResult(r) if isinstance(r, str) else await _after(ctx, r[1], r[0])
 
 
 async def _snap(ctx: ToolContext, method: str, path: str, json: dict | None = None) -> tuple[str, Tab] | str:
@@ -81,14 +100,13 @@ async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolRes
             else "这是新会话（没有保存过的登录）。")
     if switched:
         note += f"（从会话 {switched} 换到了这个；之后的点击、输入都作用于 {name}。）"
-    return ToolResult(f"会话：{name}。{note}\n" + text, [_card(tab)])
+    return await _after(ctx, tab, f"会话：{name}。{note}\n" + text, card=True)
 
 
 @tool("browser_click", "正在点击", "点击快照里编号为 ref 的元素，返回新快照。",
       {"type": "object", "properties": {"ref": {"type": "string"}}, "required": ["ref"]}, risk=_click_risk)
 async def browser_click(ctx: ToolContext, ref: str) -> ToolResult:
-    r = await _snap(ctx, "POST", "/act", {"action": "click", "ref": ref})
-    return ToolResult(r if isinstance(r, str) else r[0])
+    return await _act(ctx, "POST", "/act", {"action": "click", "ref": ref})
 
 
 @tool("browser_type", "正在输入", "在编号为 ref 的输入框里填入文字；submit=true 时随后按回车。"
@@ -97,22 +115,19 @@ async def browser_click(ctx: ToolContext, ref: str) -> ToolResult:
                                         "submit": {"type": "boolean", "default": False}},
        "required": ["ref", "text"]})
 async def browser_type(ctx: ToolContext, ref: str, text: str, submit: bool = False) -> ToolResult:
-    r = await _snap(ctx, "POST", "/act", {"action": "type", "ref": ref, "text": text, "submit": submit})
-    return ToolResult(r if isinstance(r, str) else r[0])
+    return await _act(ctx, "POST", "/act", {"action": "type", "ref": ref, "text": text, "submit": submit})
 
 
 @tool("browser_scroll", "正在滚动页面", "向下（dy>0）或向上滚动页面，返回新快照。",
       {"type": "object", "properties": {"dy": {"type": "integer", "default": 600}}})
 async def browser_scroll(ctx: ToolContext, dy: int = 600) -> ToolResult:
-    r = await _snap(ctx, "POST", "/act", {"action": "scroll", "dy": dy})
-    return ToolResult(r if isinstance(r, str) else r[0])
+    return await _act(ctx, "POST", "/act", {"action": "scroll", "dy": dy})
 
 
 @tool("browser_read", "正在查看页面", "重新读取当前页面（例如用户在实时画面里操作完之后）。",
       {"type": "object", "properties": {}})
 async def browser_read(ctx: ToolContext) -> ToolResult:
-    r = await _snap(ctx, "GET", "/snapshot")
-    return ToolResult(r if isinstance(r, str) else r[0])
+    return await _act(ctx, "GET", "/snapshot")
 
 
 @tool("browser_look", "正在看页面",
@@ -173,8 +188,8 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
         username, password, source = secret.username or "", vault.reveal(secret), f"保险箱「{secret.name}」"
     snap = await browser_client.snapshot_call(tab.session, "POST", "/login", {
         "user_ref": user_ref, "pass_ref": pass_ref, "username": username, "password": password})
-    return ToolResult(f"已用{source}代填登录（你看不到密码）。登录状态存在会话 {tab.session}，以后打开这个网站会接着用。"
-                      f"{note}\n" + _render(snap, tab))
+    return await _after(ctx, tab, f"已用{source}代填登录（你看不到密码）。登录状态存在会话 {tab.session}，"
+                        f"以后打开这个网站会接着用。{note}\n" + _render(snap, tab))
 
 
 async def _code_form(ctx: ToolContext, args: dict) -> dict | None:
@@ -201,7 +216,7 @@ async def browser_code(ctx: ToolContext, ref: str, label: str = "", submit: bool
         return ToolResult("用户没有填验证码，没填进去。")
     snap = await browser_client.snapshot_call(tab.session, "POST", "/act",
                                               {"action": "type", "ref": ref, "text": code, "submit": submit})
-    return ToolResult("已把用户填的验证码填进去。\n" + _render(snap, tab))
+    return await _after(ctx, tab, "已把用户填的验证码填进去。\n" + _render(snap, tab))
 
 
 def handoff_reason(reason: str) -> str:
@@ -238,5 +253,28 @@ async def browser_handoff(ctx: ToolContext, reason: str) -> ToolResult:
         text = _render(await browser_client.snapshot_call(tab.session, "GET", "/snapshot"), tab)
     except Exception as e:  # 浏览器在接管期间关了等：交还本身成功，让模型重开
         text = f"（重新读页面失败：{e}；用 browser_open 重新打开）"
-    final = {**_card(tab), "handoff": {"id": hid, "reason": why, "state": "done"}}
-    return ToolResult("用户完成了接管，把浏览器交还给你了。先看新快照确认那一步过了，再接着做。\n" + text, [final])
+    moved = await browser_files.collect(ctx.workspace, tab.session)  # 用户接管时点出来的下载
+    final = {**_card(tab, files=moved.files, ws=ctx.workspace), "handoff": {"id": hid, "reason": why, "state": "done"}}
+    note = f"{moved.note}\n" if moved.note else ""
+    return ToolResult(f"用户完成了接管，把浏览器交还给你了。先看新快照确认那一步过了，再接着做。\n{note}" + text, [final])
+
+
+@tool("browser_upload", "正在上传文件",
+      "把工作区里的文件放进网页的文件框（简历、图片、表格…）。ref = 快照里的文件框（input:file，常是隐藏的，名字可能叫“选择文件”）"
+      "或点了会弹出选文件的“上传”按钮；paths = 工作区相对路径，最多 5 个、共 20 MB，目录先打包成 zip。"
+      "只是放进框里，之后照常点提交/上传按钮。网页下载的文件会自动存进工作区 downloads/，不用这个。",
+      {"type": "object", "properties": {"ref": {"type": "string"},
+                                        "paths": {"type": "array", "items": {"type": "string"}}},
+       "required": ["ref", "paths"]})
+async def browser_upload(ctx: ToolContext, ref: str, paths: list[str]) -> ToolResult:
+    tab = _tab(ctx)
+    if not tab.session:
+        return ToolResult(NOT_OPEN)
+    try:
+        snap, moved = await browser_files.upload(ctx.workspace, tab.session, ref, paths)
+    except browser_files.BrowserFileError as e:
+        return ToolResult(str(e), failed=str(e))
+    r = await _after(ctx, tab, f"{moved.note}\n" + _render(snap, tab))
+    card = _card(tab, files=browser_files.card_files(moved.files, (r.blocks[0].get("files") if r.blocks else None)),
+                 ws=ctx.workspace)
+    return ToolResult(r.content, [card])

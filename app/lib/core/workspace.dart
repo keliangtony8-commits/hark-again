@@ -20,3 +20,7 @@ String workspaceEmptyText(String ws) => isPersonalWorkspace(ws)
 /// 引用选择器里文件夹是空的时的说明。
 String workspacePickEmptyText(String ws) =>
     isPersonalWorkspace(ws) ? '先在“我的 → 我的文件”里上传资料，再回来引用。' : '先在项目的“文件”里上传资料，再回来引用。';
+
+/// 工作区里一个文件的下载路径（未带 token，由 Api.fileUrl 补上）：每段路径各自编码——唯一规则。
+String workspaceFilePath(String ws, String rel) =>
+    '/api/projects/$ws/files/${rel.split('/').map(Uri.encodeComponent).join('/')}';

@@ -81,7 +81,16 @@
 .blk-handoff-text .blk-handoff-warn { color: var(--warning); }
 .blk-handoff-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: var(--sp-2); }
 .blk-handoff-line { margin: 0; padding: 0 var(--sp-4) var(--sp-2); color: var(--text-2); font-size: var(--fs-sm); animation: fade var(--dur) var(--ease); }
-@media (prefers-reduced-motion: reduce) { .blk-handoff, .blk-handoff-line, .blk-browser-paused { animation: none; } }
+.blk-browser-files { list-style: none; margin: 0; padding: var(--sp-2) var(--sp-2) 0; display: grid; gap: var(--sp-1); }
+.blk-browser-files li { --rise: 6px; animation: rise var(--dur) var(--ease); }
+.blk-browser-files a { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--tile); color: var(--text); text-decoration: none; transition: background var(--dur-fast) var(--ease); }
+.blk-browser-files a:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.blk-browser-files a > svg { color: var(--text-2); flex: none; }
+.blk-browser-file-text { flex: 1; min-width: 0; display: grid; }
+.blk-browser-file-text b { font-weight: var(--fw-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.blk-browser-file-text small { color: var(--text-2); font-size: var(--fs-sm); }
+.blk-browser-files + .blk-browser-keys, .blk-browser-files:last-child { padding-bottom: var(--sp-2); }
+@media (prefers-reduced-motion: reduce) { .blk-handoff, .blk-handoff-line, .blk-browser-paused, .blk-browser-files li { animation: none; } }
 .blk-browser-keys { display: flex; gap: var(--sp-2); padding: var(--sp-2); border-top: 1px solid var(--border); }
 .blk-browser-keys input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; padding: 0 var(--sp-2); }
 

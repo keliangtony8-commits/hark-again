@@ -3,6 +3,7 @@
 // 每个请求都带卡上的会话名（v1.26 按网站分会话）；卡头写网站名。block.live = 页面还在打开：没画面时显示“正在打开”并继续刷，不当作浏览器没开。
 // v1.29 接管交还：block.handoff pending = 助手在等你（验证码、滑块、扫码）→ 自动进入接管、卡头下出“需要你来”条，
 // 弄完点“完成，交还”（onForm(id, {})），做不了点“做不了”（onForm(id, null)）；结束后那一行小字说明结果。
+// v1.32 画面下列出这条回复里传到网页上的 / 网页下载存进工作区的文件（block.files），点开用工作区文件接口。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api.dart';
+import '../core/links.dart';
+import '../core/workspace.dart';
 import '../models/block.dart';
 import '../models/browser_view.dart';
 import '../theme/app_theme.dart';
@@ -188,6 +191,14 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
         AnimatedSize(
           duration: context.motion(Motion.base),
           curve: Motion.ease,
+          alignment: Alignment.topCenter,
+          child: widget.block.files.isEmpty || widget.block.workspace == null
+              ? const SizedBox(width: double.infinity)
+              : _FileRows(files: widget.block.files, workspace: widget.block.workspace!),
+        ),
+        AnimatedSize(
+          duration: context.motion(Motion.base),
+          curve: Motion.ease,
           child: control
               ? Padding(
                   padding: const EdgeInsets.all(Sp.x2),
@@ -302,6 +313,52 @@ class _HandoffBar extends StatelessWidget {
             ]),
         ]),
       ),
+    );
+  }
+}
+
+/// 画面下的文件清单（v1.32）：↑ 传到网页上的工作区文件、↓ 网页下载存进工作区的。新来的一条上浮淡入，点开 = 打开工作区文件。
+class _FileRows extends ConsumerWidget {
+  const _FileRows({required this.files, required this.workspace});
+  final List<BrowserFile> files;
+  final String workspace;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Sp.x2, Sp.x2, Sp.x2, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        for (final f in files)
+          FadeSlideIn(
+            key: ValueKey('${f.kind}:${f.path}'),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: Sp.x1),
+              child: Pressable(
+                semanticLabel: browserFileSemantics(f),
+                onTap: () => openUrl(ref.read(apiProvider).fileUrl(workspaceFilePath(workspace, f.path))),
+                child: ExcludeSemantics(
+                  child: Container(
+                  constraints: const BoxConstraints(minHeight: Layout.rowMin),
+                  padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
+                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+                  child: Row(children: [
+                    Icon(f.uploaded ? Icons.upload_file_rounded : Icons.download_done_rounded, size: 18, color: p.text2),
+                    const SizedBox(width: Sp.x2),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Text(f.name, style: context.text.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(browserFileLine(f), style: context.text.bodySmall?.copyWith(color: p.text2), maxLines: 1),
+                      ]),
+                    ),
+                    Icon(Icons.chevron_right_rounded, size: Layout.rowIcon, color: p.text3),
+                  ]),
+                ),
+                ),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }

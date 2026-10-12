@@ -48,3 +48,31 @@ async def close(session: str, forget: bool = False) -> None:
         raise RuntimeError(f"云浏览器没连上：{e}") from e
     if r.status_code >= 400:
         raise RuntimeError(_detail(r))
+
+
+async def downloads(session: str) -> list[dict]:
+    """这个会话还没取走的下载 [{id, name, size, state downloading|done|failed, error}]。"""
+    r = await call(session, "GET", "/downloads")
+    if r.status_code >= 400:
+        raise RuntimeError(_detail(r))
+    return r.json().get("downloads", [])
+
+
+async def fetch_download(session: str, did: str, dest) -> int:
+    """把一个下载流式写到 dest（Path），返回字节数；之后服务端那份由 drop_download 删。"""
+    async with httpx.AsyncClient(base_url=settings.browser_url, timeout=120) as c:
+        async with c.stream("GET", f"/sessions/{session}/downloads/{did}", headers=_h()) as r:
+            if r.status_code >= 400:
+                raise RuntimeError(f"取下载失败（{r.status_code}）")
+            n = 0
+            with open(dest, "wb") as f:
+                async for chunk in r.aiter_bytes():
+                    f.write(chunk)
+                    n += len(chunk)
+            return n
+
+
+async def drop_download(session: str, did: str) -> None:
+    r = await call(session, "DELETE", f"/downloads/{did}")
+    if r.status_code >= 400:
+        raise RuntimeError(_detail(r))

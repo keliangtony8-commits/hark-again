@@ -1,5 +1,5 @@
 // 浏览器画面卡的纯规则（v1.29，= app models/browser_view.dart）：接管条文案、截图刷新节奏（截图轮询，不上 VNC）、读屏句子。
-import type { BrowserHandoff } from "./types";
+import type { BrowserFile, BrowserHandoff } from "./types";
 
 export const HANDOFF_TITLE = "需要你来";
 export const HANDOFF_DONE = "完成，交还";
@@ -32,3 +32,12 @@ export function browserScreenLabel(control: boolean, paused: boolean, site?: str
   if (paused) return `${where}画面已暂停，点一下继续`;
   return control ? `${where}实时画面，已接管，点哪里就点网页哪里` : `${where}实时画面`;
 }
+
+/** 卡上文件条的第二行（v1.32，= App browserFileLine）：传上去的 → “已传到网页”；下载的 → “已存到 downloads”。 */
+export function browserFileLine(f: BrowserFile): string {
+  if (f.kind === "upload") return "已传到网页";
+  const slash = f.path.lastIndexOf("/");
+  return slash > 0 ? `已存到 ${f.path.slice(0, slash)}` : "已存到工作区";
+}
+
+export const browserFileLabel = (f: BrowserFile) => `${f.name}，${browserFileLine(f)}，点开查看`;
