@@ -14,6 +14,7 @@
 """
 import asyncio
 import base64
+import calendar
 import codecs
 import json
 import os
@@ -92,9 +93,14 @@ def _existing(pid: str):
     return c if c.status == "running" else None
 
 
-def _container(pid: str):
+def _check_pid(pid: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", pid):
         raise HTTPException(400, "bad project id")
+    return pid
+
+
+def _container(pid: str):
+    _check_pid(pid)
     name = f"sbx-{pid}"
     try:
         c = client.containers.get(name)
@@ -282,11 +288,59 @@ def _busy(pid: str) -> bool:
 
 @app.delete("/sandboxes/{pid}", dependencies=[Depends(auth)])
 async def remove(pid: str):
-    try:
-        client.containers.get(f"sbx-{pid}").remove(force=True)
-    except NotFound:
-        pass
+    """删除容器（删项目 / 用户点“重启电脑”）。工作区文件和 .home 里装的东西都在挂载目录里，下次用到时自动重建。"""
+    _check_pid(pid)
+
+    def go():
+        try:
+            client.containers.get(f"sbx-{pid}").remove(force=True)
+        except NotFound:
+            pass
+        last_used.pop(pid, None)
+    await asyncio.to_thread(go)
     return {"ok": True}
+
+
+def _memory(c) -> tuple[int | None, int | None]:
+    """(已用, 上限) 字节。已用 = usage 减去可回收的文件缓存（和 docker stats 一样算法），否则读过大文件就像“内存满了”。"""
+    try:
+        m = c.stats(stream=False).get("memory_stats") or {}
+    except Exception:  # noqa: BLE001 — 拿不到就不显示，不影响状态
+        return None, None
+    usage = m.get("usage")
+    if usage is None:
+        return None, m.get("limit")
+    st = m.get("stats") or {}
+    cache = st.get("inactive_file", st.get("total_inactive_file", 0))
+    return max(0, usage - cache), m.get("limit")
+
+
+def _started(c) -> float | None:
+    raw = ((c.attrs.get("State") or {}).get("StartedAt") or "")[:19]  # 2026-10-12T05:01:02.123456789Z → 秒
+    try:
+        return float(calendar.timegm(time.strptime(raw, "%Y-%m-%dT%H:%M:%S")))
+    except ValueError:
+        return None
+
+
+@app.get("/sandboxes/{pid}/status", dependencies=[Depends(auth)])
+async def status(pid: str):
+    """只看不启动：容器在不在、在跑没、占多少内存。state：running | stopped（空闲休眠了）| none（还没开过机）。"""
+    _check_pid(pid)
+
+    def go() -> dict:
+        out = {"state": "none", "memory_used": None, "memory_limit": None, "started_at": None, "outdated": False,
+               "idle_minutes": IDLE_MINUTES, "last_used": last_used.get(pid)}
+        try:
+            c = client.containers.get(f"sbx-{pid}")
+        except NotFound:
+            return out
+        out.update(state="running" if c.status == "running" else "stopped", outdated=_outdated(c))
+        if c.status == "running":
+            out["memory_used"], out["memory_limit"] = _memory(c)
+            out["started_at"] = _started(c)
+        return out
+    return await asyncio.to_thread(go)
 
 
 async def _reaper():

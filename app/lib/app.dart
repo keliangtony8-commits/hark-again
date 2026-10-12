@@ -8,6 +8,7 @@ import 'core/session.dart';
 import 'features/auth/login_screen.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/computer/computer_screen.dart';
 import 'features/me/connectors_screen.dart';
 import 'features/me/me_screen.dart';
 import 'features/me/memory_screen.dart';
@@ -67,6 +68,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ]),
         GoRoute(path: 'connectors', builder: (_, s) => ConnectorsScreen(oauth: OAuthResult.fromQuery(s.uri.queryParameters))),
         GoRoute(path: 'vault', builder: (_, _) => const VaultScreen()),
+        GoRoute(path: 'computer', builder: (_, _) => const ComputerScreen()),
         GoRoute(path: 'pages', builder: (_, _) => const PagesScreen()),
         GoRoute(path: 'usage', builder: (_, _) => const UsageScreen()),
         GoRoute(path: 'skills', builder: (_, _) => const SkillsScreen(), routes: [

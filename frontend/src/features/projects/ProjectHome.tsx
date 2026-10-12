@@ -1,12 +1,14 @@
 // 项目首屏（v1.10，= App ProjectHome）：项目聊天还没打开对话时，代替通用问候。
 // 字标 + 衬线名字 → 规则一行（点开规则与档案）→ 最近的对话（窄屏才有；宽屏历史栏常驻左侧，CSS 藏掉）
-// → 文件（v1.11：最近改过的 3 个，点开就看；全部/管理 → 文件面板；空文件夹一行上传入口）→ 起步建议。
+// → 文件（v1.11：最近改过的 3 个，点开就看；全部/管理 → 文件面板；空文件夹一行上传入口）
+// → 电脑（v1.25：features/computer/ComputerSection）→ 起步建议。
 import { fileUrl } from "../../lib/api";
 import { extOf } from "../../lib/files";
 import { formatWhen } from "../../lib/format";
 import type { ConversationSummary, Project, ProjectFile } from "../../lib/types";
 import { IconChat, IconChevron, IconPin, IconUpload } from "../../ui/icons";
 import { stagger } from "../../ui/kit";
+import ComputerSection from "../computer/ComputerSection";
 import { PROJECT_FILES_MAX, projectFileLine, projectFilePath, projectLine, projectRecent, projectRecentFiles } from "./projectHome";
 
 type Props = {
@@ -72,6 +74,7 @@ export default function ProjectHome({ project: p, conversations, suggestions, on
           </div>
         </section>
       )}
+      <ComputerSection ws={p.id} enter={i++} />{/* v1.25：项目沙盒在不在跑、在忙什么；加载中/失败不画 */}
       {suggestions.length > 0 && (
         <section className="section enter" style={nth()}>
           <div className="section-title"><span>{recent.length ? "或者新开一段" : "从这里开始"}</span></div>

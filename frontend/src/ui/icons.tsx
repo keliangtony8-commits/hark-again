@@ -6,6 +6,8 @@ const S = ({ d, size = 20 }: { d: string; size?: number }) => (
 type P = { size?: number };
 export const IconHome = (p: P) => <S {...p} d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" />;
 export const IconChat = (p: P) => <S {...p} d="M5 18.5 3.5 21V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v10.5a2 2 0 0 1-2 2z" />;
+export const IconComputer = (p: P) => <S {...p} d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 14.5zM9 20h6M12 16v4" />;
+export const IconCloudOff = (p: P) => <S {...p} d="M4 4l16 16M8.5 6.6A5.5 5.5 0 0 1 17 10.5a3.75 3.75 0 0 1 2.9 5.4M16 18H7a4.5 4.5 0 0 1-1.9-8.6" />;
 export const IconFolder = (p: P) => <S {...p} d="M3.5 7a2 2 0 0 1 2-2H10l2 2.5h6.5a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />;
 /** 存进项目文件：文件夹 + 向上箭头 */
 export const IconSaveTo = (p: P) => <S {...p} d="M3.5 7a2 2 0 0 1 2-2H10l2 2.5h6.5a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2zM12 17v-6M9.5 13.5 12 11l2.5 2.5" />;

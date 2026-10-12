@@ -1,0 +1,14 @@
+/* “电脑”一节（v1.25）：状态行带内存细条；任务行 = 可点的主体（看日志）+ 行尾取消（按钮不能套按钮，同 .report-row）。 */
+.computer-status { align-items: flex-start; }
+.computer-status .row-icon { color: var(--text-2); }
+.computer-status.is-down .row-icon, .computer-status.is-down .computer-state { color: var(--warning); }
+.computer-state, .computer-hint { animation: fade var(--dur) var(--ease) both; }
+.computer-meter { height: 4px; margin-top: var(--sp-2); }
+.computer-meter > span { background: var(--text-2); }
+.computer-meter.meter-near > span { background: var(--warning); }
+.computer-job { padding: 0 var(--sp-2) 0 0; transition: background var(--dur-fast) var(--ease); }
+.computer-job:hover { background: var(--tile); }
+.computer-job-open { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; align-self: stretch;
+  padding: var(--sp-3) 0 var(--sp-3) var(--sp-4); text-align: left; color: inherit; }
+.computer-job-open .row-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { .computer-state, .computer-hint { animation: none; } }

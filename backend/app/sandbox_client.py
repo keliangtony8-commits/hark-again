@@ -34,6 +34,23 @@ async def remove(project_id: str) -> None:
         pass
 
 
+async def status(project_id: str) -> dict:
+    """容器现状（sandbox/runner.py /sandboxes/{id}/status），只看不启动。连不上抛 httpx.HTTPError。"""
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(f"{settings.sandbox_url}/sandboxes/{project_id}/status",
+                        headers={"Authorization": f"Bearer {settings.sandbox_token}"})
+        r.raise_for_status()
+        return r.json()
+
+
+async def restart(project_id: str) -> None:
+    """删掉容器（下次用到自动按最新镜像重建）。和 remove() 不同：失败要抛出来，让用户知道没重启成。"""
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.delete(f"{settings.sandbox_url}/sandboxes/{project_id}",
+                           headers={"Authorization": f"Bearer {settings.sandbox_token}"})
+        r.raise_for_status()
+
+
 async def _job(action: str, project_id: str, job_id: str) -> dict:
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(f"{settings.sandbox_url}/jobs/{action}",

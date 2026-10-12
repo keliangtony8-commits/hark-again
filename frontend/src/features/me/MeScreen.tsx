@@ -6,11 +6,9 @@ import { outbox } from "../../lib/outbox";
 import { APPEARANCES, setAppearance, useAppearance } from "../../lib/theme";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, type UsageReport } from "../../lib/usage";
 import { Avatar } from "../../ui/glass";
-import { IconBack, IconBrain, IconChevron, IconClock, IconFolder, IconLayout, IconPlug, IconShield, IconSpark } from "../../ui/icons";
+import { IconBack, IconBrain, IconChevron, IconClock, IconComputer, IconLayout, IconPlug, IconShield, IconSpark } from "../../ui/icons";
 import { Section, Segmented, Toggle, stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
-import { PERSONAL_WORKSPACE, workspaceFilesTitle } from "../../lib/workspace";
-import ProjectFiles from "../projects/ProjectFiles";
 import AvatarColorPop from "./AvatarColorPop";
 import "./me.css";
 
@@ -19,7 +17,7 @@ const GROUPS = [
     { to: "/me/memory", icon: IconBrain, title: "记忆", sub: "我记住的偏好和事实，随时可改可删" },
     { to: "/me/tasks", icon: IconClock, title: "定时任务", sub: "每天的简报、提醒和例行检查" },
     { to: "/me/skills", icon: IconSpark, title: "技能", sub: "内置和你自定义的做事方法" },
-    { to: "#files", icon: IconFolder, title: workspaceFilesTitle(PERSONAL_WORKSPACE), sub: "云端电脑上的文件，我做出来的也在这" },
+    { to: "/me/computer", icon: IconComputer, title: "我的电脑", sub: "云端 Linux 的状态、后台任务和文件" },
     { to: "/me/pages", icon: IconLayout, title: "Pages", sub: "我为你做的可分享网页" },
   ] },
   { title: "连接", items: [
@@ -79,7 +77,6 @@ export default function MeScreen() {
   const appearance = useAppearance();
   const { solid } = useLook();
   const [pop, setPop] = useState(false);
-  const [files, setFiles] = useState(false);
   const hero = useRef<HTMLDivElement>(null);
   const closePop = useCallback(() => setPop(false), []);
   // 从站内点头像进来 → 返回上一页；直接打开（深链接 / 刷新）→ 回到主页
@@ -107,9 +104,7 @@ export default function MeScreen() {
                   <div className="row-body"><div className="row-title">{title}</div><div className="row-sub">{sub}</div></div>
                   <span className="row-trail"><IconChevron /></span>
                 </>;
-                return to === "#files" // 我的文件是弹层（和项目文件同一个抽屉），不是页面
-                  ? <button key={to} className="row" onClick={() => setFiles(true)}>{inner}</button>
-                  : <Link key={to} to={to} className="row">{inner}</Link>;
+                return <Link key={to} to={to} className="row">{inner}</Link>;
               })}
             </div>
           </Section>
@@ -126,7 +121,6 @@ export default function MeScreen() {
           <div className="list"><button className="row" onClick={logout}><div className="row-body"><div className="row-title danger-text">退出登录</div></div></button></div>
         </Section>
       </div>
-      {files && <ProjectFiles projectId={PERSONAL_WORKSPACE} onClose={() => setFiles(false)} />}
     </div>
   );
 }

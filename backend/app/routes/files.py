@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import reply_files, storage, workspaces
+from .. import computer, reply_files, storage, workspaces
 from ..db import get_session
 from ..auth import require_query_token, require_user
 from ..config import settings
@@ -71,6 +71,20 @@ async def delete_project_file(path: str, pid: str = Depends(_workspace)):
     if p.is_file():
         p.unlink()
     return {"ok": True}
+
+
+# ---- 工作区的“电脑”：容器状态、内存、磁盘、正在跑的后台任务；重启（computer.py）----
+@router.get("/api/projects/{pid}/computer", dependencies=auth)
+async def computer_status(pid: str = Depends(_workspace), db: AsyncSession = Depends(get_session)):
+    return await computer.status(db, pid)
+
+
+@router.post("/api/projects/{pid}/computer/restart", dependencies=auth)
+async def computer_restart(pid: str = Depends(_workspace), db: AsyncSession = Depends(get_session)):
+    try:
+        return await computer.restart(db, pid)
+    except computer.ComputerError as e:
+        raise HTTPException(503, str(e))
 
 
 # ---- 把一条回复存成项目文件（reply_files.py）----

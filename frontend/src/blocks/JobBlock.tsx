@@ -80,7 +80,8 @@ export default function JobBlock({ block }: { block: T }) {
   );
 }
 
-function JobLog({ job, onClose }: { job: JobInfo; onClose: () => void }) {
+/** 完整日志（最后 2 万字）：任务卡和“电脑”一节的任务行共用。 */
+export function JobLog({ job, onClose }: { job: JobInfo; onClose: () => void }) {
   const [text, setText] = useState(job.tail);
   const [copied, setCopied] = useState(false);
   useEffect(() => {

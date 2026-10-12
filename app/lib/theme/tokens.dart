@@ -202,6 +202,7 @@ abstract final class Timing {
   static const copiedHold = Duration(milliseconds: 1500); // 复制键变成对勾停多久再变回去
   static const clockTick = Duration(seconds: 1); // “思考中 · 8 秒”这类计时多久跳一次
   static const jobPoll = Duration(seconds: 2); // 聊天里的后台任务卡运行中多久问一次进度
+  static const computerPoll = Duration(seconds: 5); // 电脑状态块：有后台任务在跑时多久刷新一次（每次要问 Docker，别太密）
 }
 
 /// 玻璃材质（ui/glass.dart 只读这里）。真模糊很贵：只给浮层（顶栏、输入胶囊、弹层），列表里的卡片用“假玻璃”。

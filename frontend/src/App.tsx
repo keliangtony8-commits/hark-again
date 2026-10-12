@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import Login from "./features/auth/Login";
 import ChatScreen from "./features/chat/ChatScreen";
+import ComputerScreen from "./features/computer/ComputerScreen";
 import HomeScreen from "./features/home/HomeScreen";
 import ConnectorsScreen from "./features/me/ConnectorsScreen";
 import MemoryScreen from "./features/me/MemoryScreen";
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="me/skills" element={<SkillsScreen />} />
           <Route path="me/connectors" element={<ConnectorsScreen />} />
           <Route path="me/vault" element={<VaultScreen />} />
+          <Route path="me/computer" element={<ComputerScreen />} />
           <Route path="me/pages" element={<PagesScreen />} />
           <Route path="me/usage" element={<UsageScreen />} />
           {/* v0.47 前的“设置”页已拆进“我的”和“用量”：旧链接回到我的 */}

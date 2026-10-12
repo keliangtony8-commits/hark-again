@@ -1,5 +1,16 @@
 // 展示用的格式化：文件大小、相对时间、钟点、耗时。所有页面共用，措辞统一。
-String formatSize(int b) => b < 1024 ? '$b B' : b < 1 << 20 ? '${(b / 1024).toStringAsFixed(0)} KB' : '${(b / (1 << 20)).toStringAsFixed(1)} MB';
+String formatSize(int b) => b < 1024
+    ? '$b B'
+    : b < 1 << 20
+        ? '${(b / 1024).toStringAsFixed(0)} KB'
+        : b < 1 << 30
+            ? '${(b / (1 << 20)).toStringAsFixed(1)} MB'
+            : '${_trim1(b / (1 << 30))} GB';
+
+String _trim1(double v) {
+  final s = v.toStringAsFixed(1);
+  return s.endsWith('.0') ? s.substring(0, s.length - 2) : s;
+}
 
 /// 文件卡第二行的“是什么”——唯一规则（网页 lib/files.ts fileKind 同义）：先看扩展名，再看 mime 大类，都不认识 = 空。
 String fileKind(String name, String mime) {
