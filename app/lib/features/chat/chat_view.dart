@@ -13,6 +13,7 @@ import '../../core/workspace.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../models/message.dart';
+import '../../models/reply_end.dart';
 import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
@@ -175,6 +176,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   onResend: ctl.resend,
                                   onDiscard: ctl.discard,
                                   onRegenerate: regen ? ctl.regenerate : null,
+                                  onContinue: regen && m.end.continuable ? () => ctl.send(continueText) : null,
                                   onSave: m.isUser || m.pending ? null : () => saveReplyToProject(context, ref, messageId: m.id, projectId: widget.projectId),
                                   last: i == 0 && !m.isUser,
                                   revealed: m.id == _revealed,

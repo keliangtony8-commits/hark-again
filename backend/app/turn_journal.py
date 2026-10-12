@@ -85,7 +85,7 @@ def _step_line(s: dict) -> str:
 
 
 def history_note(status: str, steps: list[dict]) -> str:
-    """给模型的历史里附在被打断的回复后面（Codex turn_aborted 的形状，deepseek 的措辞）。done → 空串。"""
+    """给模型的历史里附在没走完的回复后面（Codex turn_aborted 的形状，deepseek 的措辞）：interrupted / stopped / wrapped / looped。done → 空串。"""
     if status == "interrupted":
         unknown = [s for s in steps or [] if s.get("code") == TOOL_OUTCOME_UNKNOWN]
         head = "这一轮回答被服务器重启打断了，没有说完（不是用户停的）。"
@@ -102,6 +102,12 @@ def history_note(status: str, steps: list[dict]) -> str:
         if cut:
             body += "被停下的操作可能执行了一部分：\n" + "\n".join(_step_line(s) for s in cut)
         return f"\n\n<turn_aborted>\n{body}\n</turn_aborted>"
+    if status == "wrapped":  # loop 预算用完收尾（v1.56：客户端给“继续”，用户点了就是一句“继续”）
+        return ("\n\n<turn_wrapped>\n这一轮因为步数/用量预算用完收尾了，事情没做完。用户说继续，就从上面交代的下一步接着做，"
+                "别从头重来，做过的不要重做。\n</turn_wrapped>")
+    if status == "looped":  # loop_guard 第二次判定原地打转被叫停
+        return ("\n\n<turn_looped>\n这一轮你在原地打转（同样的调用或内容反复出现），被系统叫停了。用户说继续，"
+                "先换个做法或换个工具，别重复刚才的调用；实在推进不了就直接问用户要什么信息。\n</turn_looped>")
     return ""
 
 

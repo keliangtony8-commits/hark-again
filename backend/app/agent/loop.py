@@ -87,9 +87,14 @@ class Retry:
     fallback: str | None = None
 
 
+# 一轮怎么结束的（Done.ended → 消息 status；客户端据此给“继续”）：done 正常说完 / wrapped 预算用完收尾 / looped 原地打转被叫停
+ENDINGS = ("done", "wrapped", "looped")
+
+
 @dataclass
 class Done:
     blocks: list[dict]
+    ended: str = "done"
 
 
 Event = BlockStart | BlockUpdate | TextDelta | ToolStatus | Thinking | Retry | Done
@@ -247,6 +252,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     overflowed = False  # 供应商报“上文超长”时强制压一次再重试；成功调用一次后复位
     retry_policy, retries, tried = llm_retry.policy(), 0, {model or settings.default_model}  # 调用失败的重试（llm_retry.py）
     max_steps, spent, step = max(1, limits.max_steps), 0, 0
+    ended = "done"
     while True:
         over = step >= max_steps - 1 or 0 < limits.turn_tokens <= spent \
             or (limits.deadline is not None and time.monotonic() >= limits.deadline)
@@ -321,6 +327,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
             if chant > 1 or over:
                 for ev in builder.text(loop_guard.STOP_NOTE):
                     yield ev
+                ended = "looped"
                 break
             guard.recovered()
             messages += [{"role": "assistant", "content": said},
@@ -365,6 +372,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         if hit > 1:
             for ev in builder.text(loop_guard.STOP_NOTE):
                 yield ev
+            ended = "looped"
             break
         if hit:
             guard.recovered()
@@ -372,7 +380,9 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
 
     for ev in builder.settle():
         yield ev
-    yield Done(builder.blocks)
+    if ended == "done" and limits.wrapped:
+        ended = "wrapped"
+    yield Done(builder.blocks, ended)
 
 
 

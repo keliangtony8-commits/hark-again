@@ -7,6 +7,7 @@ import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/models/block.dart';
 import 'package:assistant/models/export.dart';
 import 'package:assistant/models/message.dart';
+import 'package:assistant/models/reply_end.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -42,7 +43,7 @@ void main() {
     final md = conversationMarkdown('周末计划', [
       Message(id: 'u1', role: 'user', blocks: [const TextBlock('去哪玩？')]),
       Message(id: 'a1', role: 'assistant', blocks: [const TextBlock('去爬山'), const CodeBlock(language: 'sh', source: 'echo hi')]),
-      Message(id: 'a2', role: 'assistant', blocks: [const TextBlock('半截')], stopped: true),
+      Message(id: 'a2', role: 'assistant', blocks: [const TextBlock('半截')], end: ReplyEnd.stopped),
     ], at: at);
     expect(
         md,

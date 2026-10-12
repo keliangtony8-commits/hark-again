@@ -40,14 +40,14 @@ void main() {
     expect(cut.interrupted, isTrue);
     expect(cut.stopped, isFalse);
     expect(cut.cutShort, isTrue);
-    expect(cut.cutLabel, '服务器重启，回答被打断');
+    expect(cut.endLabel, '服务器重启，回答被打断');
     expect(cut.copyWith(pending: false).interrupted, isTrue); // copyWith 不丢
     final stopped = Message.fromJson(_json('stopped'));
-    expect(stopped.cutLabel, '已停止');
+    expect(stopped.endLabel, '已停止');
     expect(stopped.interrupted, isFalse);
     final done = Message.fromJson(_json(null));
     expect(done.cutShort, isFalse);
-    expect(done.cutLabel, isNull);
+    expect(done.endLabel, isNull);
     expect(cut.steps.single.state, ActivityState.stopped);
     expect(cut.steps.single.note, _note);
     expect(conversationMarkdown('t', [cut]), contains('开始装。\n\n*（服务器重启，回答被打断）*'));

@@ -205,7 +205,10 @@
 a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .msg-saved.is-err { color: var(--danger); }
 .msg-stopped { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-3); }
-.msg-stopped.is-interrupted svg { color: var(--warning); } /* 服务器重启打断：图标用警示色，文字仍是次要色 */
+.msg-stopped.is-interrupted svg { color: var(--warning); }
+/* “继续”（v1.56）：最后一条没正常说完的回复下的小号胶囊，跟操作条之后浮现 */
+.msg-continue { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--sp-1); margin-top: var(--sp-1); animation: rise var(--dur) var(--ease) both; animation-delay: calc(2 * var(--stagger)); }
+@media (prefers-reduced-motion: reduce) { .msg-continue { animation: none; } } /* 服务器重启打断：图标用警示色，文字仍是次要色 */
 /* 生成中的停止键：和发送键同位，换形时用同一套 rise 入场 */
 .send-btn.stop { animation: rise var(--dur) var(--ease); }
 .error-banner { display: flex; align-items: center; gap: var(--sp-2); }

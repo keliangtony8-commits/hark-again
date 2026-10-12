@@ -1,5 +1,6 @@
 import 'activity.dart';
 import 'block.dart';
+import 'reply_end.dart';
 import 'retry_notice.dart';
 
 /// 用户消息的发送状态（只存在于本机；服务器来的消息都是 sent）。
@@ -14,8 +15,7 @@ class Message {
       this.steps = const [],
       this.pending = false,
       this.outbox = Outbox.sent,
-      this.stopped = false,
-      this.interrupted = false,
+      this.end = ReplyEnd.done,
       this.createdAt,
       this.thought = '',
       this.thinkFrom,
@@ -27,8 +27,7 @@ class Message {
       role: j['role'] as String,
       blocks: blocksFrom(j['blocks']),
       steps: stepsFrom(j['steps']),
-      stopped: j['status'] == 'stopped',
-      interrupted: j['status'] == 'interrupted',
+      end: ReplyEnd.parse(j['status']),
       createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal());
 
   final String id, role;
@@ -38,17 +37,17 @@ class Message {
   final bool pending; // 正在生成
   final Outbox outbox;
 
-  /// 用户中途点了停止，内容是半截的（服务器 status=stopped）。
-  final bool stopped;
+  /// 这一轮怎么结束的（服务器 status，models/reply_end.dart）：停止 / 被打断 / 预算用完 / 原地打转。
+  final ReplyEnd end;
 
-  /// 服务器进程在这一轮中途没了（崩溃 / 重启），回答没说完（服务器 status=interrupted，turn_journal 恢复出来的）。
-  final bool interrupted;
+  bool get stopped => end == ReplyEnd.stopped;
+  bool get interrupted => end == ReplyEnd.interrupted;
 
-  /// 内容不完整：停止或被打断。行尾给一句说明（[cutLabel]），重新生成就能补全。
-  bool get cutShort => stopped || interrupted;
+  /// 内容不完整：停止或被打断，重新生成就能补全。
+  bool get cutShort => end.cutShort;
 
-  /// 不完整回复的说明；完整的 → null。
-  String? get cutLabel => stopped ? '已停止' : interrupted ? '服务器重启，回答被打断' : null;
+  /// 没正常说完时行尾的说明（[ReplyEnd.label]）；done → null。
+  String? get endLabel => end.label;
 
   /// 本地时间；老服务器不给、正在生成的占位消息没有 → null（日期分隔把它算进上一条的那天）。
   final DateTime? createdAt;
@@ -100,8 +99,7 @@ class Message {
       steps: steps ?? this.steps,
       pending: pending ?? this.pending,
       outbox: outbox ?? this.outbox,
-      stopped: stopped,
-      interrupted: interrupted,
+      end: end,
       createdAt: createdAt,
       thought: thought ?? this.thought,
       thinkFrom: thinkFrom ?? this.thinkFrom,

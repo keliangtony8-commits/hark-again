@@ -147,7 +147,9 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
     interrupted = False
     try:
         async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort), builder, model):
-            if not isinstance(ev, loop.Done):
+            if isinstance(ev, loop.Done):
+                status = ev.ended  # wrapped / looped：内容是完整的一段交代，但事没做完（客户端给“继续”）
+            else:
                 await journal.seen(ev, builder)
                 await emit(to_wire(ev))
     except asyncio.CancelledError:

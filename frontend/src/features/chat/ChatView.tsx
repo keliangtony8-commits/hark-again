@@ -7,6 +7,7 @@ import { FloatingFooter } from "../../ui/kit";
 import Composer, { type EditDraft } from "./Composer";
 import EmptyState from "./EmptyState";
 import MessageView, { type OutboxActions } from "./MessageView";
+import { CONTINUE_TEXT, continuable } from "../../lib/messageStatus";
 
 type Props = OutboxActions & {
   messages: Message[]; busy: boolean; error: string | null; link: LinkStatus;
@@ -106,6 +107,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
                 {startsNewDay(messages, i) && <div className="day-sep">{formatDay(m.created_at!)}</div>}
                 <MessageView message={m} last={m === last} onResend={onResend} onDiscard={onDiscard}
                   onRegenerate={m === last && m.role === "assistant" && canRegenerate ? onRegenerate : undefined}
+                  onContinue={m === last && m.role === "assistant" && canRegenerate && continuable(m) ? () => onSend(CONTINUE_TEXT) : undefined}
                   onEdit={m.id === editableId ? startEdit : undefined} editing={m.id === editing?.id} projectId={projectId} />
               </div>
             ))}

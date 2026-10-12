@@ -15,7 +15,7 @@ String conversationMarkdown(String title, List<Message> messages, {DateTime? at}
     '> 导出于 ${_stamp(t)} · ${kept.length} 条消息',
     for (final (m, body) in kept) ...[
       m.isUser ? '## 我' : '## 助手',
-      m.cutLabel != null ? '$body\n\n*（${m.cutLabel}）*' : body,
+      m.endLabel != null ? '$body\n\n*（${m.endLabel}）*' : body,
     ],
   ];
   return '${parts.join('\n\n')}\n';

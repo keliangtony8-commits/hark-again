@@ -1,7 +1,8 @@
 // 设计 v2：用户 = 右侧强调色胶囊；助手 = 左侧玻璃卡（假玻璃，不模糊），两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
 // 一条消息：用户 = 右侧气泡（没发出的带“待发送/发送失败”状态行；长按出菜单：复制，最后一条另有“编辑”）；助手 = 全宽块列表 + 工具进度 + 思考动画，
 // 生成完的回复下方一行操作（复制、朗读、存成文件；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
-// 操作行只常驻在最后一条（和半截回复）上；更早的回复点一下卡片才露出来（v1.17，ChatView 记住露出的是哪条，同时只露一条）。
+// 没正常说完的最后一条（停止 / 被打断 / 步数用完 / 原地打转）操作行下再给一颗“继续”（v1.56，发出去就是一句“继续”）。
+// 操作行只常驻在最后一条（和没正常说完的回复）上；更早的回复点一下卡片才露出来（v1.17，ChatView 记住露出的是哪条，同时只露一条）。
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import '../../core/speech.dart';
 import '../../models/activity.dart';
 import '../../models/block.dart';
 import '../../models/message.dart';
+import '../../models/reply_end.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
@@ -27,7 +29,7 @@ import 'retry_line.dart';
 import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
-  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onEdit, this.onSave, this.last = false, this.revealed = false, this.onReveal});
+  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onContinue, this.onEdit, this.onSave, this.last = false, this.revealed = false, this.onReveal});
   final Message message;
 
   /// 是不是对话里最后一条回复：只有它常驻“复制 / 重新生成”一排小图标（版面更干净）。
@@ -40,6 +42,9 @@ class MessageView extends StatelessWidget {
   final VoidCallback? onReveal;
   final void Function(String id)? onResend, onDiscard;
   final VoidCallback? onRegenerate;
+
+  /// “继续”：最后一条没正常说完的回复（[ReplyEnd.continuable]）且能发消息时才给（ChatView 决定）。
+  final VoidCallback? onContinue;
 
   /// 只有最后一条可编辑的用户消息才给（由 ChatView 按 ChatState.editableId 决定）。
   final VoidCallback? onEdit;
@@ -214,18 +219,21 @@ class MessageView extends StatelessWidget {
       ),
       // 操作行长出 / 收起都走 RiseSwitcher（回复不再是最后一条时也是平滑收起，不是一跳）
       RiseSwitcher(
-        child: !message.pending && (last || message.cutShort || revealed)
+        child: !message.pending && (last || message.end.continuable || revealed)
             ? _ReplyActions(
                 key: const ValueKey('actions'),
                 id: message.id,
                 text: copyText(message.blocks),
                 spoken: speakableText(message.blocks),
-                cut: message.cutLabel,
-                interrupted: message.interrupted,
+                end: message.end,
                 onRegenerate: onRegenerate,
                 onSave: onSave,
               )
             : null,
+      ),
+      // 用户发了别的、或开始生成：“继续”平滑收起
+      RiseSwitcher(
+        child: !message.pending && onContinue != null ? _ContinueRow(key: const ValueKey('continue'), end: message.end, onTap: onContinue!) : null,
       ),
     ]);
   }
@@ -295,12 +303,12 @@ class _OutboxStatus extends StatelessWidget {
 /// 回复下方的操作行：低调的小图标（kit QuietAction，不抢内容）。回复完成时逐个错峰浮现；
 /// 复制 → 对勾、朗读 → 停止都是原地 PopSwitcher；“重新生成”随可用状态淡入淡出。
 class _ReplyActions extends StatelessWidget {
-  const _ReplyActions({super.key, required this.id, required this.text, required this.spoken, this.cut, this.interrupted = false, this.onRegenerate, this.onSave});
+  const _ReplyActions({super.key, required this.id, required this.text, required this.spoken, this.end = ReplyEnd.done, this.onRegenerate, this.onSave});
   final String id;
   final String text;
   final String spoken; // 只含正文，没有就不给朗读键
-  final String? cut; // 半截回复：行尾标“已停止”/“服务器重启，回答被打断”（Message.cutLabel），提醒内容不完整（重新生成就能补全）
-  final bool interrupted;
+  final ReplyEnd end; // 没正常说完：行尾标一句说明（ReplyEnd.label），太长就省略
+
   final VoidCallback? onRegenerate;
   final VoidCallback? onSave; // 存成文件：有可复制的内容才给
 
@@ -324,24 +332,69 @@ class _ReplyActions extends StatelessWidget {
       // 把回复带走（存成文件）排在“就地重来”之后，和网页同序：复制 · 朗读 · 重新生成 · 存成文件（v1.16）
       if (text.isNotEmpty && onSave != null)
         QuietAction(icon: const Icon(Icons.drive_folder_upload_outlined), tooltip: saveReplyLabel, onPressed: onSave),
-      if (cut != null)
-        Padding(
-          padding: const EdgeInsets.only(left: Sp.x1),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(interrupted ? Icons.power_off_outlined : Icons.stop_circle_outlined, size: 14, color: interrupted ? p.warning : p.text3),
-            const SizedBox(width: Sp.x1),
-            Text(cut!, style: context.text.bodySmall?.copyWith(color: p.text3)),
-          ]),
-        ),
     ];
-    // 和卡片里的正文左缘对齐：图标键自带 8px 内边距，再补一点
+    final label = end.label;
+    // 和卡片里的正文左缘对齐：图标键自带 8px 内边距，再补一点。说明文字占剩下的宽，窄屏省略不溢出
     return Padding(
       padding: const EdgeInsets.only(top: Sp.x1, left: Sp.x1),
       child: Row(children: [
         for (var i = 0; i < items.length; i++) FadeSlideIn(delay: Motion.stagger(i, from: 1), child: items[i]),
+        if (label != null)
+          Flexible(
+            child: FadeSlideIn(
+              delay: Motion.stagger(items.length, from: 1),
+              child: Padding(
+                padding: const EdgeInsets.only(left: Sp.x1),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(replyEndIcon(end), size: 14, color: end.warn ? p.warning : p.text3),
+                  const SizedBox(width: Sp.x1),
+                  Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall?.copyWith(color: p.text3))),
+                ]),
+              ),
+            ),
+          ),
       ]),
     );
   }
+}
+
+/// 没正常说完的图标：停止方块 / 断电 / 沙漏 / 打转。
+IconData replyEndIcon(ReplyEnd end) => switch (end) {
+      ReplyEnd.interrupted => Icons.power_off_outlined,
+      ReplyEnd.wrapped => Icons.hourglass_bottom_rounded,
+      ReplyEnd.looped => Icons.sync_problem_rounded,
+      _ => Icons.stop_circle_outlined,
+    };
+
+/// 最后一条没正常说完的回复下的“继续”：小号胶囊（tile 底，不占强调色），点了等于发一句“继续”，轻触感。
+class _ContinueRow extends StatelessWidget {
+  const _ContinueRow({super.key, required this.end, required this.onTap});
+  final ReplyEnd end;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: Sp.x2),
+          child: FadeSlideIn(
+            delay: Motion.stagger(2, from: 1),
+            child: Semantics(
+              container: true, // 自成一个读屏节点，不并进上面回复的可选文字里
+              hint: end.continueHint,
+              child: PillButton(
+                dense: true,
+                icon: Icons.play_arrow_rounded,
+                label: continueText,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onTap();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 /// 朗读键：喇叭 →（向服务器要语音时）闪烁的小点 → 停止方块；同一时间只有一条在读（core/speech.dart）。

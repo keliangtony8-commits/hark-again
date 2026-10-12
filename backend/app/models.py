@@ -46,7 +46,7 @@ class Message(Base):
     conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(16))  # user | assistant
     blocks: Mapped[list] = mapped_column(JSON, default=list)
-    status: Mapped[str] = mapped_column(String(16), default="done", server_default="done")  # done | stopped（用户中途停止）| interrupted（服务器崩溃/重启打断，turn_journal 恢复）
+    status: Mapped[str] = mapped_column(String(16), default="done", server_default="done")  # done | stopped（用户中途停止）| interrupted（服务器崩溃/重启打断，turn_journal 恢复）| wrapped（预算用完收尾）| looped（原地打转被叫停）
     # 活动时间线：这条回复里每次工具调用一步（app/activity.py 定义形状）；用户消息、老消息为空
     steps: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     # 工具轨迹：这条回复里模型调过的工具 + 截短的结果（OpenAI 消息形状，agent/tool_trace.py 定义），只给下一轮的模型看，不上协议

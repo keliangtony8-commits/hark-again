@@ -9,8 +9,8 @@ import ActivitySummary from "./Activity";
 import RetryLine from "./RetryLine";
 import CopyButton from "../../ui/CopyButton";
 import SaveReplyButton from "../projects/SaveReplyButton";
-import { IconCheck, IconClose, IconCloudOff, IconCopy, IconEdit, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
-import { cutLabel } from "../../lib/messageStatus";
+import { IconAlert, IconCheck, IconClock, IconClose, IconCloudOff, IconCopy, IconEdit, IconPlay, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
+import { CONTINUE_TEXT, continueHint, endLabel, endWarns } from "../../lib/messageStatus";
 
 export type OutboxActions = { onResend: (id: string) => void; onDiscard: (id: string) => void };
 
@@ -35,14 +35,23 @@ function MessageActions({ message, onRegenerate, projectId }: { message: Message
       )}
       {/* 存到项目文件（v1.15）：有内容才给；项目对话直接存本项目，主聊天先选项目 */}
       {md && <SaveReplyButton messageId={message.id} projectId={projectId} />}
-      {/* 半截回复：提醒内容不完整（重新生成就能补全） */}
-      {cutLabel(message) && (
-        <span className={`msg-stopped${message.status === "interrupted" ? " is-interrupted" : ""}`}>
-          {message.status === "interrupted" ? <IconCloudOff size={12} /> : <IconStop size={12} />}{cutLabel(message)}
+      {/* 没正常说完：停止 / 被打断 / 步数用完 / 原地打转，行尾一句说明 */}
+      {endLabel(message) && (
+        <span className={`msg-stopped${endWarns(message) ? " is-interrupted" : ""}`}>
+          <EndIcon status={message.status} />{endLabel(message)}
         </span>
       )}
     </div>
   );
+}
+
+function EndIcon({ status }: Pick<Message, "status">) {
+  switch (status) {
+    case "interrupted": return <IconCloudOff size={12} />;
+    case "wrapped": return <IconClock size={12} />;
+    case "looped": return <IconAlert size={12} />;
+    default: return <IconStop size={12} />;
+  }
 }
 
 /** 没发出去的消息气泡下方的状态行：待发送 = 淡色提示；发送失败 = 点按重发 + 删除。 */
@@ -58,6 +67,8 @@ function OutboxStatus({ message, onResend, onDiscard }: { message: Message } & O
 
 type Props = OutboxActions & {
   message: Message; onRegenerate?: () => void;
+  /** “继续”：最后一条没正常说完的回复、且能发消息时才给（ChatView 决定）；点了等于发一句“继续”。 */
+  onContinue?: () => void;
   /** 所在项目（主聊天不给）：“存到项目文件”直接存进它。 */
   projectId?: string;
   /** 最后一条：回复的操作条常驻；更早的只在悬停/键盘聚焦时出现（同 App：只有最后一条常驻复制/重答）。 */
@@ -67,7 +78,7 @@ type Props = OutboxActions & {
 };
 
 /** 根节点带 data-msg-id：ChatView 按它定位搜索命中的消息。 */
-export default function MessageView({ message, last, onResend, onDiscard, onRegenerate, onEdit, editing, projectId }: Props) {
+export default function MessageView({ message, last, onResend, onDiscard, onRegenerate, onContinue, onEdit, editing, projectId }: Props) {
   if (message.role === "user") {
     const text = message.blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
     const files = message.blocks.filter((b) => b.type === "file");
@@ -118,6 +129,11 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
           </div>
         ))}
       {!message.pending && <MessageActions message={message} onRegenerate={onRegenerate} projectId={projectId} />}
+      {!message.pending && onContinue && (
+        <button className="btn btn-ghost btn-sm msg-continue" title={continueHint(message)} aria-description={continueHint(message)} onClick={onContinue}>
+          <IconPlay size={14} />{CONTINUE_TEXT}
+        </button>
+      )}
     </div>
   );
 }
