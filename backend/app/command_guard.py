@@ -1,8 +1,10 @@
 """命令安全规则的唯一入口：run_command（前台/后台）执行前都先问 verdict(command)。
 
-两级：
+三级（优先级 block > unsupported > ask）：
   block  永远不执行（批准也不行）：毁掉系统或整盘、关机、fork 炸弹、杀光进程……
          沙盒本身有资源和权限隔离，这一层是“别让模型一句手滑把工作区/容器搞没”的第二道防线。
+  unsupported  沙盒里根本做不到、跑了只会白白报错一轮的：sudo / su、apt / dnf / yum / apk 装系统软件
+         （容器非 root）。不执行，直接告诉模型能怎么装（pip / npm 落到工作区，系统软件看预装清单）。
   ask    执行前在聊天里弹审批卡等用户点头：推送/提交代码、递归删除、发布软件包、curl | sh……
 做法参考了 OpenAI Codex CLI（Apache-2.0）的命令安全分类：先把一整条 shell 拆成一段段简单命令
 （; && || | 换行），去掉 sudo / env / nohup 这类前缀再逐段看程序名和参数，而不是对整串做正则——
@@ -18,6 +20,8 @@ PREFIXES = {"sudo", "nohup", "time", "command", "exec", "nice", "ionice", "stdbu
 SYSTEM_PATHS = {"/", "/*", "~", "~/", "~/*", "$HOME", "${HOME}", "$HOME/", "$HOME/*", "/home", "/root", "/etc",
                 "/usr", "/var", "/bin", "/sbin", "/boot", "/lib", "/lib64", "/opt", "/srv", "/proc", "/sys", "/dev",
                 "/workspace", "/workspace/"}
+NO_ROOT = {"sudo", "su", "doas"}
+SYSTEM_PKG = {"apt", "apt-get", "aptitude", "dpkg", "dnf", "yum", "apk", "pacman", "zypper", "snap"}
 POWER = {"shutdown", "reboot", "halt", "poweroff"}
 DISK = re.compile(r"^(mkfs(\.\w+)?|mke2fs|wipefs|fdisk|sfdisk|parted|mkswap)$")
 FORK_BOMB = re.compile(r":\s*\(\s*\)\s*\{[^}]*:\s*\|\s*:[^}]*&[^}]*\}")
@@ -27,7 +31,7 @@ PIPE_TO_SHELL = re.compile(r"\b(curl|wget)\b[^|;&]*\|\s*(sudo\s+)?(ba|z|da)?sh\b
 
 @dataclass(frozen=True)
 class Verdict:
-    level: str  # "block" | "ask"
+    level: str  # "block" | "unsupported" | "ask"
     why: str
 
 
@@ -68,6 +72,13 @@ def _strip(words: list[str]) -> list[str]:
     return words
 
 
+def flags_only_query(prog: str, args: list[str]) -> bool:
+    """只是查询（dpkg -l、apt list --installed、apt show x）不需要 root，照常放行。"""
+    if prog == "dpkg":
+        return bool(args) and args[0] in ("-l", "-L", "-s", "--list", "--listfiles", "--status", "-S", "--search")
+    return prog in ("apt", "apt-get") and bool(args) and args[0] in ("list", "show", "search", "policy")
+
+
 def _flags(args: list[str]) -> set[str]:
     out = set()
     for a in args:
@@ -83,7 +94,21 @@ def _system(target: str) -> bool:
 
 
 def _segment(words: list[str]) -> Verdict | None:
-    words = _strip(words)
+    """一段简单命令：毁系统的照样 block（sudo rm -rf / 也是 block）；其次是沙盒做不到的；再其次 ask。"""
+    first = next((w for w in words if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", w)), "")
+    stripped = _strip(words)
+    v = _rules(stripped)
+    if v is not None and v.level == "block":
+        return v
+    prog = stripped[0] if stripped else ""
+    if first.rsplit("/", 1)[-1] in NO_ROOT or prog in NO_ROOT:
+        return Verdict("unsupported", "沙盒里没有 root 权限（sudo / su 用不了）")
+    if prog in SYSTEM_PKG and not flags_only_query(prog, stripped[1:]):
+        return Verdict("unsupported", "沙盒里不能装系统软件包（没有 root，apt 这类包管理器用不了）")
+    return v
+
+
+def _rules(words: list[str]) -> Verdict | None:
     if not words:
         return None
     prog, args = words[0], words[1:]
@@ -123,7 +148,7 @@ def _segment(words: list[str]) -> Verdict | None:
 
 
 def verdict(command: str) -> Verdict | None:
-    """block 优先于 ask；都不是返回 None（直接执行）。"""
+    """block > unsupported > ask；都不是返回 None（直接执行）。"""
     if FORK_BOMB.search(command):
         return Verdict("block", "fork 炸弹")
     if RAW_DEVICE.search(command):
@@ -134,10 +159,18 @@ def verdict(command: str) -> Verdict | None:
         found.append(Verdict("ask", "递归删除文件"))
     if PIPE_TO_SHELL.search(command):
         found.append(Verdict("ask", "下载并直接执行脚本"))
-    return next((v for v in found if v.level == "block"), found[0] if found else None)
+    for level in ("block", "unsupported"):
+        if (v := next((v for v in found if v.level == level), None)) is not None:
+            return v
+    return found[0] if found else None
 
 
 def refusal(v: Verdict) -> str:
     """block 时给模型的话。"""
     return (f"这条命令被安全规则拦下了（{v.why}），没有执行，用户批准也不会放行。"
             "不要换个写法绕过；如果真有必要，向用户说明你想做什么、为什么，请他自己在服务器上操作。")
+
+
+def unsupported(v: Verdict, environment: str) -> str:
+    """unsupported 时给模型的话：没跑，告诉它能怎么做。environment 由调用方给（workspaces.ENVIRONMENT）。"""
+    return f"这条命令没有执行：{v.why}。{environment}"

@@ -15,7 +15,8 @@ TEXT_EXT = {".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".tsx", ".html"
 
 
 # 工作区里不给用户/模型当“文件”看的目录：git 内部、后台任务的脚本和日志（jobs.py）
-HIDDEN_DIRS = frozenset({".git", ".jobs", ".spill"})  # .spill：长输出落盘（spill.py）
+# .spill：长输出落盘（spill.py）；.home：沙盒里的家目录，pip/npm 用户级安装（workspaces.HOME_DIR）
+HIDDEN_DIRS = frozenset({".git", ".jobs", ".spill", ".home"})
 
 
 def hidden(rel_parts) -> bool:

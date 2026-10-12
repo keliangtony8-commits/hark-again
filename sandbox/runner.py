@@ -3,6 +3,8 @@
 - 每个项目一个长驻容器 sbx-<project_id>，工作目录挂载 data/projects/<id>
 - 资源限制：内存、CPU、进程数；去掉所有 Linux capability；禁止提权
 - 单条命令超时即杀；输出太长时给后端开头 + 结尾，完整输出写进工作区 .spill/（约定见 backend/app/spill.py）
+- 容器里的家目录在工作区 .home（镜像 /etc/profile.d/workspace.sh）：pip/npm 用户级安装都落在工作区，
+  所以容器可以随时删掉重建——镜像更新后（预装清单变了），旧容器在下次用到时自动换成新镜像（有后台任务在跑的不换）
 - 空闲超过 IDLE_MINUTES 的容器自动停止，省 VPS 内存（有后台任务在跑的不停）
 - 后台任务（/jobs/*）：后端把 .jobs/<id>/run.sh 写进工作区（脚本约定见 backend/app/jobs.py），
   这里只负责 setsid 脱离启动、查活、整组杀掉；日志和退出码都落在工作区文件里，
@@ -71,6 +73,9 @@ def _container(pid: str):
     name = f"sbx-{pid}"
     try:
         c = client.containers.get(name)
+        if _outdated(c) and not (c.status == "running" and _busy(pid)):
+            c.remove(force=True)  # 装的东西都在工作区里，换镜像不丢
+            raise NotFound(name)
         if c.status != "running":
             c.start()
         return c
@@ -85,6 +90,14 @@ def _container(pid: str):
             cap_drop=["ALL"], security_opt=["no-new-privileges"],
             labels={"assistant.sandbox": "1"},
         )
+
+
+def _outdated(c) -> bool:
+    """容器建于旧镜像（镜像重建过）。查不到当前镜像就当没过期，别因为这个把容器删了。"""
+    try:
+        return c.image.id != client.images.get(IMAGE).id
+    except Exception:  # noqa: BLE001 — docker 查询失败不影响执行
+        return False
 
 
 def _exec(pid: str, command: str, timeout: int) -> dict:

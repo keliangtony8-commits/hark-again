@@ -10,6 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Project
 
+# 容器里的环境（与 sandbox/image/Dockerfile 预装清单 + workspace-env.sh 同步）：模型据此知道什么装得上、装了留不留得住
+PREINSTALLED = "python3、node/npm、git、curl、gcc/make、jq、ripgrep、zip/unzip、sqlite3、poppler-utils（pdftotext）、ImageMagick、中文字体"
+HOME_DIR = ".home"  # 工作区里的家目录（隐藏）：pip/npm 用户级安装、git 全局配置都在这里
+ENVIRONMENT = (f"沙盒是非 root 的 Debian（没有 sudo/apt），已预装：{PREINSTALLED}。"
+               "Python 包直接 pip install、Node 命令行工具 npm i -g：都装进工作区（~/.local），以后的对话和后台任务都能接着用，"
+               "容器重建也不丢，不用每次重装；项目自己的依赖照常用 .venv / node_modules。"
+               "缺系统软件就换 pip/npm 上的替代品，实在没有就告诉用户需要往沙盒镜像里加什么。")
+
 PERSONAL = "me"
 PERSONAL_NAME = "我的文件"
 
@@ -36,5 +44,5 @@ def prompt_line(ws: str) -> str:
     if is_personal(ws):
         return ("你有一台云端 Linux 电脑：用户的个人工作区（文件工具 + run_command 共用，跨对话保留，"
                 "用户在“我的文件”里能看到）。需要算、跑代码、处理文件、生成产物时直接用它；"
-                "和某个项目有关的活建议用户到那个项目里做。")
-    return "可以用文件工具和 run_command 操作项目工作区（只属于这个项目）。"
+                "和某个项目有关的活建议用户到那个项目里做。" + ENVIRONMENT)
+    return "可以用文件工具和 run_command 操作项目工作区（只属于这个项目）。" + ENVIRONMENT

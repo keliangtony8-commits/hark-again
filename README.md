@@ -54,6 +54,7 @@ docker compose --profile build-only build sandbox-image                      # �
 
 沙盒服务是唯一持有 Docker 权限的容器，不暴露端口；后端只能用 SANDBOX_TOKEN 调它。
 每个项目一个容器：1G 内存、1 核、256 进程、无 capability，单条命令最长 120 秒，空闲 30 分钟自动停。
+家目录在工作区的 `.home`（隐藏）：助手 `pip install` / `npm i -g` 装的东西跨对话、跨容器保留；沙盒里没有 sudo/apt，要加系统软件就改 `sandbox/image/Dockerfile` 后重新 `build sandbox-image`（旧容器下次用时自动换新镜像，有后台任务在跑的除外）。
 
 ## 手机 App（Flutter 原生，安卓优先）
 见 `app/README.md`：GitHub Actions 自动出 APK；首次打开在登录页填服务器地址（需 HTTPS 域名）。最近的对话、项目、首页卡片会缓存在手机上，断网也能看（纯客户端，不涉及后端）。
@@ -101,8 +102,9 @@ docker compose --profile build-only build sandbox-image                      # �
 - service.py     唯一运行 Chromium 的服务：快照、点击、输入、截图、人工接管；拦截内网地址
 
 沙盒服务 sandbox/
-- runner.py      唯一接触 Docker 的服务（前台 /exec；后台 /jobs/start|cancel|alive：setsid 脱离启动、整组杀；空闲回收跳过有任务在跑的容器）
-- image/         项目容器镜像（python、node、git）
+- runner.py      唯一接触 Docker 的服务（前台 /exec；后台 /jobs/start|cancel|alive：setsid 脱离启动、整组杀；空闲回收跳过有任务在跑的容器；镜像重建后旧容器下次用到时自动换新镜像）
+- image/         工作区容器镜像（非 root；预装 python、node、git、jq、ripgrep、zip、sqlite3、poppler、ImageMagick、中文字体——改清单同步 backend/app/workspaces.py PREINSTALLED）；
+                 workspace-env.sh → /etc/profile.d：HOME = 工作区/.home，pip / npm -g 用户级安装落在工作区，换镜像、删容器都不丢；缓存在 /tmp
 
 前端 frontend/src/
 - styles/tokens.css  设计令牌，唯一样式来源（v2.1：字重只写 var(--fw-body/title/strong)，主操作用 --ink 不用 --accent，卡片层次用 inset 0 1px 0 var(--glass-highlight) 不用外投影）；深色只认 <html data-theme="dark">，减少透明度只认 <html data-solid>（玻璃 → 实色、--blur 0）

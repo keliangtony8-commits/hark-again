@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 
-from ... import command_guard, deliver, jobs, sandbox_client, spill, vision
+from ... import command_guard, deliver, jobs, sandbox_client, spill, vision, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -100,8 +100,8 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
 
 
 @tool("run_command", "正在运行命令",
-      "在工作区的隔离 Linux 沙盒里执行 shell 命令（工作目录就是工作区根目录，有 python3、node、git）。"
-      "用于运行代码、测试、安装依赖、git 操作。前台单次最长 120 秒。"
+      "在工作区的隔离 Linux 沙盒里执行 shell 命令（工作目录就是工作区根目录，非 root，有 python3、node、git）。"
+      "用于运行代码、测试、安装依赖、git 操作；pip install / npm i -g 装的东西留在工作区，下次不用重装。前台单次最长 120 秒。"
       "预计超过一分钟的活（装大依赖、训练、批量下载/爬取、大构建、长时间脚本）用 background=true 放到后台："
       "立即返回任务 id，用户在聊天里看到实时日志、可以取消；结束时你会收到通知并在这段对话里接着说，"
       "期间不要反复用 job_status 轮询。后台任务连续 idle_timeout 秒没有任何输出会被判定卡住自动停掉。"
@@ -120,6 +120,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
                       title: str | None = None, idle_timeout: int | None = None) -> ToolResult:
     if (v := command_guard.verdict(command)) is not None and v.level == "block":
         return ToolResult(command_guard.refusal(v))
+    if v is not None and v.level == "unsupported":
+        return ToolResult(command_guard.unsupported(v, workspaces.ENVIRONMENT))
     if background:
         try:
             job = await jobs.start(ctx.db, project_id=ctx.workspace, command=command, title=title, timeout=timeout,
