@@ -14,3 +14,6 @@
 - tree-sitter / tree-sitter-bash（py-tree-sitter）— MIT License
   https://github.com/tree-sitter/tree-sitter-bash
   依赖：后端解析 shell 语法树（requirements.txt）
+
+- deepseek-ai/deepseek-harness packages/spill/spill-policy、spill-local — MIT License, Copyright (c) 2026 DeepSeek
+  移植到 backend/app/spill.py、sandbox/runner.py（_spill）、backend/tests/smoke_spill_port.py（v1.38）

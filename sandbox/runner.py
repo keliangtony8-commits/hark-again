@@ -21,6 +21,7 @@ import codecs
 import json
 import os
 import re
+import stat
 import threading
 import time
 
@@ -41,6 +42,8 @@ IDLE_MINUTES = int(os.environ.get("SANDBOX_IDLE_MINUTES", "30"))
 MAX_OUTPUT = 12000
 SPILL_MARK = "\n…（中间省略）…\n"  # 与 backend/app/spill.py MARK 相同
 SPILL_KEEP = 50
+SPILL_DAYS = 30
+SPILL_NAME_RE = re.compile(r"^\d{8}-\d{6}-[A-Za-z0-9._~-]{1,160}-[0-9a-f]{4}\.txt$")  # 同 spill.NAME_RE
 STDIN_MAX = 64 * 1024  # 走环境变量（base64），单个变量上限 128 KB，留足余量
 FLUSH_S = 0.5          # 实时输出多久推一批：太密只是白占带宽
 # 沙盒容器接的专用网络（docker-compose.yml 的 sandboxes 网络，本服务也接在上面）：端口预览靠它直连容器。
@@ -242,17 +245,40 @@ def _kill_exec(pid: str, tok: str) -> None:
 
 
 def _spill(pid: str, text: str) -> str:
-    """完整输出存进 /projects/<pid>/.spill/，返回工作区相对路径；只留最近 SPILL_KEEP 个。"""
+    """完整输出存进 /projects/<pid>/.spill/，返回工作区相对路径。约定与 backend/app/spill.py 相同（v1.38 移植自
+    deepseek-harness spill-local，MIT）：独占创建不覆盖；清理只认 SPILL_NAME_RE 形状的普通文件、不跟随符号链接，
+    严格早于 SPILL_DAYS 天的删、再只留 SPILL_KEEP 个；清理出错不影响这次落盘。"""
     d = f"/projects/{pid}/.spill"
     os.makedirs(d, exist_ok=True)
-    name = time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + f"-run_command-{os.urandom(2).hex()}.txt"
-    with open(f"{d}/{name}", "w", encoding="utf-8") as f:
-        f.write(text)
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    for _ in range(8):
+        name = f"{stamp}-run_command-{os.urandom(2).hex()}.txt"
+        try:
+            with open(f"{d}/{name}", "x", encoding="utf-8") as f:
+                f.write(text)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise FileExistsError(name)
     for path in (d, f"{d}/{name}"):
         os.chown(path, 1000, 1000)
-    old = sorted((e for e in os.scandir(d) if e.name.endswith(".txt")), key=lambda e: e.stat().st_mtime, reverse=True)
-    for e in old[SPILL_KEEP:]:
-        os.unlink(e.path)
+    try:
+        cutoff = time.time() - SPILL_DAYS * 86400
+        ours = []
+        for e in os.scandir(d):
+            if SPILL_NAME_RE.match(e.name):
+                st = e.stat(follow_symlinks=False)
+                if stat.S_ISREG(st.st_mode):
+                    ours.append((st.st_mtime, e.path))
+        ours.sort(reverse=True)
+        for p in dict.fromkeys([p for m, p in ours if m < cutoff] + [p for _, p in ours[SPILL_KEEP:]]):
+            try:
+                os.unlink(p)
+            except FileNotFoundError:
+                pass
+    except OSError:
+        pass
     return f".spill/{name}"
 
 
