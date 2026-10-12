@@ -5,7 +5,7 @@ import { asFileBlock, attachSub, extOf, MAX_MESSAGE_FILES } from "../../lib/file
 import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
 import ProjectFilePicker from "../projects/ProjectFilePicker";
 import { useRecorder } from "../../hooks/useRecorder";
-import { IconBrain, IconCheck, IconClip, IconClose, IconCopy, IconDoc, IconGauge, IconMap, IconPlus, IconEdit, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconStop, IconTerminal } from "../../ui/icons";
+import { IconBrain, IconCheck, IconClip, IconClose, IconCopy, IconDoc, IconGauge, IconMap, IconPlus, IconEdit, IconSwap, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconStop, IconTerminal } from "../../ui/icons";
 import { shellCommandOf } from "../../lib/shell";
 import { Menu } from "../../ui/kit";
 import { applyMention, mentionAt, rankMentions, rankSkills, type MentionQuery, type Sigil } from "../../lib/mentions";
@@ -293,6 +293,6 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
 
 /** 斜杠命令的图标（lib/slash.ts 只存名字，图标组件在这里对上）。 */
 function slashIcon(icon: SlashIcon) {
-  const C = { doc: IconDoc, plus: IconPlus, brain: IconBrain, map: IconMap, copy: IconCopy, gauge: IconGauge }[icon];
+  const C = { doc: IconDoc, plus: IconPlus, brain: IconBrain, map: IconMap, copy: IconCopy, gauge: IconGauge, swap: IconSwap, edit: IconEdit }[icon];
   return <C size={14} />;
 }

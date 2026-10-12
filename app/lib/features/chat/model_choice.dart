@@ -68,11 +68,7 @@ class ModelChip extends ConsumerWidget {
     if (cat.options.length == 2) {
       picked = cat.options.firstWhere((o) => o.id != current).id;
     } else {
-      picked = await showActionSheet<String>(context, title: '这个对话用哪个模型', actions: [
-        for (final o in cat.options)
-          SheetAction(o.id == current ? Icons.check_rounded : iconFor(o.id, cat), o.label,
-              subtitle: cat.isAuto(o.id) ? cat.autoHint() : null, value: o.id),
-      ]);
+      picked = await showModelSheet(context, cat, current);
     }
     if (picked != null && picked != current) await ctl.setModel(cat.toChoice(picked));
   }
@@ -116,6 +112,18 @@ class ModelChip extends ConsumerWidget {
     );
   }
 }
+
+/// 选模型的弹层（模型钮三项及以上时、/model 不接话时共用）→ 选中的 id（关掉 → null）。
+Future<String?> showModelSheet(BuildContext context, ModelCatalog cat, String current) => showActionSheet<String>(context,
+        title: '这个对话用哪个模型',
+        actions: [
+          for (final o in cat.options)
+            SheetAction(o.id == current ? Icons.check_rounded : ModelChip.iconFor(o.id, cat), o.label,
+                subtitle: cat.isAuto(o.id) ? cat.autoHint() : null, value: o.id),
+        ]);
+
+/// 换模型后的提示条（/model 用；模型钮自己换字不需要）。
+String modelToast(ModelCatalog cat, String id) => '这个对话改用${cat.labelOf(id)}，下一轮起生效';
 
 /// 计划模式开 / 关后的提示条（模式钮和 /plan 共用）。[on] = 切换后的状态。
 String planModeToast(bool on) => on ? '计划模式：先出方案，你批准后再动手' : '已退出计划模式';

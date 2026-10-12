@@ -42,6 +42,23 @@ export function effectiveEffort(opt: ModelOption, choice: string | null | undefi
   const levels = opt.efforts ?? [];
   return levels.find((l) => l.id === choice) ?? levels.find((l) => l.id === defaultEffort(opt));
 }
+/** `/model 名字`（v1.89，同 App ModelCatalog.find）→ id；认不出 / 对上好几项 → null。
+ *  大小写不敏感；“默认 / default” = 默认项；先 id、名字全等，再比开头（只对上一项才算）。 */
+export function findModel(cat: ModelCatalog, query: string): string | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  if (q === "默认" || q === "default") return cat.default;
+  const exact = cat.models.find((m) => m.id.toLowerCase() === q || m.label.toLowerCase() === q);
+  if (exact) return exact.id;
+  const hits = new Set(cat.models.filter((m) => m.id.toLowerCase().startsWith(q) || m.label.toLowerCase().startsWith(q)).map((m) => m.id));
+  return hits.size === 1 ? [...hits][0] : null;
+}
+export const findModelMiss = (cat: ModelCatalog, query: string) => `没有叫「${query.trim()}」的模型，可选：${cat.models.map((m) => m.label).join("、")}`;
+/** /model 不接话（网页没有弹层，回一句）：现在用哪个 + 可选。 */
+export const modelListNote = (cat: ModelCatalog, model: string | null | undefined) =>
+  `现在用${effectiveModel(cat, model)?.label ?? "默认"}；可选：${cat.models.map((m) => m.label).join("、")}。打 /model 名字 直接换`;
+export const modelNote = (cat: ModelCatalog, id: string) => `这个对话改用${labelOf(cat, id)}，下一轮起生效`;
+
 /** 选了 id → 存到对话上的值：选默认存 null。 */
 export const toEffortChoice = (opt: ModelOption, id: string): string | null => (id === defaultEffort(opt) ? null : id);
 

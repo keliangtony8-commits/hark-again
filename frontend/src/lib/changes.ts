@@ -1,5 +1,5 @@
 // 改动卡（v1.68）的纯规则，和 App models/changes.dart 同款；后端规则在 app/turn_changes.py。
-import type { ChangesBlock, FileChange } from "./types";
+import type { ChangesBlock, FileChange, Message } from "./types";
 
 export const changesCount = (b: ChangesBlock) => b.files.length + (b.more ?? 0);
 
@@ -25,3 +25,21 @@ export function changesSemantics(b: ChangesBlock): string {
   const [a, r] = changesTotals(b);
   return `${changesTitle(b)}，增加 ${a} 行，删除 ${r} 行：${b.files.map((f) => f.path).join("、")}`;
 }
+
+/** `/diff`（v1.89，同 App latestChanges）：最近一条带改动卡的消息 → [消息 id, 那张卡]；没有 → null。 */
+export function latestChanges(messages: Message[]): [string, ChangesBlock] | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const bs = messages[i].blocks;
+    for (let j = bs.length - 1; j >= 0; j--) {
+      const b = bs[j];
+      if (b.type === "changes" && b.files.length > 0) return [messages[i].id, b];
+    }
+  }
+  return null;
+}
+export function latestChangesNote(b: ChangesBlock): string {
+  if (b.undone) return changesTitle(b);
+  const [a, r] = changesTotals(b);
+  return `${changesTitle(b)} · +${a} −${r}`;
+}
+export const NO_CHANGES = "这段对话里助手还没改过文件";

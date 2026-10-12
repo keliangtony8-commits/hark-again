@@ -2,6 +2,7 @@
 // 网页版同款 lib/changes.ts；后端规则在 app/turn_changes.py。
 import 'activity.dart';
 import 'block.dart';
+import 'message.dart';
 
 int changesCount(ChangesBlock b) => b.files.length + b.more;
 
@@ -36,3 +37,22 @@ String undoErrorText(Object e) {
   final s = e.toString();
   return s.isEmpty ? '没撤销成功，稍后再试' : s;
 }
+
+/// `/diff`（v1.89）：最近一条带改动卡的消息 → (消息 id, 那张卡)；没有 → null。
+(String, ChangesBlock)? latestChanges(List<Message> messages) {
+  for (final m in messages.reversed) {
+    for (final b in m.blocks.reversed) {
+      if (b is ChangesBlock && b.files.isNotEmpty) return (m.id, b);
+    }
+  }
+  return null;
+}
+
+/// 跳过去时的提示条：“改了 3 个文件 · +12 −3”（撤销过的照标题）。
+String latestChangesToast(ChangesBlock b) {
+  if (b.undone) return changesTitle(b);
+  final (a, r) = changesTotals(b);
+  return '${changesTitle(b)} · +$a −$r';
+}
+
+const noChangesToast = '这段对话里助手还没改过文件';

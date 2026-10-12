@@ -567,6 +567,11 @@ class ChatController extends Notifier<ChatState> {
     return null;
   }
 
+  /// 定位到当前对话里的某条消息（/diff 跳到改动卡，v1.89）：和搜索命中同一条 focus 路，ChatView 滚过去并闪一下。
+  void seek(String messageId) {
+    if (state.messages.any((m) => m.id == messageId)) state = state.copyWith(focus: () => messageId);
+  }
+
   /// 取走待定位的消息（只给一次）：那条消息已在列表里才给，否则返回 null、请求留着等服务器版本。
   String? takeFocus() {
     final f = state.focus;

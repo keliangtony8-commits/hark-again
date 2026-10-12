@@ -4,7 +4,9 @@ import 'package:assistant/core/api.dart';
 import 'package:assistant/features/chat/composer.dart';
 import 'package:assistant/features/chat/mentions.dart';
 import 'package:assistant/features/chat/slash_actions.dart';
+import 'package:assistant/models/changes.dart';
 import 'package:assistant/models/message.dart';
+import 'package:assistant/models/resources.dart';
 import 'package:assistant/models/slash.dart';
 import 'package:assistant/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -72,7 +74,7 @@ void main() {
   });
 
   test('候选与补全', () {
-    expect(rankSlash('').map((c) => c.name), ['init', 'new', 'compact', 'plan', 'copy', 'status']);
+    expect(rankSlash('').map((c) => c.name), ['init', 'new', 'compact', 'plan', 'model', 'diff', 'copy', 'status']);
     expect(rankSlash('', local: false).map((c) => c.name), ['init']);
     expect(rankSlash('in').map((c) => c.name), ['init']);
     expect(rankSlash('c').map((c) => c.name), ['compact', 'copy']);
@@ -202,5 +204,51 @@ void main() {
     expect(calls, [const SlashCall(copyCommand, '')]);
     await _type(tester, '/');
     expect(find.text('新对话 · 回答结束后再用'), findsOneWidget);
+  });
+
+  test('/model（v1.89）：认法、提示条、ModelCatalog.find', () {
+    expect(slashOf('/model'), const SlashCall(modelCommand, ''));
+    expect(slashOf('/Model 深度'), const SlashCall(modelCommand, '深度'));
+    expect(slashBlocked(const SlashCall(modelCommand, ''), busy: true), isTrue);
+    expect(slashBarText(const SlashCall(modelCommand, '深度')), '换模型 · 换成「深度」');
+    final cat = ModelCatalog.fromJson({
+      'default': 'fast',
+      'models': [
+        {'id': 'fast', 'label': '快速'},
+        {'id': 'smart', 'label': '深度'},
+        {'id': 'smart-max', 'label': '深度加强'},
+      ],
+    });
+    expect(cat.find('深度'), 'smart'); // 全等优先于开头
+    expect(cat.find(' SMART '), 'smart');
+    expect(cat.find('快'), 'fast');
+    expect(cat.find('深度加'), 'smart-max');
+    expect(cat.find('sm'), isNull); // 对上两项
+    expect(cat.find('默认'), 'fast');
+    expect(cat.find('default'), 'fast');
+    expect(cat.find('gpt'), isNull);
+    expect(cat.find(''), isNull);
+    expect(cat.findMiss('gpt'), '没有叫「gpt」的模型，可选：快速、深度、深度加强');
+  });
+
+  test('/diff（v1.89）：最近一张有文件的改动卡 + 提示条', () {
+    Message m(String id, String role, List<Map<String, dynamic>> blocks) => Message.fromJson({'id': id, 'role': role, 'blocks': blocks});
+    Map<String, dynamic> ch(List<String> paths, {bool undone = false}) => {
+          'type': 'changes',
+          'token': 't',
+          'undone': undone,
+          'files': [for (final p in paths) {'path': p, 'added': 2, 'removed': 1}],
+        };
+    final msgs = [
+      m('a1', 'assistant', [ch(['a.md'])]),
+      m('u1', 'user', [{'type': 'text', 'text': '再改'}]),
+      m('a2', 'assistant', [{'type': 'text', 'text': '好了'}, ch(['b.md', 'c.md'])]),
+      m('a3', 'assistant', [ch([])]), // 空卡不算
+    ];
+    final hit = latestChanges(msgs)!;
+    expect(hit.$1, 'a2');
+    expect(latestChangesToast(hit.$2), '改了 2 个文件 · +4 −2');
+    expect(latestChanges(msgs.sublist(1, 2)), isNull);
+    expect(latestChangesToast(latestChanges([m('x', 'assistant', [ch(['a'], undone: true)])])!.$2), '已撤销 1 个文件的改动');
   });
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BlockActionsContext } from "../../blocks/actions";
 import { useChat } from "../../hooks/useChat";
+import { useModelCatalog } from "../../hooks/useModelCatalog";
 import { IconHistory } from "../../ui/icons";
 import { ShellLead } from "../../shell/ShellLead";
 import ChatTitle from "./ChatTitle";
@@ -56,9 +57,11 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   const open = (id: string | null, focus?: string) => { chat.open(id, focus); setDrawer(false); };
   // /status 打开标题的本对话用量面板：每次 +1，ChatTitle 看到变化就打开
   const [statusAsk, setStatusAsk] = useState(0);
+  const catalog = useModelCatalog();
   const onSlash = (c: Parameters<typeof runSlash>[0], files: OutgoingFile[]) => runSlash(c, files, {
     activeId: chat.activeId, messages: chat.messages, planMode: chat.planMode,
     open: (id) => open(id), setPlanMode: chat.setPlanMode, send: chat.send, showStatus: () => setStatusAsk((n) => n + 1),
+    catalog: catalog ?? null, model: chat.model, setModel: chat.setModel, seek: chat.seek,
   });
 
   return (

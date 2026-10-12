@@ -72,6 +72,22 @@ class ModelCatalog {
   /// 用户选了 [id] → 存到对话上的值：选默认就存 null（以后改默认会跟着变）。
   String? toChoice(String id) => id == defaultId ? null : id;
 
+  /// `/model 名字`（v1.89）→ 那一项的 id；认不出 / 对上好几项 → null。
+  /// 规则：大小写不敏感、去空白；“默认 / default” = 默认那项；先比 id、名字全等，再比开头（只对上一项才算）。
+  String? find(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return null;
+    if (q == '默认' || q == 'default') return defaultId;
+    for (final o in options) {
+      if (o.id.toLowerCase() == q || o.label.toLowerCase() == q) return o.id;
+    }
+    final hits = {for (final o in options) if (o.id.toLowerCase().startsWith(q) || o.label.toLowerCase().startsWith(q)) o.id};
+    return hits.length == 1 ? hits.first : null;
+  }
+
+  /// 认不出时的那句话：列出可选的名字。
+  String findMiss(String query) => '没有叫「${query.trim()}」的模型，可选：${options.map((o) => o.label).join('、')}';
+
   /// 至少两项才值得给切换。
   bool get selectable => options.length > 1;
 }

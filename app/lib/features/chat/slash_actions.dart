@@ -4,6 +4,8 @@
 //   /plan → ChatController.setPlanMode（和模式钮同一条 dirty/PATCH 路；接了话 = 打开后把这段话发出去）
 //   /copy → 最近一条助手回答的 copyText（和长按回复“复制”同一套规则）
 //   /status → showConversationUsage（标题弹出的本对话用量页）
+//   /model → 不接话：showModelSheet（模型钮同一个弹层）；接名字：ModelCatalog.find 认出来就 setModel（同一条 dirty/PATCH 路）
+//   /diff → latestChanges 找最近一张改动卡 → ChatController.seek（搜索定位同一条路：滚过去 + 闪一下）
 // 没有对话时 /compact /status 只给一句提示。ChatView 把它接到 Composer.onSlash。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../models/block.dart';
+import '../../models/changes.dart';
 import '../../models/conversation_context.dart';
 import '../../models/message.dart';
 import '../../models/slash.dart';
@@ -56,6 +59,22 @@ Future<void> runSlash(BuildContext context, WidgetRef ref, String scope, SlashCa
     case 'status':
       if (id == null) return showToast(context, noConversationToast);
       await showConversationUsage(context, id);
+    case 'model':
+      final cat = ref.read(modelCatalogProvider).value;
+      if (cat == null || !cat.selectable) return showToast(context, '服务器只配了一个模型');
+      final current = cat.effective(chat.model)!.id;
+      final picked = call.args.isEmpty ? await showModelSheet(context, cat, current) : cat.find(call.args);
+      if (picked == null) {
+        if (call.args.isNotEmpty && context.mounted) showToast(context, cat.findMiss(call.args));
+        return;
+      }
+      if (picked != current) await ctl.setModel(cat.toChoice(picked));
+      if (context.mounted) showToast(context, modelToast(cat, picked));
+    case 'diff':
+      final hit = latestChanges(chat.messages);
+      if (hit == null) return showToast(context, noChangesToast);
+      ctl.seek(hit.$1);
+      showToast(context, latestChangesToast(hit.$2));
     case 'compact':
       if (id == null) return showToast(context, noConversationToast);
       final text = await _compact(ref, id);

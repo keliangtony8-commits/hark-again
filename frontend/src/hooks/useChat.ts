@@ -532,8 +532,11 @@ export function useChat(projectId?: string) {
     }
   }, []);
 
+  /** 定位到当前对话里的某条消息（/diff 跳到改动卡，v1.89）：和搜索命中同一条 focus 路。 */
+  const seek = useCallback((id: string) => { if (thread.messages.some((m) => m.id === id)) setFocus(id); }, [thread.messages]);
+
   return {
-    refreshActive, undoChanges,
+    refreshActive, undoChanges, seek,
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
     canRegenerate, canStop, canSteer, editableId, focus, model, routed, setModel, effort, setEffort, planMode, setPlanMode, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };
