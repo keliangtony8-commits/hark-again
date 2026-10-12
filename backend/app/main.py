@@ -7,7 +7,7 @@ from .config import settings
 from .preview import PREFIX as PREVIEW_PREFIX
 
 from .agent.tools import load_builtin
-from .routes import auth, browser, catalog, connectors, conversations, files, home, inbox, jobs, memory_digest, pages, preview, resources, tasks, usage, vault, voice, ws
+from .routes import auth, browser, catalog, connectors, conversations, files, home, host, inbox, jobs, memory_digest, pages, preview, resources, tasks, usage, vault, voice, ws
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.include_router(voice.router)
 app.include_router(inbox.router)
 app.include_router(jobs.router)
 app.include_router(home.router)
+app.include_router(host.router)
 app.include_router(usage.router)
 app.include_router(memory_digest.router)
 for r in resources.routers:

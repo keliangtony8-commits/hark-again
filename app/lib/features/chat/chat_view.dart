@@ -136,6 +136,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
     return BlockActions(
       onApproval: ctl.replyApproval,
+      onApprovalOption: (id, option) => ctl.replyApproval(id, true, option),
       onForm: ctl.replyForm,
       onJobSettled: ctl.refreshActive,
       // 设计 v2：列表铺满整个聊天区，上面从浮动顶栏下滚过、下面从输入胶囊下滚过；

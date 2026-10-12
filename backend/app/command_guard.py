@@ -286,15 +286,21 @@ def _git(args: list[str]) -> Verdict | None:
     return None
 
 
-def verdict(command: str) -> Verdict | None:
-    """block > unsupported > ask；都不是返回 None（直接执行）。"""
+def verdicts(command: str) -> list[Verdict]:
+    """整条命令里命中的全部规则（源码顺序）；host_policy 要分开看 block 和 ask（主机上 sudo/apt 不算问题）。"""
     if FORK_BOMB.search(command):
-        return Verdict("block", "fork 炸弹")
+        return [Verdict("block", "fork 炸弹")]
     if RAW_DEVICE.search(command):
-        return Verdict("block", "直接写磁盘设备")
+        return [Verdict("block", "直接写磁盘设备")]
     found = _script(command, -1)
     if PIPE_TO_SHELL.search(command):
         found.append(Verdict("ask", "下载并直接执行脚本"))
+    return found
+
+
+def verdict(command: str) -> Verdict | None:
+    """block > unsupported > ask；都不是返回 None（直接执行）。"""
+    found = verdicts(command)
     for level in ("block", "unsupported"):
         if (v := next((v for v in found if v.level == level), None)) is not None:
             return v

@@ -48,11 +48,20 @@ class ToolContext:
     # 只许用这些工具（None = 不限）：子助手的工具白名单（agent/subagent.py CHILD_TOOLS），不在名单里的不给模型、也不执行
     allow: frozenset[str] | None = None
     depth: int = 0  # 0 = 主助手；1 = 子助手（不能再派，Codex DEFAULT_AGENT_MAX_DEPTH = 1）
+    host: bool = False  # 服务器主机模式开着（run_turn 每轮从 host_mode.enabled 读）：scope="host" 的工具才出现
 
     @property
     def workspace(self) -> str:
         """这段对话的工作区 id（项目 = 项目 id；主聊天、定时任务 = 个人工作区）。规则在 app/workspaces.py。"""
         return workspace_of(self.project_id)
+
+
+@dataclass
+class Approval:
+    """risk 的富返回值：理由 + 工具自己画的审批卡（可带 options：批准范围，用户选的以 grant= 传给 grants=True 的工具）。
+    risk 返回普通字符串 = 通用审批卡（或 Tool.card 画的卡）。"""
+    reason: str
+    card: dict | None = None
 
 
 @dataclass
@@ -78,13 +87,15 @@ class Tool:
     description: str      # 给模型看
     parameters: dict      # JSON Schema
     run: Callable[..., Awaitable[ToolResult]]
-    scope: str = "always"  # always（含文件与沙盒：每段对话都有工作区）| project（只在项目对话里，如项目档案）| conversation（需要知道当前对话）
-    risk: "Callable[[dict, ToolContext], str | None] | None" = None  # (参数, 上下文) → 需要审批的理由；None = 直接执行
+    scope: str = "always"  # always（含文件与沙盒：每段对话都有工作区）| project（只在项目对话里，如项目档案）| conversation（需要知道当前对话）| host（服务器主机模式开着）
+    # (参数, 上下文) → 需要审批的理由（或 Approval，可以是 awaitable）；None = 直接执行
+    risk: "Callable[[dict, ToolContext], object] | None" = None
     # 需要审批时的卡片：返回一个带 state 的块（如订单卡），内核补上 id；None = 通用审批卡。参数不对就抛 ValueError。
     card: Callable[[dict], dict] | None = None
     # 执行前要问用户的表单（如登录卡）：返回表单卡（不带 id/state）或 None = 不用问。
     # 用户填完，值以 form=FormReply 传给 run；取消则不执行。模型传来的 form 参数一律丢弃。
     form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None
+    grants: bool = False  # 审批卡带批准范围选项：批准后用户选的范围以 grant= 传给 run（模型传的 grant 一律丢弃）
     quiet: bool = False  # 控制类工具（update_plan）：不进活动时间线、不亮“正在…”，用户看它自己的卡片就够了（Codex 的 builtin control tool）
 
     def available(self, ctx: ToolContext) -> bool:
@@ -94,6 +105,8 @@ class Tool:
             return ctx.project_id is not None
         if self.scope == "conversation":
             return ctx.conversation_id is not None
+        if self.scope == "host":
+            return ctx.host
         return True
 
 
@@ -102,9 +115,10 @@ REGISTRY: dict[str, Tool] = {}
 
 def tool(name: str, label: str, description: str, parameters: dict, scope: str = "always",
          risk: "Callable[[dict, ToolContext], str | None] | None" = None, card: Callable[[dict], dict] | None = None,
-         form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None, quiet: bool = False):
+         form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None, quiet: bool = False,
+         grants: bool = False):
     def deco(fn):
-        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form, quiet)
+        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form, grants, quiet)
         return fn
     return deco
 

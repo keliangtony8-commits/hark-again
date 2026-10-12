@@ -37,7 +37,7 @@ async def ws_endpoint(ws: WebSocket):
                 case "message.cancel":
                     turns.stop(event.get("conversation_id"))
                 case "approval.reply":
-                    approvals.resolve(str(event.get("id")), bool(event.get("approved")))
+                    approvals.resolve(str(event.get("id")), bool(event.get("approved")), event.get("option"))
                 case "form.reply":
                     approvals.resolve_form(str(event.get("id")), event.get("values"), event.get("remember"))
     except WebSocketDisconnect:

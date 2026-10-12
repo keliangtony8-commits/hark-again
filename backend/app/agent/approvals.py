@@ -8,7 +8,9 @@ from typing import Any
 
 TIMEOUT_SECONDS = 600
 VALUE_MAX = 512  # 单个表单值的长度上限
+OPTION_MAX = 32
 _pending: dict[str, asyncio.Future[Any]] = {}
+_options: dict[str, str] = {}  # 审批卡上用户选的批准范围（如主机命令的 session / rule）；内核批准后 take_option 取走
 
 
 @dataclass
@@ -48,8 +50,15 @@ def _settle(pid: str, value: Any) -> bool:
     return False
 
 
-def resolve(approval_id: str, approved: bool) -> bool:
+def resolve(approval_id: str, approved: bool, option: Any = None) -> bool:
+    """option = 卡上选项的 id（只有带 options 的卡才有意义；是不是卡上的选项由内核核对）。"""
+    if approved and isinstance(option, str) and approval_id in _pending:
+        _options[approval_id] = option[:OPTION_MAX]
     return _settle(approval_id, approved)
+
+
+def take_option(approval_id: str) -> str | None:
+    return _options.pop(approval_id, None)
 
 
 def resolve_form(form_id: str, values: Any, remember: Any = False) -> bool:

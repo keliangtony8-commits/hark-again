@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     agent_turn_tokens: int = 600_000
     # 子助手（delegate 工具，agent/subagent.py）：一次最多并行几个（Codex 默认 6 个线程，我们 4G 小机器取 4）；
     # 每个子助手的步数 / token / 分钟上限（Gemini generalist：20 轮、10 分钟；到了就收掉工具让它交代进度）。深度固定 1：子助手不能再派。
+    # 服务器主机模式（app/host_mode.py）：宿主机上的 host agent（deploy/host-agent）监听这个 unix socket；空 = 没装，功能不出现
+    host_agent_socket: str = ""
+    host_agent_token: str = ""
+    host_command_max_seconds: int = 600
     subagent_max_tasks: int = 4
     subagent_max_steps: int = 20
     subagent_turn_tokens: int = 300_000

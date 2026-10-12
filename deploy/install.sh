@@ -12,6 +12,8 @@
 #
 # 无人值守：ASSUME_YES=1 DOMAIN=a.com STEP_API_KEY=... OWNER_PASSWORD=... sudo -E bash deploy/install.sh
 # 强制大/小内存档：SMALL=1 或 SMALL=0
+# 服务器主机模式（可选，默认不装）：sudo bash deploy/install.sh --host-agent  或  HOST_AGENT=1
+#   装一个只听 unix socket 的 root 主机代理（deploy/host-agent），App“我的电脑”里打开后，助手才能在本机跑命令，且每条都要你批准
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -213,6 +215,30 @@ wait_healthy() {
   die "后端 5 分钟内没起来，看上面的日志（docker compose logs backend）"
 }
 
+# ---------- 可选：主机代理 ----------
+wants_host_agent() {
+  [[ "${HOST_AGENT:-0}" == 1 ]] && return 0
+  local a; for a in "$@"; do [[ "$a" == --host-agent ]] && return 0; done
+  return 1
+}
+
+install_host_agent() {
+  command -v python3 >/dev/null || apt-get install -y python3 >/dev/null
+  install -d -m 0755 /opt/assistant-host
+  install -m 0755 "$ROOT/deploy/host-agent/host_agent.py" /opt/assistant-host/host_agent.py
+  install -d -m 0700 /etc/assistant-host
+  local token; token="$(env_get HOST_AGENT_TOKEN)"
+  placeholder "$token" && token="$(rand_hex 32)"
+  ( umask 077; printf '%s\n' "$token" > /etc/assistant-host/token )
+  env_set HOST_AGENT_TOKEN "$token"
+  env_set HOST_AGENT_SOCKET /run/assistant-host/agent.sock
+  install -m 0644 "$ROOT/deploy/host-agent/assistant-host.service" /etc/systemd/system/assistant-host.service
+  systemctl daemon-reload
+  systemctl enable --now assistant-host.service >/dev/null
+  systemctl restart assistant-host.service
+  say "主机代理已装（默认关）：App → 我的 → 我的电脑 → 服务器主机 里打开"
+}
+
 summary() {
   local url; url="$(env_get PUBLIC_URL)"
   echo
@@ -231,6 +257,7 @@ main() {
   open_firewall
   write_env
   prepare_data
+  if wants_host_agent "$@"; then install_host_agent; fi
   start_stack
   wait_healthy
   summary

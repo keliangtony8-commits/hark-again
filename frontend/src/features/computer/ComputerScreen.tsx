@@ -5,6 +5,7 @@ import { PERSONAL_WORKSPACE, isPersonalWorkspace } from "../../lib/workspace";
 import { Page, PageHeader, PageIntro } from "../../ui/kit";
 import ProjectFiles from "../projects/ProjectFiles";
 import BrowserSessionsSection from "./BrowserSessionsSection";
+import HostSection from "./HostSection";
 import { PortsSection, ProcessSection, StorageSection } from "./ComputerDetails";
 import ComputerSection from "./ComputerSection";
 import { useComputer } from "./useComputer";
@@ -29,6 +30,7 @@ export default function ComputerScreen() {
       <ProcessSection ctl={ctl} enter={3} />
       <StorageSection ws={ws} ctl={ctl} enter={4} onFiles={() => setFiles(true)} />
       {personal && <BrowserSessionsSection enter={5} />}
+      {personal && <HostSection enter={6} />}
       {files && <ProjectFiles projectId={ws} onClose={() => setFiles(false)} />}
     </Page>
   );

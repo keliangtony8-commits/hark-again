@@ -482,8 +482,9 @@ class ChatController extends Notifier<ChatState> {
   }
 
   /// 审批必须实时送达（服务器那一轮在等它），断线时不排队，直接提示。
-  void replyApproval(String id, bool approved) {
-    if (!_socket.send({'type': 'approval.reply', 'id': id, 'approved': approved})) {
+  /// option = 卡上选的批准范围（主机命令卡：once / session / rule；没有就是普通批准）。
+  void replyApproval(String id, bool approved, [String? option]) {
+    if (!_socket.send({'type': 'approval.reply', 'id': id, 'approved': approved, 'option': ?option})) {
       state = state.copyWith(error: () => '连接已断开，连上后再点一次');
     }
   }

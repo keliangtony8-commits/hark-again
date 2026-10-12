@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import jobs, usage, vision
+from .. import host_mode, jobs, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -112,11 +112,14 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         system += f"\n\n这段对话更早的内容（摘要，原文已不在下面）：\n{hist.summary}"
     if not notice and (held := await jobs.take_held(db, cid)):  # 叫醒轮数到上限时压下的任务结论（jobs.follow_ups）
         system += f"\n\n{held}"
+    host = await host_mode.enabled(db)  # 服务器主机模式：每轮读一次，用户在“我的电脑”里关掉后下一轮就没有 host_command
+    if host:
+        system += f"\n\n{host_mode.PROMPT}"
     builder = loop.MessageBuilder()
     status = "done"
     interrupted = False
     try:
-        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id), builder, model):
+        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host), builder, model):
             if not isinstance(ev, loop.Done):
                 await emit(to_wire(ev))
     except asyncio.CancelledError:

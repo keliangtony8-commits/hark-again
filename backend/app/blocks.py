@@ -52,13 +52,26 @@ class FileBlock(BaseModel):
     project_id: str | None = None
 
 
+class ApprovalOption(BaseModel):
+    id: str     # once | session | rule（主机命令）
+    label: str
+
+
 class ApprovalBlock(BaseModel):
-    """高风险操作的审批卡。state 从 pending 变为 approved / rejected / expired。"""
+    """高风险操作的审批卡。state 从 pending 变为 approved / rejected / expired。
+    主机命令（host_command）的卡多带：target="host"、host（机器名）、note（为什么要你看一眼：危险提示 / 模型给的理由）、
+    options（批准范围，第一个是默认；approval.reply 带 option）、granted（批准时选的那个）。"""
     type: Literal["approval"] = "approval"
     id: str
     title: str
     detail: str
     state: Literal["pending", "approved", "rejected", "expired"] = "pending"
+    target: Literal["sandbox", "host"] | None = None
+    host: str | None = None
+    note: str | None = None
+    warn: bool = False
+    options: list[ApprovalOption] = []
+    granted: str | None = None
 
 
 class Handoff(BaseModel):

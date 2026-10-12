@@ -25,7 +25,16 @@ sealed class Block {
             size: (j['size'] as num?)?.toInt() ?? 0,
             projectId: j['project_id'] as String?),
         'approval' => ApprovalBlock(
-            id: j['id'] as String, title: j['title'] as String? ?? '', detail: j['detail'] as String? ?? '', state: j['state'] as String? ?? 'pending'),
+            id: j['id'] as String,
+            title: j['title'] as String? ?? '',
+            detail: j['detail'] as String? ?? '',
+            state: j['state'] as String? ?? 'pending',
+            target: j['target'] as String?,
+            host: j['host'] as String?,
+            note: j['note'] as String?,
+            warn: j['warn'] == true,
+            options: [for (final o in (j['options'] as List? ?? const [])) ?ApprovalOption.fromJson(o)],
+            granted: j['granted'] as String?),
         'browser' => BrowserBlock(j['session'] as String? ?? 'main',
             site: j['site'] as String?, live: j['live'] == true, handoff: BrowserHandoff.fromJson(j['handoff']),
             files: [for (final f in (j['files'] as List? ?? [])) ?BrowserFile.fromJson(f)], workspace: j['workspace'] as String?),
@@ -100,10 +109,37 @@ class FileBlock extends Block {
   String get path => source == 'project' ? '/api/projects/$projectId/files/$id' : '/api/uploads/$id';
 }
 
+/// 审批卡上的一个批准范围（v1.49 主机命令：once 仅这一次 / session 这段对话里都允许 / rule 以后都允许某前缀）。
+class ApprovalOption {
+  const ApprovalOption(this.id, this.label);
+  final String id, label;
+
+  static ApprovalOption? fromJson(dynamic j) {
+    if (j is! Map || j['id'] is! String) return null;
+    return ApprovalOption(j['id'] as String, j['label'] as String? ?? j['id'] as String);
+  }
+}
+
+/// 审批卡。主机命令卡（target == 'host'，v1.49）多带机器名、为什么要你看一眼（note；warn = 危险提示）、
+/// 批准范围 options（第一个 = “批准”按钮），批准后 granted = 选的那个。
 class ApprovalBlock extends Block {
-  const ApprovalBlock({required this.id, required this.title, required this.detail, required this.state});
+  const ApprovalBlock(
+      {required this.id,
+      required this.title,
+      required this.detail,
+      required this.state,
+      this.target,
+      this.host,
+      this.note,
+      this.warn = false,
+      this.options = const [],
+      this.granted});
   final String id, title, detail, state;
+  final String? target, host, note, granted;
+  final bool warn;
+  final List<ApprovalOption> options;
   bool get pending => state == 'pending';
+  bool get onHost => target == 'host';
 }
 
 /// 云浏览器实时画面卡。session = 按网站起的会话名（后端 app/browser_sessions.py；旧卡 main），

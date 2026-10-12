@@ -3,8 +3,11 @@
 import 'package:flutter/widgets.dart';
 
 class BlockActions extends InheritedWidget {
-  const BlockActions({super.key, required super.child, this.onApproval, this.onForm, this.onJobSettled});
+  const BlockActions({super.key, required super.child, this.onApproval, this.onApprovalOption, this.onForm, this.onJobSettled});
   final void Function(String id, bool approved)? onApproval;
+
+  /// 带批准范围地批准（主机命令卡的“这段对话里都允许 / 以后都允许…”，v1.49）。没给就只显示“批准 / 拒绝”。
+  final void Function(String id, String option)? onApprovalOption;
 
   /// values = null 表示取消。返回 false = 没发出去（断线），卡片保留输入让用户再点。
   final bool Function(String id, Map<String, String>? values, bool remember)? onForm;
@@ -15,5 +18,5 @@ class BlockActions extends InheritedWidget {
   static BlockActions? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<BlockActions>();
 
   @override
-  bool updateShouldNotify(BlockActions old) => old.onApproval != onApproval || old.onForm != onForm || old.onJobSettled != onJobSettled;
+  bool updateShouldNotify(BlockActions old) => old.onApproval != onApproval || old.onApprovalOption != onApprovalOption || old.onForm != onForm || old.onJobSettled != onJobSettled;
 }

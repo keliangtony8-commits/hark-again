@@ -227,6 +227,25 @@ class AlertSent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class AppSetting(Base):
+    """少量全局开关（键值）。现在只有 host_mode（服务器主机模式，默认关；规则在 app/host_mode.py）。"""
+    __tablename__ = "app_settings"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+class HostRule(Base):
+    """用户在主机命令审批卡上点了“以后都允许”留下的前缀规则（Codex execpolicy 的 allow prefix_rule）。
+    prefix = 命令开头的字面词，如 ["systemctl", "status"]；以它开头的主机命令以后不再弹卡。只有用户能加（审批卡），能在“我的电脑”里删。"""
+    __tablename__ = "host_rules"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    prefix: Mapped[list] = mapped_column(JSON)
+    uses: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 @event.listens_for(Memory.content, "set")
 def _content_changed(target: Memory, value, old, initiator) -> None:
     """内容一变向量就作废（不管从界面还是工具改的），检索时再补。"""

@@ -5,7 +5,13 @@ export type TableBlock = { type: "table"; title?: string; columns: string[]; row
 /** live：命令还在跑，source 是最近的输出（服务器 block.update 原地换），跑完换成不带 live 的最终块。 */
 export type CodeBlock = { type: "code"; language?: string; title?: string; source: string; live?: boolean };
 export type FileBlock = { type: "file"; source: "upload" | "project"; id: string; name: string; mime: string; size: number; project_id?: string | null };
-export type ApprovalBlock = { type: "approval"; id: string; title: string; detail: string; state: "pending" | "approved" | "rejected" | "expired" };
+/** 审批卡。主机命令卡（v1.49 target = host）多带机器名、note（为什么要你看一眼；warn = 危险提示）、批准范围 options（第一个 = 批准按钮）、批准后 granted。 */
+export type ApprovalOption = { id: string; label: string };
+export type ApprovalBlock = {
+  type: "approval"; id: string; title: string; detail: string; state: "pending" | "approved" | "rejected" | "expired";
+  target?: "sandbox" | "host" | null; host?: string | null; note?: string | null; warn?: boolean;
+  options?: ApprovalOption[]; granted?: string | null;
+};
 /** 云浏览器实时画面：session = 按网站起的会话名（旧卡 main），site = 网站，live = 还在打开（v1.26）。 */
 /** 助手请你接管浏览器（backend browser_handoff）：pending → done / cancelled / expired；交还 = form.reply（id 即它）。 */
 export type BrowserHandoff = { id: string; reason: string; state: "pending" | "done" | "cancelled" | "expired" };

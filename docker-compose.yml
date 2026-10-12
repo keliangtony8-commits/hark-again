@@ -78,6 +78,8 @@ services:
       BROWSER_TOKEN: ${BROWSER_TOKEN}
     volumes:
       - ${HOST_DATA_DIR}:/data
+      # 服务器主机模式：宿主机主机代理的 unix socket（没装时只是个空目录，功能不出现）
+      - /run/assistant-host:/run/assistant-host
     depends_on:
       sandbox: {condition: service_started}
       browser: {condition: service_started}
@@ -100,6 +102,8 @@ services:
       BROWSER_TOKEN: ${BROWSER_TOKEN}
     volumes:
       - ${HOST_DATA_DIR}:/data
+      # 服务器主机模式：宿主机主机代理的 unix socket（没装时只是个空目录，功能不出现）
+      - /run/assistant-host:/run/assistant-host
     depends_on: [backend]
     restart: unless-stopped
 

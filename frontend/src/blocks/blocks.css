@@ -334,3 +334,18 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
   .blk-delegate-task, .blk-delegate-mark, .blk-delegate-progress, .blk-delegate-line, .blk-delegate-result { animation: none; }
   .blk-delegate-chev { transition: none; }
 }
+/* 主机命令审批卡（v1.49） */
+.blk-approval-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.blk-approval-where { font-weight: var(--fw-body); font-size: var(--fs-xs); color: var(--text-3); }
+.blk-approval-note { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); }
+.blk-approval-note.is-warn { color: var(--warning); }
+.blk-approval-scope { display: flex; align-items: center; gap: var(--sp-2); width: 100%; text-align: left; padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm); background: var(--tile); color: var(--text); font-size: var(--fs-sm);
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.blk-approval-scope span { flex: 1; min-width: 0; }
+.blk-approval-scope svg { color: var(--text-3); flex: none; }
+.blk-approval-scope:hover:not(:disabled) { background: color-mix(in srgb, var(--tile) 70%, var(--border)); }
+.blk-approval-scope:active:not(:disabled) { transform: scale(.98); }
+.blk-approval-scope:disabled { opacity: .5; }
+.blk-approval-granted { display: block; margin-top: 2px; font-weight: var(--fw-body); color: var(--text-2); animation: rise var(--dur) var(--ease) both; }
+@media (prefers-reduced-motion: reduce) { .blk-approval-granted { animation: none; } .blk-approval-scope { transition: none; } }

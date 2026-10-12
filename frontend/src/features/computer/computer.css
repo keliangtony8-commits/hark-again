@@ -20,3 +20,7 @@
 a.computer-status { color: inherit; text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .computer-state, .computer-hint, .computer-oom, .computer-done { animation: none; } }
 .computer-port-actions { display: flex; align-items: center; gap: var(--sp-1); }
+/* 服务器主机（v1.49） */
+.computer-host-hint { margin: var(--sp-2) var(--sp-4) 0; font-size: var(--fs-xs); color: var(--text-3); }
+.computer-host-rules { margin-top: var(--sp-3); }
+.computer-host-rule { font-family: var(--font-mono); font-size: var(--fs-sm); }

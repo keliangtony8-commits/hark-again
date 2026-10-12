@@ -319,8 +319,8 @@ export function useChat(projectId?: string) {
   }, [open, list.remove]);
 
   /** 审批必须实时送达（服务器那一轮在等它），断线时不排队，直接提示。 */
-  const replyApproval = useCallback((id: string, approved: boolean) => {
-    if (!socket.current?.send({ type: "approval.reply", id, approved })) setError("连接已断开，连上后再点一次");
+  const replyApproval = useCallback((id: string, approved: boolean, option?: string) => {
+    if (!socket.current?.send({ type: "approval.reply", id, approved, ...(option ? { option } : {}) })) setError("连接已断开，连上后再点一次");
   }, []);
 
   /** 表单卡（登录、验证码）的答复，同样实时、不排队。值只走这一条线，不进本地状态。 */

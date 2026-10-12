@@ -4,6 +4,7 @@
 MessageBuilder 把事件折叠成最终的块列表，存库与前端渲染用的是同一套块。
 """
 import asyncio
+import inspect
 import json
 import time
 import uuid
@@ -14,8 +15,8 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import compact, loop_guard, supersede
-from .tools import REGISTRY, ToolContext, ToolResult, no_live, schemas
+from . import approvals, compact, loop_guard, supersede
+from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
 WRAP_UP = ("[系统提示] 这一轮的步数/用量预算用完了，不能再调用工具。请直接回复用户：已经完成了什么、"
@@ -333,22 +334,29 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     def denied(note: str) -> ToolStatus:
         return ToolStatus(call.id, call.name, t.label, "denied", rec.denied(call.id, call.name, t.label, args, note))
 
-    if t.risk and (reason := t.risk(args, ctx)):
+    args.pop("grant", None)  # 批准范围只能来自用户在卡上的选择，不能来自模型
+    gate = t.risk(args, ctx) if t.risk else None
+    if inspect.isawaitable(gate):  # 要查库才知道问不问的（主机命令的已存规则）
+        gate = await gate
+    if gate:
+        ask = gate if isinstance(gate, Approval) else Approval(gate)
         try:
-            card = t.card(args) if t.card else None
+            card = ask.card if ask.card is not None else (t.card(args) if t.card else None)
         except (ValueError, TypeError) as e:  # 卡片画不出来 = 参数不对，先让模型改，不打扰用户
             yield ToolResult(f"参数有误：{e}")
             return
-        approved = False
-        async for ev in _ask_approval(builder, ctx, reason, args, card):
-            if isinstance(ev, bool):
-                approved = ev
+        grant = None
+        async for ev in _ask_approval(builder, ctx, ask.reason, args, card):
+            if isinstance(ev, Granted):
+                grant = ev.option
             else:
                 yield ev
-        if not approved:
+        if grant is None:
             yield denied("你没有批准")
             yield ToolResult("用户没有批准这个操作，已取消。不要换方式绕过，告诉用户即可。")
             return
+        if t.grants:
+            args["grant"] = grant
 
     if t.form:
         args.pop("form", None)  # 表单值只能来自用户，不能来自模型
@@ -482,8 +490,14 @@ def form_answers(spec: dict, values: dict[str, str]) -> list[dict]:
             for f in spec["fields"] if values.get(f["name"], "").strip()]
 
 
+@dataclass
+class Granted:
+    option: str  # 用户选的批准范围（卡上 options 的 id；没有选项的卡 = "once"）
+
+
 async def _ask_approval(builder: MessageBuilder, ctx: ToolContext, reason: str, args: dict, card: dict | None = None):
-    """插入审批卡（或工具自己的确认卡，如订单卡）→ 等用户决定 → 更新卡片状态。最后产出 bool。"""
+    """插入审批卡（或工具自己的确认卡，如订单卡、主机命令卡）→ 等用户决定 → 更新卡片状态。
+    批准了最后产出 Granted(选项)；拒绝/超时什么也不产出。卡上有 options 时用户选的那个记进卡（granted），不在选项里的一律当“仅这一次”。"""
     aid = uuid.uuid4().hex
     detail = args.get("command") or json.dumps(args, ensure_ascii=False)[:500]
     block = {**card, "id": aid, "state": "pending"} if card else \
@@ -491,5 +505,11 @@ async def _ask_approval(builder: MessageBuilder, ctx: ToolContext, reason: str, 
     yield builder.add(block)
     index = len(builder.blocks) - 1
     approved = await ctx.approve(aid, reason, detail)
-    yield builder.update(index, state="approved" if approved else "rejected")
-    yield approved
+    choices = [o.get("id") for o in block.get("options") or []]
+    option = approvals.take_option(aid)
+    if not approved:
+        yield builder.update(index, state="rejected")
+        return
+    option = option if option in choices else (choices[0] if choices else "once")
+    yield builder.update(index, state="approved", **({"granted": option} if choices else {}))
+    yield Granted(option)

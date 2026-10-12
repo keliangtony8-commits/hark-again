@@ -1,0 +1,19 @@
+# 服务器主机模式的执行端（只在 install.sh --host-agent 时装）。以 root 运行，只监听 unix socket。
+[Unit]
+Description=Assistant host agent (runs approved commands on this server)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/assistant-host/host_agent.py
+Restart=on-failure
+RestartSec=3
+RuntimeDirectory=assistant-host
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+# 输出、进程都限住：一条失控命令不能拖垮整台 4GB 机器上的其他服务
+MemoryMax=1G
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target

@@ -46,3 +46,5 @@
   移植到 backend/app/plan.py、backend/app/agent/builtin/plan.py（v1.47）
 - google-gemini/gemini-cli packages/core/src/agents/local-executor.ts + generalist-agent.ts（子助手执行器：工具按名单从父注册表挑、不含派活工具、轮数/时间上限 + 最后一次交代机会 + 宽限期）— Apache-2.0, Copyright 2026 Google LLC, modified；deepseek-ai/deepseek-harness packages/subagent/tool-subagent/src/index.ts（全新上下文子助手的措辞、深度上限、并行委派指引）— MIT License, Copyright (c) 2026 DeepSeek, adapted；openai/codex codex-rs/core/src/tools/handlers/multi_agents_spec.rs（何时委派的指引、继承模型、并行上限）— Apache-2.0, Copyright OpenAI, modified
   移植到 backend/app/agent/subagent.py、backend/app/agent/builtin/delegate.py（v1.48）
+- openai/codex codex-rs/execpolicy/src/{decision.rs,policy.rs}、codex-rs/core/src/exec_policy.rs（UnlessTrusted/Never 判定、BANNED_PREFIX_SUGGESTIONS、prefix_rule 建议推导与“能否覆盖全部命令”检查）、core/src/command_canonicalization.rs、core/src/tools/sandboxing.rs（with_cached_approval）— Apache-2.0, Copyright 2025 OpenAI, modified；google-gemini/gemini-cli packages/core/src/tools/tools.ts（ProceedAlways / ProceedAlwaysAndSave 两级“都允许”）— Apache-2.0, Copyright 2025 Google LLC, modified
+  移植到 backend/app/host_policy.py、backend/app/host_mode.py（v1.49）

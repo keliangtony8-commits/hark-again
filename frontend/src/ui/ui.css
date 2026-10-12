@@ -64,6 +64,7 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: var(--r-full); background: var(--knob); box-shadow: var(--elev-knob); transition: transform var(--dur-fast) var(--ease); }
 .toggle.on { background: var(--ink); }
 .toggle.on::after { transform: translateX(18px); background: var(--on-ink); }
+.toggle:disabled { opacity: .45; cursor: not-allowed; }
 
 .segmented { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 3px; border-radius: var(--r-md); background: var(--tile); }
 .segmented-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: calc(var(--r-md) - 3px); background: var(--ink); transform: translateX(calc(var(--i) * 100%)); transition: transform var(--dur-slow) var(--spring); }
