@@ -1,4 +1,5 @@
-// 表单卡：任务进行中向你要登录信息、验证码，或助手缺的信息（对标 Hark 任务里“在它自己的表单上问你”）。
+// 表单卡：任务进行中向你要登录信息、验证码、命令环境变量，或助手缺的信息（对标 Hark 任务里“在它自己的表单上问你”）。
+// - env 卡（request_env）：一个遮住的输入框，值直接存进保险箱，助手只知道变量名；太短时框下提示“至少 N 个字符”。
 // - 等填写（pending）：输入框 + 取消 / 提交；登录卡放进 AutofillGroup，安卓/iOS 的密码管理器能直接填。
 //   info 卡（ask_user）：标题下一行说为什么问；有候选的输入框下面是可点选的小块（点了填进框里，仍可改）；选填可空着。
 // - 提交后：输入框收起、清空，只剩一行状态（已填写 / 已取消 / 已过期）；login / code 的值从不进卡片和本地缓存，
@@ -23,7 +24,7 @@ class FormBlockView extends StatefulWidget {
 
   /// 状态小字和颜色：等填写用提醒色（与审批卡、订单卡一致），其余退到 text2/text3。
   static (String, Color) stateLabel(FormBlock b, Palette p) => switch (b.state) {
-        'submitted' => ('已填写', p.text2),
+        'submitted' => (b.purpose == 'env' ? '已存好' : '已填写', p.text2),
         'cancelled' => ('已取消', p.text3),
         'expired' => ('已过期', p.text3),
         _ => ('等你填写', p.warning),
@@ -32,7 +33,15 @@ class FormBlockView extends StatefulWidget {
   static IconData iconOf(FormBlock b) => switch (b.purpose) {
         'login' => Icons.lock_outline_rounded,
         'code' => Icons.sms_outlined,
+        'env' => Icons.key_rounded,
         _ => Icons.edit_note_rounded,
+      };
+
+  /// 输入框下的那行“你填的去哪了”。
+  static String privacyNote(String purpose) => switch (purpose) {
+        'info' => '你填的内容会交给助手，用来接着办这件事',
+        'env' => '只存进保险箱，助手只知道名字；在 我的 → 保险箱 里可以换值或删除',
+        _ => '只交给浏览器填写，助手看不到',
       };
 
   @override
@@ -63,7 +72,7 @@ class _FormBlockViewState extends State<FormBlockView> {
     if (submit && !_complete) return;
     final values = submit ? {for (final e in _ctl.entries) e.key: e.value.text} : null;
     if (!onForm(widget.block.id, values, submit && _remember)) return;
-    if (submit) TextInput.finishAutofillContext(); // 让系统密码管理器有机会保存
+    if (submit) TextInput.finishAutofillContext(shouldSave: widget.block.purpose == 'login'); // 只有登录让系统密码管理器保存
     setState(() => _sent = true);
     for (final c in _ctl.values) {
       c.clear(); // 发出后本地也不留
@@ -132,7 +141,7 @@ class _FormBlockViewState extends State<FormBlockView> {
           Icon(b.purpose == 'info' ? Icons.forum_outlined : Icons.visibility_off_outlined, size: Fs.sm, color: p.text3),
           const SizedBox(width: Sp.x1),
           Expanded(
-            child: Text(b.purpose == 'info' ? '你填的内容会交给助手，用来接着办这件事' : '只交给浏览器填写，助手看不到',
+            child: Text(FormBlockView.privacyNote(b.purpose),
                 style: context.text.bodySmall?.copyWith(color: p.text3)),
           ),
         ]),
@@ -175,6 +184,14 @@ class _FormBlockViewState extends State<FormBlockView> {
   }
 
   Widget _input(FormInput f, {required bool isLast}) {
+    if (f.minLength <= 0) return _textField(f, isLast: isLast);
+    return ListenableBuilder(
+      listenable: _ctl[f.name]!,
+      builder: (context, _) => _textField(f, isLast: isLast, short: f.tooShort(_ctl[f.name]!.text)),
+    );
+  }
+
+  Widget _textField(FormInput f, {required bool isLast, bool short = false}) {
     final secret = f.kind == 'password';
     final multiline = f.kind == 'multiline';
     final shown = _revealed.contains(f.name);
@@ -192,7 +209,7 @@ class _FormBlockViewState extends State<FormBlockView> {
         'multiline' => TextInputType.multiline,
         _ => TextInputType.text,
       },
-      autofillHints: switch (f.kind) {
+      autofillHints: widget.block.purpose == 'env' ? null : switch (f.kind) { // 环境变量不是网站密码：别让密码管理器存
         'password' => const [AutofillHints.password],
         'code' => const [AutofillHints.oneTimeCode],
         'email' => const [AutofillHints.email],
@@ -203,6 +220,7 @@ class _FormBlockViewState extends State<FormBlockView> {
       onSubmitted: isLast && !multiline ? (_) => _reply(true) : null,
       decoration: compactField(
         label: f.optional ? '${f.label}（选填）' : f.label,
+        helper: short ? '至少 ${f.minLength} 个字符' : null,
         suffix: secret
             ? IconButton(
                 tooltip: shown ? '隐藏密码' : '显示密码',

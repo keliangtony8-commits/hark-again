@@ -90,6 +90,23 @@ async def ensure(db: AsyncSession, max_age: float = MAX_AGE_S) -> None:
         await load(db)
 
 
+async def save(db: AsyncSession, name: str, value: str) -> tuple[Secret, bool]:
+    """存一个变量（保险箱页和聊天里的“要环境变量”卡都走这里）：校验名字和值，同名覆盖旧值（像 export，改 Token 不用先删），
+    提交后马上刷新打码缓存。返回 (条目, 是否覆盖了旧值)。名字/值不合格、数量到顶抛 ValueError；保险箱没配抛 RuntimeError。"""
+    name, value = check_name(name), check_value(value)
+    rows = (await db.scalars(select(Secret).where(Secret.kind == KIND))).all()
+    old = next((s for s in rows if s.name == name), None)
+    if old is None and len(rows) >= ENV_MAX:
+        raise ValueError(f"环境变量最多 {ENV_MAX} 个，先删掉不用的")
+    s = vault.create(name, value, [], KIND)
+    if old is not None:
+        await db.delete(old)
+    db.add(s)
+    await db.commit()
+    await load(db)
+    return s, old is not None
+
+
 async def names(db: AsyncSession) -> list[str]:
     return sorted((await db.scalars(select(Secret.name).where(Secret.kind == KIND))).all())
 
@@ -101,7 +118,8 @@ def prompt(var_names: list[str]) -> str:
     return ("沙盒里每条命令（含后台 / 常驻任务、定时脚本）都已注入这些环境变量，值来自用户的保险箱："
             + "、".join(f"${n}" for n in var_names)
             + "。程序里直接读环境变量（os.environ / process.env / \"$NAME\"），别把值写进文件、别打印它；"
-            "输出里出现的值会显示成 [$NAME]。缺哪个就请用户在「我的 → 保险箱 → 环境变量」里加。")
+            "输出里出现的值会显示成 [$NAME]。缺哪个就调 request_env 让用户在卡片上填（值直接进保险箱，你看不到），"
+            "绝不让用户把值发在聊天里。")
 
 
 def scrub(text: str, values: dict[str, str] | None = None) -> str:

@@ -47,24 +47,13 @@ async def create_secret(body: SecretIn, db: AsyncSession = Depends(get_session))
 
 
 async def _create_env(body: SecretIn, db: AsyncSession) -> dict:
-    """命令环境变量：名字/值按 command_env 校验；同名覆盖旧值（像 export 一样，改 Token 不用先删）。"""
+    """命令环境变量：规则全在 command_env.save（聊天里的要变量卡也走它）。"""
     try:
-        name, value = command_env.check_name(body.name), command_env.check_value(body.value)
+        s, _ = await command_env.save(db, body.name, body.value)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    rows = (await db.scalars(select(Secret).where(Secret.kind == command_env.KIND))).all()
-    old = next((s for s in rows if s.name == name), None)
-    if old is None and len(rows) >= command_env.ENV_MAX:
-        raise HTTPException(400, f"环境变量最多 {command_env.ENV_MAX} 个，先删掉不用的")
-    try:
-        s = vault.create(name, value, [], command_env.KIND)
     except RuntimeError as e:
         raise HTTPException(503, str(e))
-    if old is not None:
-        await db.delete(old)
-    db.add(s)
-    await db.commit()
-    await command_env.load(db)  # 打码缓存马上换成新值
     return vault.public(s)
 
 

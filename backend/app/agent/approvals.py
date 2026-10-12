@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 TIMEOUT_SECONDS = 600
-VALUE_MAX = 512  # 单个表单值的长度上限
+VALUE_MAX = 8192  # 单个表单值的长度上限（= command_env.VALUE_MAX：要环境变量卡收长 Token）；超长的整个丢掉，不截断成错值
 OPTION_MAX = 32
 _pending: dict[str, asyncio.Future[Any]] = {}
 _options: dict[str, str] = {}  # 审批卡上用户选的批准范围（如主机命令的 session / rule）；内核批准后 take_option 取走
@@ -65,5 +65,5 @@ def resolve_form(form_id: str, values: Any, remember: Any = False) -> bool:
     """values = None（取消）或 {字段: 字符串}；非字符串、超长的值丢掉。"""
     if not isinstance(values, dict):
         return _settle(form_id, None)
-    clean = {str(k): v[:VALUE_MAX] for k, v in values.items() if isinstance(v, str)}
+    clean = {str(k): v for k, v in values.items() if isinstance(v, str) and len(v) <= VALUE_MAX}
     return _settle(form_id, FormReply(clean, bool(remember)))

@@ -48,13 +48,24 @@ export type OrderBlock = { type: "order"; id: string; merchant: string;
   breakdown?: { label: string; amount: string }[]; total: string; payment?: string | null; destination?: string | null;
   order_number?: string | null; action?: string; state: "pending" | "approved" | "rejected" | "expired" | "placed" };
 /** 表单卡（浏览器任务里的登录 / 验证码）：答复走 form.reply；用户填的值不写进卡片。 */
-/** options = 可点选的候选（点了填进框，仍可改）；optional = 选填。 */
+/** options = 可点选的候选（点了填进框，仍可改）；optional = 选填；min_length = 至少几个字符（要环境变量卡）。 */
 export type FormInput = { name: string; label: string; kind?: "text" | "email" | "password" | "code" | "phone" | "multiline"; value?: string | null;
-  options?: string[] | null; optional?: boolean };
-/** note = 为什么问（info 卡）；answers 只有 info 卡提交后才有（用户有意告诉助手的，login/code 的值从不进卡片）。 */
-export type FormBlock = { type: "form"; id: string; purpose?: "login" | "code" | "info"; title: string; site?: string | null;
+  options?: string[] | null; optional?: boolean; min_length?: number | null };
+/** note = 为什么问；answers 只有 info 卡提交后才有（用户有意告诉助手的，login/code/env 的值从不进卡片；
+ *  env = request_env 要的命令环境变量，值只存进保险箱）。 */
+export type FormBlock = { type: "form"; id: string; purpose?: "login" | "code" | "info" | "env"; title: string; site?: string | null;
   fields: FormInput[]; remember?: boolean; action?: string; state: "pending" | "submitted" | "cancelled" | "expired";
   note?: string | null; answers?: { label: string; value: string }[] | null };
+/** 填了但不够长（空着不算，空着归必填规则）。 */
+export const tooShort = (f: FormInput, v: string) => !!v.trim() && v.length < (f.min_length ?? 0);
+/** 填好了没有：必填不空、填了的够长。 */
+export const formComplete = (b: FormBlock, values: Record<string, string>) =>
+  b.fields.every((f) => (f.optional || (values[f.name] ?? "").trim()) && !tooShort(f, values[f.name] ?? ""));
+/** 输入框下那行“你填的去哪了”。 */
+export const formPrivacy = (purpose: FormBlock["purpose"]) =>
+  purpose === "info" ? "你填的内容会交给助手，用来接着办这件事"
+    : purpose === "env" ? "只存进保险箱，助手只知道名字；在 我的 → 保险箱 里可以换值或删除"
+    : "只交给浏览器填写，助手看不到";
 /** 项目沙盒里的后台任务卡（后端 app/jobs.py）。运行中卡片自己轮询 /api/jobs/{id}（lib/jobs.ts）。 */
 export type JobState = "running" | "done" | "failed" | "timed_out" | "cancelled" | "lost";
 export type PlanStatus = "pending" | "in_progress" | "completed";

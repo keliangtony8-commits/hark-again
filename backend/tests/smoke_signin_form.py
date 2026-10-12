@@ -151,13 +151,17 @@ assert all("482913" not in s for s in model_saw)
 mb = MessageBuilder(); mb.add({**code, "state": "pending"})
 assert mb.partial()[0]["state"] == "expired"
 
-# 8) approvals：只收卡上字段、丢非字符串、截断；None = 取消；不存在的 id 不报错
+# 8) approvals：只收卡上字段、丢非字符串、超长整个丢掉（v1.88 起不截断）；None = 取消；不存在的 id 不报错
 async def hub():
     t = asyncio.create_task(approvals.wait_form("f1", ["code"]))
     await asyncio.sleep(0)
     assert approvals.resolve_form("f1", {"code": "1" * 900, "extra": "x", "n": 5}, remember=1)
     r = await t
-    assert r.values == {"code": "1" * approvals.VALUE_MAX} and r.remember is True
+    assert r.values == {"code": "1" * 900} and r.remember is True
+    t = asyncio.create_task(approvals.wait_form("f3", ["code"]))
+    await asyncio.sleep(0)
+    approvals.resolve_form("f3", {"code": "1" * (approvals.VALUE_MAX + 1)})
+    assert (await t).values == {}
     t = asyncio.create_task(approvals.wait_form("f2", ["code"]))
     await asyncio.sleep(0)
     approvals.resolve_form("f2", None)

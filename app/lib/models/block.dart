@@ -543,17 +543,24 @@ List<Block> blocksFrom(dynamic list) => [for (final b in (list as List? ?? [])) 
 String plainText(List<Block> blocks) => blocks.whereType<TextBlock>().map((b) => b.text).join('\n').trim();
 
 /// 表单卡里的一个输入框。kind：text / email / password（遮住）/ code（数字键盘 + 短信验证码自动填充）
-/// / phone（电话键盘）/ multiline（多行：地址、备注）。options = 可点选的候选（点了填进框里，仍可改）；optional = 选填。
+/// / phone（电话键盘）/ multiline（多行：地址、备注）。options = 可点选的候选（点了填进框里，仍可改）；optional = 选填；
+/// minLength = 至少几个字符才能提交（要环境变量卡：太短的值没法在输出里可靠地打码）。
 class FormInput {
-  const FormInput({required this.name, required this.label, this.kind = 'text', this.value, this.options = const [], this.optional = false});
+  const FormInput(
+      {required this.name, required this.label, this.kind = 'text', this.value, this.options = const [], this.optional = false, this.minLength = 0});
   factory FormInput.fromJson(Map<String, dynamic> j) => FormInput(
       name: j['name'] as String? ?? '',
       label: j['label'] as String? ?? '',
       kind: j['kind'] as String? ?? 'text',
       value: j['value'] as String?,
       options: [for (final o in (j['options'] as List? ?? [])) if (o is String && o.isNotEmpty) o],
-      optional: j['optional'] as bool? ?? false);
+      optional: j['optional'] as bool? ?? false,
+      minLength: (j['min_length'] as num?)?.toInt() ?? 0);
   final String name, label, kind;
+  final int minLength;
+
+  /// 填了但还不够长（输入框下提示“至少 N 个字符”）；空着不算（空着由必填规则管）。
+  bool tooShort(String v) => v.trim().isNotEmpty && v.length < minLength;
   final String? value; // 服务器预填的（只有不敏感的，如用户名、已知的默认值）
   final List<String> options;
   final bool optional;
@@ -566,7 +573,8 @@ class FormAnswer {
 }
 
 /// 表单卡：任务进行中向用户要东西（网站登录、验证码、助手缺的信息），答复走 form.reply。
-/// login / code 的值只发给服务器交给浏览器，不写进卡片；info（ask_user）提交后服务器把 answers 写回卡片。
+/// login / code 的值只发给服务器交给浏览器，env（request_env）的值只发给服务器存进保险箱，都不写进卡片；
+/// info（ask_user）提交后服务器把 answers 写回卡片。
 class FormBlock extends Block {
   const FormBlock({
     required this.id,
@@ -601,9 +609,11 @@ class FormBlock extends Block {
   final bool remember; // 是否提供“记住”（login → 保险箱；info → 长期记忆）
   bool get pending => state == 'pending';
 
-  /// 填好了没有：必填的都不是空白（选填可以空着）。
-  bool completeWith(Map<String, String> values) =>
-      fields.every((f) => f.optional || (values[f.name] ?? '').trim().isNotEmpty);
+  /// 填好了没有：必填的都不是空白（选填可以空着），填了的都够长。
+  bool completeWith(Map<String, String> values) => fields.every((f) {
+        final v = values[f.name] ?? '';
+        return (f.optional || v.trim().isNotEmpty) && !f.tooShort(v);
+      });
 }
 
 /// “复制”一条回复得到的 Markdown（和后端 blocks.py 的 blocks_to_text 同一套规则，表格转成 Markdown 表）。

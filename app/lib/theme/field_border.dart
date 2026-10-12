@@ -9,8 +9,9 @@ import 'tokens.dart';
 
 /// 卡片里的紧凑输入框（聊天表单卡）：外形同主题的 FieldBorder，只是 isDense + 上下内边距收紧，
 /// 一张五六项的表单在手机上不再占满一屏（v0.92）。弹层/整页表单仍用主题默认的宽松版。
-InputDecoration compactField({String? label, Widget? suffix}) => InputDecoration(
+InputDecoration compactField({String? label, Widget? suffix, String? helper}) => InputDecoration(
       labelText: label,
+      helperText: helper,
       suffixIcon: suffix,
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),

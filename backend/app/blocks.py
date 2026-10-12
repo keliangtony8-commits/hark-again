@@ -329,6 +329,7 @@ class FormField(BaseModel):
     value: str | None = None  # 预填（只放不敏感的，如用户名）
     options: list[str] | None = Field(default=None, max_length=6)  # 可点选的候选（点了填进框里，仍可改写）
     optional: bool = False  # 选填：空着也能提交
+    min_length: int | None = None  # 至少几个字符才能提交（要环境变量卡：command_env.VALUE_MIN）
 
 
 class FormAnswer(BaseModel):
@@ -338,11 +339,12 @@ class FormAnswer(BaseModel):
 
 class FormBlock(BaseModel):
     """表单卡：任务进行中向用户要东西（网站登录、验证码、助手缺的信息）。和审批卡一样挂起等答复（form.reply，id 即表单 id）。
-    pending → submitted / cancelled / expired。login / code 的值不写进卡片：只交给发起的工具，不落库、不给模型看；
+    pending → submitted / cancelled / expired。login / code / env 的值不写进卡片：只交给发起的工具，不给模型看
+    （env = request_env 要的命令环境变量，值由工具直接存进保险箱）；
     info（ask_user）是用户有意告诉助手的，提交后写进 answers（卡片上回显、进历史，下一轮模型也记得）。"""
     type: Literal["form"] = "form"
     id: str
-    purpose: Literal["login", "code", "info"] = "info"
+    purpose: Literal["login", "code", "info", "env"] = "info"
     title: str
     site: str | None = None  # 网站域名，卡片上显示“在 xxx 上”
     fields: list[FormField] = Field(min_length=1, max_length=6)
