@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy import select
+from fake_sandbox import streamed
 from app import jobs, llm, sandbox_client, storage
 from app.agent.runner import run_turn
 from app.agent.tools import REGISTRY, ToolContext, load_builtin
@@ -135,7 +136,7 @@ ran = []
 async def fake_run(p, command, timeout=60):
     ran.append(command)
     return {"exit_code": 0, "timed_out": False, "output": "ok\n"}
-sandbox_client.run = fake_run
+sandbox_client.stream = streamed(fake_run)
 script.extend([("run_command", {"command": "rm -rf /"}), "那条命令被拦下了。"])
 reply = run(turn())
 assert not ran and not any(b["type"] == "approval" for b in reply.blocks), reply.blocks
@@ -195,7 +196,7 @@ assert run(tool("read_file", path="Makefile")).content.startswith("all:")
 async def fake_long(p, command, timeout=60):
     return {"exit_code": 0, "timed_out": False, "output": "HEAD" + spill.MARK + "TAIL", "spill": ".spill/run.txt",
             "omitted": 99999, "total": 100007}
-sandbox_client.run = fake_long
+sandbox_client.stream = streamed(fake_long)
 r = run(tool("run_command", command="cat huge.csv"))
 assert "中间省略 99999 字符" in r.content and "read_file path=\".spill/run.txt\"" in r.content, r.content
 src = r.blocks[0]["source"]

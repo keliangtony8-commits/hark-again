@@ -11,7 +11,12 @@ sealed class Block {
             columns: [for (final c in j['columns'] as List? ?? []) '$c'],
             rows: [for (final r in j['rows'] as List? ?? []) [for (final c in r as List) '$c']],
             note: j['note'] as String?),
-        'code' => CodeBlock(language: j['language'] as String? ?? '', title: j['title'] as String?, source: j['source'] as String? ?? ''),
+        'code' => CodeBlock(
+          language: j['language'] as String? ?? '',
+          title: j['title'] as String?,
+          source: j['source'] as String? ?? '',
+          live: j['live'] == true,
+        ),
         'file' => FileBlock(
             source: j['source'] as String? ?? 'upload',
             id: j['id'] as String,
@@ -71,10 +76,12 @@ class TableBlock extends Block {
   final List<List<String>> rows;
 }
 
+/// [live]：命令还在跑，[source] 是最近的输出（服务器 block.update 原地换），跑完换成不带 live 的最终块。
 class CodeBlock extends Block {
-  const CodeBlock({required this.language, this.title, required this.source});
+  const CodeBlock({required this.language, this.title, required this.source, this.live = false});
   final String language, source;
   final String? title;
+  final bool live;
 }
 
 class FileBlock extends Block {

@@ -2,7 +2,8 @@
 
 - 每个项目一个长驻容器 sbx-<project_id>，工作目录挂载 data/projects/<id>
 - 资源限制：内存、CPU、进程数；去掉所有 Linux capability；禁止提权
-- 单条命令超时即杀；输出太长时给后端开头 + 结尾，完整输出写进工作区 .spill/（约定见 backend/app/spill.py）
+- 单条命令超时即杀；/exec/stream 边跑边把新输出推给后端（NDJSON，每 FLUSH_S 秒一批，聊天里实时看），
+  后端断开（用户点停止）就整组杀掉；可带 stdin（≤ STDIN_MAX，不带则标准输入为空，交互提示不会卡住）；输出太长时给后端开头 + 结尾，完整输出写进工作区 .spill/（约定见 backend/app/spill.py）
 - 容器里的家目录在工作区 .home（镜像 /etc/profile.d/workspace.sh）：pip/npm 用户级安装都落在工作区，
   所以容器可以随时删掉重建——镜像更新后（预装清单变了），旧容器在下次用到时自动换成新镜像（有后台任务在跑的不换）
 - 空闲超过 IDLE_MINUTES 的容器自动停止，省 VPS 内存（有后台任务在跑的不停）
@@ -12,13 +13,18 @@
 后端只能通过带 token 的 HTTP 调它，模型永远碰不到 Docker 本身。
 """
 import asyncio
+import base64
+import codecs
+import json
 import os
 import re
+import threading
 import time
 
 import docker
 from docker.errors import NotFound
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 TOKEN = os.environ["SANDBOX_TOKEN"]
@@ -30,6 +36,8 @@ IDLE_MINUTES = int(os.environ.get("SANDBOX_IDLE_MINUTES", "30"))
 MAX_OUTPUT = 12000
 SPILL_MARK = "\n…（中间省略）…\n"  # 与 backend/app/spill.py MARK 相同
 SPILL_KEEP = 50
+STDIN_MAX = 64 * 1024  # 走环境变量（base64），单个变量上限 128 KB，留足余量
+FLUSH_S = 0.5          # 实时输出多久推一批：太密只是白占带宽
 
 client = docker.from_env()
 last_used: dict[str, float] = {}
@@ -45,6 +53,23 @@ class ExecIn(BaseModel):
     project_id: str
     command: str
     timeout: int = 60
+    stdin: str | None = None
+
+
+class Sink:
+    """执行线程往里写新输出，推送协程每 FLUSH_S 秒取走一批。"""
+    def __init__(self):
+        self._buf: list[str] = []
+        self._lock = threading.Lock()
+
+    def put(self, text: str) -> None:
+        with self._lock:
+            self._buf.append(text)
+
+    def take(self) -> str:
+        with self._lock:
+            out, self._buf = "".join(self._buf), []
+        return out
 
 
 class JobIn(BaseModel):
@@ -100,13 +125,34 @@ def _outdated(c) -> bool:
         return False
 
 
-def _exec(pid: str, command: str, timeout: int) -> dict:
+# 包装脚本：先记下自己的 pid（= 之后 exec 成的 timeout，它自成进程组，停止时整组杀），
+# 有 stdin 就从环境变量解码接到标准输入（不在工作区落文件），没有就接 /dev/null，然后才跑真正的命令。
+_WRAP = ('echo $$ > /tmp/.exec-{tok}; '
+         'if [ -n "${{STDIN_B64+x}}" ]; then exec < <(printf %s "$STDIN_B64" | base64 -d); unset STDIN_B64; '
+         'else exec </dev/null; fi; '
+         'exec timeout -k 5 {timeout} bash -lc "$1"')
+
+
+def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: str | None = None,
+          sink: Sink | None = None) -> dict:
     c = _container(pid)
     last_used[pid] = time.time()
-    # coreutils timeout 负责杀超时进程；-k 再给 5 秒强杀
-    res = c.exec_run(["timeout", "-k", "5", str(timeout), "bash", "-lc", command], workdir="/workspace", demux=False)
-    out = (res.output or b"").decode("utf-8", "replace")
-    result = {"exit_code": res.exit_code, "timed_out": res.exit_code == 124, "output": out}
+    tok = tok or os.urandom(6).hex()
+    env = {"STDIN_B64": base64.b64encode(stdin.encode()).decode()} if stdin is not None else None
+    ex = client.api.exec_create(c.id, ["bash", "-c", _WRAP.format(tok=tok, timeout=timeout), "_", command],
+                                workdir="/workspace", environment=env)
+    dec, parts = codecs.getincrementaldecoder("utf-8")("replace"), []
+    for chunk in client.api.exec_start(ex["Id"], stream=True):
+        if text := dec.decode(chunk):
+            parts.append(text)
+            if sink is not None:
+                sink.put(text)
+    parts.append(dec.decode(b"", final=True))
+    code = client.api.exec_inspect(ex["Id"]).get("ExitCode")
+    c.exec_run(["rm", "-f", f"/tmp/.exec-{tok}"], detach=True)
+    last_used[pid] = time.time()
+    out = "".join(parts)
+    result = {"exit_code": code, "timed_out": code == 124, "output": out}
     if len(out) > MAX_OUTPUT:
         head, tail = out[:MAX_OUTPUT // 2], out[-MAX_OUTPUT // 2:]
         result.update(output=head + SPILL_MARK + tail, omitted=len(out) - len(head) - len(tail), total=len(out))
@@ -115,6 +161,16 @@ def _exec(pid: str, command: str, timeout: int) -> dict:
         except OSError:
             pass
     return result
+
+
+def _kill_exec(pid: str, tok: str) -> None:
+    """后端断开（用户停止了这一轮）：整组 TERM，2 秒后还在就 KILL。"""
+    c = _existing(pid)
+    if c is None:
+        return
+    f = f"/tmp/.exec-{tok}"
+    c.exec_run(["bash", "-c", f'p=$(cat {f} 2>/dev/null) || exit 0; kill -TERM -- -$p 2>/dev/null; '
+                f'sleep 2; kill -KILL -- -$p 2>/dev/null; rm -f {f}; exit 0'])
 
 
 def _spill(pid: str, text: str) -> str:
@@ -132,9 +188,40 @@ def _spill(pid: str, text: str) -> str:
     return f".spill/{name}"
 
 
+def _check_stdin(body: ExecIn) -> None:
+    if body.stdin is not None and len(body.stdin.encode()) > STDIN_MAX:
+        raise HTTPException(413, f"stdin 超过 {STDIN_MAX // 1024} KB")
+
+
 @app.post("/exec", dependencies=[Depends(auth)])
 async def exec_(body: ExecIn):
-    return await asyncio.to_thread(_exec, body.project_id, body.command, max(1, min(body.timeout, 120)))
+    _check_stdin(body)
+    return await asyncio.to_thread(_exec, body.project_id, body.command, max(1, min(body.timeout, 120)), body.stdin)
+
+
+@app.post("/exec/stream", dependencies=[Depends(auth)])
+async def exec_stream(body: ExecIn):
+    """NDJSON：若干 {"type":"out","data":新输出} → 最后一行 {"type":"exit", 同 /exec 的结果} 或 {"type":"error"}。"""
+    _check_stdin(body)
+    _container(body.project_id)  # 项目 id 不合法在开流之前就 400
+    tok, sink = os.urandom(6).hex(), Sink()
+    timeout = max(1, min(body.timeout, 120))
+
+    async def gen():
+        task = asyncio.create_task(asyncio.to_thread(_exec, body.project_id, body.command, timeout, body.stdin, tok, sink))
+        try:
+            while not task.done():
+                await asyncio.wait({task}, timeout=FLUSH_S)
+                if text := sink.take():
+                    yield json.dumps({"type": "out", "data": text}, ensure_ascii=False) + "\n"
+            try:
+                yield json.dumps({"type": "exit", **task.result()}, ensure_ascii=False) + "\n"
+            except Exception as e:  # noqa: BLE001 — docker 出错也要让后端知道这一轮结束了
+                yield json.dumps({"type": "error", "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False) + "\n"
+        finally:
+            if not task.done():  # 客户端断开：命令还在跑就杀掉，不让它在沙盒里空转
+                await asyncio.to_thread(_kill_exec, body.project_id, tok)
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
 
 
 @app.post("/jobs/start", dependencies=[Depends(auth)])

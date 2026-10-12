@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy import select
+from fake_sandbox import streamed
 from app import jobs, llm, sandbox_client, storage
 from app.agent.runner import run_turn
 from app.agent.tools import REGISTRY, ToolContext, load_builtin
@@ -129,7 +130,7 @@ ran = []
 async def fake_run(p, command, timeout=60):
     ran.append((p, command))
     return {"exit_code": 0, "timed_out": False, "output": "ok\n"}
-sandbox_client.run = fake_run
+sandbox_client.stream = streamed(fake_run)
 script.extend([("run_command", {"command": "sudo apt-get install -y ffmpeg"}), ("run_command", {"command": "pip install imageio-ffmpeg"}), "装好了。"])
 reply = run(turn())
 assert ran == [(pid, "pip install imageio-ffmpeg")], ran

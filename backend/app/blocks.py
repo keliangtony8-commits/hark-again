@@ -33,10 +33,12 @@ class TableBlock(BaseModel):
 
 
 class CodeBlock(BaseModel):
+    """live=true：命令还在跑，source 是最近的输出（run_command 运行中原地更新）；跑完换成不带 live 的最终块。"""
     type: Literal["code"] = "code"
     language: str = ""
     title: str | None = None
     source: str
+    live: bool = False
 
 
 class FileBlock(BaseModel):

@@ -46,7 +46,7 @@
 | `text` | `text`（Markdown，含表格） |
 | `links` | `items: [{url, label?, title?}]` |
 | `table` | `title?`, `columns[]`, `rows[][]`, `note?` |
-| `code` | `language`, `title?`, `source` |
+| `code` | `language`, `title?`, `source`, `live?`（v1.24：`true` = 前台命令还在跑，`source` 是最近 ≤40 行输出，服务器约每 0.5 秒用 `block.update` 整块替换；跑完同一个 index 换成不带 `live` 的最终块（完整输出 + `# 退出码 N`）。客户端运行中显示“运行中”、不给复制、定高贴底。被停止的半截回复里不会再带 `live`） |
 | `file` | `source: upload\|project`, `id`, `name`, `mime`, `size`, `project_id?`（source=project 时是工作区 id：项目 id 或 `me`；下载 `/api/projects/{project_id}/files/{id}`）。v1.22：助手用 display_file 交付的成果默认是 source=upload 快照（下载 `/api/uploads/{id}`，之后工作区改动不影响）；超过 deliver_max_mb 的退回 source=project。卡片第二行 = 种类 · 大小[ · 我的文件/项目文件]（fileKind 规则两端一致） |
 | `approval` | `id`, `title`, `detail`, `state: pending\|approved\|rejected\|expired` |
 | `browser` | `session`（实时画面：`GET /api/browser/screen?token=` 轮询；接管：`POST /api/browser/mouse {x,y}` 0–1 归一化坐标，`POST /api/browser/keyboard {text?, key?}`） |

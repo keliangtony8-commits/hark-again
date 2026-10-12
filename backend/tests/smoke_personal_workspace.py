@@ -19,6 +19,7 @@ assert r.returncode == 0, r.stderr
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from fake_sandbox import streamed
 from app import jobs, llm, sandbox_client, storage, workspaces
 from app.agent import context
 from app.agent.runner import run_turn
@@ -45,7 +46,7 @@ async def job_alive(pid, jid):
     return procs[jid].poll() is None
 async def cancel_job(pid, jid):
     os.killpg(procs[jid].pid, signal.SIGTERM); procs[jid].wait(10)
-sandbox_client.run, sandbox_client.start_job, sandbox_client.job_alive, sandbox_client.cancel_job = fake_run, start_job, job_alive, cancel_job
+sandbox_client.stream, sandbox_client.start_job, sandbox_client.job_alive, sandbox_client.cancel_job = streamed(fake_run), start_job, job_alive, cancel_job
 
 # ---- 模拟模型 ----
 script: list = []

@@ -43,6 +43,9 @@
 .blk-link-label { font-size: var(--fs-xs); color: var(--text-2); background: var(--tile); padding: 2px var(--sp-2); border-radius: var(--r-full); }
 
 .blk-code pre { margin: 0; padding: var(--sp-4); overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
+.blk-code-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.blk-code-running { flex: none; display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); }
+.blk-code.live pre { max-height: 320px; overflow-y: auto; color: var(--text-2); }  /* 运行中：定高贴底，跑完展开成完整输出 */
 .blk-code-copy { font-size: var(--fs-xs); color: var(--text-2); padding: 2px var(--sp-2); border-radius: var(--r-sm); }
 .blk-code-copy:hover { background: var(--tile); }
 

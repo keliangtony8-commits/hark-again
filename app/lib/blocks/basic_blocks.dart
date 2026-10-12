@@ -9,6 +9,7 @@ import '../theme/tokens.dart';
 import '../ui/glass.dart';
 import '../ui/kit.dart';
 import '../ui/markdown.dart';
+import '../ui/motion.dart';
 
 class TextBlockView extends StatelessWidget {
   const TextBlockView(this.block, {super.key});
@@ -108,13 +109,25 @@ class TableBlockView extends StatelessWidget {
   }
 }
 
+/// 代码 / 命令输出卡。live = 命令还在跑：标题旁呼吸点 + “运行中”、不给复制（内容还在变），
+/// 输出区定高、贴着最新一行（reverse 滚动）；跑完换成完整输出，高度随内容。
 class CodeBlockView extends StatelessWidget {
   const CodeBlockView(this.block, {super.key});
   final CodeBlock block;
 
+  static const _liveMaxHeight = 280.0;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final text = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x4),
+      child: SelectableText(
+        block.source.isEmpty && block.live ? '等待输出…' : block.source,
+        style: TextStyle(fontFamily: 'monospace', fontSize: Fs.sm, height: 1.5, color: block.live ? p.text2 : p.text),
+      ),
+    );
     return Container(
       decoration: BoxDecoration(
         color: context.tileFill, // 坐在 AI 回复的玻璃卡里：再深一层的小块，不再是实色板
@@ -125,28 +138,51 @@ class CodeBlockView extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x1, Sp.x1, 0),
-            child: Row(
-              children: [
-                Expanded(child: Text(block.title ?? block.language, style: context.text.labelSmall)),
-                IconButton(
-                  icon: Icon(Icons.copy_rounded, size: 18, color: p.text3),
-                  tooltip: '复制',
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: block.source));
-                    showToast(context, '已复制');
-                  },
-                ),
-              ],
+            child: SizedBox(
+              height: 48, // 与复制按钮同高：运行中换成状态字时卡片不跳
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      block.title ?? block.language,
+                      style: context.text.labelSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  FadeSwitcher(
+                    alignment: Alignment.centerRight,
+                    child: block.live
+                        ? Padding(
+                            key: const ValueKey('live'),
+                            padding: const EdgeInsets.only(left: Sp.x2, right: Sp.x3),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              PulseDot(color: p.accent, size: 7),
+                              const SizedBox(width: Sp.x2),
+                              Text('运行中', style: context.text.labelSmall?.copyWith(color: p.text2)),
+                            ]),
+                          )
+                        : IconButton(
+                            key: const ValueKey('copy'),
+                            icon: Icon(Icons.copy_rounded, size: 18, color: p.text3),
+                            tooltip: '复制',
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: block.source));
+                              showToast(context, '已复制');
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x4),
-            child: SelectableText(
-              block.source,
-              style: TextStyle(fontFamily: 'monospace', fontSize: Fs.sm, height: 1.5, color: p.text),
-            ),
-          ),
+          if (block.live)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: _liveMaxHeight),
+              child: SingleChildScrollView(reverse: true, child: text),
+            )
+          else
+            text,
         ],
       ),
     );

@@ -1,16 +1,27 @@
 """沙盒执行器客户端。后端不接触 Docker，只通过 HTTP 请求独立的 sandbox 服务。"""
+import json
+from collections.abc import AsyncIterator
+
 import httpx
 
 from .config import settings
 
+STDIN_MAX = 64 * 1024  # 与 sandbox/runner.py 相同
 
-async def run(project_id: str, command: str, timeout: int = 60) -> dict:
-    async with httpx.AsyncClient(timeout=timeout + 15) as c:
-        r = await c.post(f"{settings.sandbox_url}/exec",
-                         headers={"Authorization": f"Bearer {settings.sandbox_token}"},
-                         json={"project_id": project_id, "command": command, "timeout": timeout})
-        r.raise_for_status()
-        return r.json()
+
+async def stream(project_id: str, command: str, timeout: int = 60, stdin: str | None = None) -> AsyncIterator[dict]:
+    """前台执行，边跑边产出：{"type":"out","data"} …，最后 {"type":"exit", exit_code, timed_out, output, …}
+    或 {"type":"error"}。调用方中途不再读（这一轮被停止）→ 连接关闭 → 沙盒整组杀掉命令。"""
+    body = {"project_id": project_id, "command": command, "timeout": timeout}
+    if stdin is not None:
+        body["stdin"] = stdin
+    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout + 15)) as c:
+        async with c.stream("POST", f"{settings.sandbox_url}/exec/stream", json=body,
+                            headers={"Authorization": f"Bearer {settings.sandbox_token}"}) as r:
+            r.raise_for_status()
+            async for line in r.aiter_lines():
+                if line.strip():
+                    yield json.loads(line)
 
 
 async def remove(project_id: str) -> None:

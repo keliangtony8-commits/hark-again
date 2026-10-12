@@ -105,24 +105,29 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
       "预计超过一分钟的活（装大依赖、训练、批量下载/爬取、大构建、长时间脚本）用 background=true 放到后台："
       "立即返回任务 id，用户在聊天里看到实时日志、可以取消；结束时你会收到通知并在这段对话里接着说，"
       "期间不要反复用 job_status 轮询。后台任务连续 idle_timeout 秒没有任何输出会被判定卡住自动停掉。"
+      "前台命令运行中用户能实时看到输出。标准输入默认是空的（交互提示读到 EOF，不会卡住）；"
+      "需要喂输入时（确认提示的回答、要处理的数据）用 stdin 传。"
       "毁系统的命令（rm -rf /、格式化、关机等）会被直接拦下。",
       {"type": "object", "properties": {
           "command": {"type": "string"},
           "timeout": {"type": "integer", "default": 60,
                       "description": "秒。前台最多 120；后台最多 3600（默认 3600）"},
           "background": {"type": "boolean", "default": False, "description": "放到后台跑"},
+          "stdin": {"type": "string", "description": f"仅前台：传给命令标准输入的文本，最多 {sandbox_client.STDIN_MAX // 1024} KB"},
           "title": {"type": "string", "description": "后台任务给用户看的一句话名字，如“安装依赖”“训练模型”"},
           "idle_timeout": {"type": "integer",
                            "description": f"秒，仅后台：连续这么久没有新输出就判定卡住并停掉；默认 {settings.job_idle_seconds}，"
                                           "确实会长时间不打印（不输出进度的训练、静默编译）就设 0"}},
        "required": ["command"]}, risk=_command_risk)
 async def run_command(ctx: ToolContext, command: str, timeout: int | None = None, background: bool = False,
-                      title: str | None = None, idle_timeout: int | None = None) -> ToolResult:
+                      title: str | None = None, idle_timeout: int | None = None, stdin: str | None = None) -> ToolResult:
     if (v := command_guard.verdict(command)) is not None and v.level == "block":
         return ToolResult(command_guard.refusal(v))
     if v is not None and v.level == "unsupported":
         return ToolResult(command_guard.unsupported(v, workspaces.ENVIRONMENT))
     if background:
+        if stdin is not None:
+            return ToolResult("后台任务不接受 stdin：把输入写进工作区文件，命令里用 < 文件 读。")
         try:
             job = await jobs.start(ctx.db, project_id=ctx.workspace, command=command, title=title, timeout=timeout,
                                    idle_timeout=idle_timeout, conversation_id=ctx.conversation_id, task_id=ctx.task_id)
@@ -132,10 +137,23 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（最长 {jobs.duration_text(job.timeout)}{idle}）。"
                           "用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。",
                           [jobs.block(job)])
+    if stdin is not None and len(stdin.encode()) > sandbox_client.STDIN_MAX:
+        return ToolResult(f"stdin 太长（上限 {sandbox_client.STDIN_MAX // 1024} KB）：先写进工作区文件，命令里用 < 文件 读。")
+    title = f"$ {command[:80]}"
+    tail, r = "", None
     try:
-        r = await sandbox_client.run(ctx.workspace, command, min(timeout or 60, 120))
+        async for ev in sandbox_client.stream(ctx.workspace, command, min(timeout or 60, 120), stdin):
+            if ev["type"] == "out":
+                tail = live_tail(tail + ev["data"])
+                ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True})
+            elif ev["type"] == "exit":
+                r = ev
+            elif ev["type"] == "error":
+                return ToolResult(f"沙盒出错（{ev.get('error', '')}），命令的结果不确定。")
     except httpx.HTTPError as e:
         return ToolResult(f"沙盒没响应（{type(e).__name__}），命令没有执行。")
+    if r is None:
+        return ToolResult("沙盒连接中断，命令的结果不确定。")
     timed_out = r.get("timed_out")
     status = "超时被终止" if timed_out else f"退出码 {r['exit_code']}"
     out = shown = r.get("output", "")
@@ -145,4 +163,14 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         shown = shown.replace(spill.MARK, f"\n…（中间省略 {omitted} 字符）…\n")
     hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
     return ToolResult(f"{status}\n{out}{hint}", [
-        {"type": "code", "language": "bash", "title": f"$ {command[:80]}", "source": f"{shown.strip() or '（无输出）'}\n# {status}"}])
+        {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}])
+
+
+LIVE_LINES, LIVE_CHARS = 40, 4000  # 运行中卡片只带最近这些输出：每 0.5 秒整块推一次，别越推越大
+
+
+def live_tail(text: str) -> str:
+    """运行中给用户看的最近输出：最多 LIVE_LINES 行、LIVE_CHARS 字；\r 进度条只留最后一帧。"""
+    text = text[-LIVE_CHARS * 2:]
+    lines = [ln.rsplit("\r", 1)[-1] if "\r" in ln.rstrip("\r") else ln for ln in text.split("\n")]
+    return "\n".join(lines[-LIVE_LINES:])[-LIVE_CHARS:]

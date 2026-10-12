@@ -2,7 +2,8 @@
 export type TextBlock = { type: "text"; text: string };
 export type LinksBlock = { type: "links"; items: { url: string; label?: string; title?: string }[] };
 export type TableBlock = { type: "table"; title?: string; columns: string[]; rows: string[][]; note?: string };
-export type CodeBlock = { type: "code"; language?: string; title?: string; source: string };
+/** live：命令还在跑，source 是最近的输出（服务器 block.update 原地换），跑完换成不带 live 的最终块。 */
+export type CodeBlock = { type: "code"; language?: string; title?: string; source: string; live?: boolean };
 export type FileBlock = { type: "file"; source: "upload" | "project"; id: string; name: string; mime: string; size: number; project_id?: string | null };
 export type ApprovalBlock = { type: "approval"; id: string; title: string; detail: string; state: "pending" | "approved" | "rejected" | "expired" };
 export type BrowserBlock = { type: "browser"; session: string };

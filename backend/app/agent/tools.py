@@ -2,6 +2,7 @@
 
 每个工具一个文件放在 agent/builtin/，用 @tool 注册；内核只认识注册表，不认识具体工具。
 工具返回 ToolResult：content 回给模型看，blocks 直接展示给用户（表格、链接卡等），images 给模型看图（vision.for_tool）。
+跑得久的工具可在执行中用 ctx.live(block) 推进度块（见 ToolContext.live）。
 """
 import importlib
 import pkgutil
@@ -23,6 +24,10 @@ async def deny_all(_id: str, _title: str, _detail: str) -> bool:
     return False
 
 
+def no_live(_block: dict) -> None:
+    """不在聊天里跑（或工具没在执行）时，实时块无处可推：丢掉。"""
+
+
 async def nobody(_id: str, _form: dict) -> "FormReply | None":
     """无人值守时没人填表：一律当作取消。"""
     return None
@@ -36,6 +41,9 @@ class ToolContext:
     conversation_id: str | None = None  # 当前对话（分享对话等“作用于这段对话本身”的工具用）
     ask: Asker = nobody  # 在聊天里弹表单卡问用户（登录、验证码）
     task_id: str | None = None  # 这一轮是哪个定时任务在跑（None = 用户在聊天）；如早间简报不把自己列进今天的日程
+    # 工具运行中推“实时块”（如命令的最新输出）：内核把第一次推的插进回复，之后原地替换；
+    # 工具结束时 ToolResult.blocks[0] 就是它的最终形态（没有块则保留最后一次推的、去掉 live）。只由内核在执行期间挂上。
+    live: Callable[[dict], None] = no_live
 
     @property
     def workspace(self) -> str:

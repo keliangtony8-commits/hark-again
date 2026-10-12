@@ -3,15 +3,17 @@
 只产出事件，不碰传输与存储。事件同时也是消息的“构建日志”：
 MessageBuilder 把事件折叠成最终的块列表，存库与前端渲染用的是同一套块。
 """
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from dataclasses import dataclass, field
 
 from .. import spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from .tools import REGISTRY, ToolContext, ToolResult, schemas
+from .tools import REGISTRY, ToolContext, ToolResult, no_live, schemas
 
 MAX_STEPS = 6  # 防止工具死循环烧钱
 SELF_PAGED = {"read_file"}  # 自己按 offset 分页的工具，结果不再落盘截断
@@ -86,15 +88,24 @@ class MessageBuilder:
         self.blocks[index] = {**self.blocks[index], **changes}
         return BlockUpdate(index, self.blocks[index])
 
+    def replace(self, index: int, block: dict) -> Event:
+        """整块换掉（实时块换成最终块：旧字段如 live 不能残留）。"""
+        self.blocks[index] = block
+        self._text_open = False
+        return BlockUpdate(index, block)
+
     def break_text(self) -> None:
         self._text_open = False
 
     def partial(self) -> list[dict]:
-        """被打断时能落库的块：去掉空文字块，还在等的审批卡（含订单卡）标为 expired（它再也等不到答复了）。"""
+        """被打断时能落库的块：去掉空文字块，还在等的审批卡（含订单卡）标为 expired（它再也等不到答复了），
+        还在跑的实时块去掉 live（命令已随这一轮被停掉）。"""
         out = []
         for b in self.blocks:
             if b["type"] == "text" and not b["text"].strip():
                 continue
+            if b.get("live"):
+                b = {k: v for k, v in b.items() if k != "live"}
             out.append({**b, "state": "expired"} if b.get("state") == "pending" and "id" in b else b)
         return out
 
@@ -189,13 +200,22 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
             args["form"] = reply.reply
 
     yield ToolStatus(call.id, call.name, t.label, "running")
+    live = _Live(builder)
     try:
-        result = await t.run(ctx, **args)
+        async with aclosing(live.run(t.run(ctx, **args), ctx)) as events:
+            async for ev in events:
+                yield ev
+        result = live.result
     except Exception as e:  # 工具失败交给模型处理（换方法或如实告知）
+        if (ev := live.settle()) is not None:
+            yield ev
         yield ToolStatus(call.id, call.name, t.label, "error")
         yield ToolResult(f"工具出错：{e}")
         return
-    for b in result.blocks:
+    blocks = list(result.blocks)
+    if (ev := live.settle(blocks.pop(0) if blocks and live.index is not None else None)) is not None:
+        yield ev
+    for b in blocks:
         if not builder.has(b):
             yield builder.add(b)
     yield ToolStatus(call.id, call.name, t.label, "done")
@@ -203,6 +223,50 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder):
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）
         content = spill.bound(content, settings.tool_result_max, ctx.workspace, call.name)
     yield ToolResult(content, images=result.images)
+
+class _Live:
+    """一次工具执行期间的实时块：工具 ctx.live(block) 推来的，第一次插入回复，之后原地替换。
+    工具协程跑在独立 task 里，这样执行中也能把事件交出去；这一轮被取消时 task 跟着取消（沙盒那头随连接断开杀命令）。"""
+
+    def __init__(self, builder: MessageBuilder):
+        self.builder, self.index, self.result = builder, None, ToolResult("")
+
+    async def run(self, coro, ctx: ToolContext):
+        q: asyncio.Queue[dict] = asyncio.Queue()
+        ctx.live = q.put_nowait
+        task = asyncio.create_task(coro)
+        try:
+            while True:
+                getter = asyncio.create_task(q.get())
+                await asyncio.wait({task, getter}, return_when=asyncio.FIRST_COMPLETED)
+                if not getter.done():
+                    getter.cancel()
+                    break
+                block = getter.result()
+                while not q.empty():  # 积压了就只要最新的
+                    block = q.get_nowait()
+                yield self._show(block)
+            self.result = task.result()  # 工具抛的异常从这里出去
+        finally:
+            ctx.live = no_live
+            if not task.done():
+                task.cancel()
+
+    def _show(self, block: dict) -> Event:
+        if self.index is None:
+            ev = self.builder.add(block)
+            self.index = len(self.builder.blocks) - 1
+            return ev
+        return self.builder.replace(self.index, block)
+
+    def settle(self, final: dict | None = None) -> Event | None:
+        """收尾：有最终块就换上；没有就把最后一次推的去掉 live 留着。没推过实时块 → None。"""
+        if self.index is None:
+            return None
+        if final is None:
+            final = {k: v for k, v in self.builder.blocks[self.index].items() if k != "live"}
+        return self.builder.replace(self.index, final)
+
 
 @dataclass
 class Asked:
