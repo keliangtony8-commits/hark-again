@@ -178,8 +178,8 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
                 alignment: Alignment.centerLeft,
                 child: SwapSwitcher(
                   child: Text(
-                    j.awaitingReply ? '${jobStateLabel(j)} · 助手在看结果' : jobStateLabel(j),
-                    key: ValueKey('${j.state}${j.awaitingReply}'),
+                    jobFootLabel(j),
+                    key: ValueKey(jobFootLabel(j)),
                     style: small?.copyWith(
                         color: tone == JobTone.problem ? p.warning : p.text2,
                         fontWeight: tone == JobTone.problem ? Weights.title : null),

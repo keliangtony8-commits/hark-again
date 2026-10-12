@@ -198,7 +198,7 @@ class BrowserHandoff {
 /// 项目沙盒里的后台任务卡（后端 app/jobs.py）。块里是落库时的状态；运行中由卡片自己轮询 /api/jobs/{id}（models/job.dart）。
 class JobBlock extends Block {
   const JobBlock({required this.id, required this.title, required this.command, required this.state,
-      this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason});
+      this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason, this.keepAlive = false, this.restarts = 0});
   factory JobBlock.fromJson(Map<String, dynamic> j) => JobBlock(
       id: j['id'] as String? ?? '',
       title: j['title'] as String? ?? '后台任务',
@@ -208,7 +208,9 @@ class JobBlock extends Block {
       finishedAt: DateTime.tryParse(j['finished_at'] as String? ?? '')?.toLocal(),
       exitCode: (j['exit_code'] as num?)?.toInt(),
       tail: j['tail'] as String?,
-      stopReason: j['stop_reason'] as String?);
+      stopReason: j['stop_reason'] as String?,
+      keepAlive: j['keep_alive'] as bool? ?? false,
+      restarts: (j['restarts'] as num?)?.toInt() ?? 0);
   final String id, title, command, state;
   final DateTime? startedAt, finishedAt;
   final int? exitCode;
@@ -216,6 +218,10 @@ class JobBlock extends Block {
 
   /// 被服务器护栏自动停掉的原因（卡住没输出 / 输出过大）；用户或助手取消的没有。
   final String? stopReason;
+
+  /// v1.80 常驻任务：意外退出自动重启；restarts = 重启过几次。
+  final bool keepAlive;
+  final int restarts;
 }
 
 /// 用户自己跑的命令（输入框 !命令，后端 ShellBlock）：一条回复里只有它一张。规则在 models/shell.dart。

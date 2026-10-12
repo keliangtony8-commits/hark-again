@@ -250,7 +250,7 @@ class _JobRow extends ConsumerWidget {
     return RowTile(
       leading: SizedBox.square(dimension: Layout.rowIcon, child: Center(child: PulseDot(color: p.accent, size: 8))),
       title: job.title,
-      subtitle: '运行 ${jobDuration(job.elapsed)} · \$ ${job.command.split('\n').first}',
+      subtitle: jobRowSubtitle(job),
       trailing: TextButton(onPressed: cancelling ? null : onCancel, child: Text(cancelling ? '正在取消' : '取消')),
       onTap: () => showJobLog(context, ref, job),
     );

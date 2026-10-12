@@ -71,11 +71,15 @@ export type ShellBlock = { type: "shell"; command: string; state: ShellState; ou
 export type JobBlock = { type: "job"; id: string; title: string; command: string; state: JobState;
   started_at?: string | null; finished_at?: string | null; exit_code?: number | null; tail?: string | null;
   /** 被服务器护栏自动停掉的原因（卡住没输出 / 输出过大）；用户或助手取消的没有。 */
-  stop_reason?: string | null };
+  stop_reason?: string | null;
+  /** v1.80 常驻任务（后端 app/job_restart.py）：意外退出自动重启；restarts = 重启过几次。 */
+  keep_alive?: boolean | null; restarts?: number | null };
 /** /api/jobs/{id} 的快照。followup=pending：结束了，服务器还要在这段对话里接着说一轮。 */
 export type JobInfo = { id: string; title: string; command: string; state: JobState; exit_code?: number | null;
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
-  started_at?: string | null; finished_at?: string | null; stop_reason?: string | null };
+  started_at?: string | null; finished_at?: string | null; stop_reason?: string | null;
+  /** v1.80 常驻：restart_at 不为空 = 进程刚退出、等这个时刻重启（state 仍是 running）。老服务器没有这三个字段。 */
+  keep_alive?: boolean; restarts?: number; restart_at?: string | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
   | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的

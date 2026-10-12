@@ -50,7 +50,8 @@ def wake_note(reason) -> str:
     if reason not in WAKE_TEXT:
         return ""
     return (f"\n（这台电脑刚才{WAKE_TEXT[reason]}，这条命令把它重新开机了：文件和装过的软件都在，"
-            "但之前在前台起的程序（开发服务器、nohup 的进程）已经停了，需要的话重新启动；长期要跑的用 background=true）")
+            "但之前在前台起的程序（开发服务器、nohup 的进程）已经停了，需要的话重新启动；"
+            "要一直开着的服务用 background=true + keep_alive=true，停机重启后会自己拉起）")
 
 
 def storage_breakdown(root: Path, running: set[str] = frozenset()) -> dict:
@@ -197,7 +198,7 @@ async def cleanup(db: AsyncSession, ws: str) -> dict:
 
 
 async def restart(db: AsyncSession, ws: str) -> dict:
-    """停后台任务 → 删容器。沙盒连不上就整件不做（抛 ComputerError），不留半截状态。"""
+    """停后台任务 → 删容器 → 常驻任务排队重启（v1.80）。沙盒连不上就整件不做（抛 ComputerError），不留半截状态。"""
     if await workspaces.name(db, ws) is None:
         raise LookupError("没有这个工作区")
     try:
@@ -205,6 +206,8 @@ async def restart(db: AsyncSession, ws: str) -> dict:
     except httpx.HTTPError as e:
         raise ComputerError("沙盒服务连不上，没能重启") from e
     for job in await running_jobs(db, ws):
+        if job.keep_alive:
+            continue  # 常驻任务不停：容器删了之后马上排队重启（像开机自启的服务）
         try:
             await jobs.stop(db, job, "user")
         except jobs.JobError as e:
@@ -214,5 +217,8 @@ async def restart(db: AsyncSession, ws: str) -> dict:
     except httpx.HTTPError as e:
         raise ComputerError("沙盒服务没响应，没能重启") from e
     for job in await running_jobs(db, ws):  # 容器删了，进程肯定没了
-        await jobs.settle(db, job, *(jobs.observe(job) or ("lost", None)))
+        if job.keep_alive:
+            await jobs.after_restart(db, job)
+        else:
+            await jobs.settle(db, job, *(jobs.observe(job) or ("lost", None)))
     return await status(db, ws)

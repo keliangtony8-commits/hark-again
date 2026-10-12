@@ -180,4 +180,26 @@ void main() {
     expect(find.text('完整日志'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('已自动停止：连续 20 分钟')), findsOneWidget);
   });
+
+  test('常驻任务（v1.80）：状态词、底部行、副标题、读屏', () {
+    final run = JobInfo.fromJson({..._wire('running'), 'keep_alive': true, 'restarts': 2});
+    expect(run.keepAlive, isTrue);
+    expect(jobStateLabel(run), '常驻 · 运行中');
+    expect(jobFootLabel(run), '常驻 · 运行中 · 已自动重启 2 次');
+    expect(jobRowSubtitle(run), '常驻 · 已重启 2 次 · 运行 5 秒 · \$ python train.py');
+    expect(jobSemantics(run), contains('常驻任务 训练模型'));
+    final waiting = JobInfo.fromJson({..._wire('running'), 'keep_alive': true, 'restarts': 0, 'restart_at': '2026-10-13T04:00:00Z'});
+    expect(jobStateLabel(waiting), '重启中');
+    expect(jobFootLabel(waiting), '重启中');
+    expect(jobRowSubtitle(waiting).startsWith('重启中 · 运行'), isTrue);
+    expect(waiting.running, isTrue);
+    final plain = JobInfo.fromJson(_wire('running'));
+    expect(plain.keepAlive, isFalse);
+    expect(jobFootLabel(plain), '运行中');
+    expect(jobRowSubtitle(plain), '运行 5 秒 · \$ python train.py');
+    final gaveUp = JobInfo.fromBlock(JobBlock.fromJson({'type': 'job', 'id': 'j1', 'title': 't', 'command': 'c', 'state': 'failed',
+        'exit_code': 1, 'keep_alive': true, 'restarts': 5, 'stop_reason': '连续 6 次启动后不到 1 分钟就退出，已停止自动重启'}));
+    expect(gaveUp.keepAlive, isTrue);
+    expect(jobFootLabel(gaveUp), '失败 · 退出码 1 · 已自动重启 5 次');
+  });
 }

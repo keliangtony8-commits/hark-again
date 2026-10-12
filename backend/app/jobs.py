@@ -21,17 +21,22 @@ worker 的 follow_ups() 随后在原对话里带着结果再跑一轮（像有�
 v1.39 移植自 deepseek-harness tool-jobs（MIT）：job_status 只给上次看过之后的新输出（read_new，游标 read_offset）；
 同一对话一起结束的任务并成一轮通知；用户两次发言之间连着叫醒有上限（job_followup_wakes），超出的结论置 held，
 用户下次说话时并进那一轮（take_held）。
+v1.80 常驻任务（keep_alive，对标 Manus Cloud Computer 的“常开进程 / 24 小时 bot”）：不限时（timeout 0）、不判卡住；
+进程意外退出（非零 / OOM / 容器重启进程没了）→ job_restart.decide 给出等待秒数，restart_at 到点由 worker 的 tick 重新叫沙盒
+跑同一个 run.sh（日志追加，中间插一行“第 N 次自动重启”）；正常退出（0）照普通任务结算；连续很快就崩到上限 → 结算为失败并通知助手。
+整个监护期间 state 一直是 running（占运行名额、电脑不会因空闲被停）；日志超过上限不停服务，而是轮转（留尾巴进 log.1）。
+“这台电脑”重启时常驻任务不停，删完容器立刻排队重启（after_restart）。
 """
 import asyncio
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import quota, sandbox_client, term_text
+from . import job_restart, quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -45,6 +50,7 @@ LOST_GRACE = 20         # 启动后多少秒内不判“丢失”（沙盒可能
 FOLLOWUP_WAIT = 600     # 原对话里还有一轮没答完时，最多等多久再接着说
 LABELS = {"running": "运行中", "done": "已完成", "failed": "失败", "timed_out": "超时被终止",
           "cancelled": "已取消", "lost": "中断了（沙盒重启或进程消失）"}
+ROTATE_KEEP = 256 * 1024  # 常驻任务日志轮转时留进 log.1 的尾巴（字节）
 
 
 class JobError(RuntimeError):
@@ -77,14 +83,16 @@ def oom_hint(limit: int | None = None) -> str:
 
 
 def script(job_id: str, timeout: int) -> str:
-    """run.sh：从工作区根目录跑；timeout 自成进程组（取消时整组杀），-k 5 超时后再给 5 秒强杀。"""
+    """run.sh：从工作区根目录跑；timeout 自成进程组（取消时整组杀），-k 5 超时后再给 5 秒强杀。
+    timeout 0 = 不限时（GNU timeout 的 0 就是关掉计时，仍做进程组组长）——常驻任务用。
+    日志用 >> 追加：常驻任务重启接着写同一份；轮转时后端直接截断它（O_APPEND 写入跟着新末尾走）。"""
     j = f"{JOBS_DIR}/{job_id}"
     return (
         "#!/bin/bash\n"
         'cd "$(dirname "$0")/../.." || exit 1\n'
         f"J={j}\n"
         f"before=$({OOM_COUNT})\n"
-        f'timeout -k 5 {int(timeout)} bash -l "$J/cmd.sh" > "$J/log" 2>&1 < /dev/null &\n'
+        f'timeout -k 5 {int(timeout)} bash -l "$J/cmd.sh" >> "$J/log" 2>&1 < /dev/null &\n'
         'echo $! > "$J/pid"\n'
         "wait $!\n"
         "code=$?\n"
@@ -219,6 +227,8 @@ def block(job: Job) -> dict:
     """聊天里的任务卡（blocks.JobBlock）。运行中客户端自己轮询 /api/jobs/{id}；结束时 settle() 把它改成终态。"""
     out = {"type": "job", "id": job.id, "title": job.title, "command": job.command, "state": job.state,
            "started_at": iso(job.created_at)}
+    if job.keep_alive:
+        out.update(keep_alive=True, restarts=job.restarts)
     if job.state != "running":
         out.update(exit_code=job.exit_code, finished_at=iso(job.finished_at), tail=job.tail)
         if job.stop_reason:
@@ -231,7 +241,9 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
             "title": job.title, "command": job.command, "state": job.state, "exit_code": job.exit_code,
             "followup": job.followup, "started_at": iso(job.created_at), "finished_at": iso(job.finished_at),
             "elapsed": elapsed(job), "log_size": log_size(job), "stop_reason": job.stop_reason,
-            "tail": log_tail(job, chars) if job.state == "running" or log_size(job) else job.tail}
+            "tail": log_tail(job, chars) if job.state == "running" or log_size(job) else job.tail,
+            "keep_alive": bool(job.keep_alive), "restarts": job.restarts or 0,
+            "restart_at": iso(job.restart_at) if job.state == "running" else None}
 
 
 def describe(job: Job) -> str:
@@ -239,6 +251,10 @@ def describe(job: Job) -> str:
     label = f"被自动停止（{job.stop_reason}）" if job.stop_reason else LABELS.get(job.state, job.state)
     if job.stop_reason == OOM_REASON:  # 不是我们停的，是内核：给模型一条出路
         label = f"失败：{OOM_REASON}"
+    if job.keep_alive and job.state == "running":
+        label = "常驻，进程刚退出、等待自动重启" if job.restart_at else "常驻，运行中"
+    if job.keep_alive and job.restarts:
+        label += f"（已自动重启 {job.restarts} 次）"
     line = f"{job.id}「{job.title}」：{label}{code}，用时 {duration_text(elapsed(job))}"
     return f"{line}。{oom_hint()}" if job.stop_reason == OOM_REASON else line
 
@@ -258,7 +274,7 @@ def last_output_at(job: Job) -> datetime:
 def guard_reason(job: Job, now: datetime | None = None) -> str | None:
     """运行中的任务该不该被护栏停掉；该停返回给人看的原因。会数工作区磁盘（有缓存），异步代码里放线程跑。"""
     now = now or datetime.now(timezone.utc)
-    if log_size(job) > settings.job_log_max_mb * 1024 * 1024:
+    if not job.keep_alive and log_size(job) > settings.job_log_max_mb * 1024 * 1024:
         return f"输出超过 {settings.job_log_max_mb} MB，防止撑爆磁盘"
     if reason := quota.job_reason(job.project_id):
         return reason
@@ -266,6 +282,28 @@ def guard_reason(job: Job, now: datetime | None = None) -> str | None:
     if idle and (now - max(last_output_at(job), _aware(job.created_at))).total_seconds() >= idle:
         return f"连续 {duration_text(idle)} 没有任何新输出，判定卡住"
     return None
+
+
+def rotate_log(job: Job) -> bool:
+    """常驻任务日志超过 job_log_max_mb：最后 ROTATE_KEEP 字节存进 log.1（覆盖上一份），log 截断到 0，读游标归零。
+    进程用 >> 打开的日志，截断后接着从新末尾写，不用重启它。没超或不是常驻返回 False。"""
+    if not job.keep_alive or log_size(job) <= settings.job_log_max_mb * 1024 * 1024:
+        return False
+    log = job_dir(job) / "log"
+    with log.open("r+b") as f:
+        size = f.seek(0, 2)
+        f.seek(max(0, size - ROTATE_KEEP))
+        tail = f.read()
+        (job_dir(job) / "log.1").write_bytes(tail[utf8_start(tail):])
+        f.truncate(0)
+    job.read_offset = 0
+    return True
+
+
+def run_seconds(job: Job, now: datetime | None = None) -> float:
+    """这一次进程跑了多久（常驻任务按最近一次启动算）。"""
+    start = _aware(job.run_started_at or job.created_at)
+    return max(0.0, ((now or datetime.now(timezone.utc)) - start).total_seconds())
 
 
 async def running_count(db: AsyncSession, project_id: str) -> int:
@@ -282,7 +320,7 @@ def idle_limit(idle_timeout: int | None, timeout: int) -> int:
 
 async def start(db: AsyncSession, *, project_id: str, command: str, title: str | None = None,
                 timeout: int | None = None, idle_timeout: int | None = None, conversation_id: str | None = None,
-                task_id: str | None = None) -> Job:
+                task_id: str | None = None, keep_alive: bool = False) -> Job:
     command = command.strip()
     if not command:
         raise JobError("命令是空的")
@@ -292,10 +330,12 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
         await asyncio.to_thread(quota.check, project_id)
     except quota.QuotaError as e:
         raise JobError(str(e)) from e
-    limit = max(10, min(int(timeout or settings.job_max_seconds), settings.job_max_seconds))
+    limit = 0 if keep_alive else max(10, min(int(timeout or settings.job_max_seconds), settings.job_max_seconds))
+    now = datetime.now(timezone.utc)
     job = Job(id=new_id(), project_id=project_id, conversation_id=conversation_id, task_id=task_id,
               title=(title or command.splitlines()[0]).strip()[:60] or "后台任务", command=command, timeout=limit,
-              idle_timeout=idle_limit(idle_timeout, limit), created_at=datetime.now(timezone.utc))
+              idle_timeout=0 if keep_alive else idle_limit(idle_timeout, limit), created_at=now,
+              keep_alive=keep_alive, run_started_at=now)
     d = job_dir(job)
     d.mkdir(parents=True)
     (d / "cmd.sh").write_text(command + "\n", encoding="utf-8")
@@ -329,6 +369,7 @@ async def settle(db: AsyncSession, job: Job, state: str, exit_code: int | None) 
         return False
     job.state, job.exit_code = state, exit_code
     job.finished_at = datetime.now(timezone.utc)
+    job.restart_at = None
     if state == "failed" and not job.stop_reason and (job_dir(job) / "oom").exists():
         job.stop_reason = OOM_REASON
     job.tail = log_tail(job, KEEP_TAIL)
@@ -345,21 +386,81 @@ async def refresh(db: AsyncSession, job: Job, check_alive: bool = False) -> Job:
     沙盒服务连不上时不下结论（可能只是它在重启，进程还在跑）。"""
     if job.state != "running":
         return job
+    if job.restart_at is not None:  # 常驻任务进程已退出，在等重启：只有 worker（check_alive）到点才动手
+        if check_alive and datetime.now(timezone.utc) >= _aware(job.restart_at):
+            await _relaunch(db, job)
+        return job
     if (obs := observe(job)) is not None:
-        await settle(db, job, *obs)
+        await _end(db, job, *obs)
+    elif check_alive and await asyncio.to_thread(rotate_log, job):
+        await db.commit()
     elif check_alive and (reason := await asyncio.to_thread(guard_reason, job)):
         try:
             await stop(db, job, "guard", reason)
         except JobError:
             pass  # 沙盒暂时连不上：下一轮再停
-    elif check_alive and elapsed(job) >= LOST_GRACE:
+    elif check_alive and run_seconds(job) >= LOST_GRACE:
         try:
             alive = await sandbox_client.job_alive(job.project_id, job.id)
         except httpx.HTTPError:
             return job
         if not alive:
-            await settle(db, job, *(observe(job) or ("lost", None)))  # 查活期间刚好写完退出码
+            await _end(db, job, *(observe(job) or ("lost", None)))  # 查活期间刚好写完退出码
     return job
+
+
+async def _end(db: AsyncSession, job: Job, state: str, exit_code: int | None) -> None:
+    """进程结束了：普通任务直接结算；常驻任务意外退出按 job_restart 排队重启，或放弃（结算为失败）。"""
+    if job.keep_alive and job.state == "running":
+        v = job_restart.decide(state, run_seconds(job), job.crash_streak or 0)
+        if v.delay is not None:
+            job.crash_streak, job.exit_code = v.streak, exit_code
+            job.restart_at = datetime.now(timezone.utc) + timedelta(seconds=v.delay)
+            await db.commit()
+            return
+        if v.give_up:
+            job.crash_streak, job.stop_reason = v.streak, v.give_up[:120]
+            state = "failed"
+    await settle(db, job, state, exit_code)
+
+
+def _relaunch_files(job: Job) -> None:
+    """重启前清掉上一次进程留下的结论文件，日志里插一行分隔（接着追加）。"""
+    d = job_dir(job)
+    for name in ("exit", "exit.tmp", "oom", "pid"):
+        (d / name).unlink(missing_ok=True)
+    with (d / "log").open("a", encoding="utf-8") as f:
+        f.write(f"\n—— 第 {job.restarts + 1} 次自动重启 ——\n")
+
+
+async def _relaunch(db: AsyncSession, job: Job) -> None:
+    """restart_at 到点：取消标记出现了就按取消结算；工作区满了不再起；否则叫沙盒再跑一次 run.sh。
+    沙盒连不上不算一次崩溃，过 FIRST_S 秒再试。"""
+    if (obs := observe(job)) is not None and obs[0] == "cancelled":
+        await settle(db, job, *obs)
+        return
+    if reason := await asyncio.to_thread(quota.job_reason, job.project_id):
+        job.stop_reason = reason[:120]
+        await settle(db, job, "cancelled", job.exit_code)
+        return
+    await asyncio.to_thread(_relaunch_files, job)
+    now = datetime.now(timezone.utc)
+    try:
+        await sandbox_client.start_job(job.project_id, job.id)
+    except httpx.HTTPError:
+        job.restart_at = now + timedelta(seconds=job_restart.FIRST_S)
+        await db.commit()
+        return
+    job.restarts = (job.restarts or 0) + 1
+    job.run_started_at, job.restart_at = now, None
+    await db.commit()
+
+
+async def after_restart(db: AsyncSession, job: Job) -> None:
+    """“这台电脑”被用户重启（容器删了，进程肯定没了）：常驻任务马上排队重启，不算崩溃。"""
+    if job.state == "running" and job.keep_alive:
+        job.restart_at = datetime.now(timezone.utc)
+        await db.commit()
 
 
 async def cancel(db: AsyncSession, job: Job, by: str = "user") -> bool:
@@ -376,6 +477,11 @@ async def stop(db: AsyncSession, job: Job, by: str, reason: str | None = None) -
     """先写标记（结论算“已取消”，reason 记进 stop_reason），再叫沙盒整组杀；杀不成就撤回标记并抛 JobError。"""
     marker = job_dir(job) / "cancelled"
     marker.write_text(by)
+    if job.restart_at is not None:  # 常驻任务正等着重启：进程本来就没了，不用叫沙盒杀（pid 可能已被别的进程复用）
+        if reason:
+            job.stop_reason = reason[:120]
+        await settle(db, job, "cancelled", job.exit_code)
+        return
     try:
         await sandbox_client.cancel_job(job.project_id, job.id)
     except httpx.HTTPError as e:

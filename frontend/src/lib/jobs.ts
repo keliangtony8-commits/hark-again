@@ -16,9 +16,9 @@ export type JobTone = "running" | "ok" | "problem" | "quiet";
 export const jobTone = (s: JobState, autoStopped = false): JobTone =>
   autoStopped ? "problem" : s === "done" ? "ok" : s === "failed" || s === "timed_out" || s === "lost" ? "problem" : s === "cancelled" ? "quiet" : "running";
 
-export function jobStateLabel(j: Pick<JobInfo, "state" | "exit_code" | "stop_reason">): string {
+export function jobStateLabel(j: Pick<JobInfo, "state" | "exit_code" | "stop_reason" | "keep_alive" | "restart_at">): string {
   switch (j.state) {
-    case "running": return "运行中";
+    case "running": return j.keep_alive ? (j.restart_at ? "重启中" : "常驻 · 运行中") : "运行中";
     case "done": return "已完成";
     case "failed": return j.exit_code == null ? "失败" : `失败 · 退出码 ${j.exit_code}`;
     case "timed_out": return "超时被终止";
@@ -26,6 +26,17 @@ export function jobStateLabel(j: Pick<JobInfo, "state" | "exit_code" | "stop_rea
     case "lost": return "中断了";
   }
 }
+
+/** 卡片底部那行：状态词 · 已自动重启 N 次（常驻）· 助手在看结果（等它接着说）。 */
+export const jobFootLabel = (j: JobInfo) => [jobStateLabel(j),
+  ...(j.keep_alive && j.restarts ? [`已自动重启 ${j.restarts} 次`] : []),
+  ...(jobAwaitingReply(j) ? ["助手在看结果"] : [])].join(" · ");
+
+/** “电脑”一节运行中任务那行的副标题：常驻的先说清，再是用时和命令。 */
+export const jobRowSubtitle = (j: JobInfo) => [
+  ...(j.keep_alive ? [j.restart_at ? "重启中" : "常驻"] : []),
+  ...(j.keep_alive && j.restarts ? [`已重启 ${j.restarts} 次`] : []),
+  `运行 ${jobDuration(j.elapsed)}`, `$ ${j.command.split("\n")[0]}`].join(" · ");
 
 const two = (n: number) => String(n).padStart(2, "0");
 export function jobDuration(seconds: number): string {
@@ -37,7 +48,8 @@ export function jobDuration(seconds: number): string {
 
 /** 读屏：一句话说清这张卡。 */
 export const jobSemantics = (j: JobInfo, elapsed = j.elapsed) =>
-  `后台任务 ${j.title}，${jobStateLabel(j)}${jobAutoStopped(j) ? `：${j.stop_reason}` : ""}，用时 ${jobDuration(elapsed)}`;
+  `${j.keep_alive ? "常驻任务" : "后台任务"} ${j.title}，${jobStateLabel(j)}${jobAutoStopped(j) ? `：${j.stop_reason}` : ""}` +
+  `${j.keep_alive && j.restarts ? `，已自动重启 ${j.restarts} 次` : ""}，用时 ${jobDuration(elapsed)}`;
 
 export function jobTailLines(tail: string, lines = JOB_LOG_LINES): string {
   const all = tail.replace(/\s+$/, "").split("\n");
@@ -50,5 +62,5 @@ export function jobFromBlock(b: JobBlock, now = Date.now()): JobInfo {
   const end = b.finished_at ? Date.parse(b.finished_at) : now;
   return { id: b.id, title: b.title, command: b.command, state: b.state, exit_code: b.exit_code ?? null, followup: "none",
     elapsed: Number.isNaN(start) ? 0 : (end - start) / 1000, tail: b.tail ?? "", started_at: b.started_at, finished_at: b.finished_at,
-    stop_reason: b.stop_reason ?? null };
+    stop_reason: b.stop_reason ?? null, keep_alive: !!b.keep_alive, restarts: b.restarts ?? 0, restart_at: null };
 }

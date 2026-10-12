@@ -4,7 +4,7 @@ import { JobLog } from "../../blocks/JobBlock";
 import { http } from "../../lib/api";
 import { COMPUTER_MEMORY_TIGHT, type ComputerStatus, computerDetail, computerHint, computerMemoryRatio, computerOomNote, computerPath,
   computerRestartText, computerSemantics, computerStateLabel, diskFull } from "../../lib/computer";
-import { jobDuration } from "../../lib/jobs";
+import { jobDuration, jobRowSubtitle } from "../../lib/jobs";
 import type { JobInfo } from "../../lib/types";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
 import { IconChevron, IconCloudOff, IconComputer } from "../../ui/icons";
@@ -71,7 +71,7 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
             <button className="computer-job-open" onClick={() => setLog(j)} aria-label={`${j.title}，运行 ${jobDuration(j.elapsed)}，看日志`}>
               <span className="row-icon"><i className="job-dot" /></span>
               <div className="row-body"><div className="row-title">{j.title}</div>
-                <div className="row-sub">运行 {jobDuration(j.elapsed)} · $ {j.command.split("\n")[0]}</div></div>
+                <div className="row-sub">{jobRowSubtitle(j)}</div></div>
             </button>
             <button className="btn btn-ghost btn-sm" disabled={cancelling.has(j.id)} onClick={() => void cancel(j)}>
               {cancelling.has(j.id) ? "正在取消" : "取消"}</button>

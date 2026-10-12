@@ -124,6 +124,8 @@ class JobBlock(BaseModel):
     exit_code: int | None = None
     tail: str | None = None  # 结束时日志的最后一段
     stop_reason: str | None = None  # 被护栏自动停掉的原因（卡住 / 输出过大），state=cancelled
+    keep_alive: bool | None = None  # v1.80 常驻任务：意外退出自动重启（app/job_restart.py）
+    restarts: int | None = None  # 常驻任务自动重启过几次
 
 
 class PlanItem(BaseModel):
@@ -399,6 +401,11 @@ def blocks_to_text(blocks: list[dict]) -> str:
                      "timed_out": "超时被终止", "cancelled": "已取消", "lost": "中断了"}.get(b.get("state"), "")
             if b.get("stop_reason"):
                 state = f"被自动停止（{b['stop_reason']}）"
+            if b.get("keep_alive"):
+                state = ("常驻运行中（意外退出会自动重启，要停用 cancel_job）" if b.get("state") == "running"
+                         else f"常驻任务，{state}")
+                if b.get("restarts"):
+                    state += f"，已自动重启 {b['restarts']} 次"
             code = f"，退出码 {b['exit_code']}" if b.get("exit_code") not in (None, 0) and b.get("state") != "cancelled" else ""
             tail = f"\n最后的输出：\n{b['tail'][-600:]}" if b.get("tail") else ""
             parts.append(f"[后台任务 {b['id']}「{b['title']}」——{state}{code}]{tail}")

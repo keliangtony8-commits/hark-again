@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "../lib/api";
-import { JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobAwaitingReply, jobDuration, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
+import { JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobAwaitingReply, jobDuration, jobFootLabel, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
 import type { JobBlock as T, JobInfo } from "../lib/types";
 import { Sheet } from "../ui/kit";
 import { IconAlert, IconCheck, IconCopy, IconStop } from "../ui/icons";
@@ -56,7 +56,7 @@ export default function JobBlock({ block }: { block: T }) {
   const tone = jobTone(job.state, stopped);
   const elapsed = running ? job.elapsed + (Date.now() - polledAt) / 1000 : job.elapsed;
   const tail = jobTailLines(job.tail);
-  const label = jobAwaitingReply(job) ? `${jobStateLabel(job)} · 助手在看结果` : jobStateLabel(job);
+  const label = jobFootLabel(job);
   return (
     <div className={`card blk-job tone-${tone}`} role="group" aria-label={jobSemantics(job, elapsed)}>
       <div className="blk-job-head">

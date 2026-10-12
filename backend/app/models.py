@@ -299,7 +299,10 @@ class Job(Base):
     followup: none | pending（结束了，等 worker 在原对话里接着回一句）| done | seen（模型自己查过结果）| skipped
       | held（连着叫醒助手的轮数到上限了，留到用户下次说话时并进那一轮）；followup_at：哪一轮接着说的（同一轮的任务同一个时间）
     read_offset: 模型已经看过的日志字节数（job_status 只给这之后的新输出）
-    idle_timeout: 连续这么多秒没有新输出就判定卡住并停掉（0 = 不判）；stop_reason: 被护栏自动停掉的原因（state=cancelled）"""
+    idle_timeout: 连续这么多秒没有新输出就判定卡住并停掉（0 = 不判）；stop_reason: 被护栏自动停掉的原因（state=cancelled）
+    v1.80 常驻（keep_alive）：不限时、不判卡住，意外退出由 app/job_restart.py 决定何时拉起；整个监护期间 state 一直是 running。
+      restarts 自动重启过几次（给人看）；crash_streak 连着“没跑满 1 分钟就退出”的次数（退避与放弃用）；
+      restart_at 不为空 = 进程已退出、正在等这个时刻重启；run_started_at 这一次进程的启动时刻（判丢失宽限、算这次跑了多久）"""
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(32), index=True)
@@ -318,3 +321,8 @@ class Job(Base):
     followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    keep_alive: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    restarts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    crash_streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    restart_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    run_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
