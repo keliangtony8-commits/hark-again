@@ -60,8 +60,11 @@ String taskSummary(List<ScheduledTask> list) {
 
 /// 起步模板：空列表里给几颗，点一下带着内容打开新建表单（还没保存，改完再建）。
 class TaskStarter {
-  const TaskStarter(this.name, this.prompt, this.cron);
+  const TaskStarter(this.name, this.prompt, this.cron, {this.script = false});
   final String name, prompt, cron;
+
+  /// 定时脚本模板：prompt 是命令，表单以脚本模式打开。
+  final bool script;
 }
 
 /// “准备今天”的那句话：Home 段末胶囊发它开一段新对话；早间简报任务也是它（后端技能 prep-my-day 接手出简报卡）。
@@ -84,4 +87,13 @@ const taskStarters = [
   morningBrief,
   TaskStarter('每周复盘', '回顾这周的对话和完成的事，按“完成 / 没做完 / 下周重点”写一段复盘。', '0 21 * * 0'),
   TaskStarter('睡前背单词', '给我 10 个考研英语高频词，带例句，最后出 3 道小测。', '0 22 * * *'),
+  scriptStarter,
 ];
+
+/// 定时脚本的起步模板：每晚把工作区打包备份（只留最近 7 份）。不调模型、不花 token。
+const scriptStarter = TaskStarter(
+  '每晚备份',
+  'mkdir -p backups && tar czf backups/files-\$(date +%F).tar.gz --exclude=backups --exclude=.jobs --exclude=.home . && ls -1t backups/*.tar.gz | tail -n +8 | xargs -r rm --',
+  '0 3 * * *',
+  script: true,
+);

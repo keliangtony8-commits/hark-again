@@ -4,7 +4,9 @@ import { useResource } from "../../hooks/useResource";
 import { useTaskRuns } from "../../hooks/useTaskRuns";
 import { http } from "../../lib/api";
 import { formatDuration, formatWhen } from "../../lib/format";
-import { autoPauseNote, nextRunLabel, scheduleLabel } from "../../lib/taskLabels";
+import { autoPauseNote, isScript, nextRunLabel, scheduleLabel, taskOutputLabel } from "../../lib/taskLabels";
+import { JobLog } from "../../blocks/JobBlock";
+import type { JobInfo } from "../../lib/types";
 import { TaskIcon } from "./SchedulePicker";
 import type { ScheduledTask, TaskRun } from "../../lib/types";
 import { IconCheck, IconChevron, IconClock, IconClose, IconEdit, IconHistory, IconPause, IconPlay, IconTrash } from "../../ui/icons";
@@ -26,6 +28,7 @@ export default function TaskDetailScreen() {
   const onTick = useCallback(() => { refreshTasks(); }, [refreshTasks]);
   const { runs, error, reload, busy } = useTaskRuns(id, !!task?.run_requested, onTick);
   const [editing, setEditing] = useState(false);
+  const [log, setLog] = useState<JobInfo | null>(null);
   const cat = useModelCatalog();
 
   if (!task) {
@@ -54,7 +57,7 @@ export default function TaskDetailScreen() {
           <span className="row-icon"><TaskIcon task={task} /></span>
           <div className="row-body">
             <div className="row-title">{scheduleLabel(task)}</div>
-            <div className="row-sub">{[task.output === "panel" ? "刷新 Home 上的面板" : "结果放进 Home 收件箱", taskModelLabel(task, cat)].filter(Boolean).join(" · ")}</div>
+            <div className="row-sub">{[taskOutputLabel(task), isScript(task) ? null : taskModelLabel(task, cat)].filter(Boolean).join(" · ")}</div>
             {nextRunLabel(task) && <div className="row-sub task-next" key={nextRunLabel(task)}>{nextRunLabel(task)}</div>}
           </div>
           <Toggle on={task.active} label={`启用「${task.name}」`} onChange={(v) => tasks.update(task.id, { active: v })} />
@@ -62,7 +65,7 @@ export default function TaskDetailScreen() {
         {autoPauseNote(task) && (
           <div className="task-pause-note" role="status"><IconPause /><span>{autoPauseNote(task)}</span></div>
         )}
-        <p className="task-prompt">{task.prompt}</p>
+        <p className={`task-prompt ${isScript(task) ? "mono" : ""}`}>{task.prompt}</p>
         <div className="task-head-actions">
           <button className="btn btn-primary btn-sm" disabled={busy} onClick={runNow}><IconPlay />{busy ? "运行中…" : "立即运行"}</button>
         </div>
@@ -82,19 +85,22 @@ export default function TaskDetailScreen() {
                 <div className="row-body"><div className="row-title">排队中</div><div className="row-sub">马上开始</div></div>
               </div>
             )}
-            {runs.map((r, i) => <RunRow key={r.id} run={r} index={i} onOpen={(cid) => nav("/chat", { state: { open: cid } })} />)}
+            {runs.map((r, i) => <RunRow key={r.id} run={r} index={i} onOpen={(cid) => nav("/chat", { state: { open: cid } })}
+              onLog={(jid) => http.get<JobInfo>(`/api/jobs/${jid}`).then(setLog).catch(() => {})} />)}
           </div>
         )}
       </Section>
 
-      {editing && <TaskSheet title={task.output === "panel" ? "编辑面板" : "编辑任务"} panel={task.output === "panel"}
+      {log && <JobLog job={log} onClose={() => setLog(null)} />}
+      {editing && <TaskSheet title={task.output === "panel" ? "编辑面板" : isScript(task) ? "编辑脚本" : "编辑任务"} panel={task.output === "panel"}
         initial={draftOf(task)} onClose={() => setEditing(false)}
         onSave={async (d) => { const c = changesOf(draftOf(task), d); if (Object.keys(c).length) await tasks.update(task.id, c); }} />}
     </Page>
   );
 }
 
-function RunRow({ run: r, index, onOpen }: { run: TaskRun; index: number; onOpen: (conversationId: string) => void }) {
+/** 一次运行：有对话的点开对话；定时脚本没开对话的（没告诉你那次）点开它的后台任务日志。 */
+function RunRow({ run: r, index, onOpen, onLog }: { run: TaskRun; index: number; onOpen: (conversationId: string) => void; onLog: (jobId: string) => void }) {
   const running = r.status === "running", failed = r.status === "error";
   const label = running ? "正在运行" : failed ? "失败" : "成功";
   const when = formatWhen(r.started_at);
@@ -107,10 +113,12 @@ function RunRow({ run: r, index, onOpen }: { run: TaskRun; index: number; onOpen
       <span className="row-sub">{sub}</span>
       {failed && r.error && <span className="run-error">{r.error}</span>}
     </span>
-    {r.conversation_id && <IconChevron />}
+    {(r.conversation_id || (r.job_id && !running)) && <IconChevron />}
   </>;
   const aria = `${label}，${when}，${sub}${failed && r.error ? `，原因：${r.error}` : ""}`;
   const style = { animationDelay: `calc(var(--stagger) * ${Math.min(index, 10)})` };
+  if (!r.conversation_id && r.job_id && !running)
+    return <button className="row run-row" style={style} aria-label={`${aria}，看日志`} onClick={() => onLog(r.job_id!)}>{body}</button>;
   return r.conversation_id
     ? <button className="row run-row" style={style} aria-label={`${aria}，打开报告`} onClick={() => onOpen(r.conversation_id!)}>{body}</button>
     : <div className="row run-row" style={style} aria-label={aria} role="group">{body}</div>;

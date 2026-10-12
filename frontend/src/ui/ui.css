@@ -253,6 +253,11 @@ button.day-row:hover { background: var(--tile); }
   background: var(--tile); border-radius: var(--r-tile); font-size: var(--fs-sm); color: var(--text); animation: rise var(--dur) var(--ease) both; }
 .task-pause-note svg { flex: none; color: var(--warning); margin-top: 1px; }
 .task-prompt { margin: var(--sp-3) 0; color: var(--text-2); white-space: pre-wrap; }
+/* v1.84 定时脚本：命令等宽（详情页 + 表单），表单顶一句说明，提醒方式说明换档时淡入 */
+.task-prompt.mono, .form-field textarea.mono { font-family: var(--font-mono); font-size: var(--fs-sm); line-height: 1.5; word-break: break-all; }
+.form-note { margin: 0 0 var(--sp-3); color: var(--text-2); font-size: var(--fs-sm); }
+.fade-swap { display: block; animation: rise var(--dur) var(--ease) both; }
+@media (prefers-reduced-motion: reduce) { .fade-swap { animation: none; } }
 .task-head-actions { display: flex; justify-content: flex-end; }
 .run-row { align-items: flex-start; animation: rise var(--dur) var(--ease) both; }
 button.run-row:hover { background: var(--tile); }

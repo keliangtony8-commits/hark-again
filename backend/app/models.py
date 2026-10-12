@@ -151,6 +151,13 @@ class ScheduledTask(Base):
     # 这个任务每次运行用的模型别名 / 思考强度（null = 默认）；规则同对话（llm.chat_model / reasoning.resolve），校验见 task_store.check_choice
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reasoning: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # v1.84 定时脚本（app/script_tasks.py）：kind=script 时 prompt 就是 shell 命令，到点在工作区沙盒里当后台任务跑，不调用模型。
+    # project_id = 在哪个项目的工作区跑（null = 个人工作区）；notify = 什么时候告诉用户 failure | always | change；
+    # output_digest = 上一次成功运行输出的指纹（change 模式比对用）
+    kind: Mapped[str] = mapped_column(String(16), default="agent", server_default="agent")
+    project_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    notify: Mapped[str] = mapped_column(String(16), default="failure", server_default="failure")
+    output_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -164,6 +171,7 @@ class TaskRun(Base):
     status: Mapped[str] = mapped_column(String(16), default="running")    # running | ok | error
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    job_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # 定时脚本这次跑的后台任务（结束时 script_tasks 收尾）
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

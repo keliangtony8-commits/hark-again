@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useResource } from "../../hooks/useResource";
 import { autoPaused, scheduleLabel, taskStateLabel } from "../../lib/taskLabels";
 import type { ScheduledTask } from "../../lib/types";
-import { IconChevron, IconPlus } from "../../ui/icons";
+import { IconChevron, IconPlus, IconTerminal } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, Section, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
 import { TaskIcon } from "./SchedulePicker";
-import TaskSheet, { EMPTY_TASK, type TaskDraft } from "./TaskSheet";
+import TaskSheet, { EMPTY_SCRIPT, EMPTY_TASK, type TaskDraft } from "./TaskSheet";
 import { TASK_STARTERS, groupTasks, nextUp, taskIdle, taskSummary } from "./taskLibrary";
 
 /** 定时任务列表（面板也是任务）。版式（v0.77，与 App tasks_screen.dart 同）：
@@ -52,8 +52,11 @@ export default function TasksScreen() {
   );
 
   return (
-    <Page header={<PageHeader title="定时任务" back action={
-      <button className="icon-btn" onClick={() => setCreating(EMPTY_TASK)} aria-label="新定时任务"><IconPlus /></button>} />}>
+    <Page header={<PageHeader title="定时任务" back action={<>
+      {/* 定时脚本（到点直接跑命令、不调模型）单独一个入口，同 App */}
+      <button className="icon-btn" onClick={() => setCreating(EMPTY_SCRIPT)} aria-label="新定时脚本"><IconTerminal /></button>
+      <button className="icon-btn" onClick={() => setCreating(EMPTY_TASK)} aria-label="新定时任务"><IconPlus /></button>
+    </>} />}>
       <PageIntro loading={tasks.loading} summary={summary} line={line} />
       {tasks.loading ? <Skeleton /> : (
         <>
@@ -70,7 +73,7 @@ export default function TasksScreen() {
           {g.idle.length > 0 && <Section title={`已停下 · ${g.idle.length}`}>{rows(g.idle)}</Section>}
         </>
       )}
-      {creating && <TaskSheet title="新建任务" initial={creating} onClose={() => setCreating(null)}
+      {creating && <TaskSheet title={creating.kind === "script" ? "新定时脚本" : "新建任务"} initial={creating} onClose={() => setCreating(null)}
         onSave={async (d) => { await tasks.create(d); }} />}
     </Page>
   );

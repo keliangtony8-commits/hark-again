@@ -2,6 +2,7 @@
 // 页头 = 摘要小标签（数字变化时换一下）+ “下一个：早间简报 · 明天 08:00”；
 // 分组：需要留意（上次失败 / 连续失败被自动暂停）/ 在跑 / Home 面板 / 已停下（暂停或一次性已完成，变淡）；分组规则在 task_library.dart；
 // 行错峰入场，左滑删除（先确认），行尾开关；空列表给起步模板（点了带内容打开新建表单）。
+// 标题栏两个入口：终端图标 = 新定时脚本（不调模型，task_form 脚本模式），加号 = 新定时任务。
 // 点一行进详情（task_detail.dart：运行记录、立即运行、编辑、删除）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,8 +22,8 @@ import 'task_labels.dart';
 import 'task_library.dart';
 
 /// 新建任务（可带起步模板）：列表页 FAB 和空态模板共用。
-Future<void> createTask(BuildContext context, WidgetRef ref, {TaskStarter? starter}) async {
-  final body = await showTaskForm(context, starter: starter);
+Future<void> createTask(BuildContext context, WidgetRef ref, {TaskStarter? starter, bool script = false}) async {
+  final body = await showTaskForm(context, starter: starter, script: script);
   if (body != null) await ref.read(tasksProvider.notifier).create(body);
 }
 
@@ -35,7 +36,11 @@ class TasksScreen extends ConsumerWidget {
     return SubPage(
       title: const Text('定时任务'),
       // 新建放标题栏右侧（和技能页、网页版同一位置），不用 Material 悬浮钮——它不吃设计令牌
-      actions: [IconButton(icon: const Icon(Icons.add_rounded), tooltip: '新定时任务', onPressed: () => createTask(context, ref))],
+      // 定时脚本（到点直接跑命令、不调模型）单独一个入口：两种表单字段不同，进门就分开比表单里切换清楚
+      actions: [
+        IconButton(icon: const Icon(Icons.terminal_rounded), tooltip: '新定时脚本', onPressed: () => createTask(context, ref, script: true)),
+        IconButton(icon: const Icon(Icons.add_rounded), tooltip: '新定时任务', onPressed: () => createTask(context, ref)),
+      ],
       body: AsyncBody<ScheduledTask>(
         value: tasks,
         onRetry: () => ref.invalidate(tasksProvider),

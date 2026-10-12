@@ -231,6 +231,9 @@ class ScheduledTask {
     this.done = false,
     this.model,
     this.reasoning,
+    this.kind = 'agent',
+    this.notify = 'failure',
+    this.projectId,
   });
   factory ScheduledTask.fromJson(Map<String, dynamic> j) => ScheduledTask(
     id: j['id'] as String,
@@ -249,8 +252,20 @@ class ScheduledTask {
     done: j['done'] as bool? ?? false,
     model: j['model'] as String?,
     reasoning: j['reasoning'] as String?,
+    kind: j['kind'] as String? ?? 'agent',
+    notify: j['notify'] as String? ?? 'failure',
+    projectId: j['project_id'] as String?,
   );
   final String id, name, prompt, cron, output;
+
+  /// 'agent' = 到点交给助手（prompt 是指令）；'script' = 定时脚本（prompt 是 shell 命令，到点直接在工作区跑，不调模型）。建好不改。
+  final String kind;
+
+  /// 定时脚本什么时候告诉你：'failure' 只在失败时 / 'always' 每次 / 'change' 输出变了（文案见 task_labels.dart notifyLabels）。
+  final String notify;
+
+  /// 定时脚本在哪个项目的工作区跑（null = 我的文件）。
+  final String? projectId;
 
   /// 每次运行用的模型别名 / 思考强度（null = 默认；规则同对话：ModelCatalog.effective / ModelEfforts.effective）。
   final String? model, reasoning;
@@ -276,6 +291,7 @@ class ScheduledTask {
   final bool done;
   bool get isOnce => runAt != null;
   bool get isPanel => output == 'panel';
+  bool get isScript => kind == 'script';
   bool get lastFailed => lastStatus == 'error';
   bool get autoPaused => !active && pausedReason == 'failures';
 }
@@ -291,6 +307,7 @@ class TaskRun {
     this.startedAt,
     this.finishedAt,
     this.durationMs,
+    this.jobId,
   });
   factory TaskRun.fromJson(Map<String, dynamic> j) => TaskRun(
     id: j['id'] as String,
@@ -301,8 +318,12 @@ class TaskRun {
     startedAt: _date(j['started_at']),
     finishedAt: _date(j['finished_at']),
     durationMs: (j['duration_ms'] as num?)?.toInt(),
+    jobId: j['job_id'] as String?,
   );
   final String id, trigger, status;
+
+  /// 定时脚本这次跑的后台任务（没告诉你、所以没开对话时，点这一行看它的日志）。
+  final String? jobId;
   final String? error;
 
   /// 报告任务那次的对话；面板任务、或对话已被删 → null（不可点开）。

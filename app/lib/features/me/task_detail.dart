@@ -1,7 +1,8 @@
 // 定时任务详情（/me/tasks/:id）：上面是任务本身（时间、去向 + 非默认的模型 / 思考档、提示词、开关、立即运行；标题栏“编辑”= task_form.dart 同一张表单），
 // 时间下面一行是“下次运行”（服务端算好的 next_run_at，见 task_labels.dart）；
 // 下面是最近的运行记录（GET /api/tasks/{id}/runs，新的在前）：成功 / 失败（带原因）/ 正在运行，
-// 哪次、手动还是定时、用了多久；报告任务的那次可以点开对话（openConversation），面板任务没有对话。
+// 哪次、手动还是定时、用了多久；报告任务的那次可以点开对话（openConversation），面板任务没有对话；
+// 定时脚本没告诉你的那次（没开对话）点开看后台任务日志（showJobLog）。
 // 数据流：任务本身读 tasksProvider（列表页同一份，开关/删除走它的 notifier）；记录是 taskRunsProvider(id)，
 // autoDispose，离开页面就丢。有运行在排队（run_requested）或进行中时每 Timing.taskRunPoll 刷新两者，
 // 都结束了就停——不在后台空转。Home 上的“任务失败 / 连续失败已暂停”提醒卡（target=tasks）直达这一页；
@@ -23,6 +24,9 @@ import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../../blocks/job_block.dart' show showJobLog;
+import '../../models/job.dart';
+import '../../ui/diff_view.dart' show monoFont;
 import '../chat/open_conversation.dart';
 import 'task_form.dart';
 import 'task_labels.dart';
@@ -169,7 +173,7 @@ class _Header extends ConsumerWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(scheduleLabel(task), style: context.text.titleMedium),
               Text(
-                [task.isPanel ? '刷新 Home 上的面板' : '结果放进 Home 收件箱', ?_model(task, ref)].join(' · '),
+                [taskOutputLabel(task), if (!task.isScript) ?_model(task, ref)].join(' · '),
                 style: context.text.bodySmall,
               ),
               // 下次运行跟着开关/改时间变：SwapSwitcher 让文字换得不突兀
@@ -196,7 +200,11 @@ class _Header extends ConsumerWidget {
                 ),
         ),
         const SizedBox(height: Sp.x3),
-        Text(task.prompt, style: context.text.bodyMedium?.copyWith(color: p.text2)),
+        // 定时脚本的 prompt 是命令：等宽、可选中复制
+        if (task.isScript)
+          SelectableText(task.prompt, style: context.text.bodySmall?.copyWith(fontFamily: monoFont, color: p.text2, height: 1.5))
+        else
+          Text(task.prompt, style: context.text.bodyMedium?.copyWith(color: p.text2)),
         const SizedBox(height: Sp.x3),
         Align(
           alignment: Alignment.centerRight,
@@ -261,15 +269,29 @@ class TaskRunRow extends ConsumerWidget {
     final how = run.manual ? '手动' : '定时';
     final took = run.running ? '进行中' : (run.durationMs == null ? '' : '用时 ${formatDuration(run.durationMs!)}');
     final subtitle = [how, if (took.isNotEmpty) took].join(' · ');
-    final conv = run.conversationId;
+    final conv = run.conversationId, job = run.jobId;
+    // 有对话（报告 / 告诉了你的脚本）点开对话；没开对话的脚本运行点开它的日志
+    final VoidCallback? open = conv != null
+        ? () => openConversation(context, ref, conv)
+        : (job != null && !run.running ? () => _openLog(context, ref, job) : null);
     return _RunLayout(
       status: icon,
       title: when,
       subtitle: subtitle,
       error: run.failed ? run.error : null,
-      semantics: '$label，$when，$subtitle${run.failed && run.error != null ? '，原因：${run.error}' : ''}${conv != null ? '，点按打开报告' : ''}',
-      onTap: conv == null ? null : () => openConversation(context, ref, conv),
+      semantics: '$label，$when，$subtitle${run.failed && run.error != null ? '，原因：${run.error}' : ''}'
+          '${conv != null ? '，点按打开报告' : (open != null ? '，点按看日志' : '')}',
+      onTap: open,
     );
+  }
+
+  static Future<void> _openLog(BuildContext context, WidgetRef ref, String jobId) async {
+    try {
+      final j = JobInfo.fromJson((await ref.read(apiProvider).get('/api/jobs/$jobId') as Map).cast<String, dynamic>());
+      if (context.mounted) await showJobLog(context, ref, j);
+    } catch (e) {
+      if (context.mounted) showToast(context, '日志打不开了：$e');
+    }
   }
 }
 

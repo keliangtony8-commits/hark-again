@@ -13,7 +13,7 @@ ok / error、错误原因、耗时、对话 id，并更新 scheduled_tasks.last_
   同主体的首次失败卡被一张“已暂停”卡顶替（once="paused"），卡上直达任务、可交给助手分析；
 - 用户在任务上重新启用（task_store.after_patch）或手动“立即运行”成功 → 恢复、归零、收起卡；
 - 一次性任务跑一次就完，不涉及暂停。
-worker 中途被杀会留下 running 行：recover_stale() 在 worker 启动时把它们标成 error。"""
+worker 中途被杀会留下 running 行：recover_stale() 在 worker 启动时把它们标成 error（定时脚本的后台任务还在跑的除外）。"""
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -102,8 +102,10 @@ async def resumed(db: AsyncSession, task: ScheduledTask) -> None:
 
 async def recover_stale(db: AsyncSession, now: datetime | None = None) -> int:
     """worker 启动时调用：上次被杀时还在跑的运行一律算失败（不发提醒：不是任务本身的问题）。"""
+    from .script_tasks import live_run_ids  # 定时脚本的后台任务在沙盒里接着跑：不算中断，结束时照常收尾
     now = now or datetime.now(timezone.utc)
-    stale = (await db.scalars(select(TaskRun).where(TaskRun.status == "running"))).all()
+    live = await live_run_ids(db)
+    stale = [r for r in (await db.scalars(select(TaskRun).where(TaskRun.status == "running"))).all() if r.id not in live]
     for run in stale:
         run.status, run.error, run.finished_at = "error", INTERRUPTED, now
         task = await db.get(ScheduledTask, run.task_id)
@@ -138,6 +140,6 @@ def _wire(run: TaskRun, conversation_id: str | None) -> dict:
         a = run.started_at if run.started_at.tzinfo else run.started_at.replace(tzinfo=timezone.utc)
         b = run.finished_at if run.finished_at.tzinfo else run.finished_at.replace(tzinfo=timezone.utc)
         duration = max(int((b - a).total_seconds() * 1000), 0)
-    return {"id": run.id, "trigger": run.trigger, "status": run.status, "error": run.error,
+    return {"id": run.id, "trigger": run.trigger, "status": run.status, "error": run.error, "job_id": run.job_id,
             "conversation_id": conversation_id, "started_at": _iso(run.started_at),
             "finished_at": _iso(run.finished_at), "duration_ms": duration}

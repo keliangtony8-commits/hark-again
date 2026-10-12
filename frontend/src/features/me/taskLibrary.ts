@@ -43,7 +43,8 @@ export function nextUp(list: ScheduledTask[], now = new Date()): [string, string
 }
 
 /** 起步模板：空列表里给几颗，点了带内容打开新建表单（没点保存前什么都不存）。 */
-export type TaskStarter = { name: string; prompt: string; cron: string };
+/** kind "script"：定时脚本模板（prompt 是命令，表单以脚本模式打开）。 */
+export type TaskStarter = { name: string; prompt: string; cron: string; kind?: "script" };
 
 /** “准备今天”的那句话：Home 段末胶囊发它开新对话；早间简报任务也是它（后端技能 prep-my-day 出简报卡）。与 App 同字。 */
 export const PREP_DAY_PROMPT = "帮我准备今天";
@@ -56,8 +57,15 @@ export function briefTaskOf(list: ScheduledTask[]): ScheduledTask | null {
   return list.find((t) => t.output !== "panel" && !t.run_at && (t.active || autoPaused(t)) && t.prompt.trim().startsWith(PREP_DAY_PROMPT)) ?? null;
 }
 
+/** 定时脚本起步模板：每晚把工作区打包备份（只留最近 7 份），不调模型。与 App scriptStarter 同一条命令。 */
+export const SCRIPT_STARTER: TaskStarter = {
+  name: "每晚备份", kind: "script", cron: "0 3 * * *",
+  prompt: "mkdir -p backups && tar czf backups/files-$(date +%F).tar.gz --exclude=backups --exclude=.jobs --exclude=.home . && ls -1t backups/*.tar.gz | tail -n +8 | xargs -r rm --",
+};
+
 export const TASK_STARTERS: TaskStarter[] = [
   MORNING_BRIEF,
   { name: "每周复盘", prompt: "回顾这周的对话和完成的事，按“完成 / 没做完 / 下周重点”写一段复盘。", cron: "0 21 * * 0" },
   { name: "睡前背单词", prompt: "给我 10 个考研英语高频词，带例句，最后出 3 道小测。", cron: "0 22 * * *" },
+  SCRIPT_STARTER,
 ];

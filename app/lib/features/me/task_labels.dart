@@ -36,6 +36,19 @@ String? autoPauseNote(ScheduledTask t) => t.autoPaused
     ? '连着失败了 ${t.failStreak} 次，我先把它停了，免得一直白跑。改好后打开开关恢复；也可以先“立即运行”试一次，成功了会自动恢复。'
     : null;
 
-/// 行首/详情图标：面板 / 一次性（闹钟）/ 重复（时钟）。
-IconData taskIcon(ScheduledTask t) =>
-    t.isPanel ? Icons.dashboard_outlined : (t.isOnce ? Icons.alarm_rounded : Icons.schedule_rounded);
+/// 行首/详情图标：面板 / 定时脚本（终端）/ 一次性（闹钟）/ 重复（时钟）。
+IconData taskIcon(ScheduledTask t) => t.isPanel
+    ? Icons.dashboard_outlined
+    : t.isScript
+        ? Icons.terminal_rounded
+        : (t.isOnce ? Icons.alarm_rounded : Icons.schedule_rounded);
+
+/// 定时脚本“什么时候告诉我”的三档（顺序即选择器顺序；与后端 script_tasks.NOTIFY_LABELS 同措辞）。
+const notifyLabels = {'failure': '失败时告诉我', 'always': '每次都告诉我', 'change': '输出变了告诉我'};
+
+/// 详情页那行“去向”：面板 / 收件箱 / 脚本（在哪跑 · 何时告诉）。
+String taskOutputLabel(ScheduledTask t) {
+  if (t.isPanel) return '刷新 Home 上的面板';
+  if (!t.isScript) return '结果放进 Home 收件箱';
+  return '${t.projectId == null ? '在我的文件里跑' : '在项目工作区里跑'} · ${notifyLabels[t.notify] ?? t.notify}';
+}

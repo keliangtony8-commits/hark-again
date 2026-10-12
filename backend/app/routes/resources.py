@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, select
 
 from ..models import Conversation, HomeCard, Job, Memory, Project, ScheduledTask
-from .. import card_snooze, project_brief, sandbox_client, schedule, task_store
+from .. import card_snooze, project_brief, sandbox_client, schedule, script_tasks, task_store
 from ..storage import PROJECTS
 from .crud import crud_router
 
@@ -43,9 +43,13 @@ def _task_choice(cls, v, info):
 
 
 class TaskIn(BaseModel):
-    """cron（重复）与 run_at（一次性）二选一，见 app/schedule.py check()。"""
+    """cron（重复）与 run_at（一次性）二选一，见 app/schedule.py check()。
+    kind=script：prompt 是 shell 命令，到点在 project_id 的工作区（null = 个人）跑，不调模型；notify 何时告诉用户（app/script_tasks.py）。"""
     name: str
     prompt: str
+    kind: str = "agent"
+    notify: str = "failure"
+    project_id: str | None = None
     cron: str = ""
     run_at: datetime | None = None
     active: bool = True
@@ -57,6 +61,9 @@ class TaskIn(BaseModel):
     @model_validator(mode="after")
     def _plan(self):
         schedule.check(self.cron, self.run_at)  # ValueError → 422
+        script_tasks.check(self.kind, self.prompt, self.notify)
+        if self.kind != "script":
+            self.project_id = None
         return self
 
 
@@ -69,6 +76,7 @@ class TaskPatch(BaseModel):
     active: bool | None = None
     model: str | None = None
     reasoning: str | None = None
+    notify: str | None = None  # 只对定时脚本有意义；kind / project_id 建好不改
 
     _choice = field_validator("model", "reasoning")(classmethod(_task_choice))
 
@@ -109,6 +117,7 @@ def _check_card_patch(card: HomeCard, changes: dict) -> None:
 
 
 async def _delete_project_conversations(db, project: Project) -> None:
+    await task_store.remove_for_project(db, project.id)  # 在这个工作区跑的定时脚本没地方跑了
     await db.execute(delete(Conversation).where(Conversation.project_id == project.id))
     await db.execute(delete(Job).where(Job.project_id == project.id))  # 容器一删，进程也没了
     shutil.rmtree(PROJECTS / project.id, ignore_errors=True)  # 工作区文件一并删除

@@ -5,7 +5,7 @@ import { CRON_PRESETS, describeCron } from "../../lib/cron";
 import { onceShortcuts } from "../../lib/timeShortcuts";
 import { formatWhen } from "../../lib/format";
 import type { ScheduledTask } from "../../lib/types";
-import { IconAlarm, IconClock, IconLayout } from "../../ui/icons";
+import { IconAlarm, IconClock, IconLayout, IconTerminal } from "../../ui/icons";
 import { Segmented } from "../../ui/kit";
 
 /** 一个计划：run_at 非空 = 一次性（cron 为空串），否则按 cron 重复。发给服务端时两个字段都带。 */
@@ -13,7 +13,7 @@ export type Plan = { cron: string; run_at: string | null };
 
 /** 行首/详情图标：面板 / 一次性（闹钟）/ 重复（时钟）。 */
 export function TaskIcon({ task }: { task: ScheduledTask }) {
-  return task.output === "panel" ? <IconLayout /> : task.run_at ? <IconAlarm /> : <IconClock />;
+  return task.output === "panel" ? <IconLayout /> : task.kind === "script" ? <IconTerminal /> : task.run_at ? <IconAlarm /> : <IconClock />;
 }
 
 export { onceShortcuts };

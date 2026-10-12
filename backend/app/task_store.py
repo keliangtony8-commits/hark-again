@@ -3,9 +3,9 @@
 面板 = output=panel 的任务 + 一张 kind=panel 的 HomeCard（task_id 相连）；标题以任务 name 为准，卡片 title 是它的镜像。"""
 from datetime import datetime
 
-from sqlalchemy import delete, update as sql_update
+from sqlalchemy import delete, select, update as sql_update
 
-from . import model_router, reasoning, schedule, task_runs
+from . import model_router, reasoning, schedule, script_tasks, task_runs
 from .config import settings
 from .models import Conversation, HomeCard, ScheduledTask
 
@@ -48,10 +48,22 @@ async def remove(db, task: ScheduledTask) -> None:
     await db.commit()
 
 
+async def remove_for_project(db, project_id: str) -> None:
+    """删项目前：在它工作区里跑的定时脚本一起删（不 commit 之外的副作用同 remove）。"""
+    for task in (await db.scalars(select(ScheduledTask).where(ScheduledTask.project_id == project_id))).all():
+        await delete_cascade(db, task)
+        await db.delete(task)
+
+
 async def create(db, *, name: str, prompt: str, cron: str = "", run_at: datetime | None = None,
-                 output: str = "report") -> ScheduledTask:
+                 output: str = "report", kind: str = "agent", notify: str = "failure",
+                 project_id: str | None = None) -> ScheduledTask:
+    """kind=script：prompt 是命令，project_id 是它的工作区（规则见 app/script_tasks.py）。"""
     schedule.check(cron, run_at)
-    task = ScheduledTask(name=name, prompt=prompt, cron=cron.strip(), run_at=run_at, output=output)
+    script_tasks.check(kind, prompt, notify, output)
+    await script_tasks.check_project(db, project_id)
+    task = ScheduledTask(name=name, prompt=prompt, cron=cron.strip(), run_at=run_at, output=output, kind=kind,
+                         notify=notify, project_id=project_id if kind == "script" else None)
     db.add(task)
     await db.commit()
     return task
@@ -70,8 +82,9 @@ async def create_panel(db, *, title: str, prompt: str, cron: str) -> ScheduledTa
 
 
 def check_patch(task: ScheduledTask, changes: dict) -> None:
-    """合并后的计划仍须成立（二选一、cron 合法），否则 ValueError。"""
+    """合并后的计划仍须成立（二选一、cron 合法）、脚本仍有命令、提醒方式合法，否则 ValueError。类型（kind）建好就不变。"""
     schedule.check(changes.get("cron", task.cron), changes.get("run_at", task.run_at))
+    script_tasks.check(task.kind, changes.get("prompt", task.prompt), changes.get("notify", task.notify), task.output)
 
 
 async def after_patch(db, task: ScheduledTask, changes: dict) -> None:

@@ -32,6 +32,23 @@ export function taskStateLabel(t: ScheduledTask, now = new Date()): string {
   return nextRunLabel(t, now);
 }
 
+export const isScript = (t: ScheduledTask) => t.kind === "script";
+
+/** 定时脚本“什么时候告诉我”三档（顺序即选择器顺序；与 App notifyLabels、后端 script_tasks.NOTIFY_LABELS 同措辞）。 */
+export const NOTIFY_LABELS = { failure: "失败时告诉我", always: "每次都告诉我", change: "输出变了告诉我" } as const;
+export const NOTIFY_HINTS = {
+  failure: "成功了不打扰；失败时结果进 Home 收件箱。",
+  always: "每次跑完都把输出放进 Home 收件箱。",
+  change: "输出和上次不一样才告诉你，适合盯网页、价格、库存。",
+} as const;
+
+/** 详情页那行“去向”：面板 / 收件箱 / 脚本（在哪跑 · 何时告诉）。 */
+export function taskOutputLabel(t: ScheduledTask): string {
+  if (t.output === "panel") return "刷新 Home 上的面板";
+  if (!isScript(t)) return "结果放进 Home 收件箱";
+  return `${t.project_id ? "在项目工作区里跑" : "在我的文件里跑"} · ${NOTIFY_LABELS[t.notify ?? "failure"]}`;
+}
+
 /** 详情页说明条：只有被自动暂停时才有，告诉用户怎么恢复。 */
 export function autoPauseNote(t: ScheduledTask): string | null {
   return autoPaused(t)
