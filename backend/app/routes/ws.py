@@ -5,7 +5,7 @@ import contextlib
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .. import live_turns, workspaces
+from .. import conversation_title, live_turns, workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -75,7 +75,8 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
         if not text and not files:
             return
         if conv is None:
-            conv = Conversation(title=(text or files[0]["name"])[:40], project_id=pid)
+            conv = Conversation(title=conversation_title.first_title(text or files[0]["name"]),
+                                title_source=conversation_title.FIRST, project_id=pid)
             db.add(conv)
             await db.flush()
         apply_choice(conv, event)
@@ -85,7 +86,9 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
         await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title})
-        await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
+        reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
+        if reply is not None and reply.status != "stopped":  # 停掉的半截不起名，下一轮再试
+            conversation_title.schedule(conv.id, emit)  # 后台起标题，不挡排队的下一轮
 
 
 async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
@@ -106,7 +109,9 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title, "replaced": replaced,
                     **({"user_message": user_msg.to_wire()} if isinstance(text, str) else {})})
-        await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
+        reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
+        if reply is not None and reply.status != "stopped":  # 第一轮失败后点“重试”：也起一次
+            conversation_title.schedule(conv.id, emit)
 
 
 MAX_FILES = 10  # 一条消息最多带几个文件（上传 + 项目文件合计）

@@ -22,6 +22,9 @@ class Conversation(Base):
     __tablename__ = "conversations"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
     title: Mapped[str] = mapped_column(String(200), default="新对话")
+    # 标题从哪来（app/conversation_title.py）：first = 第一句话截取（第一轮后自动换成模型起的）/ auto / user = 用户改过 /
+    # fixed = 程序给的（定时任务等），只有 first 会被自动改
+    title_source: Mapped[str] = mapped_column(String(8), default="fixed", server_default="fixed")
     # 预留：Phase 3 的 Project 归属
     project_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

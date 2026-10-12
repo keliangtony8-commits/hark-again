@@ -101,6 +101,7 @@ class Turn:
         self.running = False
         self.ended = False
         self._orphan: asyncio.TimerHandle | None = None
+        self.end_seq = 0  # 终止事件（message.done / stopped / error）的编号；之后还可能有 conversation.title 这类收尾事件
 
     async def emit(self, event: dict) -> None:
         self.seq += 1
@@ -111,6 +112,8 @@ class Turn:
             conn.put(e)
 
     def _fold(self, e: dict) -> None:
+        if e.get("type") in TERMINAL and not self.end_seq:
+            self.end_seq = e["seq"]
         match e.get("type"):
             case "message.start":
                 self.conv_id = e.get("conversation_id")
@@ -145,8 +148,8 @@ class Turn:
 
     def snapshot(self) -> dict:
         """折叠好的“到目前为止”：客户端整份替换生成中的那条。已结束的轮次快照停在终止事件之前，终止事件另补。"""
-        terminal = self.ended and self.log and self.log[-1].get("type") in TERMINAL
-        return {"type": "turn.snapshot", "turn_id": self.id, "seq": self.seq - (1 if terminal else 0),
+        # 快照停在终止事件之前：终止事件和它之后的收尾事件（conversation.title）照常补发
+        return {"type": "turn.snapshot", "turn_id": self.id, "seq": self.end_seq - 1 if self.end_seq else self.seq,
                 "conversation_id": self.conv_id,
                 "message": {"blocks": copy.deepcopy(self.blocks), "steps": copy.deepcopy(self.steps)}}
 

@@ -16,7 +16,7 @@ export default function ChatTitle({ title, conversationId, streaming }: { title:
   const line = usage ? usageLine(usage) : null;
   return (
     <div className="chat-top-title">
-      <div className="chat-top-name">{title}</div>
+      <div className="chat-top-name enter" key={title}>{title}</div>
       {line && (
         <button key={line} className="chat-usage" onClick={() => setOpen(true)} aria-label={`本对话用量 ${line}`}>{line}</button>
       )}

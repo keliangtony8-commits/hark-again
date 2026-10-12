@@ -74,7 +74,11 @@ export function useConversations(projectId?: string) {
     }
   }, []);
 
-  return { items, query, setQuery, searching, refresh, rename, setPinned, setChoice, remove, exportMarkdown };
+  /** 服务器自动起的标题（conversation.title 事件）：本地原地换字，不发请求。 */
+  const retitle = useCallback((id: string, title: string) => {
+    setItems((xs) => xs.map((c) => (c.id === id ? { ...c, title } : c)));
+  }, []);
+  return { items, query, setQuery, searching, refresh, retitle, rename, setPinned, setChoice, remove, exportMarkdown };
 }
 
 export type Conversations = ReturnType<typeof useConversations>;

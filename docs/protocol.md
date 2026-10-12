@@ -42,6 +42,7 @@
 | `turn.retry` | `attempt`, `max`, `delay_ms`, `reason`, `code`, `fallback?`, `fallback_label?` | v1.50 模型调用失败、服务器正在自动重试（backend/app/llm_retry.py：限流 / 服务器错 / 超时 / 断网 / 空答复才重试，指数退避）。重试前服务器先用 `block.update` 把这次已流出的半截文字撤回（块清空但不删，重试的文字接着写进同一块）。`fallback` = 重试用完、这一轮改用的备用模型别名（此时 `attempt=0`，`fallback_label` 为其中文名）。**不属于任何块、不存库**；客户端挂在占位消息上一行提示：普通重试在下一个 `block.start`/`block.delta`/`thinking.delta`/`tool.status` 到达时收起，备用模型提示留到 `message.done`。老服务器不发 |
 | `message.done` | `message: {id, role, blocks, status?, created_at?, steps?}` | 一轮结束，以它为准落盘。`status: "stopped"` = 被停止的半截回复（等待中的审批卡变 `expired`）；`interrupted`（v1.52）只会出现在 GET 里，不会出现在 message.done；`wrapped` / `looped`（v1.56）= 预算用完收尾 / 原地打转被叫停 |
 | `message.stopped` | `conversation_id` | 还没产出任何内容就被停止：不存回复，用户消息留着（可“重试”） |
+| `conversation.title` | `conversation_id`, `title` | v1.67：新对话第一轮回答完后服务器在后台起好的短标题（在同一轮的 `message.done` 之后到达，带 turn_id/seq；也可能来自别的对话）。客户端原地换列表与顶栏的标题；老客户端忽略，下次拉列表也能看到。用户 PATCH 改过名的对话不会再收到 |
 | `error` | `message` | 本轮失败（v1.50 起 `message` 是给人看的中文：密钥无效 / 额度用完 / 对话太长 / 重试多次仍失败…，见 llm_retry.user_text） |
 
 ## 3. 消息块（`blocks.py` 是定义源）

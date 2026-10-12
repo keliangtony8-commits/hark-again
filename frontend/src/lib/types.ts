@@ -110,6 +110,8 @@ export type ServerEvent = TurnCursor & (
   | ({ type: "tool.status" } & ToolRun)
   | { type: "message.done"; message: Message }
   | { type: "message.stopped"; conversation_id: string }
+  /** v1.67：第一轮回复后服务器在后台起好的短标题（在 message.done 之后到达） */
+  | { type: "conversation.title"; conversation_id: string; title: string }
   | { type: "error"; message: string }
   /** 对 turn.resume 的答复：live=false = 没这轮（以 GET 为准）；gap = 游标太旧，随后来 turn.snapshot */
   | { type: "turn.resumed"; turn_id: string | null; conversation_id: string | null; live: boolean; ended?: boolean; gap?: boolean }

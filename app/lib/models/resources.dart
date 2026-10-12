@@ -91,6 +91,10 @@ class ConversationSummary {
   final DateTime? updatedAt;
   final bool pinned;
 
+  /// 服务器自动起了标题（conversation.title 事件）：只换标题，其余照旧。
+  ConversationSummary withTitle(String t) => ConversationSummary(
+    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId);
+
   /// 这个对话选的聊天模型别名；null = 服务器默认。
   final String? model;
 

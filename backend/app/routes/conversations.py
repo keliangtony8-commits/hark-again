@@ -4,7 +4,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import conversation_share, reasoning, turn_journal, usage
+from .. import conversation_share, conversation_title, reasoning, turn_journal, usage
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -91,6 +91,7 @@ async def patch_conversation(cid: str, body: ConversationPatch, db: AsyncSession
         values["title"] = values["title"].strip()
         if not values["title"]:
             raise HTTPException(422, "标题不能为空")
+        values["title_source"] = conversation_title.USER  # 用户起的名字自动标题永不覆盖
     if values:
         await db.execute(update(Conversation).where(Conversation.id == cid)
                          .values(**values, updated_at=Conversation.updated_at))

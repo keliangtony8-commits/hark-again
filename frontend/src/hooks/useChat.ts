@@ -177,6 +177,10 @@ export function useChat(projectId?: string) {
         setStreaming(false);   // flush effect 随后送出期间点了“重发”的那条
         list.refresh();
         break;
+      case "conversation.title":
+        // 第一轮回复后服务器在后台起好了短标题：列表和顶栏原地换字，再同步一次
+        if (e.title) { list.retitle(e.conversation_id, e.title); list.refresh(); }
+        break;
       case "message.stopped":
         // 还没吐字就停了：撤掉思考占位；用户消息留着（服务器上也在），可以“重试”
         regenerating.current = false;

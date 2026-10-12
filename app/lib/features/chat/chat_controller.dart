@@ -325,6 +325,13 @@ class ChatController extends Notifier<ChatState> {
         _regenerating = false;
         _reattach = false;
         _flush(); // 期间点了“重发”的，轮到它了
+      case 'conversation.title':
+        // 第一轮回复后服务器在后台起好了短标题（v1.67）：列表和顶栏原地换字（顶栏的 AnimatedSwitcher 淡入），再同步一次缓存
+        final cid = e['conversation_id'], title = e['title'];
+        if (cid is String && title is String && title.isNotEmpty) {
+          state = state.copyWith(conversations: [for (final c in state.conversations) c.id == cid ? c.withTitle(title) : c]);
+          refreshList();
+        }
       case 'message.stopped':
         // 还没吐字就停了：撤掉思考占位；用户消息留着（服务器上也在），可以“重试”
         _regenerating = false;
