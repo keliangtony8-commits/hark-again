@@ -22,7 +22,7 @@ from app.models import Message, Project
 from app.routes import conversations as rc, files as rf, ws as rws
 
 sent: list[list[dict]] = []
-async def fake_stream_turn(messages, tools=None, model=None):
+async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     sent.append(messages)
     yield "好"
     yield llm.Turn(text="好")

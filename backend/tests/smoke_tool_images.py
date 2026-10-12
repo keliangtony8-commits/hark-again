@@ -46,7 +46,7 @@ llm.complete = fake_complete
 def script(*calls):
     """模型第一步调用给定工具，第二步说“好了”。返回每步收到的 messages。"""
     seen = []
-    async def fake(messages, tools=None, model=None):
+    async def fake(messages, tools=None, model=None, effort=None):
         seen.append([dict(m) for m in messages])
         if len(seen) == 1:
             yield llm.Turn(tool_calls=[llm.ToolCall(f"c{i}", n, json.dumps(a)) for i, (n, a) in enumerate(calls)])

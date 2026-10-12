@@ -7,6 +7,7 @@ import { ShellLead } from "../../shell/ShellLead";
 import ChatTitle from "./ChatTitle";
 import ChatView from "./ChatView";
 import ConversationList from "./ConversationList";
+import EffortChip from "./EffortChip";
 import ModelChip from "./ModelChip";
 import type { ConversationSummary, OutgoingFile } from "../../lib/types";
 import "./chat.css";
@@ -82,7 +83,10 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
             editableId={chat.editableId} onEdit={chat.edit}
             streaming={chat.streaming} onStop={chat.canStop ? chat.stop : undefined}
             focus={chat.focus} onFocused={chat.takeFocus}
-            accessory={<ModelChip model={chat.model} onChange={chat.setModel} />}
+            accessory={<>
+              <ModelChip model={chat.model} onChange={chat.setModel} />
+              <EffortChip model={chat.model} effort={chat.effort} onChange={chat.setEffort} />
+            </>}
             onSend={chat.send} onReconnect={chat.reconnect} onResend={chat.resend} onDiscard={chat.discard} />
         </section>
       </div>

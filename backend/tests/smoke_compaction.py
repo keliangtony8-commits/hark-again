@@ -23,7 +23,7 @@ seen = []          # 主模型每轮看到的 (system, 非系统消息)
 folds = []         # 摘要模型每次的输入
 fold_fail = {"on": False}
 
-async def fake_stream_turn(messages, tools=None, model=None):
+async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     seen.append((messages[0]["content"], [(m["role"], m["content"]) for m in messages[1:]]))
     yield "好"
     yield Turn(text="好")

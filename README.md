@@ -214,3 +214,4 @@ postgres ~200M、litellm ~300M、searxng ~150M、backend+worker ~300M、browser 
 - 和 login/code 相反：info 的值是用户有意告诉助手的 → 交给模型，`loop.form_answers` 把非空答案写进卡片 `answers`（回显、落库、`blocks_to_text` 带上，下一轮模型也记得）。勾“记进记忆” → 每个答案 `label：value` 经 `memory_store.save`（profile 类）存下并附记忆卡。
 - 无人值守（`ctx.ask is nobody`）不弹卡，告诉模型按已知信息做、必要时 `offer_on_home`。
 - 冒烟：`python tests/smoke_ask_user.py`。
+- 思考强度（v1.54）：app/reasoning.py = 唯一规则（MODEL_REASONING 解析与校验、resolve(alias, choice) 回落默认、for_helper 最低档、rejected/mark_unsupported、catalog）；llm._create 是唯一发请求处（带 reasoning_effort，400 拒收 → 去参数重发并记住）；conversations.reasoning（迁移 0032），runner.apply_choice（WS model+reasoning），ToolContext.effort → loop/compact/subagent。冒烟 tests/smoke_reasoning.py

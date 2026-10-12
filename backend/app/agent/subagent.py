@@ -184,7 +184,7 @@ async def _guarded(ctx: ToolContext, t: Task, push) -> None:
 async def _child(parent: ToolContext, t: Task, push, deadline: float) -> None:
     async with SessionLocal() as db:
         ctx = ToolContext(db=db, project_id=parent.project_id, conversation_id=parent.conversation_id,
-                          task_id=parent.task_id, model=parent.model, allow=CHILD_TOOLS, depth=parent.depth + 1)
+                          task_id=parent.task_id, model=parent.model, effort=parent.effort, allow=CHILD_TOOLS, depth=parent.depth + 1)
         system = await build_system_prompt(db, parent.project_id, t.prompt) + "\n\n" + ROLE
         limits = loop.Limits(max(1, settings.subagent_max_steps), settings.subagent_turn_tokens, deadline, WRAP_UP)
         builder = loop.MessageBuilder()

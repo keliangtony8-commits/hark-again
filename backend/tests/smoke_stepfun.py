@@ -84,7 +84,7 @@ assert len(rows) == 1 and rows[0].model == "smart" and rows[0].completion_tokens
 assert seen_models[-1] == "step-5-preview"
 
 # WS：thinking.delta 发给客户端，回复块里没有思考内容
-async def fake_stream_turn(messages, tools=None, model=None):
+async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     yield Reasoning("让我想想")
     yield "答案"
     yield Turn(text="答案")

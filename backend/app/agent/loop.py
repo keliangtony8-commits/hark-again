@@ -236,7 +236,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
 
     guard = loop_guard.LoopGuard()  # 原地打转：第一次提醒模型，第二次停下（loop_guard.py）
     squeeze = compact.Compactor(len(messages), model, tools,
-                                pinned=lambda: plan.pinned(builder.blocks))  # 上文快满：剪长工具结果 / 压成检查点（compact.py）
+                                pinned=lambda: plan.pinned(builder.blocks), effort=ctx.effort)  # 上文快满：剪长工具结果 / 压成检查点（compact.py）
     overflowed = False  # 供应商报“上文超长”时强制压一次再重试；成功调用一次后复位
     retry_policy, retries, tried = llm_retry.policy(), 0, {model or settings.default_model}  # 调用失败的重试（llm_retry.py）
     max_steps, spent, step = max(1, limits.max_steps), 0, 0
@@ -255,7 +255,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         at = len(messages)
         mark = builder.mark()
         try:
-            async with aclosing(stream_turn(messages, None if over else tools, model)) as items:
+            async with aclosing(stream_turn(messages, None if over else tools, model, ctx.effort)) as items:
                 async for item in items:
                     if isinstance(item, Turn):
                         turn = item
@@ -289,6 +289,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                         model, retries = fallback, 0
                         tried.add(fallback)
                         ctx.model = fallback
+                        squeeze.model = fallback  # 换了模型：思考强度按备用模型的档位重新解析（reasoning.resolve）
                         yield Retry(0, retry_policy.max_retries, 0, llm_retry.reason(failure), failure.code, fallback)
                     else:
                         yield Retry(retries, retry_policy.max_retries, int(delay), llm_retry.reason(failure), failure.code)

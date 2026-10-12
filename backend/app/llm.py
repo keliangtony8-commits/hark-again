@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import httpx
 from openai import AsyncOpenAI
 
-from . import llm_retry, usage
+from . import llm_retry, reasoning, usage
 from .config import settings
 from .llm_retry import EmptyResponse
 
@@ -32,9 +32,20 @@ def chat_model(alias: str | None) -> str:
 
 
 def chat_models() -> dict:
-    """给客户端的可选列表（GET /api/catalog/models）。"""
+    """给客户端的可选列表（GET /api/catalog/models）；能调思考强度的别名多带 efforts / effort（reasoning.catalog）。"""
     return {"default": settings.default_model,
-            "models": [{"id": k, "label": v} for k, v in settings.chat_models.items()]}
+            "models": [{"id": k, "label": v, **reasoning.catalog(k)} for k, v in settings.chat_models.items()]}
+
+
+async def _create(alias: str, effort: str | None, **params):
+    """发请求的唯一一处：带上思考强度；供应商回 400 说不认这个参数 → 记住这个别名不支持，去掉参数重发一次。"""
+    try:
+        return await client.chat.completions.create(model=upstream(alias), **params, **reasoning.kwargs(effort))
+    except Exception as e:  # noqa: BLE001 — 只认“参数被拒”，其它原样抛
+        if not effort or not reasoning.rejected(e):
+            raise
+        reasoning.mark_unsupported(alias)
+        return await client.chat.completions.create(model=upstream(alias), **params)
 
 
 @dataclass
@@ -67,15 +78,15 @@ class Turn:
 
 
 async def stream_turn(messages: list[dict], tools: list[dict] | None = None,
-                      model: str | None = None) -> AsyncIterator[str | Reasoning | Turn]:
+                      model: str | None = None, effort: str | None = None) -> AsyncIterator[str | Reasoning | Turn]:
     """流式产出文本片段(str) / 思考片段(Reasoning)，最后产出一个 Turn（含完整文本与工具调用）。
     正常结束却一个字、一个工具调用都没有 → 抛 EmptyResponse（可重试；内核 agent/loop.py 决定重试还是收下空回复）。
-    不在这里重试：已经吐给客户端的半截文字得由内核撤回。"""
+    不在这里重试：已经吐给客户端的半截文字得由内核撤回。
+    effort = 对话选的思考强度（None = 这个别名的默认）；最后发什么由 reasoning.resolve 定。"""
     kwargs = {"tools": tools} if tools else {}
     model = model or settings.default_model
-    stream = await client.chat.completions.create(
-        model=upstream(model), messages=messages, stream=True, stream_options={"include_usage": True}, **kwargs
-    )
+    stream = await _create(model, reasoning.resolve(model, effort), messages=messages, stream=True,
+                           stream_options={"include_usage": True}, **kwargs)
     turn = Turn()
     calls: dict[int, ToolCall] = {}
     last_usage = None
@@ -119,16 +130,19 @@ class Truncated(RuntimeError):
 
 
 async def complete(messages: list[dict], model: str | None = None, kind: str = "summary",
-                   tools: list[dict] | None = None, max_tokens: int | None = None, strict: bool = False) -> str:
+                   tools: list[dict] | None = None, max_tokens: int | None = None, strict: bool = False,
+                   effort: str | None = None, helper: bool = True) -> str:
     """一次性（非流式）补全：后台小活用，比如滚动摘要、上文压缩。kind 只用于记账分类。
     tools：重放带工具调用的上文时照带工具定义（tool_choice=none，只要文字；前缀和对话请求一致，缓存能命中）。
-    strict：被截断（finish_reason=length）就抛 Truncated。"""
+    strict：被截断（finish_reason=length）就抛 Truncated。
+    helper=True（默认）= 后台小活，用最低一档思考（reasoning.for_helper）；False = 沿用对话选的 effort（上文压缩）。"""
     model = model or settings.default_model
     kwargs: dict = {"tools": tools, "tool_choice": "none"} if tools else {}
     if max_tokens:
         kwargs["max_tokens"] = max_tokens
+    level = reasoning.for_helper(model) if helper else reasoning.resolve(model, effort)
     r = await llm_retry.retry_call(  # 限流 / 服务器错 / 断网按 llm_retry 的策略重试；超长等原样抛给调用方
-        lambda: client.chat.completions.create(model=upstream(model), messages=messages, **kwargs))
+        lambda: _create(model, level, messages=messages, **kwargs))
     if r.usage:
         await usage.record(model, kind, r.usage.prompt_tokens or 0, r.usage.completion_tokens or 0)
     if strict and r.choices and getattr(r.choices[0], "finish_reason", None) == "length":

@@ -2,6 +2,8 @@
 // 列表来自 GET /api/catalog/models（服务器 .env 的 CHAT_MODELS），离线可读：先用缓存，后台刷新。
 // 选择本身归 ChatController（ChatState.model，null = 默认）；这里只负责“画出来、点了告诉 controller”。
 // 两项 → 点一下就切换（标签上下错开换字）；三项及以上 → 弹选择菜单。列表不足两项时整个钮不出现。
+// 思考强度钮（EffortChip）紧挨着：当前模型能调（≥2 档，后端 reasoning.catalog）才出现，点开选档（带一行说明）。
+// 两个钮由 ModelChoice 排成一行；换到不能调的模型时思考钮淡出收起。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -102,6 +104,81 @@ class ModelChip extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 输入框里的“模型选择”：模型钮 + 思考强度钮（当前模型能调才有）。
+class ModelChoice extends StatelessWidget {
+  const ModelChoice({super.key, required this.scope});
+  final String scope;
+
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+        ModelChip(scope: scope),
+        EffortChip(scope: scope), // 自带 FadeSwitcher（淡入淡出 + 收起宽度）
+      ]);
+}
+
+/// 思考强度钮：显示当前档（非默认档一圈细边，和模型钮同一规则），点开选档。
+class EffortChip extends ConsumerWidget {
+  const EffortChip({super.key, required this.scope});
+  final String scope;
+
+  static String semantics(EffortLevel eff) => '思考强度：${eff.label}，点按选择';
+
+  Future<void> _choose(BuildContext context, WidgetRef ref, ModelEfforts efforts, EffortLevel current) async {
+    final picked = await showActionSheet<String>(context, title: '想多深', actions: [
+      for (final l in efforts.levels)
+        SheetAction(l.id == current.id ? Icons.check_rounded : Icons.psychology_outlined,
+            l.id == efforts.defaultId ? '${l.label}（默认）' : l.label,
+            subtitle: l.description.isEmpty ? null : l.description, value: l.id),
+    ]);
+    if (picked != null && picked != current.id) await ref.read(chatProvider(scope).notifier).setEffort(efforts.toChoice(picked));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cat = ref.watch(modelCatalogProvider).value;
+    final choice = ref.watch(chatProvider(scope).select((s) => (s.model, s.effort)));
+    final model = cat?.effective(choice.$1);
+    final efforts = model == null ? null : cat!.effortsFor(model.id);
+    final eff = efforts?.effective(choice.$2);
+    final p = context.palette;
+    final strong = eff != null && eff.id != efforts!.defaultId;
+    final fg = strong ? p.text : p.text2;
+    return FadeSwitcher(
+      child: eff == null
+          ? const SizedBox.shrink(key: ValueKey('none'))
+          : Padding(
+              key: const ValueKey('effort'),
+              padding: const EdgeInsets.only(left: Sp.x1),
+              child: Pressable(
+                onTap: () => _choose(context, ref, efforts!, eff),
+                scale: 0.92,
+                semanticLabel: semantics(eff),
+                child: SizedBox(
+                  height: A11y.minTap,
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: context.motion(Motion.base),
+                      curve: Motion.ease,
+                      padding: const EdgeInsets.symmetric(horizontal: Sp.x2 + 2, vertical: Sp.x1 + 2),
+                      decoration: BoxDecoration(
+                        color: context.tileFill,
+                        border: Border.all(color: strong ? p.text3 : Colors.transparent),
+                        borderRadius: BorderRadius.circular(Radii.full),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.psychology_outlined, size: 15, color: fg),
+                        const SizedBox(width: Sp.x1),
+                        SwapSwitcher(child: Text(eff.label, key: ValueKey(eff.id), style: context.text.labelMedium?.copyWith(color: fg))),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }

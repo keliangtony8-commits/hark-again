@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     model_fallbacks: dict[str, str] = {}
     context_tokens: int = 128_000
     model_context: dict[str, int] = {}
+    # 思考强度（app/reasoning.py）：按别名配可选档 + 默认，如 {"smart": {"levels": ["low", "medium", "high"], "default": "medium"}}；
+    # 没配的别名不发 reasoning_effort（供应商自己的默认）。客户端在输入框模型钮旁边给“思考”档位
+    model_reasoning: dict = {}
     stt_model: str = "stt"      # 语音识别别名（gateway 模式走 OpenAI 音频接口）
     embed_model: str = "embed"  # 记忆检索的向量别名
     # 语音供应商：gateway = 识别走网关 stt 别名、朗读用设备自带语音；

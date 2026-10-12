@@ -19,7 +19,7 @@ from app.llm import Turn
 from app.models import Message
 from app.routes import conversations as rconv, ws as rws
 
-async def fake_stream_turn(messages, tools=None, model=None):
+async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     yield "好的"
     yield Turn(text="好的")
 loop.stream_turn = fake_stream_turn

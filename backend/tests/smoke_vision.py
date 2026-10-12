@@ -26,7 +26,7 @@ sent: list[list[dict]] = []
 captions: list[tuple[str, list]] = []
 fail_caption = False
 
-async def fake_stream_turn(messages, tools=None, model=None):
+async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     sent.append(messages)
     yield "好"
     yield llm.Turn(text="好")

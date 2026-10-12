@@ -24,7 +24,7 @@ from sqlalchemy import select
 calls = {"n": 0, "seen": []}
 fail_next = {"on": False}
 
-async def fake_stream_turn(messages, tools=None, model=None):
+async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     calls["n"] += 1
     calls["seen"].append([(m["role"], m["content"]) for m in messages if m["role"] != "system"])
     if fail_next["on"]:

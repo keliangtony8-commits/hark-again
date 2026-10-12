@@ -5,13 +5,26 @@ DateTime? _date(dynamic v) => v is String ? DateTime.tryParse(v)?.toLocal() : nu
 
 /// 聊天可选的模型（GET /api/catalog/models）。
 class ModelCatalog {
-  const ModelCatalog({required this.defaultId, required this.options});
-  factory ModelCatalog.fromJson(Map<String, dynamic> j) => ModelCatalog(
-    defaultId: j['default'] as String? ?? '',
-    options: [for (final m in (j['models'] as List? ?? const [])) (id: (m as Map)['id'] as String, label: m['label'] as String? ?? m['id'] as String)],
-  );
+  const ModelCatalog({required this.defaultId, required this.options, this.efforts = const {}});
+  factory ModelCatalog.fromJson(Map<String, dynamic> j) {
+    final models = [for (final m in (j['models'] as List? ?? const [])) if (m is Map && m['id'] is String) m.cast<String, dynamic>()];
+    return ModelCatalog(
+      defaultId: j['default'] as String? ?? '',
+      options: [for (final m in models) (id: m['id'] as String, label: m['label'] as String? ?? m['id'] as String)],
+      efforts: {for (final m in models) m['id'] as String: ?ModelEfforts.fromJson(m)},
+    );
+  }
   final String defaultId;
   final List<({String id, String label})> options;
+
+  /// 能调思考强度的模型 → 档位（后端 reasoning.catalog；旧服务器没有这项 = 都不能调）。
+  final Map<String, ModelEfforts> efforts;
+
+  /// 这个模型可选的思考档；不足两档不值得给切换（返回 null）。
+  ModelEfforts? effortsFor(String modelId) {
+    final e = efforts[modelId];
+    return e != null && e.levels.length > 1 ? e : null;
+  }
 
   /// 对话的选择（null = 默认）→ 实际生效的那一项；选的别名已不在列表里也回落到默认（与后端 llm.chat_model 一致）。
   ({String id, String label})? effective(String? alias) {
@@ -30,14 +43,47 @@ class ModelCatalog {
   bool get selectable => options.length > 1;
 }
 
+/// 一档思考强度（low / medium / high …）。
+class EffortLevel {
+  const EffortLevel(this.id, this.label, [this.description = '']);
+  final String id, label, description;
+}
+
+/// 一个模型的思考档位（从少到多）+ 默认档。规则与后端 reasoning.resolve 一致。
+class ModelEfforts {
+  const ModelEfforts(this.levels, this.defaultId);
+  static ModelEfforts? fromJson(Map<String, dynamic> m) {
+    final raw = m['efforts'];
+    if (raw is! List) return null;
+    final levels = [
+      for (final e in raw)
+        if (e is Map && e['id'] is String) EffortLevel(e['id'] as String, e['label'] as String? ?? e['id'] as String, e['description'] as String? ?? ''),
+    ];
+    if (levels.isEmpty) return null;
+    final d = m['effort'];
+    return ModelEfforts(levels, levels.any((l) => l.id == d) ? d as String : levels.first.id);
+  }
+
+  final List<EffortLevel> levels;
+  final String defaultId;
+
+  /// 对话的选择（null = 默认）→ 实际生效的档：这个模型没有那档也回默认（换过模型、改过配置）。
+  EffortLevel effective(String? choice) =>
+      levels.firstWhere((l) => l.id == choice, orElse: () => levels.firstWhere((l) => l.id == defaultId, orElse: () => levels.first));
+
+  /// 选了 [id] → 存到对话上的值：选默认就存 null（以后改默认会跟着变）。
+  String? toChoice(String id) => id == defaultId ? null : id;
+}
+
 class ConversationSummary {
-  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.snippet, this.messageId});
+  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId});
   factory ConversationSummary.fromJson(Map<String, dynamic> j) => ConversationSummary(
     id: j['id'] as String,
     title: j['title'] as String? ?? '新对话',
     updatedAt: _date(j['updated_at']),
     pinned: j['pinned'] as bool? ?? false,
     model: j['model'] as String?,
+    reasoning: j['reasoning'] as String?,
     snippet: j['snippet'] as String?,
     messageId: j['message_id'] as String?,
   );
@@ -47,6 +93,9 @@ class ConversationSummary {
 
   /// 这个对话选的聊天模型别名；null = 服务器默认。
   final String? model;
+
+  /// 这个对话选的思考强度；null = 模型默认。
+  final String? reasoning;
 
   /// 只在搜索结果里有：内容命中处的一小段摘录。
   final String? snippet;

@@ -18,6 +18,7 @@
 // 模型：ChatState.model = 这个对话选的别名（null = 默认），打开时先取列表里的、再以服务器详情为准。
 //   setModel() 先改本地；已有对话立刻 PATCH，没成功（断网）或还是新对话就记 _modelDirty，
 //   随下一条 user.message / message.regenerate 带上 model（"" = 回默认）——所以“切到深度再点重新生成”= 换模型重答。
+//   思考强度（ChatState.effort，null = 模型默认）和模型是同一份“模型选择”：setEffort 走同一条路（同一个 dirty 标记、一起带上）。
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,7 +46,8 @@ class ChatState {
       this.offline = false,
       this.linkDown = false,
       this.focus,
-      this.model});
+      this.model,
+      this.effort});
   final List<ConversationSummary> conversations;
   final String? activeId;
   final List<Message> messages;
@@ -66,6 +68,9 @@ class ChatState {
 
   /// 当前对话选的模型别名；null = 服务器默认。
   final String? model;
+
+  /// 当前对话选的思考强度；null = 模型默认（后端 reasoning.resolve）。
+  final String? effort;
 
   /// 输入框是否该等：在生成，或有一条在排队（一次只排一条，避免新对话被拆成几段）。
   bool get busy => streaming || messages.any((m) => m.outbox == Outbox.queued);
@@ -97,7 +102,8 @@ class ChatState {
           bool? offline,
           bool? linkDown,
           String? Function()? focus,
-          String? Function()? model}) =>
+          String? Function()? model,
+          String? Function()? effort}) =>
       ChatState(
         conversations: conversations ?? this.conversations,
         activeId: activeId != null ? activeId() : this.activeId,
@@ -110,6 +116,7 @@ class ChatState {
         linkDown: linkDown ?? this.linkDown,
         focus: focus != null ? focus() : this.focus,
         model: model != null ? model() : this.model,
+        effort: effort != null ? effort() : this.effort,
       );
 }
 
@@ -122,7 +129,7 @@ class ChatController extends Notifier<ChatState> {
   bool _started = false; // 在飞的这条已收到 message.start
   bool _resync = false; // 断线丢了中途的事件，连上后要重新拉当前对话
   bool _regenerating = false; // 在飞的这一轮是重新生成（用户消息早已在服务器上）
-  bool _modelDirty = false; // 本机改了模型还没送到服务器（新对话 / PATCH 没成功）
+  bool _modelDirty = false; // 本机改了模型 / 思考强度还没送到服务器（新对话 / PATCH 没成功）
   int _openSeq = 0; // 快速连点切换对话时，只认最后一次 open 的结果
 
   Api get _api => ref.read(apiProvider);
@@ -350,7 +357,7 @@ class ChatController extends Notifier<ChatState> {
   }
 
   /// 改过还没送到的模型选择，随消息带上。
-  Map<String, dynamic> _modelField() => _modelDirty ? {'model': state.model ?? ''} : const {};
+  Map<String, dynamic> _modelField() => _modelDirty ? {'model': state.model ?? '', 'reasoning': state.effort ?? ''} : const {};
 
   void _expire() {
     _giveUp = null;
@@ -388,6 +395,7 @@ class ChatController extends Notifier<ChatState> {
     state = state.copyWith(
         activeId: () => id,
         model: () => _summaryOf(id)?.model,
+        effort: () => _summaryOf(id)?.reasoning,
         messages: [if (cached != null) ..._messages(cached), ...unsent],
         error: () => null,
         focus: () => id == null ? null : focus);
@@ -417,7 +425,7 @@ class ChatController extends Notifier<ChatState> {
       final detail = await _api.get('/api/conversations/$id') as Map<String, dynamic>;
       final raw = detail['messages'] as List;
       unawaited(_cache.putMessages(id, raw));
-      if (seq == _openSeq && state.activeId == id && !_modelDirty) state = state.copyWith(model: () => detail['model'] as String?);
+      if (seq == _openSeq && state.activeId == id && !_modelDirty) state = state.copyWith(model: () => detail['model'] as String?, effort: () => detail['reasoning'] as String?);
       // 等待期间用户换了对话或已经开始发消息：不覆盖眼前的内容
       if (seq != _openSeq || state.activeId != id || state.streaming) return;
       // 本机还没发出的消息接在服务器版本后面，不能被刷新冲掉
@@ -512,12 +520,25 @@ class ChatController extends Notifier<ChatState> {
   Future<void> setModel(String? alias) async {
     if (alias == state.model) return;
     state = state.copyWith(model: () => alias);
+    await _pushChoice();
+  }
+
+  /// 换这个对话的思考强度（null = 模型默认）。和模型同一条路。
+  Future<void> setEffort(String? effort) async {
+    if (effort == state.effort) return;
+    state = state.copyWith(effort: () => effort);
+    await _pushChoice();
+  }
+
+  /// 模型选择（模型 + 思考强度）送到服务器：已有对话立刻 PATCH；新对话 / 没成功就留着 dirty，随下一条消息带上。
+  Future<void> _pushChoice() async {
     _modelDirty = true;
     final id = state.activeId;
     if (id == null) return; // 新对话：随第一条消息带上
+    final sent = (state.model, state.effort);
     try {
-      await _api.patch('/api/conversations/$id', {'model': alias ?? ''});
-      if (state.activeId == id && state.model == alias) _modelDirty = false;
+      await _api.patch('/api/conversations/$id', _modelField());
+      if (state.activeId == id && (state.model, state.effort) == sent) _modelDirty = false;
       unawaited(refreshList().catchError((_) {}));
     } on ApiError catch (e) {
       if (!e.isNetwork && state.activeId == id) state = state.copyWith(error: () => e.message);

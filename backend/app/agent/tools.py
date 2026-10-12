@@ -46,6 +46,8 @@ class ToolContext:
     # 工具结束时 ToolResult.blocks[0] 就是它的最终形态（没有块则保留最后一次推的、去掉 live）。只由内核在执行期间挂上。
     live: Callable[[dict], None] = no_live
     model: str | None = None  # 这一轮实际用的模型别名（loop.run 填上；子助手沿用它，Codex：spawned agents inherit your model）
+    # 对话选的思考强度（None = 模型默认）；实际发哪档由 reasoning.resolve 按当时的模型定。子助手同样沿用（Codex child_config）
+    effort: str | None = None
     # 只许用这些工具（None = 不限）：子助手的工具白名单（agent/subagent.py CHILD_TOOLS），不在名单里的不给模型、也不执行
     allow: frozenset[str] | None = None
     depth: int = 0  # 0 = 主助手；1 = 子助手（不能再派，Codex DEFAULT_AGENT_MAX_DEPTH = 1）

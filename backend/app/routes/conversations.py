@@ -4,7 +4,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import conversation_share, turn_journal, usage
+from .. import conversation_share, reasoning, turn_journal, usage
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -20,7 +20,8 @@ SNIPPET = 36  # 命中位置前后各取多少字
 
 def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
     """hit = (命中的消息 id, 摘录)：客户端据此打开对话后滚到那条消息并闪一下。"""
-    out = {"id": c.id, "title": c.title, "pinned": c.pinned, "model": c.model, "updated_at": iso(c.updated_at)}
+    out = {"id": c.id, "title": c.title, "pinned": c.pinned, "model": c.model, "reasoning": c.reasoning,
+           "updated_at": iso(c.updated_at)}
     if hit:
         out["message_id"], out["snippet"] = hit
     return out
@@ -71,16 +72,21 @@ class ConversationPatch(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=200)
     pinned: bool | None = None
     model: str | None = None  # 别名；"" = 回到默认
+    reasoning: str | None = None  # 思考强度（reasoning.EFFORTS）；"" = 回到模型默认
 
 
 @router.patch("/{cid}")
 async def patch_conversation(cid: str, body: ConversationPatch, db: AsyncSession = Depends(get_session)):
-    """重命名 / 置顶 / 换模型。不改 updated_at，免得整理一下列表顺序就乱了。"""
+    """重命名 / 置顶 / 换模型 / 换思考强度。不改 updated_at，免得整理一下列表顺序就乱了。"""
     values = body.model_dump(exclude_none=True)
     if "model" in values:
         if values["model"] and values["model"] not in settings.chat_models:
             raise HTTPException(422, "没有这个模型")
         values["model"] = values["model"] or None
+    if "reasoning" in values:
+        if values["reasoning"] and not reasoning.valid(values["reasoning"]):
+            raise HTTPException(422, "没有这个思考强度")
+        values["reasoning"] = values["reasoning"] or None
     if "title" in values:
         values["title"] = values["title"].strip()
         if not values["title"]:
@@ -108,6 +114,7 @@ async def get_conversation(cid: str, db: AsyncSession = Depends(get_session)):
         "title": c.title,
         "pinned": c.pinned,
         "model": c.model,
+        "reasoning": c.reasoning,
         "messages": [m.to_wire() for m in c.messages],
     }
 

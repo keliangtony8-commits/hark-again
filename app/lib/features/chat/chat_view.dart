@@ -121,7 +121,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         onStop: chat.canStop ? ctl.stop : null,
         editing: editing,
         onCancelEdit: () => setState(() => _editing = null),
-        accessory: ModelChip(scope: widget.projectId),
+        accessory: ModelChoice(scope: widget.projectId),
         workspace: workspaceOf(widget.projectId),
         onSend: (text, files) {
           if (editing != null) {

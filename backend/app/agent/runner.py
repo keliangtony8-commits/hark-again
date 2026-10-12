@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, llm_retry, turn_journal, usage, vision
+from .. import host_mode, jobs, llm_retry, reasoning, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -48,6 +48,17 @@ def apply_model(conv: Conversation, model: object) -> None:
         conv.model = None
     elif isinstance(model, str) and model in settings.chat_models:
         conv.model = model
+
+
+def apply_choice(conv: Conversation, event: dict) -> None:
+    """消息 / 重新生成随带的“模型选择”（model + reasoning 一起，客户端改过才带）：各自合法就记到对话上，"" = 回默认。"""
+    if "model" in event:
+        apply_model(conv, event["model"])
+    effort = event.get("reasoning")
+    if effort == "":
+        conv.reasoning = None
+    elif reasoning.valid(effort):
+        conv.reasoning = effort
 
 
 class RewindError(ValueError):
@@ -103,7 +114,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     一个块都还没有就发 message.stopped。
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
     否则（断线、关机）落库后把取消继续抛出去。"""
-    cid, project_id, model = conv.id, conv.project_id, chat_model(conv.model)
+    cid, project_id, model, effort = conv.id, conv.project_id, chat_model(conv.model), conv.reasoning
     await turn_journal.recover(db, cid)  # 别的进程崩掉留下的半截回答先转成 interrupted 消息，排在历史里
     hist = await build_history(db, cid, model)
     history = hist.messages
@@ -123,18 +134,19 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     journal = turn_journal.Journal(cid, task_id)  # 进程被杀时这一轮的进度还在（turn_journal.py）
     await journal.open()
     try:
-        return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model)
+        return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model, effort)
     finally:
         await journal.close()  # 走到这里结果已由 _drive 落库（或出错/没内容）；只有进程死掉才会留下检查点
 
 
 async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str, history: list[dict], builder: loop.MessageBuilder,
                  journal: turn_journal.Journal, emit: Emit, approve: Approver, stop: asyncio.Event | None,
-                 ask: Asker, task_id: str | None, host: bool, model: str) -> Message | None:
+                 ask: Asker, task_id: str | None, host: bool, model: str,
+                 effort: str | None = None) -> Message | None:
     status = "done"
     interrupted = False
     try:
-        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host), builder, model):
+        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort), builder, model):
             if not isinstance(ev, loop.Done):
                 await journal.seen(ev, builder)
                 await emit(to_wire(ev))

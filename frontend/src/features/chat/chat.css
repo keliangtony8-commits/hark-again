@@ -231,6 +231,7 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .model-chip:hover { color: var(--text); }
 .model-chip.strong { background: var(--ink); color: var(--on-ink); }
 .model-chip-label { display: inline-flex; align-items: center; gap: var(--sp-1); animation: rise var(--dur) var(--ease); }
+.effort-chip { animation: rise var(--dur) var(--ease); } /* 换到能调的模型时浮入 */
 .model-chip select { appearance: none; border: none; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 
 /* 分享对话（ShareSheet）：链接是一块 tile，可点复制；两颗等宽胶囊；状态变化 rise 进场 */
@@ -248,7 +249,7 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 /* 朗读键：准备中闪点（与录音中同一节奏）、在读时用墨色（不是强调色） */
 .speak-btn.playing { color: var(--text); }
 .speak-dot { width: 7px; height: 7px; border-radius: var(--r-full); background: currentColor; animation: blink var(--dur-pulse) var(--ease) infinite; }
-@media (prefers-reduced-motion: reduce) { .speak-dot { animation: none; opacity: .6; } }
+@media (prefers-reduced-motion: reduce) { .speak-dot { animation: none; opacity: .6; } .effort-chip { animation: none; } }
 /* v1.12：标题栏里的 ⋯ 和返回/历史同一档（40px 触发区、20px 图标），不再比两边小一号 */
 .chat-bar-side .menu-trigger { width: 40px; height: 40px; }
 

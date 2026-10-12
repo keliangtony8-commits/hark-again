@@ -219,13 +219,14 @@ def is_overflow(e: BaseException) -> bool:
                                    "too many tokens", "prompt is too long", "input is too long", "上下文长度", "超出上下文"))
 
 
-async def summarize(prefix: list[dict], tools: list[dict] | None, model: str | None) -> str:
+async def summarize(prefix: list[dict], tools: list[dict] | None, model: str | None, effort: str | None = None) -> str:
     """重放 prefix（系统提示 … 要压的最后一条）+ 指令，拿检查点正文。超长 → 从这一轮最旧的一段起丢掉再试。"""
     msgs = [_no_images(m) for m in prefix]
     for attempt in range(SUMMARY_RETRIES + 1):
         try:
             text = await llm.complete([*msgs, {"role": "user", "content": INSTRUCTION}], model=model, kind="compact",
-                                      tools=tools, max_tokens=SUMMARY_MAX_TOKENS, strict=True)
+                                      tools=tools, max_tokens=SUMMARY_MAX_TOKENS, strict=True,
+                                      effort=effort, helper=False)  # 检查点要靠谱：沿用这一轮的思考强度
         except Exception as e:  # noqa: BLE001
             if not is_overflow(e) or attempt == SUMMARY_RETRIES:
                 raise
@@ -255,9 +256,9 @@ class Compactor:
     """loop 一轮的压缩器。base = 这一轮自己的第一条消息（系统提示 + 历史之后）。"""
 
     def __init__(self, base: int, model: str | None, tools: list[dict] | None,
-                 pinned: Callable[[], str] | None = None):
-        """pinned = 写检查点那一刻要原样钉上的文字（loop 传当前计划，plan.pinned）。"""
-        self.base, self.model, self.tools, self.pinned = base, model, tools, pinned
+                 pinned: Callable[[], str] | None = None, effort: str | None = None):
+        """pinned = 写检查点那一刻要原样钉上的文字（loop 传当前计划，plan.pinned）。effort = 这一轮的思考强度选择。"""
+        self.base, self.model, self.tools, self.pinned, self.effort = base, model, tools, pinned, effort
         self.limit = int(window(model) * COMPACT_RATIO)
         self.retain = int(window(model) * RETAIN_RATIO)
         self.anchor: tuple[int, int] | None = None  # (上次调用的真实 token, 那时的消息条数)
@@ -307,7 +308,7 @@ class Compactor:
             return info if pruned else None
         s, e = rng
         try:
-            summary = await summarize(messages[:e], self.tools, self.model)
+            summary = await summarize(messages[:e], self.tools, self.model, self.effort)
         except Exception as ex:  # noqa: BLE001 — 压不了就带着原文继续，不拖垮这一轮
             log.warning("turn compaction failed: %s", ex)
             self.failed = True

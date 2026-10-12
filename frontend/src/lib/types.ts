@@ -95,7 +95,7 @@ export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopp
   /** 模型调用失败在自动重试 / 已换备用模型（v1.50 turn.retry，lib/retry.ts）：只在生成中的占位消息上。 */
   retry?: RetryNotice };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
-export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; updated_at: string; snippet?: string; message_id?: string };
+export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; updated_at: string; snippet?: string; message_id?: string };
 
 export type ServerEvent =
   | { type: "message.start"; conversation_id: string; user_message_id: string; title: string; replaced?: string[]; user_message?: Message }

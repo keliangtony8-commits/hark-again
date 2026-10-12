@@ -55,3 +55,5 @@
 - deepseek-ai/deepseek-harness packages/core/session/src/repair.ts（TOOL_NOT_STARTED / TOOL_OUTCOME_UNKNOWN 闭合与措辞）— MIT License, Copyright (c) 2026 DeepSeek, adapted；openai/codex codex-rs/core/src/context/turn_aborted.rs（被打断的轮附说明）— Apache-2.0, Copyright 2025 OpenAI, modified
 - google-gemini/gemini-cli packages/cli/src/ui/commands/compressCommand.ts（手动压缩：忙时拒绝、报前后大小、膨胀不换）— Apache-2.0, Copyright 2025 Google LLC, modified
   嫁接到 backend/app/agent/context.py compact_now（v1.53）
+- deepseek-ai/deepseek-harness packages/llm/llm/src/index.ts（reasoning efforts 校验 / 默认档）+ llm-deepseek/src/model-info.ts — MIT License, Copyright (c) 2026 DeepSeek, adapted；openai/codex protocol openai_models.rs + core/agent/child_config.rs（按模型档位、子助手沿用）— Apache-2.0, Copyright 2025 OpenAI, modified；google-gemini/gemini-cli packages/core/src/config/defaultModelConfigs.ts（后台小活少想）— Apache-2.0, Copyright 2025 Google LLC, modified
+  移植到 backend/app/reasoning.py（v1.54）

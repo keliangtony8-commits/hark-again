@@ -27,6 +27,8 @@ class Conversation(Base):
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # 这个对话用的聊天模型别名（settings.chat_models 的键）；None = 默认。解析见 llm.chat_model
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 这个对话选的思考强度（reasoning.EFFORTS 的键）；None = 模型默认。实际发哪档见 reasoning.resolve
+    reasoning: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # 滚动摘要（context.py 维护）：summary 概括了从开头到 summary_upto 这条消息（含）为止的内容；
     # 更早的原文不再发给模型。summary_upto 指向的消息不在了（被重答删掉）就视为作废。
     summary: Mapped[str] = mapped_column(Text, default="", server_default="", info={"private": True})

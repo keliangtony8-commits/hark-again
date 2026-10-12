@@ -24,7 +24,7 @@ from app.routes import catalog as rcat, conversations as rc, ws as rws
 
 used: list[str | None] = []
 
-async def fake_stream_turn(messages, tools=None, model=None):
+async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     used.append(model)
     yield "好"
     yield Turn(text="好")

@@ -23,7 +23,7 @@ from app.routes import conversations as rconv, ws as rws
 
 mode = {"m": "hang"}   # hang = 吐一段后卡住；silent = 一个字没吐就卡住；ok = 正常说完
 
-async def fake_stream_turn(messages, tools=None, model=None):
+async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     if mode["m"] == "ok":
         yield "完整回答"
         yield Turn(text="完整回答")

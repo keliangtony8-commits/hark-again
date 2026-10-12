@@ -7,7 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from .. import workspaces
 from ..agent import approvals
-from ..agent.runner import RewindError, apply_model, rewind, run_turn
+from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
 from ..blocks import FileBlock, text_to_blocks
 from ..db import SessionLocal
@@ -126,7 +126,7 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
             conv = Conversation(title=(text or files[0]["name"])[:40], project_id=pid)
             db.add(conv)
             await db.flush()
-        apply_model(conv, event.get("model"))
+        apply_choice(conv, event)
         user_msg = Message(conversation_id=conv.id, role="user",
                            blocks=(text_to_blocks(text) if text else []) + files)
         db.add(user_msg)
@@ -148,8 +148,8 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
         except RewindError as e:
             await emit({"type": "error", "message": str(e)})
             return
-        if "model" in event:  # “换个模型重答”：和 user.message 一样记到对话上
-            apply_model(conv, event["model"])
+        if "model" in event or "reasoning" in event:  # “换个模型 / 思考强度重答”：和 user.message 一样记到对话上
+            apply_choice(conv, event)
             await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title, "replaced": replaced,

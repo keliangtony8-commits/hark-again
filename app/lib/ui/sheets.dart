@@ -146,9 +146,10 @@ class _FormSheetState extends State<_FormSheet> {
 
 /// 操作菜单里的一项：要么点了就执行 [onTap]，要么把 [value] 作为菜单的返回值（用来做选择）。
 class SheetAction<T> {
-  const SheetAction(this.icon, this.label, {this.onTap, this.value, this.danger = false});
+  const SheetAction(this.icon, this.label, {this.onTap, this.value, this.danger = false, this.subtitle});
   final IconData icon;
   final String label;
+  final String? subtitle; // 一行说明（如思考强度“想得少，回得快”）
   final VoidCallback? onTap;
   final T? value;
   final bool danger;
@@ -170,6 +171,7 @@ Future<T?> showActionSheet<T>(BuildContext context, {String? title, required Lis
             contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x5), // 图标和标题对齐同一条线
             leading: Icon(a.icon, color: a.danger ? p.danger : null),
             title: Text(a.label, style: a.danger ? TextStyle(color: p.danger) : null),
+            subtitle: a.subtitle == null ? null : Text(a.subtitle!, style: ctx.text.bodySmall?.copyWith(color: p.text2)),
             onTap: () => Navigator.pop(ctx, a),
           ),
       ]),
