@@ -16,6 +16,7 @@ class Message {
       this.pending = false,
       this.outbox = Outbox.sent,
       this.end = ReplyEnd.done,
+      this.steer = false,
       this.createdAt,
       this.thought = '',
       this.thinkFrom,
@@ -28,6 +29,7 @@ class Message {
       blocks: blocksFrom(j['blocks']),
       steps: stepsFrom(j['steps']),
       end: ReplyEnd.parse(j['status']),
+      steer: j['role'] == 'user' && j['status'] == steerStatus,
       createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal());
 
   final String id, role;
@@ -39,6 +41,11 @@ class Message {
 
   /// 这一轮怎么结束的（服务器 status，models/reply_end.dart）：停止 / 被打断 / 预算用完 / 原地打转。
   final ReplyEnd end;
+
+  /// 用户消息：助手回答途中补充进那一轮的（服务器 status = steer，后端 steering.py）。气泡下标一句 [steerLabel]。
+  final bool steer;
+  static const steerStatus = 'steer';
+  static const steerLabel = '回答途中补充';
 
   bool get stopped => end == ReplyEnd.stopped;
   bool get interrupted => end == ReplyEnd.interrupted;
@@ -88,6 +95,7 @@ class Message {
           List<ActivityStep>? steps,
           bool? pending,
           Outbox? outbox,
+          bool? steer,
           String? thought,
           DateTime? thinkFrom,
           DateTime? thinkTo,
@@ -100,11 +108,19 @@ class Message {
       pending: pending ?? this.pending,
       outbox: outbox ?? this.outbox,
       end: end,
+      steer: steer ?? this.steer,
       createdAt: createdAt,
       thought: thought ?? this.thought,
       thinkFrom: thinkFrom ?? this.thinkFrom,
       thinkTo: thinkTo ?? this.thinkTo,
       retry: retry != null ? retry() : this.retry);
+}
+
+/// 把 [m] 放到生成中的那条前面（没有生成中的就接在末尾）：回答途中补充的话排在这一轮回复之前，
+/// 和服务器落库的顺序（提问 → 补充 → 回复，后端 steering.py）一致。
+List<Message> beforePending(List<Message> ms, Message m) {
+  final i = ms.lastIndexWhere((x) => x.pending);
+  return i < 0 ? [...ms, m] : [...ms.sublist(0, i), m, ...ms.sublist(i)];
 }
 
 /// 第 i 条消息前要不要画日期分隔：第一条有时间的消息、或与上一条有时间的消息不在同一个本地日。

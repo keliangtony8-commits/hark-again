@@ -119,6 +119,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       child: Composer(
         busy: chat.busy,
         streaming: chat.streaming,
+        canSteer: chat.canSteer,
         onStop: chat.canStop ? ctl.stop : null,
         editing: editing,
         onCancelEdit: () => setState(() => _editing = null),

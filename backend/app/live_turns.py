@@ -95,6 +95,7 @@ class Turn:
         self.log: deque[dict] = deque(maxlen=LOG_MAX)
         self.blocks: list[dict] = []
         self.steps: list[dict] = []
+        self.steered: list[dict] = []  # 这一轮里用户途中补充的消息（turn.steered），快照里一起给
         self.subs: set[Conn] = set()
         self.stop = asyncio.Event()
         self.task: asyncio.Task | None = None
@@ -136,6 +137,9 @@ class Turn:
                 i = e.get("index")
                 if isinstance(i, int) and 0 <= i < len(self.blocks) and self.blocks[i].get("type") == "text":
                     self.blocks[i]["text"] = (self.blocks[i].get("text") or "") + (e.get("text") or "")
+            case "turn.steered":
+                if isinstance(e.get("message"), dict):
+                    self.steered.append(copy.deepcopy(e["message"]))
             case "tool.status":
                 step = e.get("step")
                 if isinstance(step, dict) and step.get("id"):
@@ -151,7 +155,8 @@ class Turn:
         # 快照停在终止事件之前：终止事件和它之后的收尾事件（conversation.title）照常补发
         return {"type": "turn.snapshot", "turn_id": self.id, "seq": self.end_seq - 1 if self.end_seq else self.seq,
                 "conversation_id": self.conv_id,
-                "message": {"blocks": copy.deepcopy(self.blocks), "steps": copy.deepcopy(self.steps)}}
+                "message": {"blocks": copy.deepcopy(self.blocks), "steps": copy.deepcopy(self.steps)},
+                **({"steered": copy.deepcopy(self.steered)} if self.steered else {})}
 
 
 _turns: dict[str, Turn] = {}
@@ -166,8 +171,33 @@ def enqueue(handler: Handler, event: dict, conn: Conn) -> Turn:
     新对话各自独立。发起的连接自动订阅。"""
     cid = event.get("conversation_id")
     key = cid if isinstance(cid, str) and cid else f"new:{uuid.uuid4().hex}"
+    return _enqueue(key, handler, event, {conn})
+
+
+def follow(conversation_id: str, handler: Handler, event: dict) -> Turn:
+    """由服务器自己接着排的一轮（回答途中补充、上一轮没来得及读的那句，steering）：订阅者沿用这个对话当前那一轮的。
+    没人看着就和断线一样计时（turn_offline_minutes）。"""
+    cur = _by_conv.get(conversation_id)
+    turn = _enqueue(conversation_id, handler, event, set(cur.subs) if cur is not None else set())
+    if not turn.subs:
+        minutes = settings.turn_offline_minutes
+        if minutes > 0:
+            turn._orphan = asyncio.get_running_loop().call_later(minutes * 60, _halt, turn)
+    return turn
+
+
+async def note(conversation_id: str, event: dict) -> bool:
+    """往这个对话正在跑的那一轮的事件流里加一条（编号、进日志、推给所有订阅者，断线重连也补得到）。"""
+    turn = _by_conv.get(conversation_id)
+    if turn is None or turn.ended:
+        return False
+    await turn.emit(event)
+    return True
+
+
+def _enqueue(key: str, handler: Handler, event: dict, subs: set) -> Turn:
     turn = Turn(key)
-    turn.subs.add(conn)
+    turn.subs |= subs
     _turns[turn.id] = turn
     prev = _tails.get(key)
     turn.task = asyncio.create_task(_run(turn, prev, handler, event))

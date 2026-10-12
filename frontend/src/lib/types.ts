@@ -107,7 +107,7 @@ export type Outbox = "queued" | "failed";
 /** created_at：服务器时间（带时区 ISO）；本地刚发的 = 发出时刻；生成中的占位没有。用于聊天里的日期分隔。 */
 /** thought：推理模型的思考（thinking.delta 累积，只留尾部），服务器不存；message.done 时接到正式消息上（本次会话可展开回看）。
  *  thinkFrom/thinkTo：第一段 / 最近一段思考到达的本机时间（ms），算“已思考 N 秒”。 */
-export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopped" | "interrupted" | "wrapped" | "looped"; pending?: boolean; steps?: ActivityStep[]; outbox?: Outbox; created_at?: string; thought?: string; thinkFrom?: number; thinkTo?: number;
+export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopped" | "interrupted" | "wrapped" | "looped" | "steer"; pending?: boolean; steps?: ActivityStep[]; outbox?: Outbox; created_at?: string; thought?: string; thinkFrom?: number; thinkTo?: number;
   /** 模型调用失败在自动重试 / 已换备用模型（v1.50 turn.retry，lib/retry.ts）：只在生成中的占位消息上。 */
   retry?: RetryNotice };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
@@ -116,7 +116,9 @@ export type ConversationSummary = { id: string; title: string; pinned: boolean; 
 /** v1.61 续传：一轮里的事件都带 turn_id + 从 1 起连续的 seq（老服务器没有）。 */
 export type TurnCursor = { turn_id?: string; seq?: number };
 export type ServerEvent = TurnCursor & (
-  | { type: "message.start"; conversation_id: string; user_message_id: string; title: string; replaced?: string[]; user_message?: Message }
+  | { type: "message.start"; conversation_id: string; user_message_id: string; title: string; replaced?: string[]; user_message?: Message; client_id?: string }
+  /** 回答途中补充（v1.83 steering）：服务器收下了一句，并进正在跑的这一轮；client_id = 发起那台设备的本地 id。 */
+  | { type: "turn.steered"; conversation_id: string; message: Message; client_id?: string }
   | { type: "block.start"; index: number; block: Block }
   | { type: "block.update"; index: number; block: Block }
   | { type: "block.delta"; index: number; text: string }
@@ -133,7 +135,7 @@ export type ServerEvent = TurnCursor & (
   /** 对 turn.resume 的答复：live=false = 没这轮（以 GET 为准）；gap = 游标太旧，随后来 turn.snapshot */
   | { type: "turn.resumed"; turn_id: string | null; conversation_id: string | null; live: boolean; ended?: boolean; gap?: boolean }
   /** 折叠好的“到目前为止”：整份替换生成中的那条 */
-  | { type: "turn.snapshot"; turn_id: string; seq: number; conversation_id: string | null; message: { blocks: Block[]; steps: ActivityStep[] } });
+  | { type: "turn.snapshot"; turn_id: string; seq: number; conversation_id: string | null; message: { blocks: Block[]; steps: ActivityStep[] }; steered?: Message[] });
 
 // ---- 其他资源（对应 backend/app/models.py） ----
 /** conversation_count / last_active_at：服务器算好的只读字段（旧服务器没有）。 */

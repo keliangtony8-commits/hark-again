@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, plan_mode, llm_retry, model_router, reasoning, turn_changes, turn_journal, usage, vision
+from .. import host_mode, jobs, plan_mode, llm_retry, model_router, reasoning, steering, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -106,17 +106,20 @@ async def rewind(db: AsyncSession, conversation_id: str, message_id: str | None,
 
 async def run_turn(db: AsyncSession, conv: Conversation, emit: Emit = _silent,
                    approve: Approver = deny_all, stop: asyncio.Event | None = None,
-                   ask: Asker = nobody, task_id: str | None = None, notice: str | None = None) -> Message | None:
-    """task_id：worker 跑定时任务时传入，工具从 ToolContext.task_id 知道“这是哪个任务在跑”。
+                   ask: Asker = nobody, task_id: str | None = None, notice: str | None = None,
+                   inbox: steering.Inbox | None = None) -> Message | None:
+    """inbox：用户回答途中补充的话（steering.py；调用方开、关，这里只交给 loop）。
+    task_id：worker 跑定时任务时传入，工具从 ToolContext.task_id 知道“这是哪个任务在跑”。
     notice：没有用户发言、由系统事件触发的一轮（后台任务结束，见 jobs.follow_ups）——作为最后一条“用户”消息
     交给模型，但不落库、不显示；回复照常存为助手消息。"""
     with usage.scope(conv.id):  # 这一轮里所有模型调用（含摘要、记忆向量）都记在这个对话上
-        return await _run_turn(db, conv, emit, approve, stop, ask, task_id, notice)
+        return await _run_turn(db, conv, emit, approve, stop, ask, task_id, notice, inbox)
 
 
 async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
                     approve: Approver, stop: asyncio.Event | None, ask: Asker = nobody,
-                    task_id: str | None = None, notice: str | None = None) -> Message | None:
+                    task_id: str | None = None, notice: str | None = None,
+                    inbox: steering.Inbox | None = None) -> Message | None:
     """跑一轮并落库。被取消时不丢已生成的内容：半截回复以 status=stopped 存下，照常发 message.done；
     一个块都还没有就发 message.stopped。
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
@@ -156,7 +159,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     await journal.open()
     try:
         return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model, effort,
-                            plan_mode.State(active=mode == plan_mode.PLAN))
+                            plan_mode.State(active=mode == plan_mode.PLAN), inbox)
     finally:
         await journal.close()  # 走到这里结果已由 _drive 落库（或出错/没内容）；只有进程死掉才会留下检查点
 
@@ -180,13 +183,16 @@ async def _route(db: AsyncSession, cid: str, choice: str, query: str, history: l
 async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str, history: list[dict], builder: loop.MessageBuilder,
                  journal: turn_journal.Journal, emit: Emit, approve: Approver, stop: asyncio.Event | None,
                  ask: Asker, task_id: str | None, host: bool, model: str,
-                 effort: str | None = None, plan: plan_mode.State | None = None) -> Message | None:
+                 effort: str | None = None, plan: plan_mode.State | None = None,
+                 inbox: steering.Inbox | None = None) -> Message | None:
     status = "done"
     interrupted = False
     ctx = ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort,
                       plan=plan)
+    if inbox is not None:
+        inbox.start()  # 历史已拼好：从这一刻起补充的话只经收件箱进来，不会和历史重复
     try:
-        async for ev in loop.run(system, history, ctx, builder, model):
+        async for ev in loop.run(system, history, ctx, builder, model, inbox=inbox):
             if isinstance(ev, loop.Done):
                 status = ev.ended  # wrapped / looped：内容是完整的一段交代，但事没做完（客户端给“继续”）
             else:

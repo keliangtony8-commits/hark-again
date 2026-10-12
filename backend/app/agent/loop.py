@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 
-from .. import activity, browser_files, llm_retry, plan, plan_mode, spill, vision
+from .. import activity, browser_files, llm_retry, plan, plan_mode, spill, steering, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
 from . import approvals, compact, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
@@ -236,8 +236,9 @@ class MessageBuilder:
 
 async def run(system: str, history: list[dict], ctx: ToolContext,
               builder: MessageBuilder | None = None, model: str | None = None,
-              limits: Limits | None = None) -> AsyncIterator[Event]:
-    """model = 实际调用的别名（None = 默认）。limits = 这一轮的预算（None = 主助手默认）。builder 可由调用方传入：中途被取消（用户点停止）时，调用方还能拿到已生成的半截块。"""
+              limits: Limits | None = None, inbox: steering.Inbox | None = None) -> AsyncIterator[Event]:
+    """model = 实际调用的别名（None = 默认）。limits = 这一轮的预算（None = 主助手默认）。builder 可由调用方传入：中途被取消（用户点停止）时，调用方还能拿到已生成的半截块。
+    inbox = 用户回答途中补充的话（steering.py）：每次调模型前读进来；模型要收尾时还有没读的就再来一圈（Codex needs_follow_up）。"""
     messages = [{"role": "system", "content": system}, *history]
     builder = builder if builder is not None else MessageBuilder()
     builder.transcript, builder.base = messages, len(messages)  # 被停下时调用方也能拿到已经发生的调用
@@ -257,6 +258,9 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     ended = "done"
     nudges, used_tools = next_speaker.limit(), False  # 话说一半就停：替用户补“继续”的剩余次数（next_speaker.py）
     while True:
+        if inbox is not None and inbox.pending():  # 用户在途中补了话：作为新的用户消息接在后面（Codex pending input）
+            builder.break_text()
+            messages += [{"role": "user", "content": it.text} for it in inbox.take()]
         over = step >= max_steps - 1 or 0 < limits.turn_tokens <= spent \
             or (limits.deadline is not None and time.monotonic() >= limits.deadline)
         if over and step:  # 预算到了：最后一步不给工具，让模型交代进度（第一步就是最后一步时不用交代）
@@ -345,6 +349,10 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         spent += turn.tokens
         squeeze.observe(turn.prompt, at)
         if not turn.tool_calls or over:
+            if not over and inbox is not None and inbox.pending():  # 正要收尾时用户补了话：再来一圈读它（没读的不会被丢）
+                if said.strip():
+                    messages.append({"role": "assistant", "content": said})
+                continue
             if not turn.tool_calls and not over and nudges > 0 and step < max_steps - 1 \
                     and await next_speaker.decide(said, turn.cut, used_tools, messages):
                 nudges -= 1  # 说了要做却没做 / 被截断 / 用完工具一句没说：补一句“继续”再来一圈（Gemini client.ts）

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "../lib/api";
 import { memoryStore } from "../lib/memoryStore";
 import { OUTBOX_GIVE_UP_MS, outbox } from "../lib/outbox";
+import { STEER_STATUS, beforePending, isSteer } from "../lib/steer";
 import { ChatSocket, type LinkStatus } from "../lib/socket";
 import type { Block, FileBlock, Message, OutgoingFile, ServerEvent, TextBlock } from "../lib/types";
 import { mergeStep, stepFromStatus } from "../lib/activity";
@@ -125,9 +126,22 @@ export function useChat(projectId?: string) {
         setStreaming(true);
         setThread((t) => {
           const ms = t.messages.filter((x) => !x.pending && !replaced.has(x.id));
+          // 想插进上一轮却排成了新一轮的那句（client_id）：挪到末尾、不再标补充
+          const k = e.client_id ? ms.findIndex((x) => x.id === e.client_id) : -1;
+          if (k >= 0) { const [m] = ms.splice(k, 1); ms.push({ ...m, status: undefined, outbox: undefined }); }
           const i = ms.map((x) => x.role).lastIndexOf("user");
           if (um && i >= 0) ms[i] = { ...ms[i], blocks: um.blocks };
           return { id: e.conversation_id, messages: [...ms, { id: "pending", role: "assistant", blocks: [], steps: [], pending: true }] };
+        });
+        break;
+      }
+      case "turn.steered": {
+        const cur = threadRef.current.id;
+        if (cur && e.conversation_id && cur !== e.conversation_id) return;
+        setMessages((ms) => {
+          const k = e.client_id ? ms.findIndex((x) => x.id === e.client_id) : -1;
+          if (k >= 0) return ms.map((x, j) => (j === k ? { ...x, status: STEER_STATUS, outbox: undefined } : x));   // 本机发的：认领
+          return ms.some((x) => x.id === e.message.id) ? ms : beforePending(ms, e.message);   // 别的设备补充的
         });
         break;
       }
@@ -172,7 +186,10 @@ export function useChat(projectId?: string) {
           const prev = ms.find((x) => x.pending);
           const p: Message = { id: "pending", role: "assistant", blocks: e.message.blocks ?? [], steps: e.message.steps ?? [], pending: true,
             thought: prev?.thought, thinkFrom: prev?.thinkFrom, thinkTo: prev?.thinkTo };
-          return [...ms.filter((x) => !x.pending), p];
+          // 途中补充以快照为准：本机未认领的乐观气泡撤掉，服务器收下的按 id 补上
+          const kept = ms.filter((x) => !x.pending && !(isSteer(x) && x.id.startsWith("local-")));
+          const extra = (e.steered ?? []).filter((m) => !kept.some((x) => x.id === m.id));
+          return [...kept, ...extra, p];
         });
         break;
       }
@@ -296,6 +313,7 @@ export function useChat(projectId?: string) {
       type: "user.message", conversation_id: thread.id, project_id: projectId, text: plainText(m.blocks),
       attachments: fileIds(m.blocks, "upload"),
       project_files: fileIds(m.blocks, "project"),
+      client_id: m.id,
       ...modelField(),
     });
     if (!ok) {
@@ -402,15 +420,31 @@ export function useChat(projectId?: string) {
     setStopping(true);
   }, [canStop, link, thread.id]);
 
+  /** 生成中能不能补一句给这一轮（服务器 steering；新对话的第一轮还没有 id 时不行）。 */
+  const canSteer = streaming && !stopping && !!thread.id;
+
   const send = useCallback((text: string, files: OutgoingFile[] = []) => {
-    if ((!text.trim() && files.length === 0) || busy) return;
+    if (!text.trim() && files.length === 0) return;
+    if (busy) {
+      if (!canSteer || files.length > 0 || !text.trim()) return;
+      // 途中补充：立刻插在生成中那条前面；线不通就标失败（“重发”= 挪到末尾排成下一轮）
+      const id = `local-${crypto.randomUUID()}`;
+      const ok = link === "open" && !!socket.current?.send({
+        type: "user.message", conversation_id: thread.id, project_id: projectId, text: text.trim(), steer: true, client_id: id,
+      });
+      setError(null);
+      const m: Message = { id, role: "user", blocks: [{ type: "text", text: text.trim() }], created_at: new Date().toISOString(),
+        ...(ok ? { status: STEER_STATUS } : { outbox: "failed" as const }) };
+      setMessages((ms) => beforePending(ms, m));
+      return;
+    }
     setError(null);
     const blocks: Block[] = [
       ...(text.trim() ? [{ type: "text" as const, text: text.trim() }] : []),
       ...files.map(asFileBlock),
     ];
     setMessages((m) => [...m, { id: `local-${crypto.randomUUID()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
-  }, [busy]);
+  }, [busy, canSteer, link, thread.id, projectId]);
 
   /** 失败的消息重新排队：挪到末尾（回复会接在它后面），线通就发。 */
   const resend = useCallback((id: string) => {
@@ -501,7 +535,7 @@ export function useChat(projectId?: string) {
   return {
     refreshActive, undoChanges,
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
-    canRegenerate, canStop, editableId, focus, model, routed, setModel, effort, setEffort, planMode, setPlanMode, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
+    canRegenerate, canStop, canSteer, editableId, focus, model, routed, setModel, effort, setEffort, planMode, setPlanMode, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };
 }
 

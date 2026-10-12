@@ -82,7 +82,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
             projectId={projectId} messages={chat.messages} busy={chat.busy} error={chat.error} link={chat.link} greeting={emptyGreeting}
             canRegenerate={chat.canRegenerate} onRegenerate={chat.regenerate}
             editableId={chat.editableId} onEdit={chat.edit}
-            streaming={chat.streaming} onStop={chat.canStop ? chat.stop : undefined}
+            streaming={chat.streaming} canSteer={chat.canSteer} onStop={chat.canStop ? chat.stop : undefined}
             focus={chat.focus} onFocused={chat.takeFocus}
             accessory={<>
               <ModelChip model={chat.model} routed={chat.routed} onChange={chat.setModel} />

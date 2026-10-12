@@ -12,6 +12,7 @@ import { applyMention, mentionAt, rankMentions, rankSkills, type MentionQuery, t
 import type { ProjectFile, Skill } from "../../lib/types";
 import { projectFileLine } from "../projects/projectHome";
 import MentionList, { type MentionItem } from "./MentionList";
+import { STEER_HINT, steerable } from "../../lib/steer";
 import "./chat.css";
 
 /** 托盘里的一项：本机文件（上传中 / upload / error）或项目文件引用（ref，现成的文件块）。 */
@@ -30,6 +31,8 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
 export type EditDraft = { id: string; text: string; hasFiles: boolean };
 type Props = {
   onSend: (t: string, files: OutgoingFile[]) => void; disabled: boolean; streaming?: boolean; onStop?: () => void;
+  /** 生成中可以补一句给正在进行的这一轮（useChat.canSteer）：有字时停止钮换成“补充”钮。 */
+  canSteer?: boolean;
   editing?: EditDraft | null; onCancelEdit?: () => void; onEditLast?: () => void;
   /** 主按钮左边的插槽（聊天页放模型钮，Composer 不认识它）。 */
   accessory?: ReactNode;
@@ -40,7 +43,7 @@ type Props = {
   /** 这段对话的工作区（lib/workspace.ts）：“添加附件”多一个从它引用文件；不给 = 没有这个来源。 */
   workspace?: string;
 };
-export default function Composer({ onSend, disabled, streaming = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息", workspace }: Props) {
+export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息", workspace }: Props) {
   const [text, setText] = useState("");
   const stash = useRef<string | null>(null);   // 进入编辑前的草稿
   const editId = editing?.id ?? null;
@@ -129,7 +132,9 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
     setCaret(el.selectionStart === el.selectionEnd ? el.selectionStart : -1);
   };
 
-  const canSend = !disabled && (editing
+  // 生成中打了纯文字：发出去是补充给这一轮（lib/steer.ts），否则仍只能停止
+  const steering = streaming && canSteer && steerable(text, { files: files.length, shell, editing: !!editing });
+  const canSend = (!disabled || steering) && (editing
     ? !!text.trim() || editing.hasFiles
     : !uploading && (!!text.trim() || ready.length > 0));
 
@@ -206,7 +211,7 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
                 ]} />
               : <button className="icon-btn" onClick={() => picker.current?.click()} disabled={!!editing} aria-label="添加附件"><IconClip /></button>}
             <input ref={picker} type="file" multiple hidden onChange={(e) => pick(e.target.files)} />
-            <textarea ref={ref} rows={1} value={text} placeholder={voiceBusy ? "正在识别…" : placeholder}
+            <textarea ref={ref} rows={1} value={text} placeholder={voiceBusy ? "正在识别…" : streaming && canSteer && !editing ? STEER_HINT : placeholder}
               onChange={(e) => { setText(e.target.value); track(e.target); setActive(0); if (closedAt !== null && !"@$".includes(e.target.value[closedAt] ?? "x")) setClosedAt(null); }}
               onSelect={(e) => track(e.currentTarget)}
               onPaste={(e) => !editing && e.clipboardData.files.length && pick(e.clipboardData.files)}
@@ -224,11 +229,11 @@ export default function Composer({ onSend, disabled, streaming = false, onStop, 
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
               }} />
             {accessory}
-            {streaming
+            {streaming && !steering
               ? <button key="stop" className="send-btn stop" onClick={onStop} disabled={!onStop} aria-label="停止生成" title="停止生成（Esc）"><IconStop /></button>
               : canSend || !mic.supported
-              ? <button key={shell ? "run" : "send"} className="send-btn" onClick={submit} disabled={!canSend}
-                  aria-label={editing ? "保存并重新回答" : shell ? "在电脑上运行" : "发送"} title={shell ? "在电脑上运行（Enter）" : undefined}>
+              ? <button key={steering ? "steer" : shell ? "run" : "send"} className="send-btn" onClick={submit} disabled={!canSend}
+                  aria-label={editing ? "保存并重新回答" : shell ? "在电脑上运行" : steering ? "补充给正在进行的回答" : "发送"} title={shell ? "在电脑上运行（Enter）" : undefined}>
                   {shell ? <IconTerminal /> : <IconSend />}</button>
               : <button className="send-btn ghost" onClick={startVoice} disabled={disabled || voiceBusy} aria-label="说话"><IconMic /></button>}
           </div>

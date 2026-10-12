@@ -25,6 +25,7 @@
 | type | 字段 | 说明 |
 |---|---|---|
 | `user.message` | `text`, `conversation_id?`, `project_id?`, `attachments?: [uploadId]`, `project_files?: [相对路径]`, `model?`, `reasoning?` | 发一条消息；一次只跑一轮。`project_files`（v1.13）= 引用工作区文件：只认这个对话所在工作区（已有对话以对话为准，新对话以 `project_id` 为准；主聊天 = 个人工作区 `me`，v1.21；`project_id:"me"` 当作主聊天，不会把对话挂到项目上）里真实存在的文件，越界/不存在/.git/重复丢掉，和上传合计 ≤10；存成 `source=project` 的文件块（`id` = 相对路径），内容每轮由服务器从磁盘读（文本内联 ≤6000 字，其余提示模型用 read_file；删了说已不在）。`text` 里的 `@路径`（v1.79，app/file_mentions.py，移植自 Gemini CLI @ 命令）也按同一规则解析成引用接在 `project_files` 后面（去重、合计 ≤10）：@ 前不能是英文字母/数字/_/./\/@（邮箱不算），代码里的不算，可加引号（`@"a b.txt"`）、带行号（`:10`、`#L3-L5`）；先原样找，再在中英交界截短，再按 `**/*名字*` 模糊找（取最近修改的）；目录、隐藏目录、越界不认；`!命令` 不解析；`message.regenerate` 带 `text` 编辑时新写的 @ 补上（原附件保留）。`text` 里的 `$技能id`（v1.81，app/skill_mentions.py，移植自 Codex `$skill`）存成 `skill` 块接在后面：只认启用的技能，最长前缀匹配（后面紧跟英文字母/数字/_/-/: 不算），$ 前是字母/数字/_/$ 不算，代码里的、`!命令` 不认，≤3 个；编辑重答按新文字重认。`model` = 这个对话改用的模型别名（`GET /api/catalog/models` 里的 id；`""` = 回默认；不认识的忽略），记到对话上、本轮起生效。`reasoning`（v1.54）= 思考强度（low/medium/high…；`""` = 回模型默认；不认识的忽略），和 `model` 是同一份“模型选择”，一起带。客户端只在本机改过且还没 PATCH 成功（或新对话）时带。附件里的图片（jpeg/png/webp/gif）模型能看懂（v0.72，服务端处理，客户端无需改动）：当前这一问且模型在 VISION_MODELS 里 → 发原图（缩到 1280）；其余 → 图片的文字描述（每张描述一次并缓存） |
+| `user.message`（途中补充，v1.83） | 同上 + `steer: true`, `client_id?` | 生成中再发一句：服务器（app/steering.py，学 Codex steer）把它插进这个对话正在跑的那一轮——存成 `status: "steer"` 的用户消息（created_at 早于这一轮的回复），下一次调模型前作为用户消息并进去，模型本要收尾也会再来一圈读它；在这一轮的事件流里推 `turn.steered`。只收纯文字：带附件 / `project_files` / `@文件` / `$技能` / `!命令`、超过 4000 字、这一轮已插 5 句、没在跑（刚好答完）→ 照常排成下一轮（`message.start` 带回 `client_id`）。预算到头 / 被叫停时还没读到的那句，服务器紧接着另起一轮回答它（`message.start.user_message_id` = 那句的 id）；用户点了停止则不自动接。`client_id` = 客户端本地 id（≤64 字），普通发送也可带 |
 | `message.regenerate` | `conversation_id`, `message_id?`, `text?`, `model?` | 重新生成最后一条回复：删掉最后一条用户消息之后的回复，同一条用户消息再跑一轮（不保留旧版本）。`message_id` = 客户端眼中的最后一条回复，不是最新的就回 `error`、什么都不删；不带 = 上一轮失败没有回复时“重试”。带 `text` = **编辑**：最后一条用户消息的文字原地换成它（id 不变、附件保留、标题不动；文字空且没附件 → `error`）再答。带 `model` = 换模型重答（同 user.message，记到对话上）。不排队，线不通直接提示 |
 | `message.cancel` | `conversation_id?` | 停止正在生成的这一轮。带 id 就必须对得上正在跑的对话；没有在跑的轮次就忽略（刚好已说完）。不排队 |
 | `approval.reply` | `id`, `approved: bool`, `option?` | 回答审批卡；`option` = 卡上 `options` 里选的批准范围 id（v1.49 主机命令卡：once / session / rule；不在卡上的一律当第一个） |
@@ -33,7 +34,8 @@
 服务器 → 客户端（一轮的顺序）：
 | type | 字段 | 说明 |
 |---|---|---|
-| `message.start` | `conversation_id`, `user_message_id`, `title`, `replaced?: [id]`, `user_message?: {id, role, blocks, created_at?}` | 新对话时用它拿到 id；重新生成时 `replaced` = 被删的旧回复；编辑时 `user_message` = 改好的用户消息（客户端用它覆盖本地气泡） |
+| `message.start` | `conversation_id`, `user_message_id`, `title`, `replaced?: [id]`, `user_message?: {id, role, blocks, created_at?}`, `client_id?` | 新对话时用它拿到 id；重新生成时 `replaced` = 被删的旧回复；编辑时 `user_message` = 改好的用户消息（客户端用它覆盖本地气泡）；`client_id`（v1.83）= user.message 带来的本地 id 原样带回（想插进上一轮却排成新一轮的那句，客户端据此挪到末尾） |
+| `turn.steered` | `conversation_id`, `message: {id, role:"user", blocks, status:"steer", created_at}`, `client_id?` | v1.83：服务器收下了一句途中补充（属于正在跑的这一轮：带 turn_id/seq，断线续传补得到；`turn.snapshot` 多一个 `steered: [message]`）。发起的设备按 `client_id` 认领本地气泡，别的设备按 id 插在生成中那条前面；气泡下标“回答途中补充”。GET 里这类用户消息带 `status: "steer"` |
 | `block.start` | `index`, `block` | 新增第 index 个块 |
 | `block.delta` | `index`, `text` | 追加文字到第 index 个 text 块 |
 | `block.update` | `index`, `block` | 整块替换（审批卡状态变化） |

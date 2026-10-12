@@ -95,3 +95,5 @@
   移植到 backend/app/file_mentions.py（v1.79）
 - openai/codex codex-rs/skills/src/mentions.rs、codex-rs/skills/src/selection.rs — Apache License 2.0, modified
   移植到 backend/app/skill_mentions.py（v1.81）
+- openai/codex codex-rs/core/src/session/turn_input.rs（steer_input）、codex-rs/core/src/session/turn.rs（pending input / needs_follow_up）— Apache License 2.0, modified
+  移植到 backend/app/steering.py + agent/loop.py（v1.83）

@@ -16,6 +16,8 @@ type Props = OutboxActions & {
   editableId: string | null; onEdit: (text: string) => void;
   /** 生成中；onStop 为空 = 已请求停止，停止键置灰。 */
   streaming: boolean; onStop?: () => void;
+  /** 生成中能补一句给这一轮（useChat.canSteer）。 */
+  canSteer?: boolean;
   /** 待定位的消息（搜索命中）；处理完调 onFocused 取走。 */
   focus: string | null; onFocused: () => void;
   /** 输入框主按钮左边的插槽（模型钮）。 */
@@ -42,7 +44,7 @@ const PIN_SLACK = 32;
 
 /** 编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
  *  编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。 */
-export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, focus, onFocused, accessory, onSend, onReconnect, onResend, onDiscard, greeting, empty: emptyView, projectId }: Props) {
+export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, canSteer, focus, onFocused, accessory, onSend, onReconnect, onResend, onDiscard, greeting, empty: emptyView, projectId }: Props) {
   const last = messages[messages.length - 1];
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const editing = draft && draft.id === editableId ? draft : null;
@@ -125,7 +127,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
       </div>
       <FloatingFooter onHeight={setFooterH}>
         {link === "down" && <LinkBar onRetry={onReconnect} streaming={!!streaming} />}
-        <Composer disabled={busy} streaming={streaming} onStop={onStop} accessory={accessory} workspace={workspaceOf(projectId)}
+        <Composer disabled={busy} streaming={streaming} canSteer={canSteer} onStop={onStop} accessory={accessory} workspace={workspaceOf(projectId)}
           editing={editing} onCancelEdit={() => setDraft(null)} onEditLast={editableId ? startEdit : undefined}
           onSend={(t, files) => { if (editing) { onEdit(t); setDraft(null); } else onSend(t, files); }} />
       </FloatingFooter>

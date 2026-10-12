@@ -2,10 +2,13 @@
 这里只把帧交给它；业务流程在 agent/runner.py。"""
 import asyncio
 import contextlib
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .. import conversation_title, file_mentions, live_turns, skill_mentions, user_shell, workspaces
+import logging
+
+from .. import conversation_title, file_mentions, live_turns, skill_mentions, steering, user_shell, workspaces
 from ..agent import approvals
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -36,7 +39,9 @@ async def ws_endpoint(ws: WebSocket):
             event = await ws.receive_json()
             match event.get("type"):
                 case "user.message":
-                    live_turns.enqueue(_handle_user_message, event, conn)
+                    # 回答途中补充（steering）：插得进正在跑的那一轮就插，插不进（已收尾 / 带附件 / 命令）照常排队成下一轮
+                    if not (event.get("steer") and await _steer(event)):
+                        live_turns.enqueue(_handle_user_message, event, conn)
                 case "message.regenerate":
                     live_turns.enqueue(_handle_regenerate, event, conn)
                 case "message.cancel":
@@ -85,8 +90,57 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
         db.add(user_msg)
         await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
-                    "user_message_id": user_msg.id, "title": conv.title})
+                    "user_message_id": user_msg.id, "title": conv.title, **_client_id(event)})
         await _answer(db, conv, user_msg, emit, stop)
+
+
+def _client_id(event: dict) -> dict:
+    """客户端给消息的本地 id 原样带回：想插进上一轮却排成了新一轮的那句，客户端据此把气泡挪到对的位置。"""
+    c = event.get("client_id")
+    return {"client_id": c} if isinstance(c, str) and c and len(c) <= 64 else {}
+
+
+async def _steer(event: dict) -> bool:
+    """回答途中补充：只收纯文字（steering.reason），交给正在跑的那一轮（steering.offer），
+    存成 status=steer 的用户消息（created_at = 收下那一刻，早于这一轮的回复），在这一轮的事件流里推 turn.steered。
+    返回 False = 没插进去，调用方照常排队。"""
+    cid, text = event.get("conversation_id"), (event.get("text") or "").strip()
+    if not isinstance(cid, str) or not steering.active(cid):
+        return False
+    if steering.reason(text, files=bool(event.get("attachments") or event.get("project_files")),
+                       skills=bool(_skills(text)), command=user_shell.parse(text) is not None):
+        return False
+    async with SessionLocal() as db:
+        conv = await db.get(Conversation, cid)
+        if conv is None:
+            return False
+        files = await _project_files(db, conv.project_id, [], 1, text)  # 写了 @文件：要带文件内容，排队走完整的一轮
+        if files:
+            return False
+        msg = Message(id=uuid.uuid4().hex, conversation_id=cid, role="user", blocks=text_to_blocks(text),
+                      status=steering.STEER)
+        if (item := steering.offer(cid, text, msg.id)) is None:  # 不 await 地收下：模型下一次调用前就能读到
+            return False
+        msg.created_at = item.at
+        db.add(msg)
+        try:
+            await db.commit()
+        except Exception:  # 模型已经读到了；只是历史里少这一句
+            logging.getLogger(__name__).exception("saving steer message failed")
+            return True
+    await live_turns.note(cid, {"type": "turn.steered", "conversation_id": cid, "message": msg.to_wire(), **_client_id(event)})
+    return True
+
+
+async def _handle_pending(emit, event: dict, stop: asyncio.Event) -> None:
+    """上一轮收尾时还没读到的补充：另起一轮回答它（消息已在库里，不再新建）。"""
+    async with SessionLocal() as db:
+        conv = await db.get(Conversation, event.get("conversation_id"))
+        msg = await db.get(Message, event.get("message_id")) if conv is not None else None
+        if conv is None or msg is None or msg.conversation_id != conv.id:
+            return
+        await emit({"type": "message.start", "conversation_id": conv.id, "user_message_id": msg.id, "title": conv.title})
+        await _answer(db, conv, msg, emit, stop)
 
 
 async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
@@ -118,9 +172,16 @@ async def _answer(db, conv: Conversation, user_msg: Message, emit, stop: asyncio
     if (command := user_shell.command_of(user_msg.blocks)) is not None:
         await user_shell.run(db, conv.id, conv.project_id, command, emit, stop)
         return
-    reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask)
+    cid = conv.id
+    inbox = steering.open_inbox(cid)  # 这一轮跑模型期间，用户补充的话插得进来（steering.py）
+    try:
+        reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask, inbox=inbox)
+    finally:
+        left = steering.close(inbox)
+    if left and not stop.is_set():  # 模型已经收尾 / 预算到头才到的补充：紧接着另起一轮回答（用户点了停止就不自动接）
+        live_turns.follow(cid, _handle_pending, {"conversation_id": cid, "message_id": left[-1].message_id})
     if reply is not None and reply.status != "stopped":
-        conversation_title.schedule(conv.id, emit)  # 后台起标题，不挡排队的下一轮
+        conversation_title.schedule(cid, emit)  # 后台起标题，不挡排队的下一轮
 
 
 MAX_FILES = 10  # 一条消息最多带几个文件（上传 + 项目文件合计）

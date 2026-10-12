@@ -23,6 +23,9 @@
 // 模型：ChatState.model = 这个对话选的别名（null = 默认），打开时先取列表里的、再以服务器详情为准。
 //   setModel() 先改本地；已有对话立刻 PATCH，没成功（断网）或还是新对话就记 _modelDirty，
 //   随下一条 user.message / message.regenerate 带上 model（"" = 回默认）——所以“切到深度再点重新生成”= 换模型重答。
+// 途中补充（v1.83，服务器 steering）：生成中再发纯文字 = 补充给正在进行的这一轮（user.message 带 steer + client_id），
+//   气泡立刻插在生成中那条前面；服务器收下回 turn.steered（client_id 认领本地气泡）；插不进（刚好答完）就排成下一轮，
+//   那一轮的 message.start 带回 client_id，气泡挪到末尾、去掉“补充”标记。别的设备补充的从 turn.steered / 快照里补上。
 //   思考强度（ChatState.effort，null = 模型默认）和模型是同一份“模型选择”：setEffort 走同一条路（同一个 dirty 标记、一起带上）。
 import 'dart:async';
 
@@ -90,6 +93,9 @@ class ChatState {
 
   /// 停止键可点：在生成且还没请求过停止。
   bool get canStop => streaming && !stopping;
+
+  /// 生成中能不能补一句给这一轮（服务器 steering；新对话的第一轮还没有 id 时不行）。
+  bool get canSteer => streaming && !stopping && activeId != null;
 
   /// 能否“重新生成”：最后一条是已落库的回复，或是已发出却没等到回复的用户消息（上一轮失败 → 重试）。
   bool get canRegenerate =>
@@ -278,6 +284,11 @@ class ChatController extends Notifier<ChatState> {
         // 旁观（另一台设备发起的重新生成）：被替换的旧回复本机还在，按服务器说的撤掉
         final replaced = {...?(e['replaced'] as List?)?.whereType<String>()};
         final ms = [for (final m in state.messages) if (!replaced.contains(m.id) && !m.pending) m];
+        // 想插进上一轮却排成了新一轮的那句（client_id）：挪到末尾、不再标“补充”
+        if (e['client_id'] case final String local) {
+          final i = ms.indexWhere((m) => m.id == local);
+          if (i >= 0) ms.add(ms.removeAt(i).copyWith(steer: false, outbox: Outbox.sent));
+        }
         // 编辑：用服务器规整后的版本覆盖本地乐观改写（保留本地 id，气泡不重建）
         if (e['user_message'] case final Map<String, dynamic> um) {
           final i = ms.lastIndexWhere((m) => m.isUser);
@@ -297,12 +308,29 @@ class ChatController extends Notifier<ChatState> {
         _seq = seq is int ? seq : 0;
         _started = true;
         final snap = e['message'] as Map<String, dynamic>? ?? const {};
-        final ms = [for (final m in state.messages) if (!m.pending) m];
+        // 途中补充以快照为准：本机还没认领的乐观气泡先撤掉，服务器收下的按 id 补上（没收到的之后由 turn.steered 补）
+        var ms = [for (final m in state.messages) if (!m.pending && !(m.steer && m.id.startsWith(localPrefix))) m];
+        for (final raw in (e['steered'] as List? ?? const []).whereType<Map<String, dynamic>>()) {
+          final m = Message.fromJson(raw);
+          if (!ms.any((x) => x.id == m.id)) ms = [...ms, m];
+        }
         final prev = state.messages.where((m) => m.pending).lastOrNull;
         var pending = const Message(id: 'pending', role: 'assistant', blocks: [], pending: true)
             .copyWith(blocks: blocksFrom(snap['blocks']), steps: stepsFrom(snap['steps']));
         if (prev != null) pending = pending.withThoughtOf(prev);
         state = state.copyWith(streaming: true, messages: [...ms, pending]);
+      case 'turn.steered':
+        if (state.activeId != null && e['conversation_id'] != null && state.activeId != e['conversation_id']) return;
+        if (e['message'] is! Map<String, dynamic>) return;
+        final m = Message.fromJson(e['message'] as Map<String, dynamic>);
+        final ms = [...state.messages];
+        final i = e['client_id'] is String ? ms.indexWhere((x) => x.id == e['client_id']) : -1;
+        if (i >= 0) {
+          ms[i] = ms[i].copyWith(steer: true, outbox: Outbox.sent); // 本机发的：认领（保留本地 id，气泡不重建）
+          state = state.copyWith(messages: ms);
+        } else if (!ms.any((x) => x.id == m.id)) {
+          state = state.copyWith(messages: beforePending(ms, m)); // 别的设备补充的
+        }
       case 'block.start' || 'block.update':
         final block = Block.fromJson(e['block'] as Map<String, dynamic>);
         _patchPending((m) => m.copyWith(blocks: _setAt(m.blocks, e['index'] as int, block)));
@@ -463,6 +491,7 @@ class ChatController extends Notifier<ChatState> {
       'text': plainText(m.blocks),
       'attachments': [for (final f in m.blocks.whereType<FileBlock>()) if (f.source != 'project') f.id],
       'project_files': [for (final f in m.blocks.whereType<FileBlock>()) if (f.source == 'project') f.id],
+      'client_id': m.id,
       ..._modelField(),
     });
     if (!ok) {
@@ -572,11 +601,32 @@ class ChatController extends Notifier<ChatState> {
   }
 
   void send(String text, {List<FileBlock> files = const []}) {
-    if ((text.trim().isEmpty && files.isEmpty) || state.busy) return;
+    if (text.trim().isEmpty && files.isEmpty) return;
+    if (state.busy) {
+      if (state.canSteer && files.isEmpty && text.trim().isNotEmpty) _steer(text.trim());
+      return;
+    }
     final blocks = <Block>[if (text.trim().isNotEmpty) TextBlock(text.trim()), ...files];
-    final m = Message(id: 'local-${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: blocks, outbox: Outbox.queued, createdAt: DateTime.now());
+    final m = Message(id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: blocks, outbox: Outbox.queued, createdAt: DateTime.now());
     state = state.copyWith(error: () => null, messages: [...state.messages, m]);
     _flush();
+  }
+
+  /// 本机还没拿到服务器 id 的消息的 id 前缀。
+  static const localPrefix = 'local-';
+
+  /// 生成中补一句：立刻插在生成中那条前面；线不通就标失败（“重发”= 挪到末尾排成下一轮）。
+  void _steer(String text) {
+    final m = Message(id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: [TextBlock(text)], steer: true, createdAt: DateTime.now());
+    final ok = _socket.send({
+      'type': 'user.message',
+      'conversation_id': state.activeId,
+      if (projectId.isNotEmpty) 'project_id': projectId,
+      'text': text,
+      'steer': true,
+      'client_id': m.id,
+    });
+    state = state.copyWith(error: () => null, messages: beforePending(state.messages, ok ? m : m.copyWith(steer: false, outbox: Outbox.failed)));
   }
 
   /// 重新生成最后一条回复；最后一条是用户消息时 = 重试（不带 message_id）。

@@ -119,6 +119,8 @@ class MessageView extends StatelessWidget {
         child: AnimatedSwitcher(
           duration: context.motion(Motion.fast),
           child: switch (message.outbox) {
+            Outbox.sent when message.steer =>
+              _OutboxStatus(key: const ValueKey('s'), icon: Icons.call_merge_rounded, label: Message.steerLabel, color: p.text3),
             Outbox.sent => const SizedBox.shrink(),
             Outbox.queued => _OutboxStatus(key: const ValueKey('q'), icon: Icons.schedule_rounded, label: '待发送', color: p.text3),
             Outbox.failed => _OutboxStatus(

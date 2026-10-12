@@ -9,8 +9,9 @@ import ActivitySummary from "./Activity";
 import RetryLine from "./RetryLine";
 import CopyButton from "../../ui/CopyButton";
 import SaveReplyButton from "../projects/SaveReplyButton";
-import { IconAlert, IconCheck, IconClock, IconClose, IconCloudOff, IconCopy, IconEdit, IconPlay, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
+import { IconAlert, IconCheck, IconClock, IconClose, IconCloudOff, IconCopy, IconEdit, IconMerge, IconPlay, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
 import { CONTINUE_TEXT, continueHint, endLabel, endWarns } from "../../lib/messageStatus";
+import { STEER_LABEL, isSteer } from "../../lib/steer";
 
 export type OutboxActions = { onResend: (id: string) => void; onDiscard: (id: string) => void };
 
@@ -100,6 +101,7 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
           </div>
         )}
         {message.outbox && <OutboxStatus message={message} onResend={onResend} onDiscard={onDiscard} />}
+        {!message.outbox && isSteer(message) && <div className="msg-status steer"><IconMerge size={14} />{STEER_LABEL}</div>}
       </div>
     );
   }

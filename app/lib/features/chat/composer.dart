@@ -44,12 +44,16 @@ class EditDraft {
   final bool hasFiles;
 }
 
+/// 生成中输入框的提示：这时发出去的话会并进正在进行的回答（后端 steering）。
+const steerHint = '补充或纠正，会并进这次回答';
+
 class Composer extends ConsumerStatefulWidget {
   const Composer(
       {super.key,
       required this.onSend,
       required this.busy,
       this.streaming = false,
+      this.canSteer = false,
       this.onStop,
       this.editing,
       this.onCancelEdit,
@@ -61,6 +65,9 @@ class Composer extends ConsumerStatefulWidget {
   final void Function(String text, List<FileBlock> files) onSend;
   final bool busy;
   final bool streaming;
+
+  /// 生成中可以补一句给正在进行的这一轮（ChatState.canSteer）：有字时停止钮换成“补充”钮。
+  final bool canSteer;
   final VoidCallback? onStop;
   final EditDraft? editing;
   final VoidCallback? onCancelEdit;
@@ -156,7 +163,11 @@ class _ComposerState extends ConsumerState<Composer> {
   bool get _uploading => !_editing && _attachments.any((a) => a.uploading);
   bool get _hasContent =>
       _c.text.trim().isNotEmpty || (_editing ? widget.editing!.hasFiles : _attachments.any((a) => a.file != null));
-  bool get _canSend => !widget.busy && !_uploading && _hasContent;
+  bool get _canSend => (!widget.busy || _steering) && !_uploading && _hasContent;
+
+  /// 生成中打了纯文字：发出去是补充给这一轮（不带附件 / 不是命令 / 不在编辑），否则仍只能停止。
+  bool get _steering =>
+      widget.streaming && widget.canSteer && !_editing && _attachments.isEmpty && !_shell && _c.text.trim().isNotEmpty;
 
   /// 整条是 `!命令`（且没带附件）：发出去不问助手，直接在这段对话的电脑上跑（后端 user_shell）。
   bool get _shell => !_editing && _attachments.isEmpty && shellCommandOf(_c.text) != null;
@@ -361,7 +372,7 @@ class _ComposerState extends ConsumerState<Composer> {
             onChanged: (_) => setState(() {}),
             style: context.text.bodyLarge,
             decoration: InputDecoration(
-              hintText: widget.hint,
+              hintText: widget.streaming && widget.canSteer && !_editing ? steerHint : widget.hint,
               filled: false,
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
@@ -374,7 +385,7 @@ class _ComposerState extends ConsumerState<Composer> {
         AnimatedSwitcher(
           duration: context.motion(Motion.fast),
           transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-          child: widget.streaming
+          child: widget.streaming && !_steering
               ? _RoundButton(
                   key: const ValueKey('stop'),
                   icon: Icons.stop_rounded,
@@ -384,9 +395,9 @@ class _ComposerState extends ConsumerState<Composer> {
                 )
               : _hasContent || widget.busy
               ? _RoundButton(
-                  key: ValueKey(_shell ? 'run' : 'send'),
+                  key: ValueKey(_steering ? 'steer' : (_shell ? 'run' : 'send')),
                   icon: _shell ? Icons.terminal_rounded : Icons.arrow_upward_rounded,
-                  label: _editing ? '保存并重新回答' : (_shell ? '在电脑上运行' : '发送'),
+                  label: _editing ? '保存并重新回答' : (_shell ? '在电脑上运行' : (_steering ? '补充给正在进行的回答' : '发送')),
                   filled: _canSend,
                   onTap: _canSend ? _send : null,
                 )
