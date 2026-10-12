@@ -144,6 +144,27 @@ class DelegateBlock(BaseModel):
     live: bool | None = None
 
 
+class ChangedFile(BaseModel):
+    path: str
+    added: int = 0
+    removed: int = 0
+    diff: str = ""
+    created: bool | None = None
+    hidden: bool | None = None   # 像密钥的文件：不给 diff
+    big: bool | None = None      # 太大没记基线：列出来，不能撤销
+    deleted: bool | None = None  # 这一轮之后已经不在了（命令删的）
+
+
+class ChangesBlock(BaseModel):
+    """v1.68 这一轮改过的文件（app/turn_changes.py 收尾时出，模型不能自己画）：每个文件一份净 diff；
+    token 非空 = 能整轮撤销（POST …/messages/{mid}/changes/undo）；undone = 用户已撤销。"""
+    type: Literal["changes"] = "changes"
+    token: str = ""
+    files: list[ChangedFile] = []
+    more: int | None = None
+    undone: bool | None = None
+
+
 class PageBlock(BaseModel):
     """生成的网页：预览 + 打开 + 复制链接。"""
     type: Literal["page"] = "page"
@@ -301,7 +322,7 @@ class FormBlock(BaseModel):
 
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
-                        OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock],
+                        OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock, ChangesBlock],
                   Field(discriminator="type")]
 
 
@@ -360,6 +381,9 @@ def blocks_to_text(blocks: list[dict]) -> str:
             from .agent.subagent import history_text  # 规则只在 subagent.py
             if line := history_text(b):
                 parts.append(line)
+        elif t == "changes":
+            from .turn_changes import history_text as changes_text  # 规则只在 turn_changes.py
+            parts.append(changes_text(b))
         elif t == "draft":
             parts.append(f"[草稿「{b['title']}」]\n{b['body']}")
         elif t == "summary":

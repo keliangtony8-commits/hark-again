@@ -1,5 +1,7 @@
 // 消息块：与后端 backend/app/blocks.py、docs/protocol.md 一一对应。
 // 新增块类型 = 这里加一个类 + blocks/ 里加一个组件 + registry 登记。认不出的类型变成 UnknownBlock，不崩。
+import 'activity.dart';
+
 sealed class Block {
   const Block();
 
@@ -60,6 +62,7 @@ sealed class Block {
         'preview' => PreviewBlock.fromJson(j),
         'plan' => PlanBlock.fromJson(j),
         'delegate' => DelegateBlock.fromJson(j),
+        'changes' => ChangesBlock.fromJson(j),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -394,6 +397,21 @@ class PlanItem {
   final PlanStatus status;
 }
 
+/// 这一轮改过的文件（后端 app/turn_changes.py 收尾时出，v1.68）：每个文件一份净 diff；
+/// token 非空 = 能整轮撤销；undone = 已撤销。文案规则在 models/changes.dart。
+class ChangesBlock extends Block {
+  const ChangesBlock({this.token = '', this.files = const [], this.more = 0, this.undone = false});
+  factory ChangesBlock.fromJson(Map<String, dynamic> j) => ChangesBlock(
+      token: j['token'] as String? ?? '',
+      files: [for (final f in (j['files'] as List? ?? [])) ?FileChange.fromJson(f)],
+      more: (j['more'] as num?)?.toInt() ?? 0,
+      undone: j['undone'] == true);
+  final String token;
+  final List<FileChange> files;
+  final int more; // 卡上没列出的文件数（撤销仍覆盖它们）
+  final bool undone;
+}
+
 /// 子助手（后端 agent/subagent.py，delegate 产出，v1.48）：一次并行派出的几个子任务，执行中 live 原地更新。
 /// 文案规则在 models/delegate.dart。
 class DelegateBlock extends Block {
@@ -451,7 +469,7 @@ class ReplySegment {
 }
 
 bool standsAlone(Block b) => switch (b) {
-      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || PlanBlock() || DelegateBlock() => true,
+      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || PlanBlock() || DelegateBlock() || ChangesBlock() => true,
       _ => false,
     };
 

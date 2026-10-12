@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, llm_retry, reasoning, turn_journal, usage, vision
+from .. import host_mode, jobs, llm_retry, reasoning, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -147,8 +147,9 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
                  effort: str | None = None) -> Message | None:
     status = "done"
     interrupted = False
+    ctx = ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort)
     try:
-        async for ev in loop.run(system, history, ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort), builder, model):
+        async for ev in loop.run(system, history, ctx, builder, model):
             if isinstance(ev, loop.Done):
                 status = ev.ended  # wrapped / looped：内容是完整的一段交代，但事没做完（客户端给“继续”）
             else:
@@ -164,6 +165,8 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
         await emit({"type": "error", "message": llm_retry.user_text(e)})  # 重试也救不回来：说人话（鉴权 / 额度 / 太长 / …）
         return None
     blocks = builder.partial() if status == "stopped" else builder.final()
+    if card := turn_changes.finish(ctx.changes, ctx.workspace):  # 这一轮改过的文件：净改动卡 + 整轮撤销（被停下也出）
+        blocks = [*blocks, card]
     reply = None
     if blocks:
         reply = Message(conversation_id=cid, role="assistant", blocks=blocks, status=status,

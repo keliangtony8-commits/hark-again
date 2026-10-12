@@ -349,3 +349,21 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-approval-scope:disabled { opacity: .5; }
 .blk-approval-granted { display: block; margin-top: 2px; font-weight: var(--fw-body); color: var(--text-2); animation: rise var(--dur) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) { .blk-approval-granted { animation: none; } .blk-approval-scope { transition: none; } }
+
+/* v1.68 改动卡：和计划卡同一套排版；行尾 +N −M 复用 .step-change / .diff-*（ui.css），不新增强调色 */
+.blk-changes { max-width: 640px; padding: var(--sp-2) var(--sp-3) var(--sp-3) var(--sp-4); }
+.blk-changes-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 32px; }
+.blk-changes-icon { display: grid; color: var(--text-2); animation: icon-pop var(--dur) var(--ease); }
+.blk-changes-title { flex: 1; font-weight: var(--fw-title); animation: fade var(--dur) var(--ease); }
+.blk-changes-files { list-style: none; margin: 0; padding: 0; }
+.blk-changes-file { padding-top: var(--sp-2); animation: rise var(--dur) var(--ease) both; }
+.blk-changes-line { display: flex; align-items: center; gap: var(--sp-2); }
+.blk-changes-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono);
+  font-size: var(--fs-xs); color: var(--text); transition: color var(--dur) var(--ease); }
+.is-undone .blk-changes-path { color: var(--text-3); text-decoration: line-through; }
+.blk-changes-note { margin-top: var(--sp-2); font-size: var(--fs-xs); color: var(--text-3); animation: rise var(--dur) var(--ease); }
+.blk-changes-note.is-error { color: var(--warning); }
+@media (prefers-reduced-motion: reduce) {
+  .blk-changes-icon, .blk-changes-title, .blk-changes-file, .blk-changes-note { animation: none; }
+  .blk-changes-path { transition: none; }
+}

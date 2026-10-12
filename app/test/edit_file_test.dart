@@ -1,5 +1,5 @@
 // v1.34 改文件：时间线里改了文件的步骤带 “+N −M”，点开看 diff（新增绿、删除红）；像密钥的文件只有数字不能展开。
-import 'package:assistant/features/chat/activity_view.dart';
+import 'package:assistant/ui/diff_view.dart';
 import 'package:assistant/features/chat/message_view.dart';
 import 'package:assistant/models/activity.dart';
 import 'package:assistant/models/message.dart';

@@ -129,6 +129,7 @@ async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
     grow = len(content.encode()) - (p.stat().st_size if p.is_file() else 0)
     if (full := await _quota_refusal(ctx, path, grow)) is not None:
         return full
+    ctx.changes.before(project_dir(ctx.workspace), p)  # 这一轮第一次碰：记基线（整轮撤销，turn_changes.py）
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
     file_seen.observe(_owner(ctx), p)
@@ -171,6 +172,7 @@ async def edit_file(ctx: ToolContext, path: str, old_string: str, new_string: st
         return ToolResult(f"没有修改 {path}：{err}", failed=err.short)
     if (full := await _quota_refusal(ctx, path, len(e.text.encode()) - len(raw))) is not None:
         return full
+    ctx.changes.before(project_dir(ctx.workspace), p)
     p.write_bytes(e.text.encode("utf-8"))  # 不经 write_text：保住文件原来的 \r\n
     file_seen.observe(_owner(ctx), p)
     quota.forget(ctx.workspace)

@@ -8,6 +8,8 @@ export type BlockActions = {
   replyForm?: (id: string, values: Record<string, string> | null, remember: boolean) => boolean;
   /** 后台任务卡看着任务结束、服务器也接着说完了：重新拿一次这段对话，把助手的结论显示出来。 */
   onJobSettled?: () => void;
+  /** 改动卡的整轮撤销（v1.68）：返回 null = 成功（消息已换成服务器版本），否则是给用户看的原因。 */
+  undoChanges?: (token: string) => Promise<string | null>;
 };
 export const BlockActionsContext = createContext<BlockActions>({});
 export const useBlockActions = () => useContext(BlockActionsContext);

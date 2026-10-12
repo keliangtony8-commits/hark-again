@@ -79,3 +79,5 @@
   移植到 backend/app/agent/distill.py（v1.66）
 - google-gemini/gemini-cli packages/core/src/services/sessionSummaryService.ts（选材滑动窗口、500 字截断、提示词结构、清洗、超时失败返回 null）— Apache License 2.0, modified
   移植到 backend/app/conversation_title.py（v1.67）
+- openai/codex codex-rs/core/src/turn_diff_tracker.rs（每路径首次触碰记基线、基线 = 现状不出 diff、按路径排序汇总）— Apache License 2.0, modified
+  移植到 backend/app/turn_changes.py（v1.68）

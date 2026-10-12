@@ -140,6 +140,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       onApprovalOption: (id, option) => ctl.replyApproval(id, true, option),
       onForm: ctl.replyForm,
       onJobSettled: ctl.refreshActive,
+      onUndoChanges: ctl.undoChanges,
       // 设计 v2：列表铺满整个聊天区，上面从浮动顶栏下滚过、下面从输入胶囊下滚过；
       // 让位都读 MediaQuery.padding（顶 = ShellPage，底 = FloatingFooter 量出的胶囊高度）。离线条浮在让位线下方，不推动列表。
       child: FloatingFooter(

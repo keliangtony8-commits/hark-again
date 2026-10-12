@@ -293,13 +293,6 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .step-toggle svg { transition: transform var(--dur-fast) var(--ease); }
 .step-toggle.open svg { transform: rotate(90deg); }
 .step-change { flex: none; display: inline-flex; align-items: center; gap: var(--sp-1); font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-3); }
-.step-new { font-family: var(--font-sans); }
-.diff-add { color: var(--success); }
-.diff-remove { color: var(--danger); }
-.diff-hunk, .diff-note { color: var(--text-3); }
-.diff-context { color: var(--text-2); }
-.step-diff { margin: var(--sp-2) 0 0; padding: var(--sp-2); max-height: 280px; overflow: auto; background: var(--tile); border-radius: var(--r-sm);
-  font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.45; white-space: pre; animation: rise var(--dur) var(--ease) both; }
 .tool-run-detail { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
 @media (prefers-reduced-motion: reduce) { .activity-steps, .step, .step-pulse, .step-diff { animation: none; } .step-toggle svg { transition: none; } }
 

@@ -4,7 +4,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import conversation_share, conversation_title, reasoning, turn_journal, usage
+from .. import conversation_share, conversation_title, quota, reasoning, turn_changes, turn_journal, usage, workspaces
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -150,6 +150,34 @@ async def compact_conversation(cid: str, db: AsyncSession = Depends(get_session)
     except Exception as e:  # noqa: BLE001 — 摘要模型挂了：原文和摘要都没动
         await db.rollback()
         raise HTTPException(502, f"整理失败：{e}") from None
+
+
+@router.post("/{cid}/messages/{mid}/changes/undo")
+async def undo_changes(cid: str, mid: str, db: AsyncSession = Depends(get_session)):
+    """整轮撤销：把这条回复改过的文件恢复到这一轮之前（规则在 turn_changes.py）。
+    正在回复 → 409 busy；文件之后又被改过 → 409 {conflicts}（一个都不动）；记录过期 / 已撤销 → 410。返回更新后的消息。"""
+    conv = await db.get(Conversation, cid)
+    m = await db.get(Message, mid)
+    if not conv or not m or m.conversation_id != cid:
+        raise HTTPException(404)
+    i = next((k for k, b in enumerate(m.blocks or []) if b.get("type") == "changes"), None)
+    if i is None:
+        raise HTTPException(404, "这条回复没有改动文件")
+    if m.blocks[i].get("undone"):
+        raise HTTPException(410, "已经撤销过了")
+    if await turn_journal.busy(db, cid):
+        raise HTTPException(409, {"reason": "busy", "message": "正在回复，等这一轮结束再撤销"})
+    ws = workspaces.of(conv.project_id)
+    try:
+        turn_changes.undo(ws, m.blocks[i].get("token") or "")
+    except turn_changes.Conflict as e:
+        raise HTTPException(409, {"reason": "conflict", "message": str(e), "conflicts": e.paths}) from None
+    except turn_changes.UndoError as e:
+        raise HTTPException(410, str(e)) from None
+    quota.forget(ws)
+    m.blocks = [{**b, "undone": True} if k == i else b for k, b in enumerate(m.blocks)]  # 整体赋值，JSON 列才会被标脏
+    await db.commit()
+    return m.to_wire()
 
 
 async def _with_messages(db: AsyncSession, cid: str) -> Conversation:

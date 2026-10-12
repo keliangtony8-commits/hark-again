@@ -27,7 +27,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth.get() ?? ""}`, ...init.headers },
   });
   if (res.status === 401) { notifyUnauthorized(); throw new Error("未登录"); }
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
+  if (!res.ok) {
+    const d = (await res.json().catch(() => ({}))).detail; // 字符串，或 {message, …}（如撤销冲突 {reason, message, conflicts}）
+    throw new Error((typeof d === "string" ? d : d?.message) ?? res.statusText);
+  }
   return res.json();
 }
 

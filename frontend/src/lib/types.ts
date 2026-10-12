@@ -73,7 +73,7 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
   started_at?: string | null; finished_at?: string | null; stop_reason?: string | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;
@@ -81,7 +81,9 @@ export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<S
 export type Role = "user" | "assistant";
 /** 活动时间线的一步（v1.28，backend/app/activity.py）：每次工具调用一步，随消息落库（Message.steps）。 */
 /** 这一步改了工作区文件（v1.34 write_file / edit_file；形状见 backend/app/file_edit.py）。hidden = 像密钥的文件，不给 diff。 */
-export type FileChange = { path: string; added: number; removed: number; diff: string; created?: boolean; hidden?: boolean };
+export type FileChange = { path: string; added: number; removed: number; diff: string; created?: boolean; hidden?: boolean; big?: boolean; deleted?: boolean };
+/** v1.68 这一轮改过的文件（后端 app/turn_changes.py）：token 非空 = 能整轮撤销。 */
+export type ChangesBlock = { type: "changes"; token: string; files: FileChange[]; more?: number | null; undone?: boolean | null };
 export type ActivityStep = { id: string; tool: string; title: string; detail: string; state: "running" | "done" | "error" | "denied" | "stopped"; at?: string; ms?: number; note?: string; change?: FileChange };
 /** WS tool.status：step = 完整的一步（老服务器没有）。 */
 export type ToolRun = { id: string; name: string; label: string; state: ActivityStep["state"]; step?: ActivityStep };

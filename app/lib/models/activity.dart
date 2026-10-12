@@ -7,7 +7,7 @@ enum ActivityState { running, done, error, denied, stopped }
 /// 这一步改了工作区里的文件（v1.34：write_file / edit_file）：服务器 app/file_edit.py 的 change。
 /// diff = unified diff 去掉文件头（@@ 段头、+ 新增、- 删除、空格开头是上下文）；hidden = 像密钥的文件，不给 diff。
 class FileChange {
-  const FileChange({required this.path, this.added = 0, this.removed = 0, this.diff = '', this.created = false, this.hidden = false});
+  const FileChange({required this.path, this.added = 0, this.removed = 0, this.diff = '', this.created = false, this.hidden = false, this.big = false, this.deleted = false});
 
   static FileChange? fromJson(Object? raw) {
     if (raw is! Map<String, dynamic>) return null;
@@ -18,12 +18,17 @@ class FileChange {
       diff: raw['diff'] as String? ?? '',
       created: raw['created'] == true,
       hidden: raw['hidden'] == true,
+      big: raw['big'] == true,
+      deleted: raw['deleted'] == true,
     );
   }
 
   final String path, diff;
   final int added, removed;
   final bool created, hidden;
+
+  /// 改动卡（v1.68）：big = 太大没记基线（不能撤销）；deleted = 这一轮之后文件已经不在了。
+  final bool big, deleted;
 
   /// 有 diff 可展开看。
   bool get expandable => diff.isNotEmpty;

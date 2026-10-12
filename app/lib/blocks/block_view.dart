@@ -4,6 +4,7 @@ import '../models/block.dart';
 import '../theme/tokens.dart';
 import 'basic_blocks.dart';
 import 'browser_block.dart';
+import 'changes_block.dart';
 import 'commerce_blocks.dart';
 import 'content_blocks.dart';
 import 'delegate_block.dart';
@@ -31,6 +32,7 @@ class BlockView extends StatelessWidget {
         PageBlock b => PageBlockView(b),
         StatsBlock b => StatsBlockView(b),
         MemoryBlock b => MemoryBlockView(b),
+        ChangesBlock b => ChangesBlockView(b),
         DraftBlock b => DraftBlockView(b),
         SummaryBlock b => SummaryBlockView(b),
         ImagesBlock b => ImagesBlockView(b),

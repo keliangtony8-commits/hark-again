@@ -2,8 +2,9 @@
 // 点开是竖向时间线：状态圆点 + 标题 + 等宽摘要 + 用时，没成的下面一行原因；步骤之间一根发丝线。规则在 lib/activity.ts。
 // v1.34：改了文件的步骤行尾 “+3 −1”（绿/红），点这一行展开 diff（新增绿、删除红、段头淡）；像密钥的文件只有数字。
 import { useState } from "react";
-import { activitySummary, diffLines, stepDuration, stepFailed, stepSemantics, STEP_STATE_LABEL } from "../../lib/activity";
-import type { ActivityStep, FileChange } from "../../lib/types";
+import { activitySummary, stepDuration, stepFailed, stepSemantics, STEP_STATE_LABEL } from "../../lib/activity";
+import type { ActivityStep } from "../../lib/types";
+import { Diff, DiffStat } from "../../ui/Diff";
 import { IconAlert, IconCheck, IconChevron, IconClose, IconHistory, IconStop } from "../../ui/icons";
 
 function Mark({ s }: { s: ActivityStep }) {
@@ -46,9 +47,7 @@ function Step({ s, i }: { s: ActivityStep; i: number }) {
       {s.detail && <code className="step-detail" title={s.detail}>{s.detail}</code>}
       {c && (
         <span className="step-change">
-          {c.created && <span className="step-new">新建</span>}
-          <span className="diff-add">+{c.added}</span>
-          {c.removed > 0 && <span className="diff-remove">−{c.removed}</span>}
+          <DiffStat c={c} />
           {canOpen && <IconChevron size={12} />}
         </span>
       )}
@@ -68,13 +67,5 @@ function Step({ s, i }: { s: ActivityStep; i: number }) {
         {diff && c && <Diff c={c} />}
       </div>
     </li>
-  );
-}
-
-function Diff({ c }: { c: FileChange }) {
-  return (
-    <pre className="step-diff" aria-label={`${c.path} 的改动`}>
-      {diffLines(c.diff).map(([kind, text], i) => <span key={i} className={`diff-${kind}`}>{text || " "}{"\n"}</span>)}
-    </pre>
   );
 }

@@ -114,7 +114,10 @@ class Api {
     }
   }
 
-  static String? _detail(dynamic d) => d is Map && d['detail'] is String ? d['detail'] as String : null;
+  // detail 是字符串，或 {message, …}（如撤销冲突 {reason, message, conflicts}）
+  static String? _detail(dynamic d) => d is Map
+      ? (d['detail'] is String ? d['detail'] as String : (d['detail'] is Map && d['detail']['message'] is String ? d['detail']['message'] as String : null))
+      : null;
 }
 
 final apiProvider = Provider<Api>(Api.new);

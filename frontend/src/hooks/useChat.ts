@@ -457,8 +457,22 @@ export function useChat(projectId?: string) {
     if (id && !streamingRef.current) void fetchThread(id, openSeq.current);
   }, [fetchThread]);
 
+  /** 改动卡的整轮撤销（v1.68，后端 turn_changes.py）：找到带这个 token 的回复，POST 撤销，成功后换成服务器回的版本。 */
+  const undoChanges = useCallback(async (token: string): Promise<string | null> => {
+    const cid = threadRef.current.id;
+    const m = threadRef.current.messages.find((x) => x.blocks.some((b) => b.type === "changes" && b.token === token));
+    if (!cid || !m) return "找不到这条回复";
+    try {
+      const next = await http.post<Message>(`/api/conversations/${cid}/messages/${m.id}/changes/undo`, {});
+      setMessages((ms) => ms.map((x) => (x.id === m.id ? { ...next, thought: x.thought, thinkFrom: x.thinkFrom, thinkTo: x.thinkTo } : x)));
+      return null;
+    } catch (e) {
+      return e instanceof Error && e.message ? e.message : "没撤销成功，稍后再试";
+    }
+  }, []);
+
   return {
-    refreshActive,
+    refreshActive, undoChanges,
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
     canRegenerate, canStop, editableId, focus, model, setModel, effort, setEffort, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };

@@ -3,7 +3,7 @@
 import 'package:flutter/widgets.dart';
 
 class BlockActions extends InheritedWidget {
-  const BlockActions({super.key, required super.child, this.onApproval, this.onApprovalOption, this.onForm, this.onJobSettled});
+  const BlockActions({super.key, required super.child, this.onApproval, this.onApprovalOption, this.onForm, this.onJobSettled, this.onUndoChanges});
   final void Function(String id, bool approved)? onApproval;
 
   /// 带批准范围地批准（主机命令卡的“这段对话里都允许 / 以后都允许…”，v1.49）。没给就只显示“批准 / 拒绝”。
@@ -15,8 +15,11 @@ class BlockActions extends InheritedWidget {
   /// 后台任务卡看着任务结束、服务器也接着说完了：聊天页重新拿一次这段对话，把助手的结论显示出来。
   final VoidCallback? onJobSettled;
 
+  /// 改动卡的“撤销”（v1.68）：传卡上的 token，返回 null = 成功（消息已换成服务器版本），否则是给用户看的原因。
+  final Future<String?> Function(String token)? onUndoChanges;
+
   static BlockActions? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<BlockActions>();
 
   @override
-  bool updateShouldNotify(BlockActions old) => old.onApproval != onApproval || old.onApprovalOption != onApprovalOption || old.onForm != onForm || old.onJobSettled != onJobSettled;
+  bool updateShouldNotify(BlockActions old) => old.onApproval != onApproval || old.onApprovalOption != onApprovalOption || old.onForm != onForm || old.onJobSettled != onJobSettled || old.onUndoChanges != onUndoChanges;
 }

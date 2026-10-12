@@ -9,10 +9,10 @@ import 'package:flutter/material.dart';
 import '../../models/activity.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
+import '../../ui/diff_view.dart';
 import '../../ui/glass_mode.dart';
 import '../../ui/motion.dart';
 
-const _mono = 'monospace';
 const _dot = 18.0; // 状态圆点直径；竖线从圆点中心穿过
 
 class ActivitySummary extends StatefulWidget {
@@ -125,15 +125,13 @@ class _StepRowState extends State<StepRow> {
           child: Text(s.detail,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: context.text.bodySmall?.copyWith(fontFamily: _mono, fontSize: Fs.xs, color: p.text2)),
+              style: context.text.bodySmall?.copyWith(fontFamily: monoFont, fontSize: Fs.xs, color: p.text2)),
         ),
       ] else
         const Spacer(),
       if (change != null) ...[
         const SizedBox(width: Sp.x2),
-        if (change.created) Text('新建 ', style: small?.copyWith(color: p.text3)),
-        Text('+${change.added}', style: small?.copyWith(fontFamily: _mono, color: p.success)),
-        if (change.removed > 0) Text(' −${change.removed}', style: small?.copyWith(fontFamily: _mono, color: p.danger)),
+        DiffStat(change),
         if (canOpen) TurnIcon(open: _diff, child: Icon(Icons.chevron_right_rounded, size: 14, color: p.text3)),
       ],
       if (s.ms != null && !s.running) ...[
@@ -185,44 +183,6 @@ class _StepRowState extends State<StepRow> {
             ),
           ),
         ]),
-      ),
-    );
-  }
-}
-
-/// 一次文件改动的 diff：等宽小字，新增绿、删除红、@@ 段头和截断说明淡色；太长纵向滚、太宽横向滚。
-class DiffView extends StatelessWidget {
-  const DiffView(this.change, {super.key});
-  final FileChange change;
-
-  static const maxHeight = 280.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final base = context.text.bodySmall?.copyWith(fontFamily: _mono, fontSize: Fs.xs, height: 1.45);
-    Color color(DiffKind k) => switch (k) {
-          DiffKind.add => p.success,
-          DiffKind.remove => p.danger,
-          DiffKind.hunk || DiffKind.note => p.text3,
-          DiffKind.context => p.text2,
-        };
-    return Padding(
-      padding: const EdgeInsets.only(top: Sp.x2),
-      child: Container(
-        width: double.infinity,
-        constraints: const BoxConstraints(maxHeight: maxHeight),
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(Sp.x2),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              for (final (kind, text) in diffLines(change.diff))
-                Text(text.isEmpty ? ' ' : text, softWrap: false, style: base?.copyWith(color: color(kind))),
-            ]),
-          ),
-        ),
       ),
     );
   }

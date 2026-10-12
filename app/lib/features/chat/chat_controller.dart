@@ -611,6 +611,23 @@ class ChatController extends Notifier<ChatState> {
     }
   }
 
+  /// 改动卡的整轮撤销（v1.68，后端 turn_changes.py）：找到带这个 token 的回复，POST 撤销，成功后换成服务器回的版本。
+  /// 返回 null = 成功；否则是给用户看的原因（文件之后又被改过 / 记录过期 / 正在回复 / 断网）。
+  Future<String?> undoChanges(String token) async {
+    final cid = state.activeId;
+    final m = state.messages.where((m) => m.blocks.any((b) => b is ChangesBlock && b.token == token)).firstOrNull;
+    if (cid == null || m == null) return '找不到这条回复';
+    try {
+      final j = await ref.read(apiProvider).post('/api/conversations/$cid/messages/${m.id}/changes/undo') as Map<String, dynamic>;
+      final next = Message.fromJson(j);
+      state = state.copyWith(messages: [for (final x in state.messages) x.id == m.id ? next.withThoughtOf(x) : x]);
+      unawaited(_persist(cid));
+      return null;
+    } on ApiError catch (e) {
+      return e.isNetwork ? '连不上服务器，稍后再试' : e.message;
+    }
+  }
+
   /// 表单卡（登录、验证码）的答复。values = null 表示取消。值只走这一条线，不进本地状态和缓存。
   bool replyForm(String id, Map<String, String>? values, bool remember) {
     final ok = _socket.send({'type': 'form.reply', 'id': id, 'values': values, 'remember': remember});

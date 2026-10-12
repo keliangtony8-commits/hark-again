@@ -300,3 +300,13 @@ button.run-row:hover { background: var(--tile); }
 /* 技能编辑弹层顶部的出身说明：内置原样灰底，自定义版强调色底；切换时淡入 */
 .skill-origin { margin: 0 0 var(--sp-3); padding: var(--sp-3); border-radius: var(--r-md); background: var(--tile); color: var(--text-2); font-size: var(--fs-sm); animation: rise var(--dur) var(--ease) both; }
 .skill-origin.on { background: var(--tile); color: var(--text); box-shadow: inset 2px 0 0 var(--ink); }
+
+/* v1.34/v1.68 文件改动 diff（ui/Diff.tsx：时间线一步 + 改动卡共用） */
+.step-new { font-family: var(--font-sans); }
+.diff-add { color: var(--success); }
+.diff-remove { color: var(--danger); }
+.diff-hunk, .diff-note { color: var(--text-3); }
+.diff-context { color: var(--text-2); }
+.step-diff { margin: var(--sp-2) 0 0; padding: var(--sp-2); max-height: 280px; overflow: auto; background: var(--tile); border-radius: var(--r-sm);
+  font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.45; white-space: pre; animation: rise var(--dur) var(--ease) both; }
+@media (prefers-reduced-motion: reduce) { .step-diff { animation: none; } }

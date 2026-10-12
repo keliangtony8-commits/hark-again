@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..turn_changes import Tracker as ChangeTracker
 from ..workspace_instructions import Tracker
 from ..workspaces import of as workspace_of
 from .approvals import FormReply
@@ -54,6 +55,8 @@ class ToolContext:
     depth: int = 0  # 0 = 主助手；1 = 子助手（不能再派，Codex DEFAULT_AGENT_MAX_DEPTH = 1）
     # 这一轮已告知模型的子目录规则文件（app/workspace_instructions.py）；每个 ToolContext 一个，并行调用的副本共用同一个
     instructions: Tracker = field(default_factory=Tracker)
+    # 这一轮 write_file / edit_file 碰过的文件基线（app/turn_changes.py）：收尾出净改动卡 + 整轮撤销；并行副本、子助手共用
+    changes: ChangeTracker = field(default_factory=ChangeTracker)
     host: bool = False  # 服务器主机模式开着（run_turn 每轮从 host_mode.enabled 读）：scope="host" 的工具才出现
 
     @property
