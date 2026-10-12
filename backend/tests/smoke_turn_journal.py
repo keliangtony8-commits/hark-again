@@ -10,7 +10,7 @@ import os, sys, asyncio, subprocess, tempfile, json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace as NS
 tmp = tempfile.mkdtemp()
-os.environ.update(DATABASE_URL=f"sqlite+aiosqlite:///{tmp}/t.db", LLM_BASE_URL="http://x", LITELLM_MASTER_KEY="k",
+os.environ.update(DATABASE_URL=f"sqlite+aiosqlite:///{tmp}/t.db", LLM_BASE_URL="http://x", NEXT_SPEAKER_CHECK="off", LITELLM_MASTER_KEY="k",
   OWNER_USERNAME="u", OWNER_PASSWORD="p", JWT_SECRET="s"*32, VAULT_KEY="", DATA_DIR=tmp,
   CHAT_MODELS=json.dumps({"fast": "快速"}), DEFAULT_MODEL="fast", VISION_MODELS='[]', LLM_MAX_RETRIES="0")
 root = os.path.join(os.path.dirname(__file__), "..")

@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     agent_turn_tokens: int = 600_000
     # 同一步里连续的只读工具调用（读文件、搜索、读网页）同时跑几个（agent/parallel.py；deepseek-harness 默认 10）；≤1 = 一个个来
     agent_parallel_tools: int = 8
+    # 话说一半就停（agent/next_speaker.py，移植 Gemini nextSpeakerChecker）：回复结尾像“接下来我去……”却没调用工具，
+    # 替用户补一句“继续”。auto = 本地规则闸门 + 便宜模型判官（只在闸门打开时多一次 summary_model 小调用）；
+    # rules = 只看规则、零调用；off = 不检测。next_speaker_max = 每轮最多补几次
+    next_speaker_check: str = "auto"
+    next_speaker_max: int = 2
     # 工作区规则文件（AGENTS.md 一类，app/workspace_instructions.py）：根目录的每轮进系统提示、子目录的碰到时追加，
     # 每批最多多少字节（deepseek-harness 65536；约 4 字节 1 token，16384 ≈ 4k token 封顶）。0 = 不读
     workspace_instructions_bytes: int = 16384

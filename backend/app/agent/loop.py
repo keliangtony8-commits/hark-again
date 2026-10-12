@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, llm_retry, plan, spill, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, compact, loop_guard, parallel, supersede, tool_args, tool_trace
+from . import approvals, compact, loop_guard, next_speaker, parallel, supersede, tool_args, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -255,6 +255,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     retry_policy, retries, tried = llm_retry.policy(), 0, {model or settings.default_model}  # 调用失败的重试（llm_retry.py）
     max_steps, spent, step = max(1, limits.max_steps), 0, 0
     ended = "done"
+    nudges, used_tools = next_speaker.limit(), False  # 话说一半就停：替用户补“继续”的剩余次数（next_speaker.py）
     while True:
         over = step >= max_steps - 1 or 0 < limits.turn_tokens <= spent \
             or (limits.deadline is not None and time.monotonic() >= limits.deadline)
@@ -339,7 +340,16 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         spent += turn.tokens
         squeeze.observe(turn.prompt, at)
         if not turn.tool_calls or over:
+            if not turn.tool_calls and not over and nudges > 0 and step < max_steps - 1 \
+                    and await next_speaker.decide(said, turn.cut, used_tools, messages):
+                nudges -= 1  # 说了要做却没做 / 被截断 / 用完工具一句没说：补一句“继续”再来一圈（Gemini client.ts）
+                builder.break_text()
+                if said.strip():
+                    messages.append({"role": "assistant", "content": said})
+                messages.append({"role": "user", "content": next_speaker.CONTINUE})
+                continue
             break
+        used_tools = True
 
         builder.break_text()
         parsed = {c.id: tool_args.parse(c.arguments, turn.cut) for c in turn.tool_calls}
