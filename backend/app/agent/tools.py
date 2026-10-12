@@ -44,6 +44,10 @@ class ToolContext:
     # 工具运行中推“实时块”（如命令的最新输出）：内核把第一次推的插进回复，之后原地替换；
     # 工具结束时 ToolResult.blocks[0] 就是它的最终形态（没有块则保留最后一次推的、去掉 live）。只由内核在执行期间挂上。
     live: Callable[[dict], None] = no_live
+    model: str | None = None  # 这一轮实际用的模型别名（loop.run 填上；子助手沿用它，Codex：spawned agents inherit your model）
+    # 只许用这些工具（None = 不限）：子助手的工具白名单（agent/subagent.py CHILD_TOOLS），不在名单里的不给模型、也不执行
+    allow: frozenset[str] | None = None
+    depth: int = 0  # 0 = 主助手；1 = 子助手（不能再派，Codex DEFAULT_AGENT_MAX_DEPTH = 1）
 
     @property
     def workspace(self) -> str:
@@ -84,6 +88,8 @@ class Tool:
     quiet: bool = False  # 控制类工具（update_plan）：不进活动时间线、不亮“正在…”，用户看它自己的卡片就够了（Codex 的 builtin control tool）
 
     def available(self, ctx: ToolContext) -> bool:
+        if ctx.allow is not None and self.name not in ctx.allow:
+            return False
         if self.scope == "project":
             return ctx.project_id is not None
         if self.scope == "conversation":

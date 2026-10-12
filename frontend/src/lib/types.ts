@@ -52,6 +52,11 @@ export type PlanStatus = "pending" | "in_progress" | "completed";
 export type PlanItem = { content: string; status: PlanStatus };
 /** 计划清单（v1.47，后端 app/plan.py）：一条回复一张，助手边做边勾；settled = 这一轮已结束。 */
 export type PlanBlock = { type: "plan"; items: PlanItem[]; explanation?: string | null; settled?: boolean };
+export type DelegateState = "running" | "done" | "partial" | "failed" | "stopped";
+export type DelegateTask = { title: string; state: DelegateState; steps?: number; now?: string | null; seconds?: number | null;
+  result?: string | null; note?: string | null };
+/** 子助手（v1.48，后端 agent/subagent.py）：一次并行派出的几个子任务；live = 还在跑。 */
+export type DelegateBlock = { type: "delegate"; tasks: DelegateTask[]; live?: boolean | null };
 export type JobBlock = { type: "job"; id: string; title: string; command: string; state: JobState;
   started_at?: string | null; finished_at?: string | null; exit_code?: number | null; tail?: string | null;
   /** 被服务器护栏自动停掉的原因（卡住没输出 / 输出过大）；用户或助手取消的没有。 */
@@ -61,7 +66,7 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
   started_at?: string | null; finished_at?: string | null; stop_reason?: string | null };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

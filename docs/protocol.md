@@ -53,6 +53,7 @@
 | `page` | `slug`, `title`, `url` |
 | `preview` | v1.30 端口预览：`workspace`, `port`, `url`（签名链接，公开可开）, `title?`, `command`（在听的程序）, `expires_at`（ISO，默认 24 小时）；过期后打开是“链接失效”页 |
 | `plan` | v1.47 计划清单（update_plan 工具）：`items: [{content, status: pending\|in_progress\|completed}]`, `explanation?`（最近一次改计划的原因）, `settled`（这一轮已结束，“进行中”定格不再闪）；一条回复里只有一张，更新时 `block.update` 原地换；`items` 为空 = 助手清掉了计划，客户端不画；卡片类（独立成卡）。update_plan 不产生时间线步骤、不发 tool.status |
+| `delegate` | v1.48 子助手（delegate 工具）：`tasks: [{title, state: running\|done\|partial\|failed\|stopped, steps, now?（在做的那一步，如“正在搜索”）, seconds?, result?（交回的结论，≤2000 字）, note?（没做完/出错原因）}]`, `live?`（执行中为 true，`block.update` 原地换；结束时去掉）；卡片类（独立成卡）。子助手自己的工具步骤不进主时间线，主时间线只有一步 `delegate`（detail = 子任务标题） |
 | `stats` | `items: [{label, value, note?}]`（1–6 项；关键数字小卡片，标签 + 大数字 + 一句变化；模型用 `show_stats` 工具产出，面板刷新优先用它） |
 | `memory` | `action: saved\|updated\|forgotten`, `items: [{id, content, category, previous?}]`（记忆卡：本轮记住/改了/忘掉了什么；只由记忆工具产出。“已撤销”不在块里：客户端对照 GET /api/memories 推算——saved 的 id 不在 = 已撤销，updated 内容等于 previous = 已改回，forgotten 内容都在 = 已恢复；撤销走 /api/memories 的 DELETE / PATCH / POST。客户端收到 block.start 的记忆卡时重拉记忆列表） |
 | `draft` | `title, body`（草稿卡：用户以自己名义发出的文字——邮件第一行 Subject:、消息、帖子；正文原样显示不渲染 Markdown；客户端 复制 / 系统分享。模型用 `show_draft` 产出） |

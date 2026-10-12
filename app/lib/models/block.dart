@@ -50,6 +50,7 @@ sealed class Block {
         'job' => JobBlock.fromJson(j),
         'preview' => PreviewBlock.fromJson(j),
         'plan' => PlanBlock.fromJson(j),
+        'delegate' => DelegateBlock.fromJson(j),
         _ => UnknownBlock('${j['type']}'),
       };
 }
@@ -357,6 +358,45 @@ class PlanItem {
   final PlanStatus status;
 }
 
+/// 子助手（后端 agent/subagent.py，delegate 产出，v1.48）：一次并行派出的几个子任务，执行中 live 原地更新。
+/// 文案规则在 models/delegate.dart。
+class DelegateBlock extends Block {
+  const DelegateBlock({required this.tasks, this.live = false});
+  factory DelegateBlock.fromJson(Map<String, dynamic> j) => DelegateBlock(
+      tasks: [for (final t in (j['tasks'] as List? ?? [])) if (t is Map<String, dynamic>) DelegateTask.fromJson(t)],
+      live: j['live'] == true);
+  final List<DelegateTask> tasks;
+  final bool live; // 还在跑（这一轮没结束）
+}
+
+enum DelegateState { running, done, partial, failed, stopped }
+
+class DelegateTask {
+  const DelegateTask(this.title, this.state, {this.steps = 0, this.now, this.seconds, this.result, this.note});
+  factory DelegateTask.fromJson(Map<String, dynamic> j) => DelegateTask(
+        j['title'] as String? ?? '',
+        switch (j['state']) {
+          'done' => DelegateState.done,
+          'partial' => DelegateState.partial,
+          'failed' => DelegateState.failed,
+          'stopped' => DelegateState.stopped,
+          _ => DelegateState.running,
+        },
+        steps: (j['steps'] as num?)?.toInt() ?? 0,
+        now: j['now'] as String?,
+        seconds: (j['seconds'] as num?)?.toInt(),
+        result: j['result'] as String?,
+        note: j['note'] as String?,
+      );
+  final String title;
+  final DelegateState state;
+  final int steps;
+  final String? now; // 正在做的那一步（“正在搜索”）
+  final int? seconds;
+  final String? result; // 交回的结论（截断）
+  final String? note; // 没做完 / 出错的原因
+}
+
 class UnknownBlock extends Block {
   const UnknownBlock(this.type);
   final String type;
@@ -375,7 +415,7 @@ class ReplySegment {
 }
 
 bool standsAlone(Block b) => switch (b) {
-      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || PlanBlock() => true,
+      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || PlanBlock() || DelegateBlock() => true,
       _ => false,
     };
 

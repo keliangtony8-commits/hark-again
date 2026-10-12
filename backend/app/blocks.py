@@ -114,6 +114,23 @@ class PlanBlock(BaseModel):
     settled: bool = False
 
 
+class DelegateTask(BaseModel):
+    title: str
+    state: Literal["running", "done", "partial", "failed", "stopped"] = "running"
+    steps: int = 0
+    now: str | None = None      # 正在做的那一步（只在 running 时）
+    seconds: int | None = None  # 结束时用了多久
+    result: str | None = None   # 交回的结论（卡片上展开看，截断）
+    note: str | None = None     # 为什么没做完 / 出错原因
+
+
+class DelegateBlock(BaseModel):
+    """v1.48 子助手（agent/subagent.py，delegate 产出）：一次并行派出的几个子任务，执行中 live=True 原地更新。"""
+    type: Literal["delegate"] = "delegate"
+    tasks: list[DelegateTask] = []
+    live: bool | None = None
+
+
 class PageBlock(BaseModel):
     """生成的网页：预览 + 打开 + 复制链接。"""
     type: Literal["page"] = "page"
@@ -271,7 +288,7 @@ class FormBlock(BaseModel):
 
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
-                        OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock],
+                        OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock],
                   Field(discriminator="type")]
 
 
@@ -325,6 +342,10 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[后台任务 {b['id']}「{b['title']}」——{state}{code}]{tail}")
         elif t == "plan":
             if line := plan_text(b):
+                parts.append(line)
+        elif t == "delegate":
+            from .agent.subagent import history_text  # 规则只在 subagent.py
+            if line := history_text(b):
                 parts.append(line)
         elif t == "draft":
             parts.append(f"[草稿「{b['title']}」]\n{b['body']}")

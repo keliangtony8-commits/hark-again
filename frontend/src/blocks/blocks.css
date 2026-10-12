@@ -304,3 +304,33 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
   .blk-plan-body, .blk-plan-why, .blk-plan-step, .blk-plan-mark, .blk-plan-progress { animation: none; }
   .blk-plan-chev, .blk-plan-meter > span, .blk-plan-text { transition: none; }
 }
+
+/* v1.48 子助手卡：和计划卡同一套排版；在做的点复用 .job-dot（不新增强调色） */
+.blk-delegate { max-width: 640px; padding: var(--sp-3) var(--sp-4); }
+.blk-delegate-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 28px; }
+.blk-delegate-title { flex: 1; font-weight: var(--fw-title); }
+.blk-delegate-progress { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; animation: fade var(--dur) var(--ease); }
+.blk-delegate-tasks { list-style: none; margin: var(--sp-1) 0 0; padding: 0; }
+.blk-delegate-task { padding-top: var(--sp-2); animation: rise var(--dur) var(--ease) both; }
+.blk-delegate-row { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: flex-start; gap: var(--sp-2); cursor: pointer; }
+.blk-delegate-row:disabled { cursor: default; }
+.blk-delegate-row:focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; border-radius: var(--r-sm); }
+.blk-delegate-mark { flex: none; width: 18px; height: 18px; margin-top: 2px; display: grid; place-items: center; border-radius: var(--r-full);
+  color: var(--text-3); animation: icon-pop var(--dur) var(--ease); }
+.blk-delegate-mark.is-running { box-shadow: inset 0 0 0 1.5px var(--text-3); }
+.blk-delegate-mark.is-done { background: var(--text-2); color: var(--surface); }
+.blk-delegate-mark.is-partial { color: var(--warning); }
+.blk-delegate-mark.is-failed { color: var(--danger); }
+.blk-delegate-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.blk-delegate-name { font-weight: var(--fw-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.blk-delegate-line { font-size: var(--fs-xs); color: var(--text-3); animation: fade var(--dur) var(--ease); }
+.blk-delegate-line.is-bad { color: var(--danger); }
+.blk-delegate-chev { display: grid; color: var(--text-3); transition: transform var(--dur) var(--ease); }
+.blk-delegate-chev.is-open { transform: rotate(180deg); }
+.blk-delegate-result { margin: var(--sp-2) 0 0 calc(18px + var(--sp-2)); padding: var(--sp-3); max-height: 240px; overflow: auto;
+  background: var(--tile); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--text-2); white-space: pre-wrap;
+  animation: rise var(--dur) var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  .blk-delegate-task, .blk-delegate-mark, .blk-delegate-progress, .blk-delegate-line, .blk-delegate-result { animation: none; }
+  .blk-delegate-chev { transition: none; }
+}

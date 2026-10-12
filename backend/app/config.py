@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     # 步数至少按 1 算；token 设 0 = 不按 token 管。
     agent_max_steps: int = 40
     agent_turn_tokens: int = 600_000
+    # 子助手（delegate 工具，agent/subagent.py）：一次最多并行几个（Codex 默认 6 个线程，我们 4G 小机器取 4）；
+    # 每个子助手的步数 / token / 分钟上限（Gemini generalist：20 轮、10 分钟；到了就收掉工具让它交代进度）。深度固定 1：子助手不能再派。
+    subagent_max_tasks: int = 4
+    subagent_max_steps: int = 20
+    subagent_turn_tokens: int = 300_000
+    subagent_minutes: float = 10
     # 上文窗口（token）：一轮里上文过窗口的 80% 就先剪长工具结果、不够再把较早的步骤压成摘要（agent/compact.py）。
     # context_tokens = 默认；model_context = 按别名覆盖，如 {"smart": 256000}。窗口填小于真实值只会早点压，不会出错
     context_tokens: int = 128_000

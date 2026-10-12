@@ -1,5 +1,4 @@
 // 块渲染入口：sealed class + switch，新增块类型时编译器会提醒这里漏了哪种。
-import 'package:flutter/material.dart';
 
 import '../models/block.dart';
 import '../theme/tokens.dart';
@@ -7,10 +6,12 @@ import 'basic_blocks.dart';
 import 'browser_block.dart';
 import 'commerce_blocks.dart';
 import 'content_blocks.dart';
+import 'delegate_block.dart';
 import 'form_block.dart';
 import 'interactive_blocks.dart';
 import 'job_block.dart';
 import 'memory_block.dart';
+import 'package:flutter/material.dart';
 import 'plan_block.dart';
 import 'preview_block.dart';
 
@@ -39,6 +40,7 @@ class BlockView extends StatelessWidget {
         JobBlock b => JobBlockView(b),
         PreviewBlock b => PreviewBlockView(b),
         PlanBlock b => PlanBlockView(b),
+        DelegateBlock b => DelegateBlockView(b),
         UnknownBlock _ => const SizedBox.shrink(), // 新版服务器的新卡片：旧 App 安静忽略
       };
 }

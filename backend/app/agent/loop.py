@@ -5,6 +5,7 @@ MessageBuilder 把事件折叠成最终的块列表，存库与前端渲染用�
 """
 import asyncio
 import json
+import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import aclosing
@@ -19,6 +20,23 @@ from .tools import REGISTRY, ToolContext, ToolResult, no_live, schemas
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
 WRAP_UP = ("[系统提示] 这一轮的步数/用量预算用完了，不能再调用工具。请直接回复用户：已经完成了什么、"
            "还差哪些没做、下一步打算怎么做；告诉用户回复“继续”你就接着做。")
+
+
+@dataclass
+class Limits:
+    """一轮的预算。默认取 settings 的主助手预算；子助手（agent/subagent.py）给更小的步数 / token，外加截止时间。
+    到了就走同一条收尾路：最后一步收掉工具 + wrap_up 提示（Gemini local-executor 的 final warning turn）。wrapped = 真的收尾过。"""
+    max_steps: int = 0
+    turn_tokens: int = 0
+    deadline: float | None = None  # time.monotonic() 截止；None = 不按时间
+    wrap_up: str = WRAP_UP
+    wrapped: bool = False
+
+    @classmethod
+    def default(cls) -> "Limits":
+        return cls(settings.agent_max_steps, settings.agent_turn_tokens)
+
+
 SKIPPED = "没有执行：同一批里前面的调用已被判定为原地打转。"
 SELF_PAGED = {"read_file"}  # 自己按 offset 分页的工具，结果不再落盘截断
 
@@ -140,6 +158,9 @@ class MessageBuilder:
             if isinstance(h := b.get("handoff"), dict) and h.get("state") == "pending":
                 b = {**b, "handoff": {**h, "state": "expired"}}  # 等用户接管的条：这一轮停了，再也等不到交还
             b = plan.settle(b)  # 计划卡定格：没做完的步骤不再闪“进行中”
+            if b.get("type") == "delegate":  # 子任务卡：还在做的随这一轮一起停了（subagent.run_all 的取消可能还没轮到）
+                b = {**b, "tasks": [{**{k: v for k, v in t.items() if k != "now"}, "state": "stopped"}
+                                    if t.get("state") == "running" else t for t in b.get("tasks") or []]}
             out.append({**b, "state": "expired"} if b.get("state") == "pending" and "id" in b else b)
         return out
 
@@ -157,21 +178,27 @@ class MessageBuilder:
 
 
 async def run(system: str, history: list[dict], ctx: ToolContext,
-              builder: MessageBuilder | None = None, model: str | None = None) -> AsyncIterator[Event]:
-    """model = 实际调用的别名（None = 默认）。builder 可由调用方传入：中途被取消（用户点停止）时，调用方还能拿到已生成的半截块。"""
+              builder: MessageBuilder | None = None, model: str | None = None,
+              limits: Limits | None = None) -> AsyncIterator[Event]:
+    """model = 实际调用的别名（None = 默认）。limits = 这一轮的预算（None = 主助手默认）。builder 可由调用方传入：中途被取消（用户点停止）时，调用方还能拿到已生成的半截块。"""
     messages = [{"role": "system", "content": system}, *history]
     builder = builder if builder is not None else MessageBuilder()
+    limits = limits or Limits.default()
+    if ctx.model is None:
+        ctx.model = model or settings.default_model
     tools = schemas(ctx)
     seen = supersede.Tracker()  # 旧页面快照 / 截图只留最新一份（supersede.py）
 
     guard = loop_guard.LoopGuard()  # 原地打转：第一次提醒模型，第二次停下（loop_guard.py）
     squeeze = compact.Compactor(len(messages), model, tools)  # 上文快满：剪长工具结果 / 压成检查点（compact.py）
     overflowed = False  # 供应商报“上文超长”时强制压一次再重试；成功调用一次后复位
-    max_steps, spent, step = max(1, settings.agent_max_steps), 0, 0
+    max_steps, spent, step = max(1, limits.max_steps), 0, 0
     while True:
-        over = step >= max_steps - 1 or 0 < settings.agent_turn_tokens <= spent
+        over = step >= max_steps - 1 or 0 < limits.turn_tokens <= spent \
+            or (limits.deadline is not None and time.monotonic() >= limits.deadline)
         if over and step:  # 预算到了：最后一步不给工具，让模型交代进度（第一步就是最后一步时不用交代）
-            messages.append({"role": "user", "content": WRAP_UP})
+            messages.append({"role": "user", "content": limits.wrap_up})
+            limits.wrapped = True
         seen.apply(messages)
         if squeeze.due(messages):
             async for ev in _compact(squeeze, messages, seen, builder):

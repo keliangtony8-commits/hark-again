@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from .wire_time import iso
 
 # 摘要从这些参数里取，按顺序第一个有值的（值是列表就拼前几个）。新工具想上时间线摘要，参数名用这些之一即可。
-DETAIL_KEYS = ("command", "url", "query", "pattern", "port", "path", "paths", "job_id", "title", "name", "skill", "server", "tool", "reason")
+DETAIL_KEYS = ("command", "url", "query", "pattern", "port", "path", "paths", "job_id", "title", "name", "skill", "server", "tool", "reason", "tasks")
 DETAIL_MAX = 120
 NOTE_MAX = 160
 KEEP = 80  # 一条回复最多记这么多步（长任务可走到 agent_max_steps 次模型调用；更早的步骤只是噪音，留最近的）
@@ -39,6 +39,7 @@ def detail(args: dict) -> str:
     for key in DETAIL_KEYS:
         v = args.get(key)
         if isinstance(v, list):
+            v = [x.get("title") if isinstance(x, dict) else x for x in v]  # 子任务 [{title, prompt}] 只列标题
             v = "、".join(str(x) for x in v[:3] if x) + (f" 等 {len(v)} 个" if len(v) > 3 else "")
         if isinstance(v, (str, int)) and str(v).strip():
             return _short(str(v), DETAIL_MAX)
