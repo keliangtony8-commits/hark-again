@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import usage, vision
+from .. import jobs, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -110,6 +110,8 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     system = await build_system_prompt(db, project_id, query)
     if hist.summary:
         system += f"\n\n这段对话更早的内容（摘要，原文已不在下面）：\n{hist.summary}"
+    if not notice and (held := await jobs.take_held(db, cid)):  # 叫醒轮数到上限时压下的任务结论（jobs.follow_ups）
+        system += f"\n\n{held}"
     builder = loop.MessageBuilder()
     status = "done"
     interrupted = False

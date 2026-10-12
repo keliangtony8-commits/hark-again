@@ -18,6 +18,9 @@
 settle() 记下结论和日志尾巴、把聊天里那张任务卡改成最终状态，并把 followup 置 pending：
 worker 的 follow_ups() 随后在原对话里带着结果再跑一轮（像有人告诉助手“你那个任务跑完了”），
 模型若已经用 job_status 自己看过结果（followup=seen）就不再打扰。
+v1.39 移植自 deepseek-harness tool-jobs（MIT）：job_status 只给上次看过之后的新输出（read_new，游标 read_offset）；
+同一对话一起结束的任务并成一轮通知；用户两次发言之间连着叫醒有上限（job_followup_wakes），超出的结论置 held，
+用户下次说话时并进那一轮（take_held）。
 """
 import asyncio
 import secrets
@@ -121,8 +124,13 @@ def log_size(job: Job) -> int:
         return 0
 
 
+def _frames(raw: str) -> str:
+    """进度条靠 \\r 原地刷新（pip、wget、tqdm）：每行只留最后一次刷新的样子。"""
+    return "\n".join(ln.rsplit("\r", 1)[-1] if "\r" in ln.rstrip("\r") else ln.rstrip("\r") for ln in raw.split("\n"))
+
+
 def log_tail(job: Job, chars: int = TAIL_CHARS) -> str:
-    """日志最后一段。进度条靠 \\r 原地刷新（pip、wget、tqdm），每行只留最后一次刷新的样子。"""
+    """日志最后一段（\\r 进度帧折叠）。"""
     p = job_dir(job) / "log"
     try:
         with p.open("rb") as f:
@@ -131,9 +139,59 @@ def log_tail(job: Job, chars: int = TAIL_CHARS) -> str:
             raw = f.read().decode("utf-8", "replace")
     except FileNotFoundError:
         return ""
-    lines = [ln.rsplit("\r", 1)[-1] if "\r" in ln.rstrip("\r") else ln.rstrip("\r") for ln in raw.split("\n")]
-    text = "\n".join(lines)
+    text = _frames(raw)
     return text[-chars:] if len(text) > chars else text
+
+
+# ---- 只读新输出（移植自 deepseek-harness packages/jobs：jobs-local/src/ring.ts 的 utf8Tail + 绝对偏移游标、
+# tool-jobs/src/render.ts 的“读过的不再给、被丢掉的要说清完整输出在哪”；MIT）----
+# 那边是内存环形缓冲 + 每个模型一个游标；我们的完整输出本来就在 .jobs/<id>/log，游标就是 Job.read_offset（字节）。
+
+def utf8_start(raw: bytes, i: int = 0) -> int:
+    """从 i 往后跳过 UTF-8 续字节（10xxxxxx），返回第一个码点起点（ring.ts utf8Tail 的同一条循环）。"""
+    while i < len(raw) and raw[i] & 0xC0 == 0x80:
+        i += 1
+    return i
+
+
+def utf8_complete(raw: bytes) -> int:
+    """raw 里最后一个完整码点结束的位置：任务正写到一半的多字节字不读，留给下一次（游标永远落在码点边界）。"""
+    n = len(raw)
+    for back in range(1, min(4, n) + 1):
+        b = raw[n - back]
+        if b & 0xC0 == 0x80:
+            continue  # 续字节，再往前找首字节
+        need = 1 if b < 0x80 else 2 if b >> 5 == 0b110 else 3 if b >> 4 == 0b1110 else 4 if b >> 3 == 0b11110 else 1
+        return n if back >= need else n - back
+    return n  # 全是续字节（坏数据）：照读，decode 会替换掉
+
+
+def read_new(job: Job, chars: int = TAIL_CHARS) -> tuple[str, int, int]:
+    """从 job.read_offset 读到日志当前末尾：返回 (新输出文本, 新游标, 没显示的字节数)。
+    新输出超过 chars 只留尾巴（最近的最有用），丢掉的字节数如实返回，调用方提示完整日志路径。
+    日志比游标短（被截断/重建）→ 从头读。不改 job，游标由调用方决定写不写回。"""
+    p = job_dir(job) / "log"
+    try:
+        with p.open("rb") as f:
+            size = f.seek(0, 2)
+            start = job.read_offset if 0 <= (job.read_offset or 0) <= size else 0
+            begin = max(start, size - chars * 4)
+            f.seek(begin)
+            raw = f.read(size - begin)
+    except FileNotFoundError:
+        return "", job.read_offset or 0, 0
+    skip = utf8_start(raw) if begin > start else 0  # 窗口从字中间切进来：跳到下一个码点
+    end = utf8_complete(raw)
+    text = _frames(raw[skip:end].decode("utf-8", "replace"))
+    dropped = begin - start + skip
+    if len(text) > chars:
+        cut = len(text) - chars
+        nl = text.find("\n", cut)
+        if 0 <= nl - cut <= chars // 5:  # 就近从整行开始
+            cut = nl + 1
+        dropped += len(text[:cut].encode("utf-8"))
+        text = text[cut:]
+    return text, begin + max(end, skip), dropped
 
 
 def elapsed(job: Job, now: datetime | None = None) -> int:
@@ -341,38 +399,99 @@ async def tick(db: AsyncSession) -> list[str]:
     return out
 
 
-def notice(job: Job) -> str:
-    """接着说那一轮里，模型看到的“系统通知”（不落库，不是用户说的话）。"""
-    tail = job.tail.strip() or "（没有输出）"
-    return (f"【系统通知，不是用户说的】你之前在后台启动的任务已结束：{describe(job)}。\n"
-            f"命令：\n```bash\n{job.command[:500]}\n```\n最后的输出：\n```\n{tail}\n```\n"
+def _brief(job: Job, tail_chars: int) -> str:
+    tail = job.tail.strip()[-tail_chars:] or "（没有输出）"
+    return f"{describe(job)}\n命令：\n```bash\n{job.command[:500]}\n```\n最后的输出：\n```\n{tail}\n```"
+
+
+def notice(group: Job | list[Job]) -> str:
+    """接着说那一轮里，模型看到的“系统通知”（不落库，不是用户说的话）。同一对话里一起结束的任务并成一条，
+    一轮说完（deepseek-harness：一起结束的任务只花一步）。总长有界：每个任务的输出尾巴按个数分 KEEP_TAIL。"""
+    group = [group] if isinstance(group, Job) else group
+    each = max(300, KEEP_TAIL // len(group))
+    head = ("你之前在后台启动的任务已结束：" if len(group) == 1
+            else f"你之前在后台启动的 {len(group)} 个任务都已结束：\n")
+    body = "\n\n".join(_brief(j, each) for j in group)
+    return (f"【系统通知，不是用户说的】{head}{body}\n"
             "根据结果接着把事办完：成功就简短告诉用户结论和产物在哪（要交给他的图表/文件/目录用 display_file 交付）；"
             "失败就说清原因和下一步（能自己修好就直接修了再跑）。用户此刻不一定在看，不要寒暄、不要问“还需要什么”。")
 
 
+def held_notice(group: list[Job]) -> str:
+    """叫醒轮数到上限时压下的结论：用户下次说话，并进那一轮的系统提示（runner.take_held）。"""
+    each = max(300, KEEP_TAIL // len(group))
+    body = "\n\n".join(_brief(j, each) for j in group)
+    return ("【系统通知】用户这次发言之前，你后台启动的这些任务已结束（当时你已连着自动接话好几轮，就没再打扰用户）：\n"
+            f"{body}\n先照用户这次说的办；和这些结果有关、或用户还不知道结论的，顺带简短交代。")
+
+
+def _done(job: Job, at: datetime) -> None:
+    job.followup, job.followup_at = "done", at
+    job.read_offset = max(job.read_offset or 0, log_size(job))  # 通知里给过尾巴了，job_status 别再重复
+
+
+async def _wakes(db: AsyncSession, cid: str, since: datetime | None) -> int:
+    """用户上次发言之后，任务结束已经连着叫醒了助手几轮（同一轮的任务 followup_at 相同）。
+    在 Python 里比时间：SQLite 存的是去掉时区的 UTC，直接在 SQL 里比会和带时区的值错开。"""
+    rows = (await db.scalars(select(Job.followup_at).where(Job.conversation_id == cid, Job.followup == "done",
+                                                            Job.followup_at.is_not(None)))).all()
+    return len({_aware(t) for t in rows if since is None or _aware(t) > since})
+
+
+async def take_held(db: AsyncSession, cid: str) -> str | None:
+    """用户发言的那一轮调：把这个对话里压着的结论取出来（置 done 并提交——SQLite 写锁必须在调模型前放掉）。"""
+    held = (await db.scalars(select(Job).where(Job.conversation_id == cid, Job.followup == "held")
+                             .order_by(Job.finished_at))).all()
+    if not held:
+        return None
+    now = datetime.now(timezone.utc)
+    for job in held:
+        job.followup = "done"  # followup_at 不写：这不是一次“叫醒”，不占轮数
+        job.read_offset = max(job.read_offset or 0, log_size(job))
+    await db.commit()
+    return held_notice(list(held))
+
+
 async def follow_ups(db: AsyncSession) -> int:
-    """worker 调：结束了的任务在原对话里接着回一轮。原对话还有一轮没答完（最后一条是用户的）就先等，
-    等太久就放弃（那一轮自己会看到任务卡的结论）。返回这次接着说了几次。"""
+    """worker 调：结束了的任务在原对话里接着回一轮（同一对话一起结束的并成一轮）。原对话还有一轮没答完
+    （最后一条是用户的）就先等，等太久就放弃（那一轮自己会看到任务卡的结论）。
+    用户两次发言之间连着叫醒满 job_followup_wakes 轮就不再叫醒，结论置 held，留到用户下次说话（take_held）。
+    返回这次接着说了几轮。"""
     from .agent.runner import run_turn  # 避免 import 环：runner → 工具 → jobs
 
+    groups: dict[str | None, list[Job]] = {}
+    for job in (await db.scalars(select(Job).where(Job.followup == "pending").order_by(Job.finished_at))).all():
+        groups.setdefault(job.conversation_id, []).append(job)
     n = 0
-    for job in (await db.scalars(select(Job).where(Job.followup == "pending"))).all():
-        conv = await db.get(Conversation, job.conversation_id) if job.conversation_id else None
+    for cid, group in groups.items():
+        conv = await db.get(Conversation, cid) if cid else None
         if conv is None:
-            job.followup = "none"
+            for job in group:
+                job.followup = "none"
             await db.commit()
             continue
+        last_user = await db.scalar(select(Message).where(Message.conversation_id == conv.id, Message.role == "user")
+                                    .order_by(Message.created_at.desc()).limit(1))
         last = await db.scalar(select(Message).where(Message.conversation_id == conv.id)
                                .order_by(Message.created_at.desc()).limit(1))
         if last is not None and last.role == "user":
             if (datetime.now(timezone.utc) - _aware(last.created_at)).total_seconds() < FOLLOWUP_WAIT:
                 continue
-            job.followup = "skipped"
+            for job in group:
+                job.followup = "skipped"
             await db.commit()
             continue
-        await _patch_blocks(db, job)  # 任务比那一轮先结束时，卡片是那一轮结束才落库的
-        job.followup = "done"
+        budget = settings.job_followup_wakes
+        if budget > 0 and await _wakes(db, conv.id, _aware(last_user.created_at) if last_user else None) >= budget:
+            for job in group:
+                job.followup = "held"
+            await db.commit()
+            continue
+        now = datetime.now(timezone.utc)
+        for job in group:
+            await _patch_blocks(db, job)  # 任务比那一轮先结束时，卡片是那一轮结束才落库的
+            _done(job, now)
         await db.commit()
-        await run_turn(db, conv, notice=notice(job), task_id=job.task_id)
+        await run_turn(db, conv, notice=notice(group), task_id=next((j.task_id for j in group if j.task_id), None))
         n += 1
     return n

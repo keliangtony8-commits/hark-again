@@ -245,6 +245,8 @@ class Job(Base):
     进程、日志、退出码都在工作区 .jobs/<id>/ 里，这里只记归属和结论。
     state: running | done | failed | timed_out | cancelled | lost（容器重启/进程消失，没留下退出码）
     followup: none | pending（结束了，等 worker 在原对话里接着回一句）| done | seen（模型自己查过结果）| skipped
+      | held（连着叫醒助手的轮数到上限了，留到用户下次说话时并进那一轮）；followup_at：哪一轮接着说的（同一轮的任务同一个时间）
+    read_offset: 模型已经看过的日志字节数（job_status 只给这之后的新输出）
     idle_timeout: 连续这么多秒没有新输出就判定卡住并停掉（0 = 不判）；stop_reason: 被护栏自动停掉的原因（state=cancelled）"""
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -260,5 +262,7 @@ class Job(Base):
     tail: Mapped[str] = mapped_column(Text, default="", server_default="")  # 结束时日志的最后一段
     idle_timeout: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     stop_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    read_offset: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -17,3 +17,6 @@
 
 - deepseek-ai/deepseek-harness packages/spill/spill-policy、spill-local — MIT License, Copyright (c) 2026 DeepSeek
   移植到 backend/app/spill.py、sandbox/runner.py（_spill）、backend/tests/smoke_spill_port.py（v1.38）
+
+- deepseek-ai/deepseek-harness packages/jobs（jobs-local ring.ts utf8Tail、tool-jobs render.ts / index.ts 的消费式读、合并通知、maxConsecutiveWakes）— MIT License, Copyright (c) 2026 DeepSeek
+  移植到 backend/app/jobs.py（read_new、follow_ups、take_held）、backend/app/agent/builtin/jobs.py、backend/tests/smoke_jobs_port.py（v1.39）
