@@ -32,7 +32,10 @@ def _risk(args: dict, ctx=None) -> str | None:
 async def api_request(ctx: ToolContext, url: str, method: str = "GET", body: dict | None = None,
                       headers: dict | None = None) -> ToolResult:
     if not url.startswith("https://"):
-        return ToolResult("只允许 https 地址。")
+        # v2.57 B29：自己在沙盒里起的服务（127.0.0.1 / localhost）不归这个工具：从沙盒里 curl
+        msg = ("只允许 https 地址。要看你在沙盒里起的服务（127.0.0.1 / localhost:端口），"
+               "用 run_command 跑 curl -s http://127.0.0.1:端口/路径。")
+        return ToolResult(msg, failed="只允许 https 地址")
     hdrs = {k: str(v) for k, v in (headers or {}).items() if k.lower() not in {"authorization", "cookie"}}
     try:
         cred = await credentials.resolve(ctx.db, url)

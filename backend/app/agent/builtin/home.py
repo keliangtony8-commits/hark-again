@@ -47,7 +47,8 @@ async def create_panel(ctx: ToolContext, title: str, prompt: str, cron: str) -> 
       "面板自动算今天 / 近 7 天 / 连续几天，不花 token。action=add 记一笔：给 title（面板名，没有就新建，如“跑步”“记账”）"
       "或 id，text 写这笔是什么，数量放 amount（数字）+ unit（公里 / 毫升 / ¥），过去的事给 at；"
       "结果里有合计就照着说，别自己算。remove 删一笔（entry=id，或 last = 刚记的那笔）；list 看最近的笔和 id。"
-      "记错了先 remove 再 add。用户说“记一下”但没说数量、而这个面板一直记数量时，工具会让你先问那一个值。",
+      "用户每说一次就记一次：和刚才一模一样也照记（一天跑两次很常见），绝不自己判定“已经记过了”而不记；"
+      "怀疑是重复发的，就记上并在回复里提一句“如果是重复发的，我删掉这笔”。记错了先 remove 再 add。用户说“记一下”但没说数量、而这个面板一直记数量时，工具会让你先问那一个值。",
       {"type": "object", "properties": {
           "action": {"type": "string", "enum": ["add", "remove", "list"]},
           "title": {"type": "string", "description": "面板名（几个字）；add 时没有同名面板就新建"},

@@ -673,6 +673,12 @@ def _brief(job: Job, tail_chars: int) -> str:
     return f"{describe(job)}\n命令：\n```bash\n{job.command[:500]}\n```\n最后的输出：\n```\n{tail}\n```"
 
 
+# v2.57 B28：没人看着时“自己修好再跑”只限环境问题。e2e m2：脚本报 MemoryError，叫醒那轮把用户代码里的报错删了重跑，
+# 用户既没听到失败原因、代码也被改了。接着说那一轮（notice）与压下的结论（held_notice）共用这一句。
+FIX_SCOPE = ("能自己修的只限环境问题（缺包、路径、权限、端口占用、超时调大）——修了直接再跑；"
+             "绝不为了“跑通”删改用户代码的逻辑、删掉报错或测试、缩小要处理的数据，这些先说明原因、问用户。")
+
+
 def notice(group: Job | list[Job], extra: str = "") -> str:
     """接着说那一轮里，模型看到的“系统通知”（不落库，不是用户说的话）。同一对话里一起结束的任务并成一条，
     一轮说完（deepseek-harness：一起结束的任务只花一步）。总长有界：每个任务的输出尾巴按个数分 KEEP_TAIL。"""
@@ -683,7 +689,8 @@ def notice(group: Job | list[Job], extra: str = "") -> str:
     body = "\n\n".join(_brief(j, each) for j in group) + (f"\n{extra}" if extra else "")
     return (f"【系统通知，不是用户说的】{head}{body}\n"
             "根据结果接着把事办完：成功就简短告诉用户结论和产物在哪（要交给他的图表/文件/目录用 display_file 交付）；"
-            "失败就说清原因和下一步（能自己修好就直接修了再跑）。用户此刻不一定在看，不要寒暄、不要问“还需要什么”。")
+            "失败就先告诉用户失败了、原因（引用关键报错原话）和下一步；"
+            f"{FIX_SCOPE}用户此刻不一定在看，不要寒暄、不要问“还需要什么”。")
 
 
 def held_notice(group: list[Job]) -> str:
@@ -691,7 +698,7 @@ def held_notice(group: list[Job]) -> str:
     each = max(300, KEEP_TAIL // len(group))
     body = "\n\n".join(_brief(j, each) for j in group)
     return ("【系统通知】用户这次发言之前，你后台启动的这些任务已结束（没有当场叫醒你：用户自己停的，或你已连着自动接话好几轮）：\n"
-            f"{body}\n先照用户这次说的办；和这些结果有关、或用户还不知道结论的，顺带简短交代。")
+            f"{body}\n先照用户这次说的办；和这些结果有关、或用户还不知道结论的，顺带简短交代（失败的说清原因）。{FIX_SCOPE}")
 
 
 def _done(job: Job, at: datetime) -> None:
