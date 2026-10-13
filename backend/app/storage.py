@@ -11,6 +11,7 @@ PROJECTS = DATA / "projects"
 UPLOADS = DATA / "uploads"
 SKILLS = DATA / "skills"
 CAPTIONS = DATA / "captions"  # 图片描述缓存（vision.py）：captions/<上传 id>.txt
+DOC_TEXT = DATA / "doctext"  # 文档附件开头的文字缓存（documents.preview）：doctext/<上传 id>.json
 TEXT_EXT = {".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".tsx", ".html", ".css", ".yml", ".yaml", ".toml", ".sql", ".sh", ".log"}
 
 
@@ -96,3 +97,7 @@ def upload_path(uid: str) -> Path | None:
 
 def caption_path(uid: str) -> Path:
     return safe_join(CAPTIONS, f"{uid}.txt")
+
+
+def doc_text_path(uid: str) -> Path:
+    return safe_join(DOC_TEXT, f"{uid}.json")

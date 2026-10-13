@@ -5,7 +5,7 @@ import json
 
 from sqlalchemy import select
 
-from ... import extract, file_seen, llm, web_page
+from ... import documents, extract, file_seen, llm, web_page
 from ...blocks import blocks_to_text
 from ...config import settings
 from ...db import SessionLocal
@@ -21,16 +21,25 @@ def _fail(why: str) -> ToolResult:
 
 
 def _file_text(ctx: ToolContext, path: str) -> tuple[str, str]:
-    """(正文, 来源名)。PDF / HTML / JSON 走 web_page.to_text（和读网页同一套），其它文本原样；二进制拒绝。"""
+    """(正文, 来源名)。PDF / Office 走 documents（同 read_file，前 50 页），HTML / JSON 走 web_page.to_text，其它文本原样；二进制拒绝。"""
     p = safe_join(project_dir(ctx.workspace), path)
     file_seen.observe(file_seen.owner_of(ctx.conversation_id, ctx.task_id), p)  # 读过：之后 save_to 覆盖它才被允许
     if not p.is_file():
         raise extract.ExtractError(f"{path} 不存在。")
     size = p.stat().st_size
-    if size > FILE_MAX:
-        raise extract.ExtractError(f"{path} 太大（{size} B，上限 {FILE_MAX // (1024 * 1024)} MB），先用 run_command 截出需要的部分。")
+    cap = documents.FILE_MAX if documents.kind_of(p.name) else FILE_MAX
+    if size > cap:
+        raise extract.ExtractError(f"{path} 太大（{size} B，上限 {cap // (1024 * 1024)} MB），先用 run_command 截出需要的部分。")
     body = p.read_bytes()
     mime = mime_of(p.name)
+    if documents.kind_of(p.name, body[:8]) or documents.is_old(p.name):  # PDF / Office：同 read_file（app/documents.py）
+        try:
+            doc = documents.read(body, p.name)
+        except documents.DocError as e:
+            raise extract.ExtractError(str(e)) from e
+        if not doc.text:
+            raise extract.ExtractError(doc.header(path))
+        return doc.text, documents.LABEL[doc.kind]
     if mime in ("application/pdf", "text/html", "application/json") or body[:5] == b"%PDF-":
         try:
             kind, text, _ = web_page.to_text(body, mime, p.name)

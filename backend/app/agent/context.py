@@ -8,12 +8,12 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, clock, command_env, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, clock, command_env, documents, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
 from ..models import Connection, Conversation, McpServer, Message, Project, Secret
-from ..storage import is_text, project_file, upload_path
+from ..storage import doc_text_path, is_text, project_file, upload_path
 from ..prompt_cache import STABLE, VOLATILE
 from . import parallel, tool_trace
 
@@ -90,9 +90,13 @@ def _render(blocks: list[dict], current: bool = False) -> str:
             text += "\n\n" + _project_ref(b)
             continue
         path = upload_path(b["id"]) if b.get("source") == "upload" else None
+        more = f"\n…（后面还有，需要时用 read_file attachment=\"{b['id']}\" 读，offset / pages 翻页）"
         if path and is_text(b["name"]):
-            body = path.read_text(encoding="utf-8", errors="replace")[:ATTACH_CHARS]
-            text += f"\n\n[附件 {b['name']}]\n{body}"
+            body = path.read_text(encoding="utf-8", errors="replace")
+            text += f"\n\n[附件 {b['name']}]\n{body[:ATTACH_CHARS]}{more if len(body) > ATTACH_CHARS else ''}"
+        elif path and documents.kind_of(path.name) is not None:  # PDF / Word / Excel / PPT：开头的文字（规则在 app/documents.py）
+            header, body, rest = documents.preview(path, doc_text_path(b["id"]), ATTACH_CHARS)
+            text += f"\n\n[附件 {b['name']}] {header}" + (f"\n{body}" if body else "") + (more if rest else "")
         else:
             text += f"\n\n[附件 {b['name']}（{b.get('mime')}，{b.get('size', 0)} B，暂不能读取内容）]"
     return text

@@ -4,7 +4,7 @@
 - 同一主机一分钟最多 RATE_MAX 次（Gemini checkRateLimit），超了告诉模型等几秒，不去真请求；
 - 边读边数字节，超过 MAX_BYTES 就停（Gemini MAX_EXPERIMENTAL_FETCH_SIZE 10MB；小 VPS 取 5MB），按已读部分处理并注明；
 - 按类型变成正文：HTML → trafilatura 提正文（带标题）；JSON → 原样缩进；text/* 与 XML → 原样；
-  PDF → pypdf 逐页抽文字，带“第 N 页”标记，没文字的页注明（多半是扫描件）；图片 / 压缩包等 → 说明类型与大小，不塞进上下文；
+  PDF → app/documents.py 逐页抽文字（同 read_file），没文字的页注明（多半是扫描件）；图片 / 压缩包等 → 说明类型与大小，不塞进上下文；
 - 正文给模型最多 MAX_CHARS 字，超出注明已截断（调用方可用 limit 要更长的正文，如 extract 结构化提取最多 extract.SOURCE_MAX）；
 - 缓存：同一规范化地址 CACHE_TTL 秒内再读直接用（max_age 可以更短，0 = 必须现读）；最多 CACHE_MAX 条（LRU）。"""
 import io
@@ -17,11 +17,10 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 import trafilatura
 
-from . import web_guard
+from . import documents, web_guard
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_CHARS = 8000      # 控制 token 成本
-PDF_PAGES = 50        # PDF 最多抽前几页
 TIMEOUT = 20
 CACHE_TTL = 900
 CACHE_MAX = 64
@@ -132,30 +131,19 @@ def _decode(body: bytes, ctype: str) -> str:
 
 
 def _pdf(body: bytes) -> str:
-    from pypdf import PdfReader
+    """PDF 规则在 app/documents.py（和 read_file、附件、extract 一致）；网页只抽前 documents.PAGES_MAX 页。"""
     try:
-        reader = PdfReader(io.BytesIO(body))
-        pages = reader.pages
-    except Exception as e:  # pypdf 对坏文件抛各种异常
-        raise FetchError(f"这个 PDF 打不开（{e.__class__.__name__}），可能文件不完整或加密了。") from e
-    out, blank = [], []
-    for i, p in enumerate(pages[:PDF_PAGES], 1):
-        try:
-            t = (p.extract_text() or "").strip()
-        except Exception:
-            t = ""
-        if t:
-            out.append(f"--- 第 {i} 页 ---\n{t}")
-        else:
-            blank.append(i)
+        doc = documents.read(body, "document.pdf")
+    except documents.DocError as e:
+        raise FetchError(str(e)) from e
     note = []
-    if blank:
-        note.append(f"（第 {', '.join(map(str, blank[:20]))}{'…' if len(blank) > 20 else ''} 页没有可提取的文字，可能是扫描图片）")
-    if len(pages) > PDF_PAGES:
-        note.append(f"（共 {len(pages)} 页，只抽了前 {PDF_PAGES} 页）")
-    if not out:
-        return "这个 PDF 没有可提取的文字（多半是扫描件）。" + "".join(note[1:])
-    return "\n\n".join(out) + ("\n" + "\n".join(note) if note else "")
+    if doc.blank and doc.text:
+        note.append(f"（第 {documents.spans(doc.blank[:20])}{'…' if len(doc.blank) > 20 else ''} 页没有可提取的文字，可能是扫描图片）")
+    if doc.total > len(doc.shown):
+        note.append(f"（共 {doc.total} 页，只抽了前 {len(doc.shown)} 页；要后面的页就下载到工作区用 read_file 的 pages 读）")
+    if not doc.text:
+        return "这个 PDF 没有可提取的文字（多半是扫描件）。" + "".join(note)
+    return doc.text + ("\n" + "\n".join(note) if note else "")
 
 
 def to_text(body: bytes, ctype: str, url: str) -> tuple[str, str, str]:
