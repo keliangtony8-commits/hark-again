@@ -5,7 +5,7 @@
          沙盒本身有资源和权限隔离，这一层是“别让模型一句手滑把工作区/容器搞没”的第二道防线。
   unsupported  沙盒里根本做不到、跑了只会白白报错一轮的：sudo / su、apt / dnf / yum / apk 装系统软件
          （容器非 root）。不执行，直接告诉模型能怎么装（pip / npm 落到工作区，系统软件看预装清单）。
-  ask    执行前在聊天里弹审批卡等用户点头：推送/提交代码、递归删除、发布软件包、curl | sh……
+  ask    执行前在聊天里弹审批卡等用户点头：推送代码、递归删除、发布软件包、curl | sh……
 
 v1.37 起解析移植自 OpenAI Codex CLI（Apache-2.0）的 is_dangerous_command.rs + bash.rs：
   - shell_parse 用 tree-sitter-bash 拆出整段脚本里每条简单命令的字面词：管道、if/for/while 体、
@@ -339,8 +339,7 @@ def _git(args: list[str]) -> Verdict | None:
     if sub == "push":
         forced = flags & {"-f", "--force", "--force-with-lease"} or any(t.startswith("+") for t in targets)
         return Verdict("ask", "强制推送，会覆盖远端历史" if forced else "推送代码到远端仓库")
-    if sub == "commit":
-        return Verdict("ask", "提交代码")
+    # v2.44 B17：commit 只动本地仓库（reflog / reset 能撤回），用户让提交就直接提交；离开本机的 push 才问。
     if sub == "reset" and "--hard" in flags:
         return Verdict("ask", "丢弃未提交的改动（git reset --hard）")
     if sub == "clean" and flags & {"-f", "--force"}:

@@ -19,7 +19,8 @@ GENERIC = frozenset({
     "run_command", "host_command", "api_request", "mcp_call", "browser_click", "browser_type", "browser_code",
     "browser_upload", "browser_login", "browser_handoff", "delegate", "cancel_job", "restart_service",
 })
-MEMORY = frozenset({"remember", "update_memory", "forget", "memory_note"})
+# ask_user 表单的“记住”勾选会直接写记忆；save_skill 是“记住我的做法”（v2.44：全量冒烟发现两处误拦）
+MEMORY = frozenset({"remember", "update_memory", "forget", "memory_note", "ask_user", "save_skill"})
 FILES = frozenset({"write_file", "edit_file", "apply_patch", "render_document", "save_attachment", "display_file",
                    "publish_page", "save_skill", "extract_data"}) | GENERIC
 SCHEDULE = frozenset({"schedule_task", "manage_home", "create_panel", "offer_on_home"})
@@ -73,6 +74,9 @@ KINDS: tuple[Kind, ...] = (
 )
 
 _CLAUSE = re.compile(r"[，,。！？!?；;：:\n]+")
+_SENTENCE = re.compile(r"[。！？!?\n]+")
+# 整句在讲上一轮 / 被打断那轮的事（“刚才被打断了，a 装好了”）：这一轮没调工具很正常，整句不追究（v2.44）
+_PAST = re.compile(r"刚才|刚刚|之前|上次|上一轮|前面|被打断|\b(?:earlier|before|last time|previously)\b", re.I)
 # 小句里有这些就不算“宣称做完”：否定、疑问、将来 / 打算、条件、说的是以前的事、在问用户
 _SKIP = re.compile(
     r"没|未|不能|无法|没法|不了|不会|不要|别|还没|尚未|失败|出错|报错|吗|呢|么|要不要|是否|需不需要|如果|假如|若|的话|一旦|"
@@ -93,14 +97,16 @@ def claims(text: str, acted: set[str] | frozenset[str]) -> tuple[Kind, str] | No
     if not body:
         return None
     writes = {n for n in acted if not _read_only(n) or n == "delegate"}  # 子助手可能替它做了写操作
-    for clause in _CLAUSE.split(body):
+    clauses = [c for sent in _SENTENCE.split(body) if not _PAST.search(sent) for c in _CLAUSE.split(sent)]
+    for clause in clauses:
         c = clause.strip()
         if len(c) < 2 or _SKIP.search(c):
             continue
         for k in KINDS:
             if not k.pattern.search(c):
                 continue
-            ok = writes if not k.tools else (writes & k.tools)
+            ok = writes if not k.tools else (writes & k.tools) or (k.tools is MEMORY and "ask_user" in acted)
+            # ↑ ask_user 只读，但表单“记住”勾选会写记忆：只对记忆类算数
             if not ok:
                 return k, c[:60]
             break  # 一个小句只归一类：先命中的类有工具就算数

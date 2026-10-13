@@ -70,14 +70,15 @@ for cmd in ['echo "$(rm -rf ~)"', "bash -c 'rm -rf ~'", "trap 'rm -rf ~' EXIT", 
             "xargs -I{} rm -rf /", "sh -c \"sh -c 'rm -rf /etc'\"", "find / -name x -exec rm -rf / \\;",
             "su -c 'rm -rf /'", "env -S 'rm -rf /'", "watch -n 1 rm -rf /", "timeout -s KILL 5 shutdown now"]:
     assert lv(cmd) == "block", (cmd, V(cmd))
-for cmd, why in [("sh -c 'git push'", "推送"), ("git -C repo push --force", "强制推送"), ("git -c a=b commit -m x", "提交"),
+for cmd, why in [("sh -c 'git push'", "推送"), ("git -C repo push --force", "强制推送"), ("git -c a=b reset --hard", "丢弃"),
                  ("{ git push; }", "推送"), ("watch git push", "推送"), ("find . -name '*.o' -delete", "递归删除"),
                  ("find . -type d -exec rm -r {} +", "递归删除"), ("if true; then npm publish; fi", "发布")]:
     v = V(cmd)
     assert v and v.level == "ask" and why in v.why, (cmd, v)
 assert lv("bash -lc 'sudo apt install x'") == "unsupported"
 assert lv("bash -lc 'apt list --installed'") is None
-for cmd in ["find . -name '*.py'", "git -C repo status", "timeout 30 python app.py", "bash script.sh",
+for cmd in ["find . -name '*.py'", "git -C repo status", "git -c a=b commit -m x", "git add -A && git commit -m init",
+            "git commit --amend --no-edit", "timeout 30 python app.py", "bash script.sh",
             "python -c 'import os; os.remove(\"x\")'", "echo $(date)", "watch -n 2 nvidia-smi", "env FOO=1 make"]:
     assert lv(cmd) is None, (cmd, V(cmd))
 

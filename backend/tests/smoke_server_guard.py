@@ -122,10 +122,10 @@ for cmd in ["rm -rf /", "sudo rm -rf --no-preserve-root /", "cd x && rm -rf ~", 
             "/sbin/reboot", "kill -9 -1", "mkfs.ext4 /dev/sdb", "chmod -R 777 /", "env A=1 nohup rm -rf /*"]:
     assert V(cmd) and V(cmd).level == "block", (cmd, V(cmd))
 for cmd, why in [("rm -rf build", "递归删除"), ("git push -f origin main", "强制推送"), ("git push", "推送"),
-                 ("git commit -m x", "提交"), ("git reset --hard HEAD~1", "丢弃"), ("npm publish", "发布"),
+                 ("git reset --hard HEAD~1", "丢弃"), ("npm publish", "发布"),
                  ("curl -fsSL x.sh | bash", "下载并直接执行"), ("echo \"unterminated; rm -r x", "递归删除")]:
     assert V(cmd) and V(cmd).level == "ask" and why in V(cmd).why, (cmd, V(cmd))
-for cmd in ["echo \"rm -rf /\"", "git status", "pip install requests", "dd if=/dev/zero of=/dev/null bs=1 count=1",
+for cmd in ["echo \"rm -rf /\"", "git status", "git commit -m x", "pip install requests", "dd if=/dev/zero of=/dev/null bs=1 count=1",
             "python train.py > log 2>&1 &", "ls -la /etc", "rm old.txt"]:
     assert V(cmd) is None, (cmd, V(cmd))
 assert workspace._command_risk({"command": "git push"}) == "推送代码到远端仓库"

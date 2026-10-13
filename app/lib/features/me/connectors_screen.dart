@@ -101,7 +101,7 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
             child: PageBody(children: [
               PageIntro(
                 summary: connectorSummary(list, servers),
-                line: '连接后我能读你的邮件、日历和代码仓库。发邮件、提交代码这类动作，永远先问你。',
+                line: '连接后我能读你的邮件、日历和代码仓库。发邮件、推送代码这类动作，永远先问你。',
               ),
               SectionTitle('账户', count: list.isEmpty ? null : list.length),
               ListGroup(children: [for (final c in sortAccounts(list)) _AccountRow(c, delay: next())]),

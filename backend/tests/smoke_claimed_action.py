@@ -45,6 +45,12 @@ CASES = [
     ("删除失败了，文件被占用。", set(), None),
     ("I can't delete it.", set(), None),
     ("我来删掉它。", set(), None),
+    ("好的，4 位，已记下电话。", {"ask_user"}, None),  # v2.44：表单“记住”勾选写了记忆
+    ("记好了。", {"save_skill"}, None),
+    ("记好了。", set(), "记忆"),
+    ("已经删掉了。", {"ask_user"}, "操作"),
+    ("刚才被打断了，a 装好了，我看看 b。", set(), None),  # 说的是上一轮
+    ("刚才被打断了。已经删掉了那条记忆。", set(), "记忆"),  # 只放过讲过去的那一句
 ]
 bad = [(t, a, got and got[0].name, w) for t, a, w in CASES if ((got := claims(t, a)) and got[0].name) != w and (got or w)]
 assert not bad, bad
