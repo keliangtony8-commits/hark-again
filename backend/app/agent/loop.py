@@ -555,7 +555,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
     if result.card and card_at is not None:
         yield builder.update(card_at, **result.card)
     state = "error" if result.failed else "done"
-    yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed, result.change) or {})
+    yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed, result.change, result.detail) or {})
     content = _with_notes(result.content, notes)
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）；日志型再补中间段要点（distill.py）
         content = await distill.bound(content, settings.tool_result_max, ctx.workspace, call.name, ctx.db)

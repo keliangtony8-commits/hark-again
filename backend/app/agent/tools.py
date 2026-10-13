@@ -94,6 +94,8 @@ class ToolResult:
     change: dict | list[dict] | None = None
     # 这次调用前用户批准过的那张卡要补的字段（执行后才知道的结果，如方案没存成 → {"path": ""}）；内核合并进卡，没批准卡就忽略
     card: dict | None = None
+    # 时间线这一步的摘要换成结果（如“明天 → 10-14 周三”）；None = 保留开始时从参数取的
+    detail: str | None = None
 
 
 @dataclass

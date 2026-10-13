@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, command_env, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, clock, command_env, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -59,8 +59,8 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     p.add(STABLE, workspace_instructions.baseline(workspaces.of(project_id)).text)
 
     # —— 以下每轮都可能变：放最后 ——
-    now = datetime.now(ZoneInfo(settings.timezone)).strftime("%Y-%m-%d %A %H:%M")
-    p.add(VOLATILE, f"现在是 {now}（{settings.timezone}）。")
+    now = datetime.now(ZoneInfo(settings.timezone))
+    p.add(VOLATILE, f"现在是 {clock.day_text(now.date())} {now:%H:%M}（{settings.timezone}）。")
     mems = await memory_store.relevant(db, query)
     if mems:
         p.add(VOLATILE, "关于用户你已知道（# 后是引用，改/删时传给 update_memory / forget）：\n"

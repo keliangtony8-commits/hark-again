@@ -21,6 +21,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import schedule
+from .clock import WEEKDAYS  # 星期的写法只有 clock 一份
 from .blocks import blocks_to_text
 from .config import settings
 from .models import HomeCard, Memory, ScheduledTask
@@ -31,7 +32,6 @@ MAX_MEMORIES = 8
 MAX_CARDS = 6
 MAX_REPORTS = 5
 SNIPPET = 80
-WEEKDAYS = "一二三四五六日"
 
 _FULL = re.compile(r"(?<!\d)(20\d{2})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*[日号]?")
 _MONTH_DAY = re.compile(r"(?<![\d年/.-])(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]")

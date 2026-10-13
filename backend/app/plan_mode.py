@@ -40,6 +40,7 @@ HISTORY_MAX = 4000  # 写进历史的方案正文上限（之后几轮模型还�
 READ_TOOLS = frozenset({
     "read_file", "list_files", "glob", "grep", "web_search", "web_fetch", "job_status", "mcp_tools",
     "use_skill", "ask_user", "day_overview", "delegate",
+    "get_current_time", "convert_time", "resolve_relative_date",
     "browser_open", "browser_read", "browser_look", "browser_scroll",  # 看网页；点、填、登录、上传都不行
     "show_table", "show_links", "show_stats", "show_draft", "show_summary", "show_images", "show_products",
     TOOL,
