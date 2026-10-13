@@ -38,6 +38,10 @@ void main() {
     expect(taskStateLabel(t({...taskJson(), 'fail_streak': 1})), '上次失败');
     final manual = t(paused(reason: null));
     expect([manual.autoPaused, nextRunLabel(manual), autoPauseNote(manual)], [isFalse, '已暂停', isNull]);
+    // v2.31：任务运行里按指令结束了自己 → 停用不删，标“已结束”，不算自动暂停
+    final ended = t(paused(streak: 0, reason: 'ended'));
+    expect([ended.ended, ended.autoPaused, nextRunLabel(ended), autoPauseNote(ended)], [isTrue, isFalse, '已结束', isNull]);
+    expect(t(paused(streak: 0, reason: 'ended', active: true)).ended, isFalse);
     // 启用着但 paused_reason 还没清（理论上不会）：不算自动暂停
     expect(t(paused(active: true)).autoPaused, isFalse);
   });

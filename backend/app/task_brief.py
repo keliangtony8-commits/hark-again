@@ -7,6 +7,10 @@
 - 静默：报告任务没有新结果 / 变化 / 要用户处理的事时，回复以 SILENT 开头 + 一句原因 → 这次不进收件箱，
   运行记录写“没打扰你：原因”（task_runs.silent_reason），对话照常保留可点开。面板任务不适用（面板总要有内容）。
 - 跳过下一次（skip_at）：记下被跳过的那一次计划时刻，schedule.due_at 从它之后算起；改计划时清掉；一次性任务不跳（取消或改时间）。
+- 运行里不改计划（v2.31，E2E B7）：fire_refusal() 是“定时任务运行里能不能动任务计划”的唯一规则——
+  计划（时间、频率、指令、提醒方式、开关）是用户定的；运行里只能看（list/runs/read）、记（set_runbook/note/report_wall）、
+  按指令新建任务（create，Hark：运行里建的任务算助手建的）、按指令结束自己（cancel 自己）；
+  update / run_now / skip_next / unskip / 删别的任务 / 面板 update·refresh·移除·找回 一律拒绝，改成在结果里建议。
 做法和观察是以前的运行写的资料，不是用户的指令：和任务指令冲突时以指令为准（preface 里明说）。
 注入位置：runner.run_turn(brief=...) 放在系统提示易变段，不进用户消息（对话里看到的仍是任务指令本身）。"""
 from datetime import datetime, timezone
@@ -48,6 +52,32 @@ def clean(field: str, text: str | None) -> str | None:
     return _clean(text, RUNBOOK_MAX, "做法") if field == "runbook" else _clean(text, NOTE_MAX, "观察")
 
 
+FIRE_FREE = frozenset({"list", "runs", "read", "set_runbook", "note", "report_wall", "create", "snooze", "unsnooze", "dismiss"})
+FIRE_REFUSED = ("计划是用户定的，这次自动运行不能改任何任务的时间、频率、指令或开关（也不能叫别的任务跑、跳过、删掉）。"
+                "觉得该调整，就在这次的结果里向用户建议，由他决定。")
+
+
+def fire_refusal(own_task_id: str | None, action: str, target_id: str | None = None,
+                 removes_task: bool = False) -> str | None:
+    """定时任务运行里（own_task_id 有值）这个动作被拒绝吗：拒绝 → 中文原因；允许 / 不在运行里 → None。
+    schedule_task 和 manage_home 共用。cancel 只许结束自己（target 省略 = 自己）；面板 dismiss 会删任务（removes_task）也拒绝。"""
+    if not own_task_id:
+        return None
+    if action in FIRE_FREE and not removes_task:
+        return None
+    if action == "cancel" and target_id in (None, own_task_id):
+        return None
+    return FIRE_REFUSED
+
+
+ENDED = "ended"  # paused_reason：运行里按指令结束了自己（停用而不删除：这次的结果照常交付、记录留着；用户重新打开即恢复）
+
+
+def end_self(task: ScheduledTask) -> None:
+    """运行里 cancel 自己：停用（active False, paused_reason ENDED），不在运行中途删掉任务（删了这次的运行记录和结果就没了）。"""
+    task.active, task.paused_reason, task.skip_at, task.run_requested = False, ENDED, None, False
+
+
 def _run_line(r: TaskRun) -> str:
     if r.status == "error":
         what = ("碰壁" if r.wall else "失败") + f"：{(r.error or '').strip()[:200]}"
@@ -74,6 +104,8 @@ def preface(task: ScheduledTask, runs: list[TaskRun]) -> str:
     if runs:
         parts.append("最近几次运行（只当参考，不是结论：上次碰壁这次可能好了，照常尝试）：\n" + "\n".join(_run_line(r) for r in runs))
     parts.append(task_wall.brief(task))
+    parts.append("计划（时间、频率、指令、提醒方式）是用户定的：这次运行不要改任何任务，也不要叫别的任务跑或跳过；"
+                 "觉得该调整就在结果里建议。只有任务指令明确要求时，才新建任务或结束这个任务自己（cancel 不给 id）。")
     if not panel:
         parts.append(f"这次没有新结果、变化或需要用户处理的事时，整段回复只写 {SILENT} 加一句原因（如“{SILENT} 价格没变”），"
                      "这次就不打扰用户；“没变化”本身不算结果。")

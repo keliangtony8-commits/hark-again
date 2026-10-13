@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from zoneinfo import ZoneInfo
 
-from ... import card_snooze, card_targets, home_offers, panel_trash, schedule, task_runs, task_store, task_wall, web_guard
+from ... import card_snooze, card_targets, home_offers, panel_trash, schedule, task_brief, task_runs, task_store, task_wall, web_guard
 from ...blocks import blocks_to_text
 from ...config import settings
 from ...db import SessionLocal
@@ -143,6 +143,8 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
             out += [f"- id={c.id} [已移除面板]「{c.title}」 · 移除于 {_local(c.removed_at)}" for c in gone]
         return ToolResult("\n".join(out) if out else "Home 上还什么都没有。")
 
+    if action == "revive" and (refused := task_brief.fire_refusal(ctx.task_id, action)):
+        return ToolResult(refused)
     if action == "revive":
         if not id:
             return ToolResult("revive 要给 id：先用 action=list 看“最近移除的面板”。")
@@ -156,6 +158,9 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
     if card is None or card.dismissed:
         return ToolResult("没找到这张卡，先用 action=list 查 id。")
     task = await db.get(ScheduledTask, card.task_id) if card.task_id else None
+    refused = task_brief.fire_refusal(ctx.task_id, action, card.task_id, removes_task=action == "dismiss" and card.kind == "panel")
+    if refused:
+        return ToolResult(refused)
 
     if action == "dismiss":
         if card.kind == "panel":

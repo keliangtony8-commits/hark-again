@@ -27,6 +27,8 @@ def _plan(t: ScheduledTask) -> str:
 def _line(t: ScheduledTask) -> str:
     if t.paused_reason == "failures":
         state = f"连续失败 {t.fail_streak} 次已自动暂停（修好后 update active=true 恢复）"
+    elif t.paused_reason == task_brief.ENDED and not t.active:
+        state = "已按指令结束"
     elif not t.active:
         state = "已暂停"
     else:
@@ -77,7 +79,8 @@ def _when(run_at: str | None) -> datetime | None:
       "set_runbook / note（text 整段替换，空串清空）：任务自己的做法与观察，每次运行开头都会读到；"
       "report_wall（只在任务自己的运行里）：碰到只有用户能清掉的障碍或暂时的阻碍时记下 wall=<类>:<对象> 和 text（发生了什么），"
       "用户会看到可修的标记，这次算碰壁失败、面板保留上次内容；之后照常交付已完成的部分。"
-      "在定时任务运行里调用时 id 可省略（就是正在跑的这个任务）。"
+      "在定时任务运行里调用时 id 可省略（就是正在跑的这个任务）；运行里不能 update/run_now/skip 任何任务（计划由用户决定，在结果里建议），"
+      "只有指令要求时才 create 或 cancel 自己。"
       "要反复看的数据（价格、比分）用 create_panel，不用这个。",
       {"type": "object", "properties": {
           "action": {"type": "string", "enum": ["create", "list", "update", "cancel", "runs", "run_now",
@@ -105,6 +108,10 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
     if when is not None and when < datetime.now(timezone.utc) - timedelta(minutes=1):
         return ToolResult(f"{_local(when)} 已经过去了（现在 {schedule.local_now():%Y-%m-%d %H:%M}）。")
 
+    refused = task_brief.fire_refusal(ctx.task_id, action, id)
+    if refused:
+        return ToolResult(refused)
+
     if action == "list":
         rows = (await db.scalars(select(ScheduledTask).order_by(ScheduledTask.created_at.desc()))).all()
         return ToolResult("\n".join(_line(t) for t in rows) if rows else "还没有定时任务。")
@@ -125,7 +132,7 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
         where = "失败或按 notify 该告诉用户时结果进 Home 收件箱" if command else "到点结果会出现在 Home 收件箱"
         return ToolResult(f"已安排：{_line(t)}。{where}，用户可在“我的 → 定时任务”里改。")
 
-    id = id or (ctx.task_id if action in ("set_runbook", "note", "runs", "report_wall") else None)  # 任务运行里：默认就是自己
+    id = id or (ctx.task_id if action in ("set_runbook", "note", "runs", "report_wall", "cancel") else None)  # 任务运行里：默认就是自己
     t = await db.get(ScheduledTask, id) if id else None
     if t is None:
         return ToolResult("没找到这个任务，先用 action=list 查 id。")
@@ -171,6 +178,10 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
         done = task_brief.unskip(t)
         await db.commit()
         return ToolResult(f"已撤销跳过：{_line(t)}。" if done else f"「{t.name}」没有待跳过的一次。")
+    if action == "cancel" and t.id == ctx.task_id:  # 运行里按指令结束自己：停用，这次照常交付（task_brief.end_self）
+        task_brief.end_self(t)
+        await db.commit()
+        return ToolResult(f"已结束「{t.name}」：这次的结果照常交付，之后不再运行（任务留在列表里，用户可以删掉或重新打开）。")
     if action == "cancel":
         await task_store.remove(db, t)
         return ToolResult(f"已删除「{t.name}」。")

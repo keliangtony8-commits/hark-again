@@ -154,7 +154,7 @@ assert c.post("/api/tasks/nope/skip").status_code == 404
 out = asyncio.run(call(None, action="runs", id=tid))
 assert "失败：模型 401" in out and "没打扰用户" in out and "成功，已告诉用户" in out, out
 assert "已排队" in asyncio.run(call(None, action="run_now", id=tid)) and task(tid)["run_requested"]
-assert "不能在运行里" in asyncio.run(call(tid, action="run_now", id=tid))
+assert "计划是用户定的" in asyncio.run(call(tid, action="run_now", id=tid))
 assert "已记下观察" not in asyncio.run(call(None, action="list"))  # 观察已清空
 
 # 8) 迁移往返

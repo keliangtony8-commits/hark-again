@@ -347,6 +347,9 @@ class ScheduledTask {
   bool get lastFailed => lastStatus == 'error';
   bool get autoPaused => !active && pausedReason == 'failures';
 
+  /// 任务自己运行时按指令结束了自己（服务端 task_brief.ENDED：停用不删除；打开开关即恢复）。
+  bool get ended => !active && pausedReason == 'ended';
+
   /// 能跳过下一次：重复任务、开着（一次性的取消或改时间就行）。
   bool get canSkip => !isOnce && active && nextRunAt != null;
 }

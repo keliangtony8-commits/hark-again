@@ -9,11 +9,12 @@ import '../../ui/format.dart';
 String scheduleLabel(ScheduledTask t, {DateTime? now}) =>
     t.isOnce ? '一次 · ${formatWhen(t.runAt, now: now)}' : describeCron(t.cron);
 
-/// 下次运行：已完成（一次性跑过）/ 连续失败已暂停 / 已暂停 / 马上运行（过期补跑或一分钟内）/ 下次 明天 08:00；cron 无效时为空。
+/// 下次运行：已完成（一次性跑过）/ 连续失败已暂停 / 已结束（运行里按指令结束了自己）/ 已暂停 / 马上运行（过期补跑或一分钟内）/ 下次 明天 08:00；cron 无效时为空。
 /// 一次性任务的“下次”就是计划时刻，scheduleLabel 已经写了，这里不再重复。
 String nextRunLabel(ScheduledTask t, {DateTime? now}) {
   if (t.done) return '已完成';
   if (t.autoPaused) return '连续失败，已暂停';
+  if (t.ended) return '已结束';
   if (!t.active) return '已暂停';
   final at = t.nextRunAt;
   if (at == null) return '';

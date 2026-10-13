@@ -10,12 +10,15 @@ export function scheduleLabel(t: ScheduledTask, now = new Date()): string {
 
 /** 连续失败被自动暂停（手动停的不算）。 */
 export const autoPaused = (t: ScheduledTask) => !t.active && t.paused_reason === "failures";
+/** 任务自己运行时按指令结束了自己（服务端 task_brief.ENDED：停用不删除） */
+export const ended = (t: ScheduledTask) => !t.active && t.paused_reason === "ended";
 
-/** 已完成（一次性跑过）/ 连续失败已暂停 / 已暂停 / 马上运行（过期补跑或一分钟内）/ 下次 明天 08:00；cron 无效时为空。
+/** 已完成（一次性跑过）/ 连续失败已暂停 / 已结束 / 已暂停 / 马上运行（过期补跑或一分钟内）/ 下次 明天 08:00；cron 无效时为空。
  * 一次性任务的“下次”就是计划时刻，scheduleLabel 已经写了，这里不再重复。 */
 export function nextRunLabel(t: ScheduledTask, now = new Date()): string {
   if (t.done) return "已完成";
   if (autoPaused(t)) return "连续失败，已暂停";
+  if (ended(t)) return "已结束";
   if (!t.active) return "已暂停";
   if (!t.next_run_at) return "";
   if (new Date(t.next_run_at).getTime() - now.getTime() < 60_000) return "马上运行";

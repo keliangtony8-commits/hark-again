@@ -195,7 +195,7 @@ export type Project = { id: string; name: string; emoji: string; rules: string; 
   brief?: string; brief_by?: "user" | "assistant" | null; brief_updated_at?: string | null; conversation_count?: number; last_active_at?: string | null };
 export type Memory = { id: string; category: string; content: string; updated_at: string };
 export type ScheduledTask = { id: string; name: string; prompt: string; cron: string; active: boolean; output: "report" | "panel"; run_requested: boolean; last_run_at: string | null; last_status: "ok" | "error" | null;
-  /** 连着失败几次（成功归零）；paused_reason "failures" = 连续失败被自动暂停，手动停 = null（老服务器没有这两个字段） */
+  /** 连着失败几次（成功归零）；paused_reason "failures" = 连续失败被自动暂停，"ended" = 运行里按指令结束了自己，手动停 = null（老服务器没有这两个字段） */
   fail_streak?: number; paused_reason?: string | null;
   /** 服务端算好的下次运行（只读）；停用或 cron 无效 = null */
   next_run_at: string | null;
