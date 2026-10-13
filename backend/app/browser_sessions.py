@@ -110,6 +110,7 @@ class Tab:
     session: str = ""
     url: str = ""
     names: dict[str, str] = field(default_factory=dict)  # 快照元素 ref → 名字
+    frames: dict[str, str] = field(default_factory=dict)  # 快照里在跨站内嵌框里的元素 ref → 框的域名（v2.59，browser/frames.py）
     signed_in: bool = False   # 这个会话登录过（服务端标记）
     expired: bool = False     # 已判定过期（服务端标记过）
     login_seen: bool = False  # 这次打开后见过登录页（之后的 auth 动作成功 → signed_in）
@@ -126,6 +127,15 @@ class Tab:
     @property
     def host(self) -> str:
         return urlparse(self.url).hostname or ""
+
+    def login_url(self, pass_ref: str | None) -> str:
+        """这个密码框属于哪个网站（v2.59）——保险箱查 / 存登录、登录卡写的站点只认它：密码框在别的网站嵌进来的
+        框里（第三方登录框、支付页里的账户框）→ 那个框的域名，绝不把主页面网站的密码填进别人家的框；否则主页面。"""
+        host = self.frames.get(str(pass_ref or ""))
+        return f"https://{host}/" if host else self.url
+
+    def login_host(self, pass_ref: str | None) -> str:
+        return urlparse(self.login_url(pass_ref)).hostname or ""
 
 
 _tabs: dict[str, Tab] = {}

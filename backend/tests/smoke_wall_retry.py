@@ -125,7 +125,8 @@ from app.agent.builtin import browser as bt
 from app.agent.tools import ToolContext
 from app.agent.approvals import FormReply
 other_reset = asyncio.run(seed("另一个站点", "needs_login:shop.other.com"))
-class Tab: session, host, url = "s1", "other.com", "https://other.com/login"
+from app.browser_sessions import Tab as _RealTab
+Tab = _RealTab(session="s1", url="https://other.com/login")  # v2.59 用真 Tab：登录站点按 login_url 定
 bt._tab = lambda ctx: Tab
 async def fake_snap(session, method, path, body): return {"ok": True}
 bt.browser_client.snapshot_call = fake_snap

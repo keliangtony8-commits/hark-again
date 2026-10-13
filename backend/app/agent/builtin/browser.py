@@ -44,12 +44,15 @@ def _tab(ctx: ToolContext) -> Tab:
 
 def _render(snap: dict, tab: Tab) -> str:
     tab.names.clear()
+    tab.frames.clear()
     tab.url = snap.get("url", "")
     lines = []
     for e in snap.get("elements", []):
         tab.names[e["ref"]] = e["name"]
+        if e.get("frame") and e["frame"] != "同站":
+            tab.frames[e["ref"]] = e["frame"]
         lines.append(element_line(e))
-    return (tab_note(snap) + dialog_note(snap) + blocked_note(snap) + f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines)
+    return (tab_note(snap) + dialog_note(snap) + blocked_note(snap) + f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines) + frames_note(snap)
             + f"\n\n页面文字：\n{snap.get('text', '')}")
 
 
@@ -69,7 +72,17 @@ def element_line(e: dict) -> str:
         line += f" = {e.get('value') or '（未选）'}（下拉框，用 browser_select；可选：{'、'.join(opts[:OPTIONS_SHOW])}{more}）"
     if e.get("disabled"):
         line += "（灰的，不能操作）"
+    if e.get("frame"):  # v2.59 在 iframe 里（browser/frames.py）：照常用编号操作，标出来让模型知道是嵌进来的（支付框、第三方登录）
+        line += f"（内嵌框 {e['frame']}）"
     return line
+
+
+def frames_note(snap: dict) -> str:
+    """内嵌框太多、没全部展开（browser/frames.py FRAME_MAX）→ 元素列表末尾一句；否则空。"""
+    n = snap.get("frames_more")
+    if not isinstance(n, int) or n <= 0:
+        return ""
+    return f"\n（页面里还有 {n} 个内嵌框没展开：要找的东西不在上面，可以 browser_look 看画面。）"
 
 
 def blocked_note(snap: dict) -> str:
@@ -173,8 +186,8 @@ async def _view(ctx: ToolContext, tab: Tab, snap: dict, auth: bool = False) -> s
         return text
     secret = None
     if browser_sessions.login_page(snap) and not tab.autofilled:
-        secret = await vault.find_for_url(ctx.db, tab.url, kind="login")
         refs = browser_sessions.login_fields(snap)
+        secret = await vault.find_for_url(ctx.db, tab.login_url(refs[1] if refs else None), kind="login")
         if secret and secret.username and refs:
             tab.autofilled = True
             again = await _autologin(ctx, tab, secret, refs, expired=event == "expired")
@@ -446,10 +459,10 @@ async def browser_screenshot(ctx: ToolContext, path: str = "", full_page: bool =
 async def _login_form(ctx: ToolContext, args: dict) -> dict | None:
     """保险箱里有这个网站的登录就直接代填，不打扰用户；没有就在聊天里弹登录卡。"""
     tab = _tab(ctx)
-    host = tab.host
+    host = tab.login_host(args.get("pass_ref"))  # v2.59：密码框在别家内嵌框里 → 登录卡写那家、保险箱查那家
     if not tab.session or not host:
         return None
-    secret = await vault.find_for_url(ctx.db, tab.url, kind="login")
+    secret = await vault.find_for_url(ctx.db, tab.login_url(args.get("pass_ref")), kind="login")
     if secret and secret.id != tab.vault_failed:
         return None
     stale = secret is not None  # v2.51：保险箱那条刚代填没登上 → 问用户新的，预填原用户名
@@ -469,19 +482,20 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
     if not tab.session or not tab.host:
         return ToolResult(NOT_OPEN)
     note = ""
+    url, host = tab.login_url(pass_ref), tab.login_host(pass_ref)  # 密码框所属的网站（v2.59 内嵌框）
     if form is not None:
         username, password = form.values.get("username", "").strip(), form.values.get("password", "")
         if not username or not password:
             return ToolResult("用户没有把账号和密码填完整，登录没做。")
         if form.remember:
             try:
-                old = await vault.find_for_url(ctx.db, tab.url, kind="login")
+                old = await vault.find_for_url(ctx.db, url, kind="login")
                 if old is not None:  # 保险箱那条密码过期了：原地更新，不再建一条
                     vault.replace_login(old, username, password)
                     tab.vault_failed = ""
                 else:
-                    ctx.db.add(vault.create(tab.host, password, [tab.host], kind="login", username=username))
-                retried = await task_wall.retry_fixed(ctx.db, "needs_login", hosts=[tab.host])
+                    ctx.db.add(vault.create(host, password, [host], kind="login", username=username))
+                retried = await task_wall.retry_fixed(ctx.db, "needs_login", hosts=[host])
                 await ctx.db.commit()
                 note = "已按用户的选择记到保险箱，下次自动登录。" + (f"{task_wall.retry_note(retried)}。" if retried else "")
             except Exception:  # 没配 VAULT_KEY 等：登录照常，只是记不住
@@ -489,7 +503,7 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
                 note = "没能记到保险箱（服务器没配好保险箱）。"
         source = "用户在登录卡上填的账号"
     else:
-        secret = await vault.find_for_url(ctx.db, tab.url, kind="login")
+        secret = await vault.find_for_url(ctx.db, url, kind="login")
         if not secret:
             return ToolResult("没有可用的登录信息。用 browser_handoff 请用户在实时画面里自己登录。", [_card(tab)])
         username, password, source = secret.username or "", vault.reveal(secret), f"保险箱「{secret.name}」"

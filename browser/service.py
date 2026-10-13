@@ -16,6 +16,8 @@
 - 网页弹框（v2.56，规则在 dialogs.py）：alert / confirm / prompt / 离开提示当场处理（不挂着，挂着会卡死页面脚本），
   confirm / prompt 按这次动作说好的 dialog（accept / dismiss，没说 = 取消）办；弹过什么放快照的 dialogs 字段；
   用户在实时画面里亲手点 = accept
+- 内嵌框（v2.59，规则在 frames.py）：看得见的 iframe（支付卡号框、嵌入的登录框 / 表单、Cookie 同意层）里的元素和文字
+  一起进快照，编号全局接着编、元素带 frame 标签；点 / 填 / 登录 / 上传按 ref 自动去对应的框里找
 - 文件（v1.32）：POST /upload 把后端传来的工作区文件放进网页的文件框（<input type=file> 直接设；
   别的按钮先等“选文件”对话框再设）；页面触发的下载存到 DOWNLOADS/<会话>/，GET /downloads 列出、
   取走后 DELETE——后端把它搬进工作区 downloads/（app/browser_files.py），这里只是中转，关会话就清掉
@@ -39,6 +41,7 @@ from pydantic import BaseModel
 import dialogs
 import egress
 import forms
+import frames
 import tabs
 
 TOKEN = os.environ["BROWSER_TOKEN"]
@@ -61,6 +64,7 @@ _downloads: dict[str, list[dict]] = {}  # 会话 → [{id, name, size, state dow
 _tabs: dict[str, tabs.Tabs] = {}  # 会话 → 现在操作哪个标签页（规则在 tabs.py）
 _dialog_arm: dict[str, tuple[str | None, str | None, float]] = {}  # 会话 → (accept/dismiss/None, prompt 字, 有效到)
 _dialog_notes: dict[str, list[dict]] = {}  # 会话 → 上次快照以来弹过的框（dialogs.decide 的 note）
+_frame_of: dict[str, dict[str, object]] = {}  # 会话 → {ref: 内嵌框}（上一张快照里在 iframe 里的元素，frames.py）
 _dialog_seen: dict[str, int] = {}  # 会话 → 这次动作里已弹过几个（连环弹框判定）
 ARM_AFTER_S = 2.0  # 动作返回后说好的处理再保留这么久（点完弹框可能稍后才到）
 _restored: set[str] = set()  # 这次是从存好的登录状态恢复出来的会话（goto 回报给后端，模型知道“沿用了登录”）
@@ -316,11 +320,11 @@ def _summary(name: str) -> dict:
 
 
 SNAPSHOT_JS = """
-() => {
+({start, cap}) => {
   const sel = 'a[href],button,input,textarea,select,[role=button],[role=link],[role=tab],[role=checkbox],[contenteditable=true]';
-  const out = []; let n = 0;
+  const out = []; let n = start; const end = start + cap;
   document.querySelectorAll('[data-ref]').forEach(e => e.removeAttribute('data-ref'));
-  for (const el of document.querySelectorAll(sel)) {
+  for (const el of (cap > 0 ? document.querySelectorAll(sel) : [])) {
     // 文件框常被藏起来（样式化的“上传”按钮盖在上面），照样编号：browser_upload 直接往里放文件
     const file = el.tagName === 'INPUT' && el.type === 'file';
     const r = el.getBoundingClientRect();
@@ -345,21 +349,74 @@ SNAPSHOT_JS = """
     if (tick) item.checked = el.checked;
     if (el.disabled) item.disabled = true;
     out.push(item);
-    if (n >= 150) break;
+    if (n >= end) break;
   }
   return { url: location.href, title: document.title, text: document.body ? document.body.innerText : '', elements: out };
 }
 """
 
 
-async def _snapshot(page: Page) -> dict:
+def _tidy(text: str) -> str:
+    return re.sub(r"\n{3,}", "\n\n", text or "").strip()
+
+
+async def _frames_in(frame, depth: int = 1):
+    """主页面下的内嵌框，按文档顺序（深度优先），带深度。"""
+    for child in frame.child_frames:
+        yield child, depth
+        if depth < frames.DEPTH_MAX:
+            async for sub in _frames_in(child, depth + 1):
+                yield sub
+
+
+async def _frame_box(frame) -> dict | None:
+    try:
+        el = await frame.frame_element()
+        return await el.bounding_box()
+    except Exception:
+        return None  # 框已脱离 / 跨站框拿不到位置：当看不见
+
+
+async def _snapshot(name: str, page: Page) -> dict:
+    """主页面 + 看得见的内嵌框拍成一张快照（收哪些框、编号、文字规则在 frames.py）；记住每个 ref 在哪个框。"""
     try:
         await page.wait_for_load_state("domcontentloaded", timeout=8000)
     except Exception:
         pass
-    snap = await page.evaluate(SNAPSHOT_JS)
-    snap["text"] = re.sub(r"\n{3,}", "\n\n", snap["text"])[:MAX_TEXT]
+    snap = await page.evaluate(SNAPSHOT_JS, {"start": 0, "cap": frames.ELEMENT_MAX})
+    where: dict[str, object] = {}
+    parts: list[tuple[str, str]] = []
+    taken = more = 0
+    async for frame, depth in _frames_in(page.main_frame):
+        if not frames.include(frame.url, await _frame_box(frame), depth):
+            continue
+        if taken >= frames.FRAME_MAX:
+            more += 1
+            continue
+        try:
+            sub = await frame.evaluate(SNAPSHOT_JS, {"start": len(snap["elements"]), "cap": frames.budget(len(snap["elements"]))})
+        except Exception:
+            continue  # 框正在跳转 / 刚被删：这次不收
+        taken += 1
+        lab = frames.label(frame.url, page.url)
+        for e in sub["elements"]:
+            e["frame"] = lab
+            where[e["ref"]] = frame
+        snap["elements"] += sub["elements"]
+        parts.append((lab, _tidy(sub["text"])))
+    _frame_of[name] = where
+    snap["text"] = frames.merge_text(_tidy(snap["text"]), parts, MAX_TEXT)
+    if more:
+        snap["frames_more"] = more
     return snap
+
+
+def _ref(name: str, page: Page, ref: str):
+    """ref → 元素定位器：在内嵌框里的去那个框找（快照时记下的），其余在主页面。"""
+    frame = _frame_of.get(name, {}).get(ref)
+    if frame is not None and not frame.is_detached():
+        return frame.locator(f'[data-ref="{ref}"]')
+    return page.locator(f'[data-ref="{ref}"]')
 
 
 def _with_blocked(name: str, snap: dict) -> dict:
@@ -381,7 +438,7 @@ async def _after(name: str) -> dict:
     """动作做完：先跟到该看的标签页（网站可能开了新页 / 关了页 / 崩了），存登录，再拍快照。"""
     page = await _follow(name)
     await _save(name)
-    return _with_blocked(name, await _snapshot(page))
+    return _with_blocked(name, await _snapshot(name, page))
 
 
 class GotoIn(BaseModel):
@@ -464,13 +521,13 @@ async def login_state(name: str, body: LoginStateIn):
 
 @app.get("/sessions/{name}/snapshot", dependencies=[Depends(auth)])
 async def snapshot(name: str):
-    return _with_blocked(name, await _snapshot(await _session(_check_name(name))))
+    return _with_blocked(name, await _snapshot(name, await _session(_check_name(name))))
 
 
 @app.post("/sessions/{name}/act", dependencies=[Depends(auth)])
 async def act(name: str, body: ActIn):
     page = await _session(_check_name(name))
-    el = page.locator(f'[data-ref="{body.ref}"]') if body.ref else None
+    el = _ref(name, page, body.ref) if body.ref else None
     if el is not None and body.action in ("click", "type", "select", "press") and await _gone(el):
         # 编号是上一张快照的（页面换了 / 切到了新标签页）：马上说清楚，不空等 8 秒超时
         raise HTTPException(400, f"当前页（{(await page.title())[:40] or page.url}）上没有编号 {body.ref}：页面已经换了，"
@@ -546,7 +603,7 @@ async def _on_dialog(name: str, dialog) -> None:
 
 
 def _forget_dialogs(name: str) -> None:
-    for m in (_dialog_arm, _dialog_notes, _dialog_seen):
+    for m in (_dialog_arm, _dialog_notes, _dialog_seen, _frame_of):  # 会话没了：弹框状态和内嵌框 ref 一起清
         m.pop(name, None)
 
 
@@ -594,8 +651,8 @@ async def login(name: str, body: LoginIn):
     page = await _session(_check_name(name))
     _arm(name, None)
     try:
-        await page.locator(f'[data-ref="{body.user_ref}"]').fill(body.username, timeout=8000)
-        pw = page.locator(f'[data-ref="{body.pass_ref}"]')
+        await _ref(name, page, body.user_ref).fill(body.username, timeout=8000)
+        pw = _ref(name, page, body.pass_ref)
         if await pw.get_attribute("type") != "password":
             raise HTTPException(400, "pass_ref 不是密码框")
         await pw.fill(body.password, timeout=8000)
@@ -622,7 +679,7 @@ async def upload(name: str, body: UploadIn):
         raise HTTPException(400, "没有文件")
     if sum(len(f["buffer"]) for f in payload) > UPLOAD_MAX:
         raise HTTPException(413, f"一次最多传 {UPLOAD_MAX // 1024 // 1024} MB")
-    el = page.locator(f'[data-ref="{body.ref}"]')
+    el = _ref(name, page, body.ref)
     _arm(name, None)
     try:
         kind = await el.evaluate("e => e.tagName.toLowerCase() + ':' + (e.type || '')", timeout=8000)

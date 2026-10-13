@@ -46,7 +46,8 @@ class Page:
     def is_closed(self): return False
     async def goto(self, url, **kw): self.url = url
     async def wait_for_load_state(self, *a, **kw): pass
-    async def evaluate(self, js): return {"url": self.url, "title": "T", "text": "hi", "elements": []}
+    async def evaluate(self, js, arg=None): return {"url": self.url, "title": "T", "text": "hi", "elements": []}
+    main_frame = type("F", (), {"child_frames": []})()  # v2.59 快照会看内嵌框：假页面没有框
 class Ctx:
     def __init__(self, state): self.state, self.closed = state, False
     async def route(self, *a): pass

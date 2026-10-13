@@ -126,3 +126,4 @@
   移植到 backend/app/skill_catalog.py（v2.46）
 - browser/forms.py + browser_select / browser_press: semantics after microsoft/playwright-mcp browser_select_option / browser_press_key (Apache-2.0); own implementation, no code copied.
 - browser/dialogs.py + browser_click/browser_press confirm: semantics after microsoft/playwright-mcp browser_handle_dialog (Apache-2.0); own implementation (decided before the action, not left pending), no code copied.
+- browser/frames.py (iframe content inlined into one snapshot with globally unique refs): semantics after microsoft/playwright-mcp aria snapshot (Apache-2.0); own implementation, no code copied.

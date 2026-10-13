@@ -54,7 +54,8 @@ class Page:
             raise RuntimeError("Download is starting")
     async def wait_for_load_state(self, *a, **kw): pass
     async def wait_for_timeout(self, ms): await asyncio.sleep(0.01)
-    async def evaluate(self, js): return {"url": self.url, "title": "T", "text": "hi", "elements": []}
+    async def evaluate(self, js, arg=None): return {"url": self.url, "title": "T", "text": "hi", "elements": []}
+    main_frame = type("F", (), {"child_frames": []})()  # v2.59 快照会看内嵌框：假页面没有框
     def locator(self, sel): return Locator(sel.split('"')[1])
     def expect_file_chooser(self, **kw): return ChooserCM(multiple=False)
 class Ctx:
