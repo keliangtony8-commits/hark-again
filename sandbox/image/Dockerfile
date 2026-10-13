@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         jq ripgrep zip unzip sqlite3 poppler-utils imagemagick fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* && useradd -m -u 1000 dev
 COPY workspace-env.sh /etc/profile.d/workspace.sh
+COPY matplotlibrc /etc/matplotlibrc
 USER dev
 WORKDIR /workspace
 CMD ["sleep", "infinity"]

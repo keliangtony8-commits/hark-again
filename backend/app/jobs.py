@@ -43,7 +43,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_credentials, command_env, egress_note, job_changes, job_disk, job_restart, quota, sandbox_client, term_text
+from . import command_credentials, command_env, egress_note, glyph_note, job_changes, job_disk, job_restart, quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -282,6 +282,17 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
             "credentials": command_credentials.labels(credentials(job))}
 
 
+def _log_tail(job: Job) -> bytes:
+    """日志最后 glyph_note.TAIL_BYTES 字节；没有 / 读不了 → 空。"""
+    try:
+        with open(job_dir(job) / "log", "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - glyph_note.TAIL_BYTES))
+            return f.read()
+    except OSError:
+        return b""
+
+
 def describe(job: Job) -> str:
     code = "" if job.exit_code is None or job.state in ("done", "cancelled") else f"，退出码 {job.exit_code}"
     label = f"被自动停止（{job.stop_reason}）" if job.stop_reason else LABELS.get(job.state, job.state)
@@ -304,6 +315,8 @@ def describe(job: Job) -> str:
         line += f"；{changed}"
     if blocked := egress_note.note(egress_note.read_job(job_dir(job)), "job"):  # v2.37 沙盒服务记的出网被拦
         line += f"。\n{blocked.rstrip()}"
+    if job.state != "running" and (glyphs := glyph_note.note_tail(_log_tail(job))):  # v2.40 画图缺字形
+        line += f"。\n{glyphs.rstrip()}"
     if job.stop_reason == OOM_REASON:
         return f"{line}。{oom_hint()}"
     return f"{line}。{memcap_hint()}" if (job.stop_reason or "").startswith(MEMCAP_PREFIX) else line

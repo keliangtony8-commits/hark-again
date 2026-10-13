@@ -1,0 +1,8 @@
+# 系统级 matplotlib 配置（镜像里是 /etc/matplotlibrc；workspace-env.sh 在用户没有自己的配置时用 MATPLOTLIBRC 指到这里）。
+# 默认 DejaVu Sans 没有中文字形，图里中文会成方块（E2E B13）。镜像装了 fonts-noto-cjk：
+# .ttc 里 matplotlib 只读第一个字面（JP），所以 JP 排在前面；它也有完整的拉丁字母和数字。
+# 漏掉的字 matplotlib 会打 "Glyph ... missing from font(s)"，后端 app/glyph_note.py 认出来提醒模型。
+font.family: sans-serif
+font.sans-serif: Noto Sans CJK JP, Noto Sans CJK SC, Noto Sans CJK TC, Noto Sans CJK KR, DejaVu Sans, sans-serif
+axes.unicode_minus: False
+backend: Agg

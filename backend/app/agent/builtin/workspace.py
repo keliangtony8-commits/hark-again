@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, file_read, file_seen, foreground, job_memory, job_startup, jobs, memory_view, omission, quota, read_many, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, jobs, memory_view, omission, quota, read_many, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -578,6 +578,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         if left := memory_view.note(await memory_view.current(ctx.db, ctx.workspace), after_oom=True):
             hint += f"\n{left}"  # v2.00 刚被杀：剩下谁在占（不然原样重跑又被杀）
     hint += computer.wake_note(r.woke)
+    if glyphs := glyph_note.note(out):  # v2.40 图里的字缺字形（会成方块）：规则在 glyph_note.py
+        hint += f"\n{glyphs.rstrip()}"
     # 命令可能刚写了大东西：重数一遍（线程里跑，最多数 20 万项），满了 / 快满了才有一句
     hint += await asyncio.to_thread(quota.model_note, ctx.workspace, True)
     hint += f"\n{cred_note}" if cred_note else ""

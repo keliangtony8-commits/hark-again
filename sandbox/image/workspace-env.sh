@@ -23,4 +23,8 @@ if [ -d "$WORKSPACE" ] && [ -w "$WORKSPACE" ]; then
     export XDG_CACHE_HOME="/tmp/.cache"
     export NPM_CONFIG_CACHE="/tmp/.npm"
     export PIP_DISABLE_PIP_VERSION_CHECK=1
+    # v2.40 画图默认用中文字体（/etc/matplotlibrc）；用户自己有 ~/.config/matplotlib/matplotlibrc 或设了 MATPLOTLIBRC 就不管
+    if [ -z "$MATPLOTLIBRC" ] && [ -f /etc/matplotlibrc ] && [ ! -f "$HOME/.config/matplotlib/matplotlibrc" ]; then
+        export MATPLOTLIBRC=/etc/matplotlibrc
+    fi
 fi
