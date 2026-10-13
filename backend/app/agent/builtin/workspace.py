@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, jobs, memory_view, omission, quota, read_many, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, job_usage, jobs, memory_view, omission, quota, read_many, runaway, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -454,12 +454,17 @@ async def _promoted(ctx: ToolContext, command: str, r: foreground.Outcome, borro
     """前台命令到点没跑完，沙盒已把它转成后台任务：建任务行，告诉模型它还在跑、去哪看后续（同 deepseek-harness renderPromoted）。"""
     job = await jobs.adopt(ctx.db, job_id=r.promoted, project_id=ctx.workspace, command=command, seconds=r.seconds,
                            conversation_id=ctx.conversation_id, task_id=ctx.task_id, credentials=borrowed)
+    stuck = ""
+    if not r.shown.strip() and (use := await job_usage.of(job)) and runaway.looks_stuck(r.shown, r.seconds, use):
+        job.idle_timeout = runaway.idle_cap(job.idle_timeout)  # v2.42 B15 像死循环：再没输出就早点停（规则在 runaway.py）
+        await ctx.db.commit()
+        stuck = runaway.note(job.id, r.seconds, use, job.idle_timeout)
     idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
     so_far = r.out.strip() or "（还没有输出）"
     return ToolResult(f"命令跑了 {jobs.duration_text(int(r.seconds))} 还没结束，没有被杀，已转成后台任务 {job.id} 接着跑"
                       f"（最长 {jobs.duration_text(job.timeout)}{idle}）。到目前的输出：\n{so_far}\n"
-                      "它结束时你会收到通知并在这段对话里接着说，期间别反复用 job_status 轮询（它只给这之后的新输出），"
-                      "要停就 cancel_job。现在简短告诉用户这条命令转到后台在跑。" + computer.wake_note(r.woke),
+                      + (stuck or "它结束时你会收到通知并在这段对话里接着说，期间别反复用 job_status 轮询（它只给这之后的新输出），"
+                                  "要停就 cancel_job。现在简短告诉用户这条命令转到后台在跑。") + computer.wake_note(r.woke),
                       [jobs.block(job)])
 
 
