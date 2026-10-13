@@ -138,6 +138,7 @@ class _Parser:
         self.line_no = 0
         self.hunk_line = 0
         self.environment = False
+        self.blanks = 0             # Add File 里还没定性的裸空行（见 line()）
 
     def _ensure_update_not_empty(self, line: str) -> None:
         h = self.hunks[-1] if self.hunks else None
@@ -183,12 +184,21 @@ class _Parser:
         if self.mode in ("started", "delete"):
             if self._headers(trimmed):
                 return
+            if not trimmed:
+                return                   # 段与段之间的空行：忽略
             raise _hunk_error(bad_header, self.line_no)
         if self.mode == "add":
+            # 唯一规则（E2E B10）：Add File 里的裸空行，后面还有 + 行 → 是一行空内容；
+            # 后面紧跟段头 / End Patch → 段间空行，丢掉。（以前当成坏段头报错，模型改写成 "++" 把文件弄脏。）
+            if not trimmed:
+                self.blanks += 1
+                return
             if self._headers(trimmed):
+                self.blanks = 0
                 return
             if line.startswith("+"):
-                self.hunks[-1].contents += line[1:] + "\n"
+                self.hunks[-1].contents += "\n" * self.blanks + line[1:] + "\n"
+                self.blanks = 0
                 return
             raise _hunk_error(bad_header + "新建文件的内容每行都要以 + 开头。", self.line_no)
         if self.mode == "ended":
@@ -253,6 +263,7 @@ class _Parser:
         所以缩进的 ' *** End Patch' 在最后一行也认（修改段里别处的缩进标记仍当上下文行）。"""
         if line.strip() == END and self.mode != "not_started":
             self.line_no += 1
+            self.blanks = 0
             self._ensure_update_not_empty(END)
             self.mode = "ended"
             return

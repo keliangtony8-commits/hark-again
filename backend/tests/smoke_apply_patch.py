@@ -62,6 +62,11 @@ assert ind[0].chunks[0].old == [" *** Update File: not-a-header", "x"], ind
 bare = AP.parse(wrap("*** Update File: a.txt\n@@\n a\n\n-b\n+B"))
 assert bare[0].chunks[0].old == ["a", "", "b"] and bare[0].chunks[0].new == ["a", "", "B"]
 assert AP.parse(wrap("*** Update File: a.txt\n@@\n-x\n+y\n*** End of File\n\n\n"))[0].chunks[0].eof
+# E2E B10：Add File 里的裸空行——后面还有 + 行 = 空内容行；紧跟段头 / End Patch = 段间空行，丢掉
+b10 = AP.parse(wrap("*** Add File: n1.md\n+# 标题\n\n+正文\n\n\n*** Add File: n2.md\n+a\n   \n+b\n\n"))
+assert [h.contents for h in b10] == ["# 标题\n\n正文\n", "a\n\nb\n"], b10
+assert AP.parse(wrap("\n*** Delete File: x\n\n*** Add File: y\n+1")) == [Hunk("delete", "x"), Hunk("add", "y", "1\n")]
+assert "新建文件的内容每行都要以 + 开头" in err(wrap("*** Add File: z\n+1\nnot plus"))    # 真乱码仍报错
 crlf = AP.parse("*** Begin Patch\r\n*** Update File: a.txt\r\n@@\r\n-x\r\n+y\r\n*** End Patch\r\n")
 assert crlf[0].chunks[0].old == ["x"] and crlf[0].chunks[0].new == ["y"]
 assert "之后不能再有内容" in err("*** Begin Patch\n*** Add File: a\n+x\n*** End Patch\nmore\n*** End Patch")
@@ -258,6 +263,14 @@ script.extend([[("run_command", {"command": cmd})], "好。"])
 r4 = asyncio.run(turn(cid4))
 assert (wr / "sub/x.txt").read_text() == "from heredoc\n" and r4.steps[0]["state"] == "done", r4.steps
 assert r4.steps[0]["change"]["path"] == "sub/x.txt" and r4.blocks[-1]["type"] == "changes"
+# 真实复现（E2E t3）：模型一次写三篇笔记，标题后、文件之间都是裸空行 → 一次成功，没有多余的 "+"
+cid5 = asyncio.run(seed())
+notes = "*** Begin Patch\n" + "".join(f"*** Add File: notes/note{i}.md\n+# 笔记{i}\n\n+正文{i}\n\n" for i in (1, 2, 3)) + "*** End Patch"
+script.extend([[("apply_patch", {"patch": notes})], "好。"])
+r5 = asyncio.run(turn(cid5))
+assert r5.steps[0]["state"] == "done", r5.steps
+for i in (1, 2, 3):
+    assert (wr / f"notes/note{i}.md").read_text() == f"# 笔记{i}\n\n正文{i}\n"
 # 子助手也能用；工具 schema 自检
 from app.agent import subagent
 from app.agent.tools import REGISTRY
