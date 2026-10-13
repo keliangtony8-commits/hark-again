@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import attachment_save, quota, workspace_write
-from .storage import project_dir
+from .storage import project_dir, sandbox_rel
 
 DIR = "screenshots"
 FORMATS = {".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg"}
@@ -48,7 +48,7 @@ def target(root: Path, site: str, path: str = "") -> tuple[Path, str]:
     """截图该放到哪 + 格式（还没处理重名）。"""
     raw = (path or "").strip().replace("\\", "/")
     name = f"{_stem(site)}.png"
-    rel = raw.removeprefix("/workspace").lstrip("/") if raw == "/workspace" or raw.startswith("/workspace/") else raw
+    rel = raw if (inner := sandbox_rel(raw)) is None else inner
     if not rel or rel in (".", "./"):
         raw = f"{DIR}/"
     try:

@@ -24,7 +24,19 @@ def hidden(rel_parts) -> bool:
     return any(part in HIDDEN_DIRS for part in rel_parts)
 
 
+SANDBOX_ROOT = "/workspace"  # 沙盒里工作区挂载的位置（sandbox/runner.py）：命令输出、模型写的绝对路径都以它开头
+
+
+def sandbox_rel(path: str) -> str | None:
+    """沙盒里的绝对路径 /workspace/… → 相对工作区的路径（只给根 → ""）；不是这种路径 → None。唯一入口（v2.54 B25）。"""
+    if path == SANDBOX_ROOT or path.startswith(SANDBOX_ROOT + "/"):
+        return path.removeprefix(SANDBOX_ROOT).lstrip("/")
+    return None
+
+
 def safe_join(root: Path, rel: str) -> Path:
+    if (inner := sandbox_rel(rel)) is not None:  # 模型照着命令输出写了 /workspace/x（E2E l1：display_file 三次都“不存在”）
+        rel = inner
     p = (root / rel.lstrip("/")).resolve()
     if p != root.resolve() and root.resolve() not in p.parents:
         raise ValueError("路径越界")

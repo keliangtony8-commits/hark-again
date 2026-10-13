@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, job_usage, jobs, memory_view, omission, quota, read_many, runaway, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, job_usage, jobs, memory_view, missing_env, omission, quota, read_many, runaway, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -414,7 +414,8 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
             continue
         blocks.append(d.block)
         notes.append(d.note)
-    return ToolResult("\n".join(notes), blocks)
+    # v2.54 B25：一个都没交出去 = 失败（步骤显示出错；不然模型以为交了、或者以为“交付工具不可用”）
+    return ToolResult("\n".join(notes), blocks, failed="" if blocks else "没有交付")
 
 
 @tool("render_document", "正在排版",
@@ -565,7 +566,7 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     try:
         r = await foreground.run(ctx.workspace, command, timeout or 60, stdin,
                                  lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}),
-                                 {**await command_env.load(ctx.db), **grant.env}, slot)
+                                 (env := {**await command_env.load(ctx.db), **grant.env}), slot)
     finally:
         if watch:
             await asyncio.to_thread(command_changes.after, ctx.workspace, ctx.changes)
@@ -585,6 +586,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     hint += computer.wake_note(r.woke)
     if glyphs := glyph_note.note(out):  # v2.40 图里的字缺字形（会成方块）：规则在 glyph_note.py
         hint += f"\n{glyphs.rstrip()}"
+    if not r.ok and (absent := missing_env.note(out, command_env.RESERVED, set(env))):  # v2.54 缺密钥 → request_env，别拿示例 Key 试
+        hint += f"\n{absent.rstrip()}"
     # 命令可能刚写了大东西：重数一遍（线程里跑，最多数 20 万项），满了 / 快满了才有一句
     hint += await asyncio.to_thread(quota.model_note, ctx.workspace, True)
     hint += f"\n{cred_note}" if cred_note else ""

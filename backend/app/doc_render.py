@@ -25,7 +25,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from . import browser_client, quota, workspace_write
-from .storage import hidden, looks_text, mime_of, project_dir, safe_join
+from .storage import hidden, looks_text, mime_of, project_dir, safe_join, sandbox_rel
 
 FORMATS = ("pdf", "png")
 PAPERS = ("A3", "A4", "A5", "Letter", "Legal")  # browser/service.py PAPERS 同值
@@ -183,7 +183,7 @@ def _asset(root: Path, base: Path, ref: str, notes: list[str]) -> Path | None:
     if not clean:
         return None
     if clean.startswith("/"):  # 沙盒里的绝对路径 /workspace/… 也认；别的绝对路径算工作区外
-        rel = clean.removeprefix("/workspace").lstrip("/") if clean == "/workspace" or clean.startswith("/workspace/") else None
+        rel = sandbox_rel(clean)
     else:
         rel = os.path.relpath(os.path.normpath(base / clean), root)
     try:

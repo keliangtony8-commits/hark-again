@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, command_env, llm_retry, plan, plan_mode, spill, steering, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, claimed_action, compact, deferred, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
+from . import approvals, claimed_action, compact, deferred, distill, loop_guard, next_speaker, parallel, supersede, text_tool_call, tool_args, tool_mask, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -260,6 +260,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     ended = "done"
     nudges, used_tools = next_speaker.limit(), False  # 话说一半就停：替用户补“继续”的剩余次数（next_speaker.py）
     claims_left, acted = claimed_action.ONCE, set()  # 嘴上做完、手上没做：拦的剩余次数 + 这一轮成功完成的工具（claimed_action.py）
+    texted_left = text_tool_call.ONCE  # 把工具调用写成文字：拦的剩余次数（text_tool_call.py）
     while True:
         if inbox is not None and inbox.pending():  # 用户在途中补了话：作为新的用户消息接在后面（Codex pending input）
             builder.break_text()
@@ -356,6 +357,14 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
             if not over and inbox is not None and inbox.pending():  # 正要收尾时用户补了话：再来一圈读它（没读的不会被丢）
                 if said.strip():
                     messages.append({"role": "assistant", "content": said})
+                continue
+            if not turn.tool_calls and not over and texted_left > 0 and step < max_steps - 1 \
+                    and (texted := text_tool_call.found(said, (x.name for x in REGISTRY.values() if x.available(ctx)))):
+                texted_left -= 1  # 回复里写了 <display_file><args>…：没执行，撤回后让它真调
+                for ev in builder.rollback(mark):
+                    yield ev
+                messages += [{"role": "assistant", "content": said},
+                             {"role": "user", "content": text_tool_call.nudge(texted)}]
                 continue
             if not turn.tool_calls and not over and claims_left > 0 and step < max_steps - 1 \
                     and (claim := claimed_action.claims(said, acted)):

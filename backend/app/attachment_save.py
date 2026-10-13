@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import file_seen, quota
-from .storage import hidden, project_dir, safe_join, upload_path
+from .storage import hidden, project_dir, safe_join, sandbox_rel, upload_path
 
 DIR = "uploads"     # 默认放进工作区的哪个目录
 NAME_MAX = 99       # 重名时最多试到 “名字 (99)”
@@ -52,8 +52,8 @@ def numbered(p: Path, n: int) -> Path:
 def target(root: Path, name: str, path: str = "") -> Path:
     """附件该放到哪（还没处理重名）。"""
     path = (path or "").strip().replace("\\", "/")
-    if path == "/workspace" or path.startswith("/workspace/"):
-        rel = path.removeprefix("/workspace").lstrip("/")  # 沙盒里的绝对路径 → 相对；只给根 → 默认目录
+    if (inner := sandbox_rel(path)) is not None:
+        rel = inner  # 沙盒里的绝对路径 → 相对；只给根 → 默认目录
     elif path.startswith("/"):
         raise SaveError(f"{path} 在工作区外面，存不了；给相对工作区的路径（比如 {DIR}/{name}）。")
     else:

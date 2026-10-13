@@ -43,7 +43,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_credentials, command_env, egress_note, glyph_note, job_changes, job_disk, job_restart, quota, sandbox_client, term_text
+from . import command_credentials, command_env, egress_note, glyph_note, job_changes, missing_env, job_disk, job_restart, quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -317,6 +317,8 @@ def describe(job: Job) -> str:
         line += f"。\n{blocked.rstrip()}"
     if job.state != "running" and (glyphs := glyph_note.note_tail(_log_tail(job))):  # v2.40 画图缺字形
         line += f"。\n{glyphs.rstrip()}"
+    if job.state == "failed" and (absent := missing_env.note(_log_tail(job).decode("utf-8", "replace"), command_env.RESERVED)):  # v2.54
+        line += f"。\n{absent.rstrip()}"
     if job.stop_reason == OOM_REASON:
         return f"{line}。{oom_hint()}"
     return f"{line}。{memcap_hint()}" if (job.stop_reason or "").startswith(MEMCAP_PREFIX) else line

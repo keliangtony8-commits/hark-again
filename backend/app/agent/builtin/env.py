@@ -35,7 +35,7 @@ async def _form(ctx: ToolContext, args: dict) -> dict | None:
 @tool("request_env", "正在向你要环境变量",
       "沙盒里的程序要用一个用户自己的密钥（机器人 Token、第三方 API Key、数据库密码…）而系统提示里没列出这个环境变量，"
       "或者用户说旧值失效了时调用：在聊天里弹一张卡，用户把值填进去，直接存进保险箱，之后每条命令（含后台 / 常驻任务、"
-      "定时脚本）都能用 $NAME 读到。你永远看不到值。绝不让用户把密钥发在聊天里；用户已经发了也别复述、别写进文件。"
+      "定时脚本）都能用 $NAME 读到。你永远看不到值。绝不让用户把密钥发在聊天里；用户已经发了也别复述、别写进文件。也绝不拿示例 Key、文档 / 网上找到的 Key 去试（v2.54）。"
       "网站登录用 browser_login，HTTP API 的密钥按域名注入（api_request）不用它。",
       {"type": "object", "properties": {
           "name": {"type": "string", "description": "环境变量名，大写字母 / 数字 / 下划线，如 TELEGRAM_BOT_TOKEN"},
