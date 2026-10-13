@@ -1,7 +1,8 @@
 """定时任务（含面板）的增删改唯一写入口：接口的钩子与智能体工具 schedule_task / create_panel / manage_home 共用，
 保证“删任务连带删 Home 卡片和运行记录”“面板改名卡片跟着改”只写在这一处。计划校验在 app/schedule.py check()。
 面板 = output=panel 的任务 + 一张 kind=panel 的 HomeCard（task_id 相连）；标题以任务 name 为准，卡片 title 是它的镜像。"""
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 
 from sqlalchemy import delete, select, update as sql_update
 
@@ -53,6 +54,36 @@ async def remove_for_project(db, project_id: str) -> None:
     for task in (await db.scalars(select(ScheduledTask).where(ScheduledTask.project_id == project_id))).all():
         await delete_cascade(db, task)
         await db.delete(task)
+
+
+def _same_text(a: str | None, b: str | None) -> bool:
+    """内容一样：忽略首尾空白、连续空白和句末标点（E2E：同一句提醒模型这次带“。”下次不带）。"""
+    norm = lambda s: re.sub(r"\s+", " ", (s or "").strip()).rstrip("。．.！!～~ ")
+    return norm(a) == norm(b)
+
+
+def _utc(t: datetime | None) -> datetime | None:
+    if t is None:
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).replace(second=0, microsecond=0)
+
+
+async def twin(db, *, prompt: str, cron: str = "", run_at: datetime | None = None, kind: str = "agent",
+               project_id: str | None = None) -> ScheduledTask | None:
+    """“同一件事已经安排过了”的唯一规则（v2.41，E2E B14：模型为了加个参数又 create 一遍 → 到点提醒两次）：
+    还会再跑的（启用、一次性的没跑过）、同类型、同计划（cron 一样或 run_at 同一分钟）、内容一样（prompt / 命令，空白不计）的
+    报告类任务算同一个；名字不看（模型换个说法起名很常见）。面板不在这查（create_panel 自有标题）。
+    只给智能体工具用：用户在界面上自己建两个一样的，是他的事。"""
+    rows = (await db.scalars(select(ScheduledTask).where(
+        ScheduledTask.active.is_(True), ScheduledTask.kind == kind, ScheduledTask.output == "report"))).all()
+    for t in rows:
+        if schedule.is_done(t) or not _same_text(t.prompt, prompt):
+            continue
+        if kind == "script" and t.project_id != project_id:
+            continue
+        if (t.cron or "").split() == (cron or "").split() and _utc(t.run_at) == _utc(run_at):
+            return t
+    return None
 
 
 async def create(db, *, name: str, prompt: str, cron: str = "", run_at: datetime | None = None,

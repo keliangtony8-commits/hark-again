@@ -72,7 +72,8 @@ def _when(run_at: str | None) -> datetime | None:
       "prompt 是到点时独立执行的指令（看不到当前对话，写全要做什么；纯提醒就写“提醒我：……”），结果进 Home 收件箱。"
       "定时脚本：create 时给 command（不给 prompt）= 到点直接在当前工作区跑这条 shell 命令，不调用模型、不花 token，"
       "适合备份、定时抓取/爬虫、跑测试、清理文件这类固定步骤（复杂的先写成脚本文件放工作区再调用）；"
-      "notify：failure 只在失败时告诉用户（默认）/ always 每次 / change 输出和上次不一样时（监控网页、价格用这个）。"
+      "notify（只对 command 脚本）：failure 只在失败时告诉用户（默认）/ always 每次 / change 输出和上次不一样时（监控网页、价格用这个）；交给助手的任务每次到点都会通知，不传。"
+      "同计划同内容的任务已存在时 create 不会再建，改已有的用 update。"
       "需要判断、总结、搜索的事才用 prompt 交给助手。"
       "action=list 看现有任务和 id；update 按 id 改 name/prompt/command/notify/cron/run_at/active（换成一次性传 run_at，换回重复传 cron）；cancel 按 id 删除。"
       "runs 看最近几次运行（成功 / 失败原因 / 没打扰用户的原因）；run_now 立刻跑一次；skip_next 跳过下一次（unskip 撤销）。"
@@ -121,6 +122,14 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
             return ToolResult("create 需要 name，以及 prompt（交给助手）或 command（定时脚本）二选一。")
         if prompt and command:
             return ToolResult("prompt 和 command 只给一个：要助手判断/总结用 prompt，固定命令用 command。")
+        kind = "script" if command else "agent"
+        ignored = script_tasks.notify_ignored(kind, notify)
+        tail = f"\n{ignored}" if ignored else ""
+        same = await task_store.twin(db, prompt=command or prompt, cron=cron or "", run_at=when, kind=kind,
+                                     project_id=ctx.project_id if command else None)
+        if same is not None:
+            return ToolResult(f"一模一样的已经安排过了，没再建（不然到点会提醒两遍）：{_line(same)}。"
+                              f"要改名、改时间或内容用 action=update id={same.id}。{tail}")
         try:
             if command:
                 t = await task_store.create(db, name=name, prompt=command, cron=cron or "", run_at=when, kind="script",
@@ -130,7 +139,7 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
         except ValueError as e:
             return ToolResult(str(e))
         where = "失败或按 notify 该告诉用户时结果进 Home 收件箱" if command else "到点结果会出现在 Home 收件箱"
-        return ToolResult(f"已安排：{_line(t)}。{where}，用户可在“我的 → 定时任务”里改。")
+        return ToolResult(f"已安排：{_line(t)}。{where}，用户可在“我的 → 定时任务”里改。{tail}")
 
     id = id or (ctx.task_id if action in ("set_runbook", "note", "runs", "report_wall", "cancel") else None)  # 任务运行里：默认就是自己
     t = await db.get(ScheduledTask, id) if id else None
@@ -190,8 +199,11 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
             return ToolResult("这是交给助手的任务，不能改成脚本：取消后用 command 重建。")
         if prompt is not None and script_tasks.is_script(t):
             return ToolResult("这是定时脚本，改命令用 command。")
+        ignored = script_tasks.notify_ignored(t.kind, notify)
         changes = {k: v for k, v in {"name": name, "prompt": command if command is not None else prompt,
-                                      "active": active, "notify": notify}.items() if v is not None}
+                                      "active": active, "notify": None if ignored else notify}.items() if v is not None}
+        if ignored and not changes and when is None and not cron:
+            return ToolResult(f"没改动：{ignored}")
         if when is not None:
             changes.update(run_at=when, cron="")
         elif cron:
@@ -200,5 +212,5 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
             await task_store.update(db, t, changes)
         except ValueError as e:
             return ToolResult(str(e))
-        return ToolResult(f"已更新：{_line(t)}。")
+        return ToolResult(f"已更新：{_line(t)}。" + (f"\n{ignored}" if ignored else ""))
     return ToolResult(f"未知 action：{action}")

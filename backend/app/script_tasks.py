@@ -31,6 +31,16 @@ COMMAND_MAX = 4000
 DIGEST_CHARS = 200_000  # 比对“输出变没变”看的日志长度（尾部）
 
 
+AGENT_NOTIFY_NOTE = ("notify 只对定时脚本（command）有效，这次没用上：交给助手的任务每次到点都会把结果送进 Home 收件箱，"
+                     "不用传 notify。要它到点不打扰用户，在 prompt 里写明“没变化就不用告诉我”。")
+
+
+def notify_ignored(kind: str | None, notify: str | None) -> str | None:
+    """“给助手任务传了 notify”的唯一规则（v2.41，E2E B14）：不报错（别的字段照常生效），但把“没用上”明说，
+    免得模型以为没设上又 create 一遍。脚本任务或没传 → None。"""
+    return AGENT_NOTIFY_NOTE if notify is not None and (kind or "agent") != "script" else None
+
+
 def is_script(task: ScheduledTask) -> bool:
     return task.kind == "script"
 
