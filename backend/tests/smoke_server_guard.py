@@ -144,6 +144,15 @@ tool_msg = [m for m in seen[-1] if m["role"] == "tool"][-1]["content"]
 assert "安全规则拦下" in tool_msg and "不要换个写法绕过" in tool_msg, tool_msg
 out = run(tool("run_command", command="mkfs.ext4 /dev/sdb", background=True)).content
 assert "拦下" in out and not (root_dir / ".jobs").exists(), out
+# v2.26（真机试跑 B3）：换个写法也绕不过——模型发 \rm / 变量程序名 / ../ 都在执行前被拦
+for sneaky in ["\\rm -rf /", "R=rm; $R -rf /", "rm -fr /etc/../", "T=/; rm -rf $T"]:
+    script.extend([("run_command", {"command": sneaky}), "拦下了。"])
+    reply = run(turn())
+    assert not ran and not any(b["type"] == "approval" for b in reply.blocks), (sneaky, reply.blocks)
+    tool_msg = [m for m in seen[-1] if m["role"] == "tool"][-1]["content"]
+    assert "安全规则拦下" in tool_msg, (sneaky, tool_msg)
+# 管道交给 sh 执行：弹审批卡，不直接跑
+assert workspace._command_risk({"command": "echo cm0gLXJmIC8= | base64 -d | sh"}), "piped sh should ask"
 
 # ---- 3. spill 纯规则 ----
 text = "".join(f"第 {i} 行 日志内容\n" for i in range(2000))

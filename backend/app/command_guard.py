@@ -16,7 +16,14 @@ v1.37 起解析移植自 OpenAI Codex CLI（Apache-2.0）的 is_dangerous_comman
   - 和 Codex 的分歧：Codex 把任何 rm -f 都当危险；云端工作区里删单个文件很常见，这里只拦递归删除
     （系统目录 → block，其余 → ask）。
   语法树有错或没装 tree-sitter → 退回 shlex 分词（剥掉 if/then/do 这类关键字），引号不配对再退回整串正则。
+
+v2.26（真机试跑 B3：护栏能被平凡写法绕过）——“看不清”不再等于“安全”：
+  - 程序名用 Word.value：`\\rm`、`r\\m` 去掉转义就是 rm；`R=rm; $R -rf /` 用前面的字面赋值猜出 rm。
+  - 还是猜不出的程序名（`$(echo rm) -rf /`）：参数是递归 + 系统目录 → block，带递归或系统目录 → ask（_opaque）。
+  - 目标先规范化（_normalize）：/etc/../、/workspace/.. 都是 /；~/.. 越过家目录也算系统目录。
+  - 管道里把前一条输出交给 shell 从标准输入执行（`… | base64 -d | sh`）一律 ask，不只 curl/wget。
 """
+import posixpath
 import re
 import shlex
 from dataclasses import dataclass
@@ -51,6 +58,10 @@ RAW_DEVICE = re.compile(r">\s*/dev/(sd|nvme|vd|xvd|hd|mmcblk)\w*")
 PIPE_TO_SHELL = re.compile(r"\b(curl|wget)\b[^|;&]*\|\s*(sudo\s+)?(ba|z|da)?sh\b")
 ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 TOO_DEEP = "命令套了太多层包装，看不清到底要做什么"
+PIPED_SHELL = "把前一条命令的输出当脚本直接执行"
+OPAQUE = "程序名要到运行时才知道（变量或命令替换），参数又像递归处理或动系统目录"
+OPAQUE_SYSTEM = "程序名要到运行时才知道，参数却在递归处理系统目录"
+HOME_PREFIXES = ("~", "$HOME", "${HOME}", "$WORKSPACE", "${WORKSPACE}")
 
 
 @dataclass(frozen=True)
@@ -59,7 +70,7 @@ class Verdict:
     why: str
 
 
-def _segments(command: str) -> list[list[str]] | None:
+def _segments(command: str) -> list[list[Word]] | None:
     """兜底分词（tree-sitter 不可用或语法树有错时）。"""
     try:
         lex = shlex.shlex(command.replace("\n", " ; "), posix=True, punctuation_chars=";&|()")
@@ -67,36 +78,44 @@ def _segments(command: str) -> list[list[str]] | None:
         tokens = list(lex)
     except ValueError:  # 引号不配对
         return None
-    out, cur = [], []
+    out: list[shell_parse.Command] = []
+    cur = shell_parse.Command()
+    piped = False
     for t in tokens:
         if t in SEPARATORS or set(t) <= set(";&|()"):
             if cur:
                 out.append(cur)
-            cur = []
+            cur = shell_parse.Command()
+            piped = t in ("|", "|&") or (piped and t in ("(", ")"))
+            cur.piped = piped
         elif not cur and (t in KEYWORDS or ASSIGN.fullmatch(t)):
             continue  # if / then / do / A=B 前缀
         else:
-            cur.append(t)
+            cur.append(_fallback_word(t))
     if cur:
         out.append(cur)
     return out
 
 
+def _fallback_word(t: str) -> Word:
+    return Word(None, t) if "$" in t or "`" in t else Word(t, t)
+
+
 def _parse(script: str) -> list[list[Word]] | None:
-    """整段脚本 → 每条命令的词。None = 连兜底分词都拆不开（引号不配对）。"""
+    """整段脚本 → 每条命令的词（shell_parse.Command，带 piped）。None = 连兜底分词都拆不开（引号不配对）。"""
     cmds = shell_parse.commands(script)
     if cmds is not None:
         return cmds
     segs = _segments(script)
-    return None if segs is None else [[Word(t, t) for t in s] for s in segs]
+    return None if segs is None else segs
 
 
 def _name(w: Word) -> str:
-    return (w.text or "").rsplit("/", 1)[-1]  # /bin/rm → rm
+    return (w.value or "").rsplit("/", 1)[-1]  # /bin/rm → rm
 
 
 def _arg(w: Word) -> str:
-    return w.text if w.text is not None else w.raw
+    return w.value if w.value is not None else w.raw
 
 
 def flags_only_query(prog: str, args: list[str]) -> bool:
@@ -128,8 +147,41 @@ def _targets(args: list[str]) -> list[str]:
     return out
 
 
+def _normalize(target: str) -> str:
+    """/etc/../ → /、//usr/./ → /usr、~/a/../.. → /（越过家目录）；相对路径原样。"""
+    for pre in HOME_PREFIXES:
+        if target == pre or target.startswith(pre + "/"):
+            depth, parts = 0, []
+            for part in target[len(pre):].split("/"):
+                if part in ("", "."):
+                    continue
+                if part == "..":
+                    if not parts:
+                        return "/"  # 越过家目录 / 工作区
+                    parts.pop()
+                else:
+                    parts.append(part)
+            return pre + "".join("/" + p for p in parts)
+    if target.startswith("/"):
+        return "/" + posixpath.normpath(target).lstrip("/")
+    return target
+
+
 def _system(target: str) -> bool:
-    return target in SYSTEM_PATHS or (target.rstrip("/") or "/") in SYSTEM_PATHS
+    for t in (target, _normalize(target)):
+        if t in SYSTEM_PATHS or (t.rstrip("/") or "/") in SYSTEM_PATHS:
+            return True
+    return False
+
+
+def _opaque(args: list[str]) -> list[Verdict]:
+    """程序名猜不出：不当安全（v2.26 前整条跳过）。递归 + 系统目录 → block；有其一 → ask。"""
+    flags = _flags(args)
+    recursive = bool(flags & {"-r", "-R", "--recursive", "--no-preserve-root"})
+    system = any(_system(t) for t in _targets(args))
+    if recursive and system:
+        return [Verdict("block", OPAQUE_SYSTEM)]
+    return [Verdict("ask", OPAQUE)] if recursive or system else []
 
 
 def _skip_options(words: list[Word], with_value: set[str]) -> list[Word]:
@@ -149,23 +201,26 @@ def _script(script: str, depth: int) -> list[Verdict]:
     cmds = _parse(script)
     if cmds is None:
         return [Verdict("ask", "递归删除文件")] if re.search(r"\brm\s+-[a-zA-Z]*[rR]", script) else []
-    return [v for c in cmds for v in _exec(c, depth + 1)]
+    return [v for c in cmds for v in _exec(c, depth + 1, getattr(c, "piped", False))]
 
 
-def _exec(words: list[Word], depth: int) -> list[Verdict]:
-    """一条简单命令（可能是包装）：返回它和它包着的命令命中的全部规则。"""
+def _exec(words: list[Word], depth: int, piped: bool = False) -> list[Verdict]:
+    """一条简单命令（可能是包装）：返回它和它包着的命令命中的全部规则。piped = 标准输入来自管道前一段。"""
     if depth > MAX_DEPTH:
         return [Verdict("ask", TOO_DEEP)]
     while words and words[0].text is not None and ASSIGN.fullmatch(words[0].text):
         words = words[1:]  # 兜底分词里的 A=B 前缀
-    if not words or words[0].text is None:
+    if not words:
         return []
-    prog, rest = _name(words[0]), words[1:]
+    rest = words[1:]
     args = [_arg(w) for w in rest]
+    if words[0].value is None:
+        return _opaque(args)
+    prog = _name(words[0])
 
     if prog in ("sudo", "doas"):
         inner = _skip_options(rest, {"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "--user", "--group"})
-        return [Verdict("unsupported", "沙盒里没有 root 权限（sudo / su 用不了）"), *_exec(inner, depth + 1)]
+        return [Verdict("unsupported", "沙盒里没有 root 权限（sudo / su 用不了）"), *_exec(inner, depth + 1, piped)]
     if prog == "su":
         found = [Verdict("unsupported", "沙盒里没有 root 权限（sudo / su 用不了）")]
         for i, a in enumerate(args[:-1]):
@@ -187,12 +242,12 @@ def _exec(words: list[Word], depth: int) -> list[Verdict]:
                 i += 2
             else:
                 break
-        return _exec(rest[i:], depth + 1)
+        return _exec(rest[i:], depth + 1, piped)
     if prog == "timeout":
         inner = _skip_options(rest, WRAPPERS["timeout"])
-        return _exec(inner[1:], depth + 1)  # 第一个是时长
+        return _exec(inner[1:], depth + 1, piped)  # 第一个是时长
     if prog in WRAPPERS:
-        return _exec(_skip_options(rest, WRAPPERS[prog]), depth + 1)
+        return _exec(_skip_options(rest, WRAPPERS[prog]), depth + 1, piped and prog != "xargs")
     if prog == "trap":  # Codex dangerous_command_match_for_trap：动作是一段 shell 源码
         i = 1 if args[:1] == ["--"] else 0
         return _script(args[i], depth) if i < len(args) and not args[i].startswith("-") else []
@@ -202,9 +257,16 @@ def _exec(words: list[Word], depth: int) -> list[Verdict]:
         for i, a in enumerate(args):
             if a.startswith("-") and not a.startswith("--") and "c" in a[1:]:
                 return _script(args[i + 1], depth) if i + 1 < len(args) else []
-            if not a.startswith("-"):
+            if a.startswith("-") and not a.startswith("--") and "s" in a[1:]:
+                break  # -s：后面都是位置参数，脚本从标准输入读
+            if a == "--":
+                if i + 1 < len(args):
+                    return []  # bash -- script.sh
                 break
-        return []
+            if not a.startswith("-"):
+                return []  # bash script.sh：跑的是文件
+        # 从标准输入读脚本（只有选项或 -s）。管道里 = 前一条命令的输出直接当脚本执行
+        return [Verdict("ask", PIPED_SHELL)] if piped else []
     if prog == "find":
         return _find(rest, depth)
     v = _rules(prog, args)
@@ -293,8 +355,8 @@ def verdicts(command: str) -> list[Verdict]:
     if RAW_DEVICE.search(command):
         return [Verdict("block", "直接写磁盘设备")]
     found = _script(command, -1)
-    if PIPE_TO_SHELL.search(command):
-        found.append(Verdict("ask", "下载并直接执行脚本"))
+    if PIPE_TO_SHELL.search(command):  # curl | sh 说得更具体，替掉通用的那句
+        found = [v for v in found if v.why != PIPED_SHELL] + [Verdict("ask", "下载并直接执行脚本")]
     return found
 
 

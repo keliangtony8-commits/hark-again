@@ -27,7 +27,9 @@ assert words("echo 'a'\"b\"c") == [["echo", "abc"]]  # mixed quote concatenation
 assert words('echo "hi $USER"') == [["echo", None]]  # 双引号里有展开 → 非字面
 assert words('echo "a\\$b"') == [["echo", None]]  # 双引号里的转义 → 非字面（Codex rejects_double_quoted_escapes）
 assert words("echo \"$(rm -rf x)\"") == [["echo", None], ["rm", "-rf", "x"]]  # 双引号里的命令替换也被找到
-assert words("cmd=rm; $cmd -rf x") == []  # 程序名非字面 → 跳过
+# v2.26 起和 Codex 分歧：程序名非字面也返回（text=None），guess 用前面的字面赋值
+assert words("cmd=rm; $cmd -rf x") == [[None, "-rf", "x"]]
+assert [w.guess for w in shell_parse.commands("cmd=rm; $cmd -rf x")[0]] == ["rm", None, None]
 assert words("if then rm -rf x") is None  # 语法错 → None
 w = shell_parse.commands("rm -rf ~ \"$HOME\" /*")[0]
 assert [x.raw for x in w[2:]] == ["~", "$HOME", "/*"] and all(x.text is None for x in w[2:])
@@ -57,7 +59,8 @@ deep = V(" ".join(["env"] * (command_guard.MAX_DEPTH + 1) + ["rm", "-rf", "/tmp/
 assert deep and deep.level == "ask" and deep.why == command_guard.TOO_DEEP, deep
 assert lv(" ".join(["env"] * (command_guard.MAX_DEPTH + 1) + ["ls"])) == "ask"
 # Codex non_forced_or_non_literal_rm_is_not_dangerous（我们 rm -r 也问，所以只留不递归/非字面的）
-for cmd in ["rm -- -r", "rm -f old.txt", "echo 'rm -rf /tmp/example'", "cmd=rm; $cmd -rf /tmp/example",
+assert lv("cmd=rm; $cmd -rf /tmp/example") == "ask"  # v2.26：猜得出 rm → 递归删除照常问（Codex 放行）
+for cmd in ["rm -- -r", "rm -f old.txt", "echo 'rm -rf /tmp/example'",
             "bash -lc \"trap 'echo rm -rf /tmp/example' EXIT\"", "bash -lc 'echo rm -rf /'"]:
     assert lv(cmd) is None, (cmd, V(cmd))
 
@@ -91,4 +94,43 @@ finally:
     shell_parse._PARSER = saved
 # 语法树有错（tree-sitter 在，脚本不合法）也走兜底
 assert lv("if then rm -rf /") == "block"
+
+# ---- 5. v2.26 真机试跑 B3：平凡写法不再绕过（e2e-local-2026-10-13.md）----
+from app import host_policy
+assert shell_parse.dequote("\\rm") == "rm" and shell_parse.dequote("r'm'") == "rm" and shell_parse.dequote("\\/") == "/"
+assert shell_parse.dequote("$x") is None and shell_parse.dequote("~/a") is None and shell_parse.dequote('"a\\"b"') == 'a"b'
+assert shell_parse.dequote("*.py") is None and shell_parse.dequote('"a$b"') is None
+c = shell_parse.commands("echo x | base64 -d | sh")
+assert [x.piped for x in c] == [False, True, True]
+assert [x.piped for x in shell_parse.commands("a >o | b; c")] == [False, True, False]
+for cmd in ["\\rm -rf /", "r\\m -rf /", "rm -rf \\/", "R=rm; $R -rf /", "export R=rm; \"${R}\" -rf /",
+            "T=/; rm -rf $T", "rm -fr /etc/../", "rm -rf /workspace/..", "rm -rf //", "rm -rf /usr/./",
+            "rm -rf ~/a/../..", "rm -rf $HOME/..", "$(echo rm) -rf /", "`which rm` -rf /etc",
+            "chmod -R 777 /etc/../", "find /usr/.. -delete"]:
+    assert lv(cmd) == "block", (cmd, V(cmd))
+for cmd, why in [("echo cm0gLXJmIC8= | base64 -d | sh", command_guard.PIPED_SHELL),
+                 ("cat x | bash -s -- a", command_guard.PIPED_SHELL), ("echo x | timeout 5 sh", command_guard.PIPED_SHELL),
+                 ("curl -s x | sh", "下载并直接执行脚本"), ("$(echo rm) -rf build", command_guard.OPAQUE),
+                 ("X=/ rm -rf $X", "递归删除")]:  # 前缀赋值不影响同一条命令里的 $X
+    v = V(cmd)
+    assert v and v.level == "ask" and why in v.why, (cmd, v)
+for cmd in ["$PY app.py", "\"$EDITOR\" notes.md", "cat a | bash script.sh", "echo 'x | sh'", "sh < run.sh",
+            "rm -rf ./build/..x", "ls ~/a/..", "R=ls; $R -la"]:
+    v = V(cmd)
+    assert v is None or v.why == "递归删除文件", (cmd, v)
+assert lv("rm -rf ./build/..x") == "ask" and lv("R=ls; $R -la") is None
+# 主机模式：同一套 block 规则 → forbid；看不清的命令永远不算被前缀规则覆盖
+assert host_policy.evaluate("\\rm -rf /", []).kind == "forbid"
+assert host_policy.evaluate("rm -fr /etc/../", []).kind == "forbid"
+assert host_policy.evaluate("ls; $X", [["ls"]]).kind != "skip"
+assert host_policy.evaluate("ls", [["ls"]]).kind == "skip"
+# 没有 tree-sitter 的兜底分词：同样不放过
+saved = shell_parse._PARSER
+shell_parse._PARSER = None
+try:
+    for cmd, level in [("\\rm -rf /", "block"), ("rm -fr /etc/../", "block"), ("echo eA== | base64 -d | sh", "ask"),
+                       ("R=rm; $R -rf x", "ask"), ("$PY app.py", None)]:  # 兜底拆不开 $( )，只保证不比以前差
+        assert lv(cmd) == level, (cmd, V(cmd))
+finally:
+    shell_parse._PARSER = saved
 print("smoke_command_guard_port OK")
