@@ -64,6 +64,8 @@ sealed class Block {
         'skill' => SkillBlock(id: j['id'] as String? ?? '', name: j['name'] as String? ?? ''),
         'agent' => AgentBlock(
             name: j['name'] as String? ?? '子助手', target: j['target'] as String?, title: j['title'] as String?, gone: j['gone'] == true),
+        'origin' => OriginBlock.fromJson(j),
+        'relay' => RelayBlock.fromJson(j),
         'preview' => PreviewBlock.fromJson(j),
         'plan' => PlanBlock.fromJson(j),
         'delegate' => DelegateBlock.fromJson(j),
@@ -551,6 +553,48 @@ class AgentBlock extends Block {
   final bool gone;
 }
 
+/// v2.23 用户消息里：这条是别的项目 / 主聊天的助手替用户转交来的（服务器 app/project_relay.py）。
+/// 气泡上方一枚“来自 X”标签，点一下回到来源那段对话（[conversationId] 为空 = 不可点）。
+class OriginBlock extends Block {
+  const OriginBlock({required this.name, this.emoji = '💬', this.projectId, this.conversationId, this.depth = 1});
+  factory OriginBlock.fromJson(Map<String, dynamic> j) => OriginBlock(
+      name: j['name'] as String? ?? '主聊天',
+      emoji: j['emoji'] as String? ?? '💬',
+      projectId: j['project_id'] as String?,
+      conversationId: j['conversation_id'] as String?,
+      depth: (j['depth'] as num?)?.toInt() ?? 1);
+  final String name, emoji;
+  final String? projectId, conversationId;
+  final int depth;
+
+  String get label => '来自 $emoji $name';
+  String get semantics => conversationId == null ? '$name 转交来的消息' : '$name 转交来的消息，点按打开原对话';
+}
+
+/// v2.23 回复里：把一件事交给了另一个项目（projects 工具）。点开 = 那个项目的那段对话。
+class RelayBlock extends Block {
+  const RelayBlock(
+      {required this.projectId, required this.name, this.emoji = '📁', required this.conversationId, this.text = '', this.files = const [], this.newConversation = false});
+  factory RelayBlock.fromJson(Map<String, dynamic> j) => RelayBlock(
+      projectId: j['project_id'] as String? ?? '',
+      name: j['name'] as String? ?? '项目',
+      emoji: j['emoji'] as String? ?? '📁',
+      conversationId: j['conversation_id'] as String? ?? '',
+      text: j['text'] as String? ?? '',
+      files: [for (final f in (j['files'] as List? ?? const [])) if (f is String && f.isNotEmpty) f],
+      newConversation: j['new_conversation'] == true);
+  final String projectId, name, emoji, conversationId, text;
+  final List<String> files;
+  final bool newConversation;
+
+  /// 卡片第二行：在哪段对话 + 带了几个文件。
+  String get meta => [
+        newConversation ? '新开了一段对话' : '接在最近的对话里',
+        if (files.length == 1) '带了 ${files.first}' else if (files.length > 1) '带了 ${files.first} 等 ${files.length} 个文件',
+      ].join(' · ');
+  String get semantics => '已交给项目 $name：$text。$meta。点按打开';
+}
+
 class UnknownBlock extends Block {
   const UnknownBlock(this.type);
   final String type;
@@ -569,7 +613,7 @@ class ReplySegment {
 }
 
 bool standsAlone(Block b) => switch (b) {
-      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || ShellBlock() || PlanBlock() || DelegateBlock() || ChangesBlock() || PlanReviewBlock() => true,
+      ApprovalBlock() || OrderBlock() || FormBlock() || ProductsBlock() || SummaryBlock() || BrowserBlock() || JobBlock() || ShellBlock() || PlanBlock() || DelegateBlock() || ChangesBlock() || PlanReviewBlock() || RelayBlock() => true,
       _ => false,
     };
 

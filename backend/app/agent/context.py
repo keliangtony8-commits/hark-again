@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, attachment_save, clock, command_credentials, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, attachment_save, clock, command_credentials, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -82,7 +82,9 @@ def _render(blocks: list[dict], current: bool = False) -> str:
     if (note := init_command.of(blocks)) is not None:
         said = init_command.render(note) if current else init_command.record(note)
         blocks = [{"type": "text", "text": said}, *blocks[1:]]
-    text = blocks_to_text([b for b in blocks if b.get("type") not in ("file", "skill", "agent")])
+    text = blocks_to_text([b for b in blocks if b.get("type") not in ("file", "skill", "agent", "origin")])
+    if origin := project_relay.origin_of(blocks):  # 别的项目替用户转交来的（project_relay）：先说清楚这不是用户本人在这里说的
+        text = project_relay.render(origin) + "\n" + text
     for b in blocks:
         if b.get("type") == "skill":
             text += "\n\n" + skill_mentions.render(b)

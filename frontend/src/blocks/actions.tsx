@@ -12,6 +12,8 @@ export type BlockActions = {
   undoChanges?: (token: string) => Promise<string | null>;
   /** 子任务卡的“追问”（v1.97）：接着问某个子助手（id = 编号）。没给（Home）就不显示。 */
   followUp?: (id: string, title: string, text: string) => void;
+  /** 打开另一段对话（v2.23 转交卡、“来自 X”标签）：projectId 空 = 主聊天。没给（Home）就不可点。 */
+  openConversation?: (id: string, projectId: string | null) => void;
 };
 export const BlockActionsContext = createContext<BlockActions>({});
 export const useBlockActions = () => useContext(BlockActionsContext);

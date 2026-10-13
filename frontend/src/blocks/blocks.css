@@ -425,3 +425,18 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 @media (prefers-reduced-motion: reduce) {
   .blk-review, .blk-review-icon, .blk-review-hint, .blk-review-state, .blk-review-body, .blk-review-actions, .blk-review-file { animation: none; transition: none; }
 }
+
+/* v2.23 转交卡（blocks/RelayBlock.tsx）：表情方块 + 已交给 · 项目 + 两行交代 + 一行去向；可点时整张卡是按钮 */
+.blk-relay { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--sp-3); padding: var(--sp-3); width: 100%;
+  text-align: left; font: inherit; color: inherit; --rise: 6px; animation: rise var(--dur) var(--ease); }
+.blk-relay.is-link { cursor: pointer; transition: transform var(--dur) var(--ease), filter var(--dur) var(--ease); }
+.blk-relay.is-link:hover { filter: brightness(.98); }
+.blk-relay.is-link:active { transform: scale(.99); }
+.blk-relay-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--r-md); background: var(--tile); font-size: var(--fs-lg); }
+.blk-relay-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.blk-relay-title { display: flex; align-items: center; gap: var(--sp-1); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk-relay-title svg { color: var(--text-2); flex: none; }
+.blk-relay-text { font-size: var(--fs-sm); color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.blk-relay-meta { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk-relay-go { color: var(--text-3); display: grid; place-items: center; }
+@media (prefers-reduced-motion: reduce) { .blk-relay, .blk-relay.is-link { animation: none; transition: none; } }

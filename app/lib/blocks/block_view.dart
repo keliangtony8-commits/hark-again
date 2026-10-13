@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'plan_review_block.dart';
 import 'plan_block.dart';
 import 'preview_block.dart';
+import 'relay_block.dart';
 import 'shell_block.dart';
 import 'skill_chip.dart';
 
@@ -32,6 +33,8 @@ class BlockView extends StatelessWidget {
         FileBlock b => FileBlockView(b),
         SkillBlock b => SkillChip(b),
         AgentBlock b => AgentChip(b),
+        OriginBlock b => OriginChip(b),
+        RelayBlock b => RelayBlockView(b),
         ApprovalBlock b => ApprovalBlockView(b),
         BrowserBlock b => BrowserBlockView(b),
         PageBlock b => PageBlockView(b),

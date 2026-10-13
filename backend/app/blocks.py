@@ -376,10 +376,33 @@ class FormBlock(BaseModel):
     answers: list[FormAnswer] | None = None  # 只有 info 卡提交后才有；选填没填的不列
 
 
+class OriginBlock(BaseModel):
+    """v2.23 用户消息里：这条是别的项目 / 主聊天的助手替用户转交来的（规则在 app/project_relay.py）。
+    name/emoji = 来源（项目名或“主聊天”），project_id/conversation_id = 来源那段对话（点标签跳回去），depth = 第几手。"""
+    type: Literal["origin"] = "origin"
+    name: str
+    emoji: str = "💬"
+    project_id: str | None = None
+    conversation_id: str | None = None
+    depth: int = 1
+
+
+class RelayBlock(BaseModel):
+    """v2.23 回复里：把一件事交给了另一个项目（projects 工具 action=message）。点开 = 那个项目的那段对话。"""
+    type: Literal["relay"] = "relay"
+    project_id: str
+    name: str
+    emoji: str = "📁"
+    conversation_id: str
+    text: str
+    files: list[str] = []
+    new_conversation: bool = False
+
+
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
                         OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock, ChangesBlock,
-                        PlanReviewBlock, ShellBlock, SkillBlock, AgentBlock],
+                        PlanReviewBlock, ShellBlock, SkillBlock, AgentBlock, OriginBlock, RelayBlock],
                   Field(discriminator="type")]
 
 
@@ -428,6 +451,9 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[文件：{b['name']}]")
         elif t == "skill":
             parts.append(f"[技能：{b['name']}]")
+        elif t == "relay":
+            files = f"（带了 {'、'.join(b['files'])}）" if b.get("files") else ""
+            parts.append(f"[已交给「{b.get('name')}」项目{files}：{b.get('text', '')}]")
         elif t == "agent":
             parts.append(f"[追问子助手「{b.get('title') or ''}」]" if b.get("target") else "[交给子助手]")
         elif t == "job":

@@ -36,14 +36,14 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
   const nav = useNavigate();
-  const consumed = useRef(false);
+  const consumed = useRef<string | null>(null); // 用过的那次跳转（location.key）：同一页里再跳一次（转交卡打开同项目的另一段）也认
 
   // 从 Home 跳过来：带一句话就直接发出（新对话）；带对话 id 就打开那段，同时带话 = 打开后再发（建议卡“开始做”）。
   // 用完清掉路由状态防止重复
   useEffect(() => {
     const st = location.state as { draft?: string; files?: OutgoingFile[]; open?: string } | null;
-    if (!st || consumed.current) return;
-    consumed.current = true;
+    if (!st || consumed.current === location.key) return;
+    consumed.current = location.key;
     if (st.open) chat.open(st.open).then(() => { if (st.draft?.trim()) chat.send(st.draft); });
     else if (st.draft || st.files?.length) chat.send(st.draft ?? "", st.files);
     nav(location.pathname, { replace: true, state: null });
@@ -55,6 +55,11 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   if (found) lastTitle.current = { id: found.id, title: found.title };
   const title = headerTitle ?? (lastTitle.current.id === chat.activeId && chat.activeId ? lastTitle.current.title : "新对话");
   const open = (id: string | null, focus?: string) => { chat.open(id, focus); setDrawer(false); };
+  // v2.23 转交卡 / “来自 X”：同一个范围（主聊天或同一项目）直接打开，否则跳到那边的聊天再打开（路由状态 open）
+  const openElsewhere = (id: string, pid: string | null) => {
+    if ((pid ?? undefined) === projectId) open(id);
+    else nav(pid ? `/projects/${pid}` : "/chat", { state: { open: id } });
+  };
   // /status 打开标题的本对话用量面板：每次 +1，ChatTitle 看到变化就打开
   const [statusAsk, setStatusAsk] = useState(0);
   const catalog = useModelCatalog();
@@ -65,7 +70,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   });
 
   return (
-    <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval, replyForm: chat.replyForm, onJobSettled: chat.refreshActive, undoChanges: chat.undoChanges, followUp: chat.followUp }}>
+    <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval, replyForm: chat.replyForm, onJobSettled: chat.refreshActive, undoChanges: chat.undoChanges, followUp: chat.followUp, openConversation: (id, pid) => openElsewhere(id, pid) }}>
       <div className={`chat ${leading ? "with-bar" : "floating"} ${drawer ? "drawer-open" : ""}`}>
         <ConversationList title={listTitle} list={chat.list} activeId={chat.activeId}
           onOpen={open} onDelete={chat.remove} onClose={() => setDrawer(false)} />

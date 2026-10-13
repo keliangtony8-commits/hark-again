@@ -8,9 +8,11 @@ import '../../models/block.dart';
 import 'chat_controller.dart';
 
 /// [send]：打开后再发一句（主页建议卡“开始做”：服务端刚开的空对话 + 卡上的指令）。
-Future<void> openConversation(BuildContext context, WidgetRef ref, String id, {String? focus, String? send}) async {
-  final chat = ref.read(chatProvider('').notifier);
-  context.go('/chat');
+/// [projectId]：对话在某个项目里（v2.23 跨项目转交卡 / “来自 X”标签）→ 切到那个项目的聊天再打开；空 = 主聊天。
+Future<void> openConversation(BuildContext context, WidgetRef ref, String id, {String? focus, String? send, String? projectId}) async {
+  final scope = projectId ?? '';
+  final chat = ref.read(chatProvider(scope).notifier);
+  context.go(scope.isEmpty ? '/chat' : '/projects/$scope');
   await chat.open(id, focus: focus);
   if (send != null && send.trim().isNotEmpty) chat.send(send);
 }

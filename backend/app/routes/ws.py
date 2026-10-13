@@ -8,7 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 import logging
 
-from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, skill_mentions, steering, user_shell, workspaces
+from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, project_relay, skill_mentions, steering, user_shell, workspaces
 from ..agent import approvals, context
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -148,6 +148,10 @@ async def _handle_pending(emit, event: dict, stop: asyncio.Event) -> None:
             return
         await emit({"type": "message.start", "conversation_id": conv.id, "user_message_id": msg.id, "title": conv.title})
         await _answer(db, conv, msg, emit, stop)
+
+
+# 别的项目转交来的消息（project_relay.send 已落库）：和“补充的话另起一轮”同一条路——有人看着就实时推，审批卡照常弹
+project_relay.set_answerer(lambda cid, mid: live_turns.follow(cid, _handle_pending, {"conversation_id": cid, "message_id": mid}))
 
 
 async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:

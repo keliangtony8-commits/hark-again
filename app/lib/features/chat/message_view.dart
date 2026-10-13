@@ -66,13 +66,15 @@ class MessageView extends StatelessWidget {
     final files = message.blocks.whereType<FileBlock>().toList();
     final skills = message.blocks.whereType<SkillBlock>().toList();
     final agents = message.blocks.whereType<AgentBlock>().toList();
+    final origin = message.blocks.whereType<OriginBlock>().firstOrNull;
     final bubble = Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-      if (skills.isNotEmpty || agents.isNotEmpty) // `@子助手` / `$技能`：一排小标签（skill_chip.dart）
+      if (skills.isNotEmpty || agents.isNotEmpty || origin != null) // 来自 X / `@子助手` / `$技能`：一排小标签（skill_chip.dart）
         Padding(
           padding: const EdgeInsets.only(bottom: Sp.x2),
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
             child: Wrap(alignment: WrapAlignment.end, spacing: Sp.x2, runSpacing: Sp.x1, children: [
+              if (origin != null) OriginChip(origin),
               for (final a in agents) AgentChip(a),
               for (final s in skills) SkillChip(s),
             ]),

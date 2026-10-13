@@ -10,6 +10,10 @@ export type SkillBlock = { type: "skill"; id: string; name: string };
 /** v1.91 用户消息里 `@子助手` 点名交给子助手（后端 app/agent_mentions.py）：气泡上方一枚标签。 */
 /** v1.91 `@子助手`；v1.97 追问：target = 子助手编号、title = 子任务标题、gone = 它的上下文已经不在了。 */
 export type AgentBlock = { type: "agent"; id?: string; name?: string; target?: string | null; title?: string | null; gone?: boolean | null };
+/** v2.23 用户消息里：别的项目 / 主聊天的助手替用户转交来的（后端 app/project_relay.py）；点标签回到来源对话。 */
+export type OriginBlock = { type: "origin"; name: string; emoji?: string; project_id?: string | null; conversation_id?: string | null; depth?: number };
+/** v2.23 回复里：把一件事交给了另一个项目（projects 工具）；点开 = 那个项目的那段对话。 */
+export type RelayBlock = { type: "relay"; project_id: string; name: string; emoji?: string; conversation_id: string; text?: string; files?: string[]; new_conversation?: boolean };
 export type FileBlock = { type: "file"; source: "upload" | "project"; id: string; name: string; mime: string; size: number; project_id?: string | null };
 /** 审批卡。主机命令卡（v1.49 target = host）多带机器名、note（为什么要你看一眼；warn = 危险提示）、批准范围 options（第一个 = 批准按钮）、批准后 granted。 */
 export type ApprovalOption = { id: string; label: string };
@@ -123,7 +127,7 @@ export type JobDisk = { log: number; written: number; files: number; top: { path
 export type JobBox = { used: number; limit: number };
 export type JobUsage = { cpu: number; cpu_seconds: number; memory: number; processes: number };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock | AgentBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock | AgentBlock | OriginBlock | RelayBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;

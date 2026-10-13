@@ -83,7 +83,7 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
   if (message.role === "user") {
     const text = message.blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
     const files = message.blocks.filter((b) => b.type === "file");
-    const skills = [...message.blocks.filter((b) => b.type === "agent"), ...message.blocks.filter((b) => b.type === "skill")]; // @子助手 在技能前
+    const skills = ["origin", "agent", "skill"].flatMap((t) => message.blocks.filter((b) => b.type === t)); // 来自 X、@子助手、$技能 依次
     return (
       <div className={`msg user ${message.outbox ?? ""} ${editing ? "editing" : ""}`} data-msg-id={message.id}>
         {skills.length > 0 && <div className="msg-skills"><BlockRenderer blocks={skills} /></div>}
