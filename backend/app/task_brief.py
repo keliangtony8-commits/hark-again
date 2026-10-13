@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import schedule
+from . import schedule, task_wall
 from .config import settings
 from .models import ScheduledTask, TaskRun
 
@@ -50,7 +50,7 @@ def clean(field: str, text: str | None) -> str | None:
 
 def _run_line(r: TaskRun) -> str:
     if r.status == "error":
-        what = f"失败：{(r.error or '').strip()[:200]}"
+        what = ("碰壁" if r.wall else "失败") + f"：{(r.error or '').strip()[:200]}"
     elif r.silent_reason is not None:
         what = f"没打扰用户：{r.silent_reason}"
     else:
@@ -73,6 +73,7 @@ def preface(task: ScheduledTask, runs: list[TaskRun]) -> str:
                  f"（会替换全部：保留仍成立的、删掉过时的，≤{NOTE_MAX} 字）；只记方法和来源，不记这次的具体数值。")
     if runs:
         parts.append("最近几次运行（只当参考，不是结论：上次碰壁这次可能好了，照常尝试）：\n" + "\n".join(_run_line(r) for r in runs))
+    parts.append(task_wall.brief(task))
     if not panel:
         parts.append(f"这次没有新结果、变化或需要用户处理的事时，整段回复只写 {SILENT} 加一句原因（如“{SILENT} 价格没变”），"
                      "这次就不打扰用户；“没变化”本身不算结果。")

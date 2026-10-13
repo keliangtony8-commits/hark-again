@@ -4,13 +4,14 @@ import { useResource } from "../../hooks/useResource";
 import { useTaskRuns } from "../../hooks/useTaskRuns";
 import { http } from "../../lib/api";
 import { formatDuration, formatWhen } from "../../lib/format";
-import { autoPauseNote, canSkip, isScript, isSilent, nextRunLabel, runStateLabel, scheduleLabel, skipLabel, taskOutputLabel } from "../../lib/taskLabels";
+import WallNotice from "./WallNotice";
+import { autoPauseNote, canSkip, isScript, isSilent, isWalled, nextRunLabel, runStateLabel, scheduleLabel, skipLabel, taskOutputLabel } from "../../lib/taskLabels";
 import TaskMemory from "./TaskMemory";
 import { JobLog } from "../../blocks/JobBlock";
 import type { JobInfo } from "../../lib/types";
 import { TaskIcon } from "./SchedulePicker";
 import type { ScheduledTask, TaskRun } from "../../lib/types";
-import { IconCheck, IconChevron, IconClock, IconClose, IconSnooze, IconEdit, IconHistory, IconPause, IconPlay, IconTrash } from "../../ui/icons";
+import { IconCheck, IconChevron, IconClock, IconClose, IconLock, IconSnooze, IconEdit, IconHistory, IconPause, IconPlay, IconTrash } from "../../ui/icons";
 import { Hint, Page, PageHeader, Section, Skeleton, Toggle } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "./TaskSheet";
 import { taskModelLabel } from "./TaskModelPicker";
@@ -19,6 +20,7 @@ import { confirmDialog } from "../../ui/dialog";
 
 /** 定时任务详情（/me/tasks/:id）：任务本身（时间、去向 + 非默认的模型 / 思考档、提示词、开关、立即运行、编辑、删除）+ 最近运行记录。
  *  有运行在排队或进行时每 4 秒刷新，结束就停（useTaskRuns）。报告那次可点开对话（/chat + state.open）。
+ *  v2.15：头卡里碰壁条（WallNotice：去处理 / 重试），碰壁那次运行锁图标 + “碰壁”。
  *  v2.13：“跳过下一次 / 撤销跳过”（POST / DELETE skip）、“助手记下的”（TaskMemory）、没打扰你的运行（silent_reason）。
  *  与 App task_detail.dart 同版面同文案；Home 的“任务失败”提醒卡（target=tasks）直达这里。 */
 export default function TaskDetailScreen() {
@@ -72,6 +74,7 @@ export default function TaskDetailScreen() {
         {autoPauseNote(task) && (
           <div className="task-pause-note" role="status"><IconPause /><span>{autoPauseNote(task)}</span></div>
         )}
+        <WallNotice task={task} onRetry={runNow} busy={busy} />
         <p className={`task-prompt ${isScript(task) ? "mono" : ""}`}>{task.prompt}</p>
         <div className="task-head-actions">
           {(canSkip(task) || task.skipped_at) && (
@@ -114,12 +117,12 @@ export default function TaskDetailScreen() {
 /** 一次运行：有对话的点开对话；定时脚本没开对话的（没告诉你那次）点开它的后台任务日志。 */
 function RunRow({ run: r, index, onOpen, onLog }: { run: TaskRun; index: number; onOpen: (conversationId: string) => void; onLog: (jobId: string) => void }) {
   const running = r.status === "running", failed = r.status === "error";
-  const label = runStateLabel(r), silent = isSilent(r);
+  const label = runStateLabel(r), silent = isSilent(r), walled = isWalled(r);
   const when = formatWhen(r.started_at);
-  const sub = [r.trigger === "manual" ? "手动" : "定时", silent ? label : null, running ? "进行中" : r.duration_ms === null ? null : `用时 ${formatDuration(r.duration_ms)}`]
+  const sub = [r.trigger === "manual" ? "手动" : "定时", silent || walled ? label : null, running ? "进行中" : r.duration_ms === null ? null : `用时 ${formatDuration(r.duration_ms)}`]
     .filter(Boolean).join(" · ");
   const body = <>
-    <span className={`run-status ${r.status}`} aria-hidden>{running ? <span className="run-pulse" /> : failed ? <IconClose size={14} /> : silent ? <IconSnooze size={14} /> : <IconCheck size={14} />}</span>
+    <span className={`run-status ${r.status}${walled ? " walled" : ""}`} aria-hidden>{running ? <span className="run-pulse" /> : walled ? <IconLock size={14} /> : failed ? <IconClose size={14} /> : silent ? <IconSnooze size={14} /> : <IconCheck size={14} />}</span>
     <span className="row-body">
       <span className="row-title">{when}</span>
       <span className="row-sub">{sub}</span>

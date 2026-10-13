@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
-from ... import schedule, script_tasks, task_brief, task_runs, task_store
+from ... import schedule, script_tasks, task_brief, task_runs, task_store, task_wall
 from ...config import settings
 from ...models import ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
@@ -39,6 +39,8 @@ def _line(t: ScheduledTask) -> str:
         kind = "面板" if t.output == "panel" else "报告"
     if (skipped := task_brief.pending_skip(t)) is not None:
         state += f" · 跳过 {_local(skipped)} 那次"
+    if t.wall:
+        state += f" · 碰壁：{task_wall.error_text(t.wall, t.wall_reason)}"
     memo = "、".join(w for w, v in (("做法", t.runbook), ("观察", t.note)) if v)
     return (f"- id={t.id}「{t.name}」{kind} · {_plan(t)}" + (f" · {state}" if state else "")
             + (f" · 已记下{memo}" if memo else ""))
@@ -50,7 +52,7 @@ def _run(r: dict) -> str:
     if r["status"] == "running":
         what = "正在运行"
     elif r["status"] == "error":
-        what = f"失败：{r['error']}"
+        what = ("碰壁" if r.get("wall") else "失败") + f"：{r['error']}"
     elif r["silent_reason"] is not None:
         what = f"没打扰用户：{r['silent_reason']}"
     else:
@@ -73,13 +75,16 @@ def _when(run_at: str | None) -> datetime | None:
       "action=list 看现有任务和 id；update 按 id 改 name/prompt/command/notify/cron/run_at/active（换成一次性传 run_at，换回重复传 cron）；cancel 按 id 删除。"
       "runs 看最近几次运行（成功 / 失败原因 / 没打扰用户的原因）；run_now 立刻跑一次；skip_next 跳过下一次（unskip 撤销）。"
       "set_runbook / note（text 整段替换，空串清空）：任务自己的做法与观察，每次运行开头都会读到；"
+      "report_wall（只在任务自己的运行里）：碰到只有用户能清掉的障碍或暂时的阻碍时记下 wall=<类>:<对象> 和 text（发生了什么），"
+      "用户会看到可修的标记，这次算碰壁失败、面板保留上次内容；之后照常交付已完成的部分。"
       "在定时任务运行里调用时 id 可省略（就是正在跑的这个任务）。"
       "要反复看的数据（价格、比分）用 create_panel，不用这个。",
       {"type": "object", "properties": {
           "action": {"type": "string", "enum": ["create", "list", "update", "cancel", "runs", "run_now",
-                                                 "skip_next", "unskip", "set_runbook", "note"]},
+                                                 "skip_next", "unskip", "set_runbook", "note", "report_wall"]},
           "id": {"type": "string", "description": "除 create/list 外都要，先 list 拿到"},
-          "text": {"type": "string", "description": "set_runbook（≤16000 字）/ note（≤4000 字）的全文"},
+          "text": {"type": "string", "description": "set_runbook（≤16000 字）/ note（≤4000 字）的全文；report_wall 的一两句经过"},
+          "wall": {"type": "string", "description": "report_wall 用：needs_login:<域名> / needs_connector:<名字> / paywall:<域名> / source_gone:<域名> / blocked:<原因>"},
           "name": {"type": "string", "description": "几个字，如：交作业提醒"},
           "prompt": {"type": "string"},
           "command": {"type": "string", "description": "定时脚本的 shell 命令（在工作区根目录跑）"},
@@ -91,7 +96,7 @@ def _when(run_at: str | None) -> datetime | None:
 async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, name: str | None = None,
                         prompt: str | None = None, cron: str | None = None, run_at: str | None = None,
                         active: bool | None = None, command: str | None = None, notify: str | None = None,
-                        text: str | None = None) -> ToolResult:
+                        text: str | None = None, wall: str | None = None) -> ToolResult:
     db = ctx.db
     try:
         when = _when(run_at)
@@ -120,7 +125,7 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
         where = "失败或按 notify 该告诉用户时结果进 Home 收件箱" if command else "到点结果会出现在 Home 收件箱"
         return ToolResult(f"已安排：{_line(t)}。{where}，用户可在“我的 → 定时任务”里改。")
 
-    id = id or (ctx.task_id if action in ("set_runbook", "note", "runs") else None)  # 任务运行里：默认就是自己
+    id = id or (ctx.task_id if action in ("set_runbook", "note", "runs", "report_wall") else None)  # 任务运行里：默认就是自己
     t = await db.get(ScheduledTask, id) if id else None
     if t is None:
         return ToolResult("没找到这个任务，先用 action=list 查 id。")
@@ -137,6 +142,15 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
         await db.commit()
         what = "做法" if field == "runbook" else "观察"
         return ToolResult(f"已{'清空' if getattr(t, field) is None else '记下'}「{t.name}」的{what}，之后每次运行开头都会读到。")
+    if action == "report_wall":
+        if t.id != ctx.task_id:
+            return ToolResult("report_wall 只能在这个任务自己的运行里用；聊天里排查别的任务用 runs。")
+        try:
+            w = await task_wall.report(db, t, wall or "", text)
+        except ValueError as e:
+            return ToolResult(str(e))
+        hint = "用户会看到要他处理的标记" if task_wall.fixable(w) else "之后会自动再试"
+        return ToolResult(f"已记下碰壁：{task_wall.error_text(w, t.wall_reason)}（{hint}）。接着交付已经做完的部分。")
     if action == "runs":
         rows = await task_runs.history(db, t.id, 10)
         return ToolResult("\n".join(_run(r) for r in rows) if rows else f"「{t.name}」还没运行过。")

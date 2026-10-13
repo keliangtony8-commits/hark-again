@@ -57,5 +57,5 @@ String taskOutputLabel(ScheduledTask t) {
 String? skipLabel(ScheduledTask t, {DateTime? now}) =>
     t.skippedAt == null ? null : '跳过了 ${formatWhen(t.skippedAt, now: now)} 那次';
 
-/// 运行记录一行的状态字：正在运行 / 失败 / 没打扰你 / 成功。
-String runStateLabel(TaskRun r) => r.running ? '正在运行' : (r.failed ? '失败' : (r.silent ? '没打扰你' : '成功'));
+/// 运行记录一行的状态字：正在运行 / 碰壁 / 失败 / 没打扰你 / 成功。
+String runStateLabel(TaskRun r) => r.running ? '正在运行' : (r.walled ? '碰壁' : (r.failed ? '失败' : (r.silent ? '没打扰你' : '成功')));

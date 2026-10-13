@@ -64,5 +64,11 @@ export const skipLabel = (t: ScheduledTask): string | null => (t.skipped_at ? `�
 
 /** 运行记录一行的状态字（失败优先于没打扰你）。 */
 export const isSilent = (r: TaskRun) => r.status !== "error" && r.silent_reason != null;
+export const isWalled = (r: TaskRun) => r.status === "error" && !!r.wall_label;
 export const runStateLabel = (r: TaskRun) =>
-  r.status === "running" ? "正在运行" : r.status === "error" ? "失败" : isSilent(r) ? "没打扰你" : "成功";
+  r.status === "running" ? "正在运行" : isWalled(r) ? "碰壁" : r.status === "error" ? "失败" : isSilent(r) ? "没打扰你" : "成功";
+
+/** v2.15 碰壁条下面的小字（= App wallHint）。 */
+export const wallHint = (t: ScheduledTask) => t.wall_fixable
+  ? (t.output === "panel" ? "面板先显示上一次的内容。处理好后点“重试”。" : "处理好后点“重试”，成功了提醒会自动收起。")
+  : "不用你管，下次会自动再试。";

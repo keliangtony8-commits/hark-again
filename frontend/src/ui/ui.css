@@ -280,6 +280,13 @@ button.run-row:hover { background: var(--tile); }
 .run-status { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: var(--r-full); margin-top: 2px;
   background: var(--tile); color: var(--text-2); }
 .run-status.error { background: var(--danger); color: var(--surface); }
+/* v2.15 碰壁：运行行用警示色（不是红叉）；碰壁条 = 暂停说明条同款，标题加粗 + 原因 + 小字提示 + 去处理 / 重试 */
+.run-status.error.walled { background: var(--warning); }
+.task-wall-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.task-wall-reason { color: var(--text-2); overflow-wrap: anywhere; }
+.task-wall-hint { color: var(--text-3); font-size: var(--fs-xs); }
+.task-wall-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-1); }
+.panel .task-wall { margin: 0 0 var(--sp-3); }
 .run-pulse { width: 8px; height: 8px; border-radius: var(--r-full); background: var(--accent); animation: blink 1.2s infinite; }
 .run-pulse.muted { background: var(--text-3); }
 .run-error { display: block; margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere;

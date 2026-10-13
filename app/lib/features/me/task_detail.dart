@@ -8,6 +8,7 @@
 // 都结束了就停——不在后台空转。Home 上的“任务失败 / 连续失败已暂停”提醒卡（target=tasks）直达这一页；
 // 自动暂停时卡片里多一条说明（_PauseNote，文案 task_labels.dart autoPauseNote）。
 // v2.13：“跳过下一次 / 撤销跳过”（POST / DELETE /api/tasks/{id}/skip）在“立即运行”旁边；跳过后“下次”下面多一行“跳过了 X 那次”；
+// v2.15：头卡里一条碰壁条（task_wall.dart WallNotice）；碰壁的那次运行用锁图标 + 警示色（runStateLabel “碰壁”）。
 // 中间一块“助手记下的”（task_memory.dart：做法 / 观察，可看全文、清空）；没打扰你的那次运行（silent_reason）静音图标 + 原因。
 import 'dart:async';
 
@@ -33,6 +34,7 @@ import '../chat/open_conversation.dart';
 import 'task_form.dart';
 import 'task_labels.dart';
 import 'task_memory.dart';
+import 'task_wall.dart';
 import 'task_model_picker.dart';
 import '../chat/model_choice.dart' show modelCatalogProvider;
 
@@ -225,6 +227,8 @@ class _Header extends ConsumerWidget {
                   child: _PauseNote(text: autoPauseNote(task)!),
                 ),
         ),
+        // v2.15 碰壁条：要你处理的带“去处理 / 重试”（task_wall.dart）
+        WallNotice(task: task, onRetry: busy ? null : onRun),
         const SizedBox(height: Sp.x3),
         // 定时脚本的 prompt 是命令：等宽、可选中复制
         if (task.isScript)
@@ -296,13 +300,15 @@ class TaskRunRow extends ConsumerWidget {
     final label = runStateLabel(run);
     final Widget icon = run.running
         ? PulseDot(color: p.accent)
-        : run.failed
+        : run.walled
+            ? Icon(Icons.lock_outline_rounded, color: p.warning, size: Sp.x5)
+            : run.failed
             ? Icon(Icons.error_rounded, color: p.danger, size: Sp.x5)
             : Icon(run.silent ? Icons.notifications_off_outlined : Icons.check_circle_outline_rounded, color: p.text2, size: Sp.x5);
     final when = formatWhen(run.startedAt);
     final how = run.manual ? '手动' : '定时';
     final took = run.running ? '进行中' : (run.durationMs == null ? '' : '用时 ${formatDuration(run.durationMs!)}');
-    final subtitle = [how, if (run.silent) label, if (took.isNotEmpty) took].join(' · ');
+    final subtitle = [how, if (run.silent || run.walled) label, if (took.isNotEmpty) took].join(' · ');
     final conv = run.conversationId, job = run.jobId;
     // 有对话（报告 / 告诉了你的脚本）点开对话；没开对话的脚本运行点开它的日志
     final VoidCallback? open = conv != null

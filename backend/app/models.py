@@ -163,6 +163,10 @@ class ScheduledTask(Base):
     runbook: Mapped[str | None] = mapped_column(Text, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     skip_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # v2.15 碰壁（app/task_wall.py）：最近一次运行报的、只有用户能清掉或会自己好的障碍（needs_login:<域名>…）；下一次没碰壁的运行清掉
+    wall: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    wall_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    wall_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -177,6 +181,7 @@ class TaskRun(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     job_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # 定时脚本这次跑的后台任务（结束时 script_tasks 收尾）
+    wall: Mapped[str | None] = mapped_column(String(80), nullable=True)  # v2.15 这次碰的壁（app/task_wall.py）；null = 没碰壁
     silent_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # v2.13 这次没打扰用户（没东西可报）的一句原因；null = 说了话
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

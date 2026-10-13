@@ -84,4 +84,5 @@ def parse_local(text: str) -> datetime:
 def wire(task: ScheduledTask) -> dict:
     """接口给每个任务补的只读字段。"""
     from .task_brief import pending_skip  # 跳过的规则在 task_brief
-    return {"next_run_at": next_run_at(task), "done": is_done(task), "skipped_at": pending_skip(task)}
+    from . import task_wall  # 碰壁的规则在 task_wall
+    return {"next_run_at": next_run_at(task), "done": is_done(task), "skipped_at": pending_skip(task), **task_wall.wire(task)}

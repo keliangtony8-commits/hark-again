@@ -1,18 +1,27 @@
 """Home：把“要反复看的信息”做成定时刷新的面板（create_panel），以及在对话里管理 Home 上已有的东西（manage_home）：
 “我主页上有什么”“把天气面板改成每天 7 点”“删掉那个比分面板”“收件箱那条不用管了”。
 面板本质是 output=panel 的定时任务，增删改都走 app/task_store.py（与接口、客户端同一套规则：改名卡片跟着改、删除连卡带记录）。"""
+import asyncio
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select
 
 from zoneinfo import ZoneInfo
 
-from ... import card_snooze, card_targets, home_offers, schedule, task_store, web_guard
+from ... import card_snooze, card_targets, home_offers, schedule, task_runs, task_store, task_wall, web_guard
+from ...blocks import blocks_to_text
 from ...config import settings
-from ...models import HomeCard, ScheduledTask
+from ...db import SessionLocal
+from ...models import HomeCard, ScheduledTask, TaskRun
 from ..tools import ToolContext, ToolResult, tool
 from .display import IMAGE_PROBE_TIMEOUT, probe_image
 
 _KIND = {"action": "建议", "panel": "面板", "report": "收件箱"}
 REPORTS_LISTED = 10  # 收件箱只列最近几条，免得把上下文撑大
+READ_MAX = 4000      # read 给模型看的面板内容上限（字）
+RUNS_LISTED = 10
+REFRESH_WAIT = 60    # refresh 等多久看结果（秒；对标 Hark 的“最多等一分钟”）
+REFRESH_POLL = 2
 
 
 @tool("create_panel", "正在创建面板",
@@ -81,6 +90,7 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
     s = f"- id={card.id} [{_KIND.get(card.kind, card.kind)}]「{card.title}」"
     if card.kind == "panel" and task is not None:
         s += f" · cron {task.cron}" + ("" if task.active else " · 已暂停") + (" · 刷新中" if task.run_requested else "")
+        s += f" · 碰壁：{task_wall.label(task.wall)}" if task.wall else (" · 上次刷新失败" if task.last_status == "error" else "")
         s += f" · 刷新指令：{task.prompt[:80]}"
     elif card.kind == "action" and card.origin == home_offers.ORIGIN:
         s += " · 你提议的" + (f" · 按钮“{card.action_label or '去做'}”" if card.action_prompt else "")
@@ -100,12 +110,13 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
 
 @tool("manage_home", "正在整理主页",
       "查看和管理 Home 上的卡片。action=list 列出建议、面板、收件箱（带 id）；"
-      "refresh 让面板立即刷新；update 改面板的 title/prompt/cron（cron 同 create_panel）；"
+      "read 看一个面板的完整内容和刷新状态（上次结果、下次时间、连续失败、碰壁、是否暂停）；runs 看它最近几次刷新；"
+      "refresh 让面板立即刷新并最多等一分钟告诉你结果（用户说面板不对 / 没更新时先 read，再 runs，再 refresh）；update 改面板的 title/prompt/cron（cron 同 create_panel）；"
       "dismiss 拿掉一张卡：建议/收件箱只是隐藏，面板会连同它的定时刷新一起删除（不可恢复，用户没明确要删就先问）；"
       "snooze 把建议/收件箱先收起，到 until 再放回来并提醒（“明早再提醒我”）；unsnooze 现在就放回来。"
       "id 先用 list 拿到。",
       {"type": "object", "properties": {
-          "action": {"type": "string", "enum": ["list", "refresh", "update", "dismiss", "snooze", "unsnooze"]},
+          "action": {"type": "string", "enum": ["list", "read", "runs", "refresh", "update", "dismiss", "snooze", "unsnooze"]},
           "id": {"type": "string", "description": "卡片 id"},
           "title": {"type": "string"},
           "prompt": {"type": "string"},
@@ -161,10 +172,19 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
 
     if card.kind != "panel" or task is None:
         return ToolResult(f"「{card.title}」不是面板，只能 dismiss。")
+    if action == "read":
+        return ToolResult(_read(card, task))
+    if action == "runs":
+        rows = await task_runs.history(db, task.id, RUNS_LISTED)
+        from .tasks import _run  # 运行行的写法和 schedule_task runs 同一处
+        return ToolResult("\n".join(_run(r) for r in rows) if rows else f"面板「{card.title}」还没刷新过。")
     if action == "refresh":
+        if task.run_requested:
+            return ToolResult(f"面板「{card.title}」已经在刷新了，稍后用 read 看结果。")
+        asked = datetime.now(timezone.utc) - timedelta(seconds=1)
         task.run_requested = True
         await db.commit()
-        return ToolResult(f"面板「{card.title}」开始刷新，半分钟内更新。")
+        return ToolResult(await _wait_refresh(task.id, card.id, asked))
     if action == "update":
         changes = {k: v for k, v in {"name": title, "prompt": prompt, "cron": cron}.items() if v}
         if not changes:
@@ -177,3 +197,59 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
             return ToolResult(str(e))
         return ToolResult(f"已更新面板「{task.name}」· cron {task.cron}。")
     return ToolResult(f"未知 action：{action}")
+
+
+def _local(t: datetime | None) -> str:
+    if t is None:
+        return "—"
+    return card_snooze._aware(t).astimezone(ZoneInfo(settings.timezone)).strftime("%m-%d %H:%M")
+
+
+def _state(task: ScheduledTask) -> str:
+    """刷新状态一行：诊断“面板不对 / 没更新”的依据（库里的戳，不靠对话记忆）。"""
+    if task.paused_reason == task_runs.PAUSED_BY_FAILURES:
+        plan = f"连续失败 {task.fail_streak} 次已自动暂停（修好后 update 或用户在任务页重新启用）"
+    elif not task.active:
+        plan = "用户暂停了，不会自动刷新"
+    else:
+        plan = f"cron {task.cron} · 下次 {_local(schedule.next_run_at(task))}"
+    last = "从没刷新过" if task.last_run_at is None else (
+        f"上次刷新 {_local(task.last_run_at)} " + ("成功" if task.last_status == "ok" else f"失败（连续 {task.fail_streak} 次）"))
+    out = f"{plan} · {last}" + (" · 正在刷新" if task.run_requested else "")
+    if task.wall:
+        who = "要用户处理" if task_wall.fixable(task.wall) else "会自己再试"
+        out += f" · 碰壁（{who}）：{task_wall.error_text(task.wall, task.wall_reason)}"
+    return out
+
+
+def _read(card: HomeCard, task: ScheduledTask) -> str:
+    body = blocks_to_text(card.blocks or []).strip() or "（还没有内容）"
+    if len(body) > READ_MAX:
+        body = body[:READ_MAX] + f"…（还有 {len(body) - READ_MAX} 字）"
+    memo = "、".join(w for w, v in (("做法", task.runbook), ("观察", task.note)) if v) or "还没有"
+    return (f"面板「{card.title}」（id={card.id}，任务 id={task.id}）\n刷新状态：{_state(task)}\n"
+            f"内容更新于 {_local(card.updated_at)}；记下的{memo}\n刷新指令：{task.prompt}\n\n当前内容：\n{body}")
+
+
+async def _wait_refresh(task_id: str, card_id: str, asked: datetime) -> str:
+    """等 worker 领走并跑完这次刷新（自己的会话轮询，不占这一轮的事务）；最多 REFRESH_WAIT 秒。"""
+    loop = asyncio.get_running_loop()
+    end = loop.time() + REFRESH_WAIT
+    while True:
+        async with SessionLocal() as db:
+            task = await db.get(ScheduledTask, task_id)
+            if task is None:
+                return "面板在刷新时被删除了。"
+            run = None if task.run_requested else await db.scalar(
+                select(TaskRun).where(TaskRun.task_id == task_id, TaskRun.started_at >= asked)
+                .order_by(TaskRun.started_at.desc()).limit(1))
+            if run is not None and run.status != "running":
+                card = await db.get(HomeCard, card_id)
+                if run.status == "ok":
+                    text = blocks_to_text(card.blocks or []).strip() if card else ""
+                    return f"面板「{task.name}」刷新好了，{_local(run.finished_at)} 更新：\n{text[:600] or '（没有内容）'}"
+                head = "碰壁" if run.wall else "失败"
+                return f"面板「{task.name}」这次刷新{head}：{run.error}。上面还是上一次的内容。\n状态：{_state(task)}"
+        if loop.time() >= end:
+            return f"已经开始刷新，一分钟内还没跑完（模型或网站慢），稍后用 read 看结果。"
+        await asyncio.sleep(REFRESH_POLL)

@@ -2,6 +2,7 @@
 
 每 POLL 秒检查一次：到点的或被点了“立即运行”的任务 → 新建一段对话执行 → 按 task.output 投递：
 - report：作为卡片放进 Home 收件箱（同一任务只保留最新一张），对话保留，点开可追问；
+  碰到登录 / 连接器 / 付费墙这类壁时助手用 report_wall 记下：这次算失败，原因是那堵壁，面板保留旧内容（app/task_wall.py）；
   回复以 [[SILENT]] 开头 = 这次没东西可报，不发卡，运行记录写原因（app/task_brief.py；每次开头读到做法 / 观察 / 最近几次）
 - panel：原地更新面板卡的内容，执行用的对话随即删除（面板每小时刷新，不能把聊天列表刷满）
 kind=script 的定时脚本不调模型：到点当后台任务跑命令，结束后按 notify 决定告不告诉用户（app/script_tasks.py）。
@@ -21,7 +22,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import task_brief, card_snooze, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
+from . import task_brief, task_wall, card_snooze, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -44,12 +45,12 @@ async def _deliver_report(db, task: ScheduledTask, conv: Conversation, blocks: l
                     blocks=blocks, headline=headline, gist=line))
 
 
-async def _deliver_panel(db, task: ScheduledTask, conv: Conversation, blocks: list[dict]) -> None:
+async def _deliver_panel(db, task: ScheduledTask, conv: Conversation, blocks: list[dict], walled: bool = False) -> None:
     card = await db.scalar(select(HomeCard).where(HomeCard.task_id == task.id, HomeCard.kind == "panel"))
     if card is None:  # 面板被用户删了卡但任务还在：补一张
         card = HomeCard(kind="panel", title=task.name, task_id=task.id, blocks=[])
         db.add(card)
-    if blocks:  # 失败时保留上一次的内容，比空白有用
+    if blocks and not (walled and card.blocks):  # 失败 / 碰壁时保留上一次的内容，比空白或“登录不了”有用
         card.blocks = blocks
         card.updated_at = datetime.now(timezone.utc)
     await db.execute(delete(Message).where(Message.conversation_id == conv.id))
@@ -92,10 +93,13 @@ async def run_task(task_id: str) -> None:
             log.exception("task %s crashed", task.name)
             await db.rollback()
             errors.append(f"{type(e).__name__}: {e}")
-        error = errors[-1] if errors else (None if blocks else task_runs.NO_OUTPUT)
+        for row in (run, task):  # report_wall 在模型这一轮里写过它们（已提交）；崩了回滚后也要重新载入
+            await db.refresh(row)
+        walled = task_wall.settle(task, run)  # 报了壁 = 这次算失败（原因是壁）；没报 = 清掉旧壁（task_wall.py）
+        error = walled or (errors[-1] if errors else (None if blocks else task_runs.NO_OUTPUT))
         quiet = None if (panel or error) else task_brief.silent(blocks)  # 没东西可报：不进收件箱（task_brief.py）
         if panel:
-            await _deliver_panel(db, task, conv, blocks)
+            await _deliver_panel(db, task, conv, blocks, walled=walled is not None)
         elif quiet is None:
             await _deliver_report(db, task, conv, blocks)
         run.silent_reason = quiet

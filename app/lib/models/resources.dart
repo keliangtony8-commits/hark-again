@@ -253,6 +253,10 @@ class ScheduledTask {
     this.runbook,
     this.note,
     this.skippedAt,
+    this.wallLabel,
+    this.wallReason,
+    this.wallFixable = false,
+    this.wallOpen,
   });
   factory ScheduledTask.fromJson(Map<String, dynamic> j) => ScheduledTask(
     id: j['id'] as String,
@@ -277,8 +281,23 @@ class ScheduledTask {
     runbook: _line(j['runbook']),
     note: _line(j['note']),
     skippedAt: _date(j['skipped_at']),
+    wallLabel: _line(j['wall_label']),
+    wallReason: _line(j['wall_reason']),
+    wallFixable: j['wall_fixable'] as bool? ?? false,
+    wallOpen: _line(j['wall_open']),
   );
   final String id, name, prompt, cron, output;
+
+  /// v2.15 碰壁（后端 app/task_wall.py）：最近一次运行碰到的障碍，一句话（“需要登录 jw.example.edu”）+ 经过；没碰壁 = null。
+  /// 只用服务端给的这几个字段，不自己解析壁的字符串。
+  final String? wallLabel, wallReason;
+
+  /// 要你处理（登录 / 重新连接 / 付费墙）才 true；验证码、页面改版这类它会自己再试。
+  final bool wallFixable;
+
+  /// 去哪一页处理（'vault' / 'connectors'；cardTargets 的键），没有 = null。
+  final String? wallOpen;
+  bool get walled => wallLabel != null;
 
   /// v2.13 助手自己记下的做法（第一次运行写）与观察（之后滚动改）；每次运行开头都读到（后端 app/task_brief.py）。没有 = null。
   final String? runbook, note;
@@ -340,6 +359,7 @@ class TaskRun {
     this.durationMs,
     this.jobId,
     this.silentReason,
+    this.wallLabel,
   });
   factory TaskRun.fromJson(Map<String, dynamic> j) => TaskRun(
     id: j['id'] as String,
@@ -352,7 +372,12 @@ class TaskRun {
     durationMs: (j['duration_ms'] as num?)?.toInt(),
     jobId: j['job_id'] as String?,
     silentReason: j['silent_reason'] as String?,
+    wallLabel: _line(j['wall_label']),
   );
+
+  /// v2.15 这次碰的壁（一句话）；error 里是“壁：经过”。没碰壁 = null。
+  final String? wallLabel;
+  bool get walled => failed && wallLabel != null;
 
   /// 这次没东西可报、没打扰你的一句原因（不进收件箱，对话仍可点开）；说了话 = null。
   final String? silentReason;

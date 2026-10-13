@@ -26,6 +26,7 @@ import 'card_snooze.dart';
 import 'inbox.dart';
 import 'report_actions.dart';
 import '../me/task_form.dart';
+import '../me/task_wall.dart';
 import '../me/tasks_screen.dart' show createTask;
 import 'new_panel.dart';
 import 'today_agenda.dart';
@@ -125,7 +126,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             FadeSlideIn(
                               delay: Motion.stagger(i),
                               child: _PanelCard(
-                                  card: panels[i], refreshing: panels[i].taskId != null && refreshing.contains(panels[i].taskId)),
+                                  card: panels[i],
+                                  task: tasks.where((t) => t.id == panels[i].taskId).firstOrNull,
+                                  refreshing: panels[i].taskId != null && refreshing.contains(panels[i].taskId)),
                             ),
                         ]),
             ),
@@ -340,8 +343,11 @@ class _PanelIdeas extends StatelessWidget {
 }
 
 class _PanelCard extends ConsumerWidget {
-  const _PanelCard({required this.card, required this.refreshing});
+  const _PanelCard({required this.card, required this.task, required this.refreshing});
   final HomeCard card;
+
+  /// 面板背后的任务（碰壁条读它）；任务列表还没到 = null。
+  final ScheduledTask? task;
   final bool refreshing;
 
   @override
@@ -399,6 +405,8 @@ class _PanelCard extends ConsumerWidget {
               ),
             IconButton(onPressed: menu, tooltip: '更多', icon: Icon(Icons.more_horiz_rounded, size: Fs.lg, color: p.text3)),
           ]),
+          // v2.15 碰壁：内容还是上一次的，上面一条说清卡在哪、要不要你处理（task_wall.dart）
+          if (task != null) WallNotice(task: task!, onRetry: refreshing ? null : refresh, padding: const EdgeInsets.fromLTRB(0, 0, Sp.x2, Sp.x3)),
           Padding(
             padding: const EdgeInsets.only(right: Sp.x2),
             child: Dimmed(dimmed: refreshing, child: BlockList(card.blocks)),

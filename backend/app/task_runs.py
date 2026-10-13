@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import system_alerts
+from . import system_alerts, task_wall
 from .config import settings
 from .models import Conversation, HomeCard, ScheduledTask, TaskRun
 from .wire_time import iso
@@ -75,6 +75,13 @@ async def _prune(db: AsyncSession, task_id: str) -> None:
 async def _alert(db: AsyncSession, task: ScheduledTask, run: TaskRun, now: datetime) -> HomeCard | None:
     local = now.astimezone(ZoneInfo(settings.timezone))
     what = "面板没刷新成功，上面还是上一次的内容。" if task.output == "panel" else "这次的报告没有出来。"
+    if run.wall and task_wall.fixable(run.wall):  # 只有用户能清掉的壁：卡上说清要用户做什么
+        text = (f"{local:%m月%d日 %H:%M} 那次运行碰壁：{run.error}\n\n{what}处理好后在任务页点“立即运行”试一次，成功了这张卡自动收起。")
+        return await system_alerts.post(
+            db, subject=f"task:{task.id}", once=run.id, title=f"定时任务「{task.name}」需要你处理",
+            text=text, open=f"task:{task.id}",
+            prompt=(f"我的定时任务「{task.name}」碰壁了：{run.error}。它的提示词是：{task.prompt}。"
+                    "帮我把这个障碍处理掉（需要我登录或连接的就带我去做），然后再跑一次。"))
     text = (f"{local:%m月%d日 %H:%M} 那次运行失败：{run.error}\n\n"
             f"{what}之后仍按计划重试；连着失败不会重复提醒，恢复后这张卡自动收起。")
     # 键含运行 id：同一次运行收尾两遍也只有一张
@@ -141,5 +148,6 @@ def _wire(run: TaskRun, conversation_id: str | None) -> dict:
         b = run.finished_at if run.finished_at.tzinfo else run.finished_at.replace(tzinfo=timezone.utc)
         duration = max(int((b - a).total_seconds() * 1000), 0)
     return {"id": run.id, "trigger": run.trigger, "status": run.status, "error": run.error, "job_id": run.job_id, "silent_reason": run.silent_reason,
+            "wall": run.wall, "wall_label": task_wall.label(run.wall),
             "conversation_id": conversation_id, "started_at": _iso(run.started_at),
             "finished_at": _iso(run.finished_at), "duration_ms": duration}

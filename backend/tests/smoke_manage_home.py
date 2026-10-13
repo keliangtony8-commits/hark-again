@@ -68,7 +68,10 @@ async def clear_flag(tid):
     async with SessionLocal() as db:
         (await db.get(ScheduledTask, tid)).run_requested = False; await db.commit()
 asyncio.run(clear_flag(score["task_id"]))
-assert "开始刷新" in asyncio.run(call("manage_home", action="refresh", id=score["id"]))
+import app.agent.builtin.home as home_tool
+home_tool.REFRESH_WAIT, home_tool.REFRESH_POLL = 0.3, 0.1  # 没有 worker：等不到结果 → 说“已经开始刷新”
+assert "已经开始刷新" in asyncio.run(call("manage_home", action="refresh", id=score["id"]))
+assert "已经在刷新" in asyncio.run(call("manage_home", action="refresh", id=score["id"]))
 assert c.get(f"/api/tasks/{score['task_id']}").json()["run_requested"] is True
 out = asyncio.run(call("manage_home", action="update", id=score["id"], title="湖人比分", cron="0 12 * * *"))
 assert "湖人比分" in out and "0 12 * * *" in out, out

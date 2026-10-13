@@ -13,6 +13,7 @@ import { WidePill } from "../../ui/glass";
 import { IconChat, IconChevron, IconClock, IconEdit, IconHistory, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconSun, IconTrash } from "../../ui/icons";
 import { Menu, Page, Section, Skeleton, stagger } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf, EMPTY_TASK } from "../me/TaskSheet";
+import WallNotice from "../me/WallNotice";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
 import { InboxRow } from "./InboxRow";
@@ -184,6 +185,8 @@ export default function HomeScreen() {
                   { label: "移除", icon: <IconTrash />, danger: true, onSelect: () => removePanel(p) },
                 ]} />
               </div>
+              {/* v2.15 碰壁：内容还是上一次的，上面一条说清卡在哪、要不要你处理 */}
+              {taskOf(p) && <WallNotice task={taskOf(p)!} onRetry={() => refreshPanel(p.task_id!)} busy={busy} />}
               <div className="panel-body"><BlockRenderer blocks={p.blocks} /></div>
             </div>
           );
