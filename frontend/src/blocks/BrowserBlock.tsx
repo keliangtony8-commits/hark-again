@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { fileUrl, http } from "../lib/api";
 import {
-  HANDOFF_CANCEL, HANDOFF_DONE, HANDOFF_TITLE, browserFileLabel, browserFileLine, browserScreenLabel, controlLabel, handoffStateLine, screenInterval, screenShouldPause,
+  BROWSER_DOWN_HINT, BROWSER_DOWN_TITLE, HANDOFF_CANCEL, HANDOFF_DONE, HANDOFF_TITLE, browserFileLabel, browserFileLine, browserScreenLabel, controlLabel, handoffStateLine, screenInterval, screenShouldPause,
 } from "../lib/browserView";
 import type { BrowserBlock as T } from "../lib/types";
 import { useBlockActions } from "./actions";
 import { workspaceFilePath } from "../lib/workspace";
-import { IconChevron, IconDownload, IconGlobe, IconHand, IconSend, IconUpload } from "../ui/icons";
+import { IconChevron, IconDownload, IconGlobe, IconGlobeOff, IconHand, IconSend, IconUpload } from "../ui/icons";
 
 /** 云浏览器实时画面：只在卡片可见、页面在前台时刷新截图，节奏见 lib/browserView（操作中快、打开中中、看着慢，
  *  只是看着 2 分钟后暂停，点一下继续）。点“接管”后点画面 = 点网页，下方输入框 = 键盘。
  *  每个请求带卡上的会话名（v1.26 按网站分会话），卡头写网站名；block.live = 还在打开：没画面时显示“正在打开”，不当作没开。
  *  v1.29 接管交还：block.handoff pending = 助手在等你 → 自动接管、出“需要你来”条，完成/做不了走 replyForm(id, {} | null)。
- *  v1.32 画面下列出这条回复传到网页上的 / 网页下载存进工作区的文件（block.files），点开 = 工作区文件。 */
+ *  v1.32 画面下列出这条回复传到网页上的 / 网页下载存进工作区的文件（block.files），点开 = 工作区文件。
+ *  v2.28 block.down = 浏览器服务本身不能用：不拉画面、不能接管，画面位置换成一句原因 + 怎么办。 */
 export default function BrowserBlock({ block }: { block: T }) {
   const session = block.session || "main";
   const { replyForm } = useBlockActions();
@@ -31,6 +32,7 @@ export default function BrowserBlock({ block }: { block: T }) {
   const waiting = !!h && h.state === "pending" && replied !== h.id;
   const control = manual || waiting;
   const live = !!block.live;
+  const down = block.down || null;
 
   const wake = () => { idle.current = 0; setPaused(false); };
 
@@ -41,7 +43,7 @@ export default function BrowserBlock({ block }: { block: T }) {
   }, []);
 
   useEffect(() => {
-    if (!visible || paused) return;
+    if (!visible || paused || down) return;
     const every = screenInterval(control, live);
     const id = setInterval(() => {
       idle.current += every;
@@ -49,7 +51,7 @@ export default function BrowserBlock({ block }: { block: T }) {
       if (!document.hidden) setTick((t) => t + 1);
     }, every);
     return () => clearInterval(id);
-  }, [visible, paused, control, live, waiting]);
+  }, [visible, paused, control, live, waiting, down]);
 
   useEffect(() => { if (!live) setBroken(false); wake(); }, [live]); // 打开完成：再试一次拿画面
   useEffect(() => { wake(); if (h && h.state !== "pending") setManual(false); }, [h?.id, h?.state]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -77,9 +79,9 @@ export default function BrowserBlock({ block }: { block: T }) {
   return (
     <div ref={box} className={`card blk-browser ${control ? "control" : ""}`}>
       <div className="card-head">
-        <span className="blk-browser-title"><IconGlobe size={16} /><span className="blk-browser-site">{block.site ?? "云浏览器"}</span>{visible && !broken && !paused && <i className="live-dot" />}</span>
-        <button className={`btn btn-sm ${control ? "btn-primary" : "btn-ghost"}`} disabled={waiting} onClick={() => { setManual(!manual); wake(); }}>
-          <IconHand />{controlLabel(control)}</button>
+        <span className="blk-browser-title"><IconGlobe size={16} /><span className="blk-browser-site">{block.site ?? "云浏览器"}</span>{visible && !broken && !paused && !down && <i className="live-dot" />}</span>
+        {!down && <button className={`btn btn-sm ${control ? "btn-primary" : "btn-ghost"}`} disabled={waiting} onClick={() => { setManual(!manual); wake(); }}>
+          <IconHand />{controlLabel(control)}</button>}
       </div>
       {waiting && h && (
         <div className="blk-handoff" role="status" key={h.id}>
@@ -95,7 +97,12 @@ export default function BrowserBlock({ block }: { block: T }) {
         </div>
       )}
       {line && <p className="blk-handoff-line" key={`${h?.id}-${h?.state}`}>{line}</p>}
-      <div className="blk-browser-stage" onClick={click} aria-label={browserScreenLabel(control, paused, block.site)} role="img">
+      {down ? (
+        <div className="blk-browser-down" role="status">
+          <IconGlobeOff size={18} />
+          <div className="blk-handoff-text"><b>{BROWSER_DOWN_TITLE}</b><span>{down}</span><small>{BROWSER_DOWN_HINT}</small></div>
+        </div>
+      ) : <div className="blk-browser-stage" onClick={click} aria-label={browserScreenLabel(control, paused, block.site)} role="img">
         {broken && live ? (
           <div className="blk-browser-empty" role="status">正在打开{block.site ? ` ${block.site}` : "网页"}…
             <img hidden alt="" src={src} onLoad={() => setBroken(false)} /></div>
@@ -105,7 +112,7 @@ export default function BrowserBlock({ block }: { block: T }) {
           <img className="blk-browser-screen" alt="" src={src} onError={() => setBroken(true)} onLoad={() => setBroken(false)} />
         )}
         {paused && <div className="blk-browser-paused">画面已暂停，点一下继续</div>}
-      </div>
+      </div>}
       {!!block.files?.length && block.workspace && (
         <ul className="blk-browser-files">
           {block.files.map((f) => (

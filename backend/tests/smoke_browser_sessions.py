@@ -58,6 +58,7 @@ class Ctx:
                                    {"domain": ".taobao.com", "name": "z", "value": "w"}], "origins": []}, f)
     async def close(self): self.closed = True
 class Browser:
+    def is_connected(self): return True
     async def new_context(self, **kw): return Ctx(kw.get("storage_state"))
 class PW:
     async def start(self):

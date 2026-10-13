@@ -4,6 +4,9 @@ import type { BrowserFile, BrowserHandoff } from "./types";
 export const HANDOFF_TITLE = "需要你来";
 export const HANDOFF_DONE = "完成，交还";
 export const HANDOFF_CANCEL = "做不了";
+/** v2.28 浏览器服务本身不能用（卡上 block.down）：标题 + 怎么办（原因在 down 里）。和 app models/browser_view.dart 同文案。 */
+export const BROWSER_DOWN_TITLE = "云浏览器现在用不了";
+export const BROWSER_DOWN_HINT = "是服务器上的浏览器服务出了问题，不是网页的问题。修好后让助手再打开一次。";
 
 /** 按钮：没在操作 → 接管；在操作 → 交还（交还的对象是助手）。 */
 export const controlLabel = (control: boolean) => (control ? "交还" : "接管");

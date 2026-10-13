@@ -62,8 +62,8 @@ def blocked_note(snap: dict) -> str:
             "页面缺的部分多半就是它，别换地址或换工具去绕；用户确实要读自己内网的机器，请他把主机加进 OUTBOUND_ALLOW_HOSTS。\n")
 
 
-def _card(tab: Tab, live: bool = False, files: list[dict] | None = None, ws: str | None = None) -> dict:
-    block = {"type": "browser", "session": tab.session, "site": browser_sessions.site_of(tab.url) or None}
+def _card(tab: Tab, live: bool = False, files: list[dict] | None = None, ws: str | None = None, down: str | None = None) -> dict:
+    block = {"type": "browser", "session": tab.session, "site": browser_sessions.site_of(tab.url) or None, "down": down}
     if live:
         block["live"] = True
     if files:
@@ -127,8 +127,16 @@ async def _after(ctx: ToolContext, tab: Tab, text: str, card: bool = False) -> T
     return ToolResult(text, blocks)
 
 
+def _down(tab: Tab, e: browser_client.BrowserDown) -> ToolResult:
+    """浏览器服务不能用：画面卡标 down（不再拉画面），这一步记失败，原因整句给模型。"""
+    return ToolResult(str(e), [_card(tab, down=e.short)], failed=e.short)
+
+
 async def _act(ctx: ToolContext, method: str, path: str, json: dict | None = None) -> ToolResult:
-    r = await _snap(ctx, method, path, json)
+    try:
+        r = await _snap(ctx, method, path, json)
+    except browser_client.BrowserDown as e:
+        return _down(_tab(ctx), e)
     return ToolResult(r) if isinstance(r, str) else await _after(ctx, r[1], r[0])
 
 
@@ -163,7 +171,10 @@ async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolRes
     tab.session, tab.url = name, url if "://" in url else f"https://{url}"
     tab.names.clear()
     ctx.live(_card(tab, live=True))  # 打开要几秒到几十秒：先让用户看到画面卡
-    snap = await browser_client.snapshot_call(name, "POST", "/goto", {"url": url})
+    try:
+        snap = await browser_client.snapshot_call(name, "POST", "/goto", {"url": url})
+    except browser_client.BrowserDown as e:
+        return _down(tab, e)
     tab.opened(snap.get("login"))
     text = await _view(ctx, tab, snap)
     note = ("沿用了这个会话之前保存的登录，先看页面是否已经登录，已登录就别再登录。" if snap.get("restored")
@@ -208,7 +219,10 @@ async def browser_look(ctx: ToolContext) -> ToolResult:
     tab = _tab(ctx)
     if not tab.session:
         return ToolResult(NOT_OPEN)
-    r = await browser_client.call(tab.session, "GET", "/screen")
+    try:
+        r = await browser_client.call(tab.session, "GET", "/screen")
+    except browser_client.BrowserDown as e:
+        return _down(tab, e)
     if r.status_code == 404:
         return ToolResult("这个会话的浏览器已经关了（空闲太久会自动关），先用 browser_open 重新打开。")
     if r.status_code >= 400:
@@ -257,8 +271,11 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
         if not secret:
             return ToolResult("没有可用的登录信息。用 browser_handoff 请用户在实时画面里自己登录。", [_card(tab)])
         username, password, source = secret.username or "", vault.reveal(secret), f"保险箱「{secret.name}」"
-    snap = await browser_client.snapshot_call(tab.session, "POST", "/login", {
-        "user_ref": user_ref, "pass_ref": pass_ref, "username": username, "password": password})
+    try:
+        snap = await browser_client.snapshot_call(tab.session, "POST", "/login", {
+            "user_ref": user_ref, "pass_ref": pass_ref, "username": username, "password": password})
+    except browser_client.BrowserDown as e:
+        return _down(tab, e)
     return await _after(ctx, tab, f"已用{source}代填登录（你看不到密码）。登录状态存在会话 {tab.session}，"
                         f"以后打开这个网站会接着用。{note}\n" + await _view(ctx, tab, snap, auth=True))
 
@@ -285,8 +302,11 @@ async def browser_code(ctx: ToolContext, ref: str, label: str = "", submit: bool
         return ToolResult(NOT_OPEN)
     if not code:
         return ToolResult("用户没有填验证码，没填进去。")
-    snap = await browser_client.snapshot_call(tab.session, "POST", "/act",
-                                              {"action": "type", "ref": ref, "text": code, "submit": submit})
+    try:
+        snap = await browser_client.snapshot_call(tab.session, "POST", "/act",
+                                                  {"action": "type", "ref": ref, "text": code, "submit": submit})
+    except browser_client.BrowserDown as e:
+        return _down(tab, e)
     return await _after(ctx, tab, "已把用户填的验证码填进去。\n" + await _view(ctx, tab, snap, auth=True))
 
 

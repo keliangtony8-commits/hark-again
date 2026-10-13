@@ -24,9 +24,17 @@ class Keys(BaseModel):
     session: str = Field(browser_sessions.LEGACY, pattern=r"^[A-Za-z0-9_-]{1,40}$")
 
 
+async def _call(session: str, method: str, path: str, json: dict | None = None):
+    """转发给 browser 服务；服务本身不能用（BrowserDown）→ 503 + 一句原因，不是 500。"""
+    try:
+        return await browser_client.call(session, method, path, json)
+    except browser_client.BrowserDown as e:
+        raise HTTPException(503, e.short)
+
+
 @router.get("/screen", dependencies=[Depends(require_query_token)])
 async def screen(session: str = Session):
-    r = await browser_client.call(session, "GET", "/screen")
+    r = await _call(session, "GET", "/screen")
     if r.status_code != 200:
         raise HTTPException(404, "浏览器没有打开")
     return Response(r.content, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
@@ -34,13 +42,13 @@ async def screen(session: str = Session):
 
 @router.post("/mouse", dependencies=[Depends(require_user)])
 async def mouse(p: Point):
-    await browser_client.call(p.session, "POST", "/mouse", {"x": min(max(p.x, 0), 1), "y": min(max(p.y, 0), 1)})
+    await _call(p.session, "POST", "/mouse", {"x": min(max(p.x, 0), 1), "y": min(max(p.y, 0), 1)})
     return {"ok": True}
 
 
 @router.post("/keyboard", dependencies=[Depends(require_user)])
 async def keyboard(k: Keys):
-    await browser_client.call(k.session, "POST", "/keyboard", k.model_dump(exclude={"session"}))
+    await _call(k.session, "POST", "/keyboard", k.model_dump(exclude={"session"}))
     return {"ok": True}
 
 

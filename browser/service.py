@@ -72,17 +72,61 @@ def _check_name(name: str) -> str:
     return name
 
 
+LAUNCH_RETRY_S = 30  # Chromium 起不来后这么久内不再硬试（每次试要几秒，模型连着调会一直卡）
+_launch_error: tuple[float, str] | None = None
+
+
+def launch_reason(err: BaseException | str) -> str:
+    """Chromium 起不来时给模型和人看的一句话（只这一处判断原因）。
+    缺系统库 / 没装浏览器（镜像和 playwright 版本对不上）/ 内存不够 / 其它取第一行有内容的话。"""
+    text = str(err)
+    libs = re.findall(r"\b(lib[\w.+-]+\.so[\w.]*)", text)
+    if libs or "missing dependencies" in text.lower():
+        names = "、".join(dict.fromkeys(libs[:3])) or "若干系统库"
+        why = f"缺少系统库 {names}"
+    elif "executable doesn't exist" in text.lower() or "playwright install" in text:
+        why = "镜像里没有对应版本的 Chromium（playwright 版本和镜像对不上）"
+    elif re.search(r"cannot allocate memory|out of memory|enomem", text, re.I):
+        why = "服务器内存不够"
+    else:
+        line = next((x.strip() for x in text.splitlines() if x.strip() and not set(x.strip()) <= set("=═╔╗╚╝║─-")), "未知错误")
+        why = line[:160]
+    return f"云浏览器没能启动：{why}。这不是网页的问题，马上重试也没用；请告诉用户需要管理员修复 browser 服务（重建镜像或加内存）。"
+
+
+def _forget_browser() -> None:
+    """Chromium 进程没了（崩溃 / 被 OOM 杀）：会话全作废，下次用到重新起。登录状态早在每次操作后存过档。"""
+    global _browser
+    _browser = None
+    for name in list(_sessions):
+        _sessions.pop(name, None)
+        _used.pop(name, None)
+        _drop_downloads(name)
+        _egress.forget(name)
+
+
 async def _ensure_browser() -> Browser:
-    """在 _lock 里调：第一次用到时才起 Chromium（会话和渲染共用一个进程，小 VPS 只养一个）。"""
-    global _pw, _browser
+    """在 _lock 里调：第一次用到时才起 Chromium（会话和渲染共用一个进程，小 VPS 只养一个）。
+    起不来 → 503 + launch_reason（不是 500 "Internal Server Error"）；进程死了 → 作废会话重起。"""
+    global _pw, _browser, _launch_error
+    if _browser and not _browser.is_connected():
+        _forget_browser()
     if not _browser:
+        if _launch_error and time.time() - _launch_error[0] < LAUNCH_RETRY_S:
+            raise HTTPException(503, _launch_error[1])
         if not _egress.port:
             await _egress.start()
-        _pw = await async_playwright().start()
-        # proxy per-context：先给浏览器一个占位代理，每个会话再用自己的代理账号（被拦记到对的会话上）；
-        # WebRTC 只许走代理（不然 UDP 能绕过关卡直连内网）
-        _browser = await _pw.chromium.launch(proxy={"server": "http://per-context"}, args=[
-            "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
+        try:
+            if not _pw:
+                _pw = await async_playwright().start()
+            # proxy per-context：先给浏览器一个占位代理，每个会话再用自己的代理账号（被拦记到对的会话上）；
+            # WebRTC 只许走代理（不然 UDP 能绕过关卡直连内网）
+            _browser = await _pw.chromium.launch(proxy={"server": "http://per-context"}, args=[
+                "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
+        except Exception as e:
+            _launch_error = (time.time(), launch_reason(e))
+            raise HTTPException(503, _launch_error[1])
+        _launch_error = None
     return _browser
 
 
@@ -533,6 +577,8 @@ def png_height(data: bytes) -> int:
 # ---- 实时画面与人工接管 ----
 @app.get("/sessions/{name}/screen", dependencies=[Depends(auth)])
 async def screen(name: str):
+    if _browser and not _browser.is_connected():
+        _forget_browser()
     if name not in _sessions:
         raise HTTPException(404)
     page = _sessions[name][1]

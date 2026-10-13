@@ -30,6 +30,8 @@ export type BrowserFile = { kind: "upload" | "download"; name: string; path: str
 export type BrowserBlock = {
   type: "browser"; session: string; site?: string; live?: boolean; handoff?: BrowserHandoff | null;
   files?: BrowserFile[]; workspace?: string | null;
+  /** v2.28 浏览器服务本身不能用（Chromium 起不来 / 服务没连上）的一句原因：不拉画面，显示这句。 */
+  down?: string | null;
 };
 export type PageBlock = { type: "page"; slug: string; title: string; url: string };
 /** 端口预览（v1.30，app/preview.py）：工作区里跑着的网页服务，链接带期限。 */

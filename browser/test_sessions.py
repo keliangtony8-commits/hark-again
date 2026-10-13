@@ -20,15 +20,25 @@ class Ctx:
 
 class Browser:
     n = 0
+    alive = True
+    def is_connected(self): return self.alive
     async def new_context(self, **kw):
         Browser.n += 1
         return Ctx(Browser.n)
 
 
+launch_fail: list[str] = []  # 非空 → 下次 launch 抛这条错（模拟缺系统库）
+launches = [0]
+
+
 class PW:
     chromium = types.SimpleNamespace(launch=None)
     async def start(self):
-        async def launch(**kw): return Browser()
+        async def launch(**kw):
+            launches[0] += 1
+            if launch_fail:
+                raise RuntimeError(launch_fail[0])
+            return Browser()
         self.chromium = types.SimpleNamespace(launch=launch)
         return self
 
@@ -70,5 +80,37 @@ async def main():
     await service.close("c", forget=True)
     assert not os.path.exists(service._meta_path("c")) and service._meta("c") == {"signed_in": None, "expired": None}
     print("✓ 登录标记测试通过")
+    await launch_tests()
+
+
+async def launch_tests():
+    """Chromium 起不来 → 503 + 一句原因（不是 500）；30 秒内不再硬试；进程死了 → 会话作废、重起。"""
+    from fastapi import HTTPException
+    r = service.launch_reason
+    assert "libatk-1.0.so.0" in r("BrowserType.launch: Target page, context or browser has been closed\n"
+                                  "chrome: error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file")
+    assert "缺少系统库" in r("Host system is missing dependencies to run browsers.")
+    assert "版本" in r("BrowserType.launch: Executable doesn't exist at /ms-playwright/chromium-1134/chrome-linux/chrome")
+    assert "内存" in r("spawn ENOMEM")
+    assert "boom" in r("╔══╗\nboom happened\n╚══╝") and "重试也没用" in r("x")
+    # 现在的浏览器“崩了”：会话作废，下次重起新进程
+    service._browser.alive = False
+    launch_fail.append("chrome: error while loading shared libraries: libnss3.so: cannot open shared object file")
+    for _ in range(2):  # 第二次在冷却期里，不再真去 launch
+        try:
+            await service._session("d")
+            raise AssertionError("应当 503")
+        except HTTPException as e:
+            assert e.status_code == 503 and "libnss3.so" in e.detail, e.detail
+    assert launches[0] == 2 and service._sessions == {} and service._browser is None, launches
+    try:
+        await service.screen("b")  # 会话已作废 → 404，不是对死页面截图的 500
+        raise AssertionError("应当 404")
+    except HTTPException as e:
+        assert e.status_code == 404
+    launch_fail.clear()
+    service._launch_error = (0, "")  # 冷却过了
+    assert (await service._session("d")).startswith("page-") and launches[0] == 3 and service._launch_error is None
+    print("✓ 浏览器起不来 / 崩溃恢复测试通过")
 
 asyncio.run(main())

@@ -66,6 +66,7 @@ class Ctx:
     async def close(self): pass
 contexts: list = []
 class Browser:
+    def is_connected(self): return True
     async def new_context(self, **kw):
         contexts.append(kw); return Ctx(kw)
 class PW:

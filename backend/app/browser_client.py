@@ -9,9 +9,25 @@ def _h() -> dict:
     return {"Authorization": f"Bearer {settings.browser_token}"}
 
 
+class BrowserDown(RuntimeError):
+    """浏览器服务本身不能用（只这一处判定）：连不上，或 Chromium 起不来（服务回 503 + 一句原因，browser/service.py launch_reason）。
+    和“这个网页打不开”分开：工具据此把画面卡标成 down，不留一张永远黑着的卡；str = 给模型的整句，short = 卡上一句。"""
+
+    @property
+    def short(self) -> str:
+        first = str(self).split("。")[0]
+        return first.split("：", 1)[1] if first.startswith("云浏览器没能启动：") else first
+
+
 async def call(session: str, method: str, path: str, json: dict | None = None) -> httpx.Response:
-    async with httpx.AsyncClient(base_url=settings.browser_url, timeout=60) as c:
-        return await c.request(method, f"/sessions/{session}{path}", headers=_h(), json=json)
+    try:
+        async with httpx.AsyncClient(base_url=settings.browser_url, timeout=60) as c:
+            r = await c.request(method, f"/sessions/{session}{path}", headers=_h(), json=json)
+    except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+        raise BrowserDown(f"云浏览器没连上（{type(e).__name__}）。浏览器服务没在运行，马上重试也没用；请告诉用户需要管理员启动 browser 服务。") from e
+    if r.status_code == 503:
+        raise BrowserDown(_detail(r) or "云浏览器暂时不能用。")
+    return r
 
 
 def _detail(r: httpx.Response) -> str:

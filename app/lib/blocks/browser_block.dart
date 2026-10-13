@@ -4,6 +4,7 @@
 // v1.29 接管交还：block.handoff pending = 助手在等你（验证码、滑块、扫码）→ 自动进入接管、卡头下出“需要你来”条，
 // 弄完点“完成，交还”（onForm(id, {})），做不了点“做不了”（onForm(id, null)）；结束后那一行小字说明结果。
 // v1.32 画面下列出这条回复里传到网页上的 / 网页下载存进工作区的文件（block.files），点开用工作区文件接口。
+// v2.28 block.down = 浏览器服务本身不能用：不拉画面、不能接管，画面位置换成 _DownPanel（一句原因 + 怎么办）。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -42,6 +43,7 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
 
   BrowserHandoff? get _handoff => widget.block.handoff;
   bool get _waiting => _handoff?.pending == true && _replied != _handoff!.id;
+  String? get _down => widget.block.down;
 
   @override
   void initState() {
@@ -58,7 +60,7 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
       _control = true; // 助手在等你：直接进入接管
       HapticFeedback.mediumImpact();
     }
-    if (old.block.live != widget.block.live || old.block.handoff?.state != h?.state) {
+    if (old.block.live != widget.block.live || old.block.handoff?.state != h?.state || old.block.down != _down) {
       if (!widget.block.live) _broken = false; // 打开完成：再试一次拿画面
       if (h != null && !h.pending) _control = false;
       _wake();
@@ -74,6 +76,7 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
 
   void _schedule() {
     _timer?.cancel();
+    if (_down != null) return; // 服务坏了：不拉画面（换成新卡时 didUpdateWidget → _wake 重新排）
     final every = screenInterval(control: _control || _waiting, live: widget.block.live);
     _timer = Timer(every, () => _onTick(every));
   }
@@ -157,13 +160,16 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
                   style: context.text.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
             const SizedBox(width: Sp.x2),
-            FadeSwitcher(child: !_broken && !_paused ? PulseDot(key: const ValueKey('on'), color: p.danger, size: 7) : const SizedBox(key: ValueKey('off'))),
+            FadeSwitcher(child: !_broken && !_paused && _down == null ? PulseDot(key: const ValueKey('on'), color: p.danger, size: 7) : const SizedBox(key: ValueKey('off'))),
             const Spacer(),
-            TextButton.icon(
-              onPressed: _waiting ? null : _toggle,
-              icon: Icon(control ? Icons.pan_tool_rounded : Icons.pan_tool_outlined, size: 16),
-              label: Text(controlLabel(control)),
-            ),
+            if (_down == null)
+              TextButton.icon(
+                onPressed: _waiting ? null : _toggle,
+                icon: Icon(control ? Icons.pan_tool_rounded : Icons.pan_tool_outlined, size: 16),
+                label: Text(controlLabel(control)),
+              )
+            else
+              const SizedBox(height: kMinInteractiveDimension),
           ]),
         ),
         RiseSwitcher(
@@ -177,16 +183,23 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
                     )
                   : null,
         ),
-        LayoutBuilder(
-          builder: (_, c) => GestureDetector(
-            onTapUp: (d) => _tap(d, c),
-            excludeFromSemantics: true,
-            child: Semantics(
-              label: browserScreenSemantics(control: control, paused: _paused, site: widget.block.site),
-              image: true,
-              child: AspectRatio(aspectRatio: _aspect, child: _screen(context)),
-            ),
-          ),
+        RiseSwitcher(
+          child: _down != null
+              ? _DownPanel(key: ValueKey('down-$_down'), reason: _down!)
+              : KeyedSubtree(
+                  key: const ValueKey('stage'),
+                  child: LayoutBuilder(
+                    builder: (_, c) => GestureDetector(
+                      onTapUp: (d) => _tap(d, c),
+                      excludeFromSemantics: true,
+                      child: Semantics(
+                        label: browserScreenSemantics(control: control, paused: _paused, site: widget.block.site),
+                        image: true,
+                        child: AspectRatio(aspectRatio: _aspect, child: _screen(context)),
+                      ),
+                    ),
+                  ),
+                ),
         ),
         AnimatedSize(
           duration: context.motion(Motion.base),
@@ -267,6 +280,42 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
         WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? setState(() => _broken = true) : null);
         return Container(color: context.tileFill);
       },
+    );
+  }
+}
+
+/// 浏览器服务不能用：图标 + 标题 + 原因 + 怎么办（读屏一次读完）。
+class _DownPanel extends StatelessWidget {
+  const _DownPanel({super.key, required this.reason});
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: '$browserDownTitle：$reason。$browserDownHint',
+      child: ExcludeSemantics(
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(Sp.x2, 0, Sp.x2, Sp.x2),
+          padding: const EdgeInsets.all(Sp.x3),
+          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(padding: const EdgeInsets.only(top: 2), child: Icon(Icons.public_off_rounded, size: 18, color: p.warning)),
+            const SizedBox(width: Sp.x2),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(browserDownTitle, style: context.text.labelLarge),
+                const SizedBox(height: Sp.x1),
+                Text(reason, style: context.text.bodySmall?.copyWith(color: p.text2)),
+                const SizedBox(height: Sp.x1),
+                Text(browserDownHint, style: context.text.labelSmall),
+              ]),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

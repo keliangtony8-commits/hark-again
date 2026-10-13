@@ -40,7 +40,8 @@ sealed class Block {
             granted: j['granted'] as String?),
         'browser' => BrowserBlock(j['session'] as String? ?? 'main',
             site: j['site'] as String?, live: j['live'] == true, handoff: BrowserHandoff.fromJson(j['handoff']),
-            files: [for (final f in (j['files'] as List? ?? [])) ?BrowserFile.fromJson(f)], workspace: j['workspace'] as String?),
+            files: [for (final f in (j['files'] as List? ?? [])) ?BrowserFile.fromJson(f)], workspace: j['workspace'] as String?,
+            down: (j['down'] as String?)?.trim().isEmpty ?? true ? null : (j['down'] as String).trim()),
         'page' => PageBlock(slug: j['slug'] as String, title: j['title'] as String? ?? '', url: j['url'] as String? ?? ''),
         'stats' => StatsBlock([for (final i in (j['items'] as List? ?? [])) StatItem.fromJson(i as Map<String, dynamic>)]),
         'memory' => MemoryBlock(
@@ -172,13 +173,14 @@ class PlanReviewBlock extends Block {
 /// 云浏览器实时画面卡。session = 按网站起的会话名（后端 app/browser_sessions.py；旧卡 main），
 /// site = 打开的网站（卡头显示），live = 页面还在打开（还没画面时显示“正在打开”，不当作浏览器没开）。
 class BrowserBlock extends Block {
-  const BrowserBlock(this.session, {this.site, this.live = false, this.handoff, this.files = const [], this.workspace});
+  const BrowserBlock(this.session, {this.site, this.live = false, this.handoff, this.files = const [], this.workspace, this.down});
   final String session;
   final String? site;
   final bool live;
   final BrowserHandoff? handoff; // v1.29 助手请你接管（验证码、滑块、扫码），规则在 models/browser_view.dart
   final List<BrowserFile> files; // v1.32 这条回复里传到网页上的 / 网页下载存进工作区的文件（最近 8 条）
   final String? workspace; // files 所在工作区 id（点开用工作区文件接口）
+  final String? down; // v2.28 浏览器服务本身不能用的一句原因（Chromium 起不来 / 没连上）：不拉画面，显示这句
 }
 
 /// 浏览器和工作区之间搬过的一个文件（后端 app/browser_files.py）：upload = 传到网页上的工作区文件，download = 网页下载、存进工作区的。

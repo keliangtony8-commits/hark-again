@@ -7,6 +7,10 @@ const handoffTitle = '需要你来';
 const handoffDoneLabel = '完成，交还';
 const handoffCancelLabel = '做不了';
 
+/// v2.28 浏览器服务本身不能用（卡上 down）：标题 + 怎么办（原因在 down 里）。网页版 lib/browserView.ts 同文案。
+const browserDownTitle = '云浏览器现在用不了';
+const browserDownHint = '是服务器上的浏览器服务出了问题，不是网页的问题。修好后让助手再打开一次。';
+
 /// 右上角按钮：没在操作 → 接管；在操作 → 交还（不是“交还给我”：交还的对象是助手）。
 String controlLabel(bool control) => control ? '交还' : '接管';
 

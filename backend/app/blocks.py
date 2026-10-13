@@ -128,6 +128,7 @@ class BrowserBlock(BaseModel):
     handoff: Handoff | None = None  # v1.29 助手在等用户接管（验证码、滑块、扫码、MFA）
     files: list[BrowserFile] = []  # v1.32 这条回复里传上去/下载下来的文件（最近 8 条）
     workspace: str | None = None  # files 所在工作区 id（项目 id / me），客户端点文件用它打开
+    down: str | None = None  # v2.28 浏览器服务不能用（Chromium 起不来 / 服务没连上）的一句原因：客户端不拉画面，显示这句
 
 
 class JobBlock(BaseModel):
