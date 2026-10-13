@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_env, command_guard, computer, deliver, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -393,10 +393,10 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
     return ToolResult("\n".join(notes), blocks)
 
 
-async def _promoted(ctx: ToolContext, command: str, r: foreground.Outcome) -> ToolResult:
+async def _promoted(ctx: ToolContext, command: str, r: foreground.Outcome, borrowed: list[str] | None = None) -> ToolResult:
     """前台命令到点没跑完，沙盒已把它转成后台任务：建任务行，告诉模型它还在跑、去哪看后续（同 deepseek-harness renderPromoted）。"""
     job = await jobs.adopt(ctx.db, job_id=r.promoted, project_id=ctx.workspace, command=command, seconds=r.seconds,
-                           conversation_id=ctx.conversation_id, task_id=ctx.task_id)
+                           conversation_id=ctx.conversation_id, task_id=ctx.task_id, credentials=borrowed)
     idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
     so_far = r.out.strip() or "（还没有输出）"
     return ToolResult(f"命令跑了 {jobs.duration_text(int(r.seconds))} 还没结束，没有被杀，已转成后台任务 {job.id} 接着跑"
@@ -431,14 +431,28 @@ async def _promoted(ctx: ToolContext, command: str, r: foreground.Outcome) -> To
                          "description": "仅后台：常驻服务，意外退出 / 电脑重启后自动拉起，不限时（忽略 timeout、idle_timeout）"},
           "stdin": {"type": "string", "description": f"仅前台：传给命令标准输入的文本，最多 {sandbox_client.STDIN_MAX // 1024} KB"},
           "title": {"type": "string", "description": "后台任务给用户看的一句话名字，如“安装依赖”“训练模型”"},
+          "credentials": {"type": "array", "items": {"type": "object", "properties": {"provider": {"type": "string"}},
+                                                     "required": ["provider"]},
+                          "description": "这条命令要借用的已连接账户，如 [{\"provider\": \"github\"}]：命令里就有它的 Token"
+                                         "（GitHub：$GH_TOKEN / $GITHUB_TOKEN，git 推拉 github.com 免密；Google：$GOOGLE_OAUTH_ACCESS_TOKEN），"
+                                         "输出里显示成 [$变量名]。只有要以用户身份访问该服务时才加（gh、git push 私有仓库、调它的 API 的脚本）"},
           "idle_timeout": {"type": "integer",
                            "description": f"秒，仅后台：连续这么久没有新输出就判定卡住并停掉；默认 {settings.job_idle_seconds}，"
                                           "确实会长时间不打印（不输出进度的训练、静默编译）就设 0"}},
        "required": ["command"]}, risk=_command_risk)
 async def run_command(ctx: ToolContext, command: str, timeout: int | None = None, background: bool = False,
                       title: str | None = None, idle_timeout: int | None = None, stdin: str | None = None,
-                      keep_alive: bool = False, memory_limit: str | None = None) -> ToolResult:
+                      keep_alive: bool = False, memory_limit: str | None = None,
+                      credentials: list | None = None) -> ToolResult:
     background = background or bool(keep_alive)  # 常驻一定在后台
+    try:
+        borrowed = command_credentials.parse(credentials)  # v2.20 借用已连接账户（规则在 command_credentials.py）
+    except ValueError as e:
+        return ToolResult(f"没有运行：{e}", failed="参数有误")
+    grant = await command_credentials.grant(ctx.db, borrowed)
+    if grant.missing:  # 借不到就不跑：没认证的 git push / gh 只会给一句看不懂的错
+        return ToolResult("没有运行：" + "；".join(grant.missing), failed="账户没连上")
+    cred_note = command_credentials.note(grant)
     if (heredoc := patching.from_command(command)) is not None and not background:
         # Codex 的模型习惯在 shell 里写 apply_patch <<'EOF'：沙盒里没有这个命令，整条就是它时直接按补丁改（同 Codex invocation.rs）
         return await _apply_patch(ctx, *heredoc)
@@ -456,23 +470,23 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
         try:
             job = await jobs.start(ctx.db, project_id=ctx.workspace, command=command, title=title, timeout=timeout,
                                    idle_timeout=idle_timeout, conversation_id=ctx.conversation_id, task_id=ctx.task_id,
-                                   keep_alive=bool(keep_alive), memory_max=cap)
+                                   keep_alive=bool(keep_alive), memory_max=cap, credentials=borrowed)
         except jobs.JobError as e:
             return ToolResult(f"没有启动：{e}", failed=f"没有启动：{e}")
         capped = f"内存上限 {quota.size_text(cap)}；" if cap else ""
         if job.keep_alive:
             return ToolResult(f"已在后台启动常驻任务 {job.id}「{job.title}」：{capped}不限时，意外退出或电脑重启后会自动拉起。"
                               "它监听端口的话可用 preview_port 给用户预览链接；用 job_status 看日志，改了代码用 restart_service 重启，cancel_job 停。"
-                              "现在简短告诉用户它在跑什么。", [jobs.block(job)])
+                              f"现在简短告诉用户它在跑什么。{cred_note}", [jobs.block(job)])
         idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
         return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（{capped}最长 {jobs.duration_text(job.timeout)}{idle}）。"
-                          "用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。",
+                          f"用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。{cred_note}",
                           [jobs.block(job)])
     if memory_limit:
         return ToolResult("memory_limit 只对后台任务有效：要限内存就加 background=true 放到后台跑。", failed="参数有误")
     if stdin is not None and len(stdin.encode()) > sandbox_client.STDIN_MAX:
         return ToolResult(f"stdin 太长（上限 {sandbox_client.STDIN_MAX // 1024} KB）：先写进工作区文件，命令里用 < 文件 读。")
-    title = f"$ {command[:80]}"
+    title = f"$ {command[:80]}" + (f" · 用 {'、'.join(command_credentials.labels(borrowed))} 账户" if borrowed else "")
     # v2.04 到点没跑完就转后台（deepseek-harness promoteOnTimeout）：先问收不收得下，收不下照旧到点杀掉
     refusal = await jobs.admission(ctx.db, ctx.workspace)
     slot = None if refusal else jobs.promote_slot()
@@ -483,14 +497,14 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     try:
         r = await foreground.run(ctx.workspace, command, timeout or 60, stdin,
                                  lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}),
-                                 await command_env.load(ctx.db), slot)
+                                 {**await command_env.load(ctx.db), **grant.env}, slot)
     finally:
         if watch:
             await asyncio.to_thread(command_changes.after, ctx.workspace, ctx.changes)
     if r.failed:
         return ToolResult(r.message, failed=r.failed)
     if r.promoted:
-        return await _promoted(ctx, command, r)
+        return await _promoted(ctx, command, r, borrowed)
     timed_out, status, out, shown = r.timed_out, r.status, r.out, r.shown
     hint = ""
     if timed_out:
@@ -503,6 +517,7 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     hint += computer.wake_note(r.woke)
     # 命令可能刚写了大东西：重数一遍（线程里跑，最多数 20 万项），满了 / 快满了才有一句
     hint += await asyncio.to_thread(quota.model_note, ctx.workspace, True)
+    hint += f"\n{cred_note}" if cred_note else ""
     return ToolResult(f"{status}\n{out}{hint}", [
         {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}],
         failed="" if r.ok else status)

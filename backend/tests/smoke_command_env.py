@@ -288,7 +288,8 @@ for bad in [{"PATH": "x"}, {"STDIN_B64": "x"}, {"lower": "x"}, {"A": "x"}, {"OK_
         runner.check_env(bad); raise AssertionError(bad)
     except HTTPException as e:
         assert e.status_code == 400
-assert runner.ENV_MAX == E.ENV_MAX and runner.ENV_VALUE_MAX == E.VALUE_MAX and runner.ENV_RESERVED == E.RESERVED
+from app import command_credentials as CC
+assert runner.ENV_MAX == E.ENV_MAX + CC.ENV_EXTRA_MAX and runner.ENV_VALUE_MAX == E.VALUE_MAX and runner.ENV_RESERVED == E.RESERVED
 runner._container = lambda pid: fc
 res = runner._exec("p1", "echo hi", 10, "in", None, None, {"TG": "v1"})
 env = captured["exec_create"]["environment"]

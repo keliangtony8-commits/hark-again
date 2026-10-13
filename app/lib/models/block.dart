@@ -199,11 +199,14 @@ class BrowserHandoff {
   bool get pending => state == 'pending';
 }
 
+/// 服务器给的字符串列表（不是列表 / 混了别的类型 → 只留字符串）。
+List<String> stringList(Object? v) => v is List ? v.whereType<String>().toList() : const [];
+
 /// 项目沙盒里的后台任务卡（后端 app/jobs.py）。块里是落库时的状态；运行中由卡片自己轮询 /api/jobs/{id}（models/job.dart）。
 class JobBlock extends Block {
   const JobBlock({required this.id, required this.title, required this.command, required this.state,
       this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason, this.keepAlive = false, this.restarts = 0,
-      this.memoryMax, this.memoryPeak, this.disk, this.promoted = false, this.changes});
+      this.memoryMax, this.memoryPeak, this.disk, this.promoted = false, this.changes, this.credentials = const []});
   factory JobBlock.fromJson(Map<String, dynamic> j) => JobBlock(
       id: j['id'] as String? ?? '',
       title: j['title'] as String? ?? '后台任务',
@@ -220,7 +223,8 @@ class JobBlock extends Block {
       memoryPeak: (j['memory_peak'] as num?)?.toInt(),
       disk: JobDisk.tryParse(j['disk']),
       promoted: j['promoted'] as bool? ?? false,
-      changes: ChangesBlock.tryParse(j['changes']));
+      changes: ChangesBlock.tryParse(j['changes']),
+      credentials: stringList(j['credentials']));
   final String id, title, command, state;
   final DateTime? startedAt, finishedAt;
   final int? exitCode;
@@ -244,6 +248,9 @@ class JobBlock extends Block {
 
   /// v2.18 它改了哪些文件（后端 app/job_changes.py，结算时出；可在任务卡上撤销）。
   final ChangesBlock? changes;
+
+  /// v2.20 借用的已连接账户（服务名，如 ['GitHub']；后端 app/command_credentials.py）。
+  final List<String> credentials;
 }
 
 /// 用户自己跑的命令（输入框 !命令，后端 ShellBlock）：一条回复里只有它一张。规则在 models/shell.dart。

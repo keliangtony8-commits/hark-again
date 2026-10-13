@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, attachment_save, clock, command_env, documents, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, attachment_save, clock, command_credentials, command_env, documents, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -43,6 +43,9 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
                      if s.kind != command_env.KIND)
     if access:
         p.add(STABLE, "这些服务已授权，用 api_request 直接调用（认证自动附加；具体用法先看对应技能）：\n" + "\n".join(access))
+    conns = sorted(c.provider for c in (await db.scalars(select(Connection))).all() if c.provider in PROVIDERS)
+    if cred_line := command_credentials.prompt(conns):  # v2.20 命令按需借已连接账户
+        p.add(STABLE, cred_line)
     if env_line := command_env.prompt(await command_env.names(db)):  # 沙盒命令里能用的环境变量（只给名字）
         p.add(STABLE, env_line)
     servers = sorted(s.name for s in (await db.scalars(select(McpServer))).all())

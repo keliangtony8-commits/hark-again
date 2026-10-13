@@ -64,6 +64,13 @@ def preview(value: str) -> str:
 # ---- 进程内缓存：打码是同步的（日志读取、终端尾巴都在同步代码里），值在这里常驻 ----
 _values: dict[str, str] = {}
 _loaded_at = 0.0
+_borrowed: dict[str, str] = {}  # v2.20 借给命令的连接 Token（app/command_credentials.py）：只打码，不注入
+
+
+def remember(name: str, value: str) -> None:
+    """登记一个只用来打码的值（借给某条命令的 Token）。同名换新值（Token 续期了，旧的也已无效）。"""
+    if value and len(value) >= VALUE_MIN:
+        _borrowed[name] = value
 
 
 def _set(values: dict[str, str]) -> None:
@@ -81,6 +88,12 @@ async def load(db: AsyncSession) -> dict[str, str]:
         except Exception:  # noqa: BLE001 — VAULT_KEY 换了 / 没配：这一条当不存在
             continue
     _set(out)
+    from . import command_credentials  # 迟导入：它也依赖本模块
+    try:
+        for n, v in (await command_credentials.known(db)).items():
+            remember(n, v)
+    except Exception:  # noqa: BLE001 — 连接表读不了不影响命令变量
+        pass
     return out
 
 
@@ -125,7 +138,7 @@ def prompt(var_names: list[str]) -> str:
 def scrub(text: str, values: dict[str, str] | None = None) -> str:
     """把值换成 [$NAME]；长值先换（一个值是另一个的一部分时不留半截）。
     文本开头是某个值的后半截、结尾是某个值的前半截（≥EDGE_MIN 字）也抹掉：日志尾巴、流式片段是从中间切的。"""
-    vals = _values if values is None else values
+    vals = {**_borrowed, **_values} if values is None else values
     if not text or not vals:
         return text
     pairs = sorted(((v, n) for n, v in vals.items() if v), key=lambda p: -len(p[0]))

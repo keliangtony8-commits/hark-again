@@ -97,7 +97,9 @@ export type JobBlock = { type: "job"; id: string; title: string; command: string
   /** v2.04 前台命令到点没跑完、转进后台接着跑的（后端 jobs.adopt）。 */
   promoted?: boolean | null;
   /** v2.18 它改了哪些文件（结算时出，可撤销：POST /api/jobs/{id}/changes/undo）。 */
-  changes?: ChangesBlock | null };
+  changes?: ChangesBlock | null;
+  /** v2.20 借用的已连接账户（服务名，后端 app/command_credentials.py）。 */
+  credentials?: string[] | null };
 /** /api/jobs/{id} 的快照。followup=pending：结束了，服务器还要在这段对话里接着说一轮。 */
 export type JobInfo = { id: string; title: string; command: string; state: JobState; exit_code?: number | null;
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
@@ -113,7 +115,9 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   /** v2.04 前台命令转进后台的（老服务器没有这个字段）。 */
   promoted?: boolean;
   /** v2.18 它改了哪些文件（结束了才有）。 */
-  changes?: ChangesBlock | null };
+  changes?: ChangesBlock | null;
+  /** v2.20 借用的已连接账户（服务名；老服务器没有）。 */
+  credentials?: string[] | null };
 /** v1.96 日志 + 运行期间工作区里新写或改过的文件（按顶层条目分组，最多 3 组）；overlap = 同时段还在跑的其他任务数。 */
 export type JobDisk = { log: number; written: number; files: number; top: { path: string; size: number }[]; overlap: number; partial: boolean };
 export type JobBox = { used: number; limit: number };

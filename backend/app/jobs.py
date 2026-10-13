@@ -43,7 +43,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_env, job_changes, job_disk, job_restart, quota, sandbox_client, term_text
+from . import command_credentials, command_env, job_changes, job_disk, job_restart, quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -249,6 +249,8 @@ def block(job: Job) -> dict:
         out["memory_max"] = job.memory_max
     if job.promoted:
         out["promoted"] = True
+    if borrowed := credentials(job):
+        out["credentials"] = command_credentials.labels(borrowed)
     if job.state != "running":
         if job.memory_peak:
             out["memory_peak"] = job.memory_peak
@@ -271,7 +273,8 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
             "keep_alive": bool(job.keep_alive), "restarts": job.restarts or 0,
             "restart_at": iso(job.restart_at) if job.state == "running" else None,
             "memory_max": job.memory_max, "memory_peak": job.memory_peak, "disk": job_disk.stored(job),
-            "promoted": bool(job.promoted), "changes": job_changes.wire(job)}
+            "promoted": bool(job.promoted), "changes": job_changes.wire(job),
+            "credentials": command_credentials.labels(credentials(job))}
 
 
 def describe(job: Job) -> str:
@@ -383,7 +386,8 @@ def promote_slot() -> tuple[str, int]:
 
 
 async def adopt(db: AsyncSession, *, job_id: str, project_id: str, command: str, seconds: float,
-                conversation_id: str | None = None, task_id: str | None = None) -> Job:
+                conversation_id: str | None = None, task_id: str | None = None,
+                credentials: list[str] | None = None) -> Job:
     """v2.04 前台命令到点没跑完、沙盒已把它登记成 .jobs/<job_id>/（cmd.sh、pid、log，结束时写 exit）：建这一行，
     从此和 start() 起的普通后台任务一样被监护（护栏、查活、取消、结束通知）。开始时间往前推 seconds（它已经跑了这么久），
     读游标放在现在的日志末尾：到目前的输出已经在这次的工具结果里给过模型，job_status 只给之后的
@@ -393,7 +397,7 @@ async def adopt(db: AsyncSession, *, job_id: str, project_id: str, command: str,
     job = Job(id=job_id, project_id=project_id, conversation_id=conversation_id, task_id=task_id,
               title=(command.strip().splitlines() or [""])[0].strip()[:60] or "后台任务", command=command.strip(),
               timeout=limit, idle_timeout=idle_limit(None, limit), created_at=start_at, run_started_at=start_at,
-              promoted=True)
+              promoted=True, credentials=",".join(credentials or []) or None)
     job.read_offset = log_size(job)
     await job_changes.begin(project_id, job_id)  # v2.18 从转后台这一刻起记它改的文件（之前的归那一轮的改动卡）
     db.add(job)
@@ -403,7 +407,8 @@ async def adopt(db: AsyncSession, *, job_id: str, project_id: str, command: str,
 
 async def start(db: AsyncSession, *, project_id: str, command: str, title: str | None = None,
                 timeout: int | None = None, idle_timeout: int | None = None, conversation_id: str | None = None,
-                task_id: str | None = None, keep_alive: bool = False, memory_max: int | None = None) -> Job:
+                task_id: str | None = None, keep_alive: bool = False, memory_max: int | None = None,
+                credentials: list[str] | None = None) -> Job:
     command = command.strip()
     if not command:
         raise JobError("命令是空的")
@@ -414,14 +419,15 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     job = Job(id=new_id(), project_id=project_id, conversation_id=conversation_id, task_id=task_id,
               title=(title or command.splitlines()[0]).strip()[:60] or "后台任务", command=command, timeout=limit,
               idle_timeout=0 if keep_alive else idle_limit(idle_timeout, limit), created_at=now,
-              keep_alive=keep_alive, run_started_at=now, memory_max=memory_max or None)
+              keep_alive=keep_alive, run_started_at=now, memory_max=memory_max or None,
+              credentials=",".join(credentials or []) or None)
     d = job_dir(job)
     d.mkdir(parents=True)
     (d / "cmd.sh").write_text(command + "\n", encoding="utf-8")
     (d / "run.sh").write_text(script(job.id, limit, keep_alive), encoding="utf-8")
     await job_changes.begin(project_id, job.id, keep_alive)  # v2.18 启动前记基线（结算时出改动区）
     try:
-        await _launch(db, project_id, job.id)
+        await _launch(db, project_id, job.id, credentials)
     except httpx.HTTPError as e:
         job_changes.drop(project_id, job.id)
         for f in d.iterdir():
@@ -433,10 +439,16 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     return job
 
 
-async def _launch(db: AsyncSession, workspace: str, job_id: str) -> None:
+async def _launch(db: AsyncSession, workspace: str, job_id: str, borrowed: list[str] | None = None) -> None:
     """叫沙盒跑 run.sh：每次（含自动 / 手动重启）都现取用户的命令环境变量，改了变量重启就生效。"""
     env = await command_env.load(db)
+    if borrowed:  # v2.20 借用的连接：每次启动现取（会续期），借不到就不带
+        env = {**env, **(await command_credentials.grant(db, borrowed)).env}
     await sandbox_client.start_job(workspace, job_id, **({"env": env} if env else {}))
+
+
+def credentials(job: Job) -> list[str]:
+    return [p for p in (job.credentials or "").split(",") if p]
 
 
 async def patch_blocks(db: AsyncSession, job: Job) -> None:
@@ -539,7 +551,7 @@ async def _relaunch(db: AsyncSession, job: Job) -> None:
     await asyncio.to_thread(_relaunch_files, job)
     now = datetime.now(timezone.utc)
     try:
-        await _launch(db, job.project_id, job.id)
+        await _launch(db, job.project_id, job.id, credentials(job))
     except httpx.HTTPError:
         job.restart_at = now + timedelta(seconds=job_restart.FIRST_S)
         await db.commit()

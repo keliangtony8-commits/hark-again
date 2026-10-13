@@ -14,7 +14,7 @@ class JobInfo {
   const JobInfo({required this.id, required this.title, required this.command, required this.state,
       this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt,
       this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage, this.memoryMax,
-      this.memoryPeak, this.box, this.disk, this.promoted = false, this.changes});
+      this.memoryPeak, this.box, this.disk, this.promoted = false, this.changes, this.credentials = const []});
 
   factory JobInfo.fromJson(Map<String, dynamic> j) => JobInfo(
       id: j['id'] as String? ?? '',
@@ -37,7 +37,8 @@ class JobInfo {
       box: JobBox.tryParse(j['box']),
       disk: JobDisk.tryParse(j['disk']),
       promoted: j['promoted'] as bool? ?? false,
-      changes: ChangesBlock.tryParse(j['changes']));
+      changes: ChangesBlock.tryParse(j['changes']),
+      credentials: stringList(j['credentials']));
 
   /// 还没问过服务器时，用消息里落库的块先画出来。
   factory JobInfo.fromBlock(JobBlock b) => JobInfo(
@@ -57,14 +58,15 @@ class JobInfo {
       memoryPeak: b.memoryPeak,
       disk: b.disk,
       promoted: b.promoted,
-      changes: b.changes);
+      changes: b.changes,
+      credentials: b.credentials);
 
   /// 换个用时（卡片跳秒用），其余不变。
   JobInfo withElapsed(Duration d) => JobInfo(
       id: id, title: title, command: command, state: state, exitCode: exitCode, followup: followup, elapsed: d,
       tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason, keepAlive: keepAlive,
       restarts: restarts, restartAt: restartAt, usage: usage, memoryMax: memoryMax, memoryPeak: memoryPeak, box: box,
-      disk: disk, promoted: promoted, changes: changes);
+      disk: disk, promoted: promoted, changes: changes, credentials: credentials);
 
   /// v2.18 它改了哪些文件（结束了才有；可撤销）。规则在 models/changes.dart。
   final ChangesBlock? changes;
@@ -94,6 +96,9 @@ class JobInfo {
 
   /// v2.04 前台命令到点没跑完、转进后台接着跑的（后端 jobs.adopt）：卡上标 [jobPromotedLabel]。
   final bool promoted;
+
+  /// v2.20 借用的已连接账户（服务名；后端 app/command_credentials.py）：卡上标 [jobCredentialsLabel]。
+  final List<String> credentials;
 
   bool get running => !jobFinal.contains(state);
 
@@ -211,10 +216,14 @@ String jobStateLabel(JobInfo j) => switch (j.state) {
 /// 前台命令转进后台的任务，卡片底部和“这台电脑”里都标这一句（网页版 lib/jobs.ts 同一句）。
 const jobPromotedLabel = '从前台转入';
 
+/// v2.20 借了账户的任务标一句“用 GitHub 账户”（网页版 lib/jobs.ts 同一句）；没借 → null。
+String? jobCredentialsLabel(List<String> names) => names.isEmpty ? null : '用 ${names.join('、')} 账户';
+
 /// 卡片底部那行：状态词 · 从前台转入 · 已自动重启 N 次（常驻）· 助手在看结果（等它接着说）。
 String jobFootLabel(JobInfo j) => [
       jobStateLabel(j),
       if (j.promoted) jobPromotedLabel,
+      ?jobCredentialsLabel(j.credentials),
       if (j.keepAlive && j.restarts > 0) '已自动重启 ${j.restarts} 次',
       if (!j.running && j.memoryPeak != null) '内存峰值 ${formatSize(j.memoryPeak!)}',
       if (j.awaitingReply) '助手在看结果',
@@ -225,6 +234,7 @@ String jobRowSubtitle(JobInfo j) => [
       if (j.keepAlive) j.restartAt != null ? '重启中' : '常驻',
       if (j.keepAlive && j.restarts > 0) '已重启 ${j.restarts} 次',
       if (j.promoted) jobPromotedLabel,
+      ?jobCredentialsLabel(j.credentials),
       '运行 ${jobDuration(j.elapsed)}',
       if (j.usage != null) jobUsageLabel(j.usage!),
       '\$ ${j.command.split('\n').first}',
@@ -248,7 +258,8 @@ String jobTailLines(String tail, int lines) {
 /// 读屏：一句话说清这张卡。
 String jobSemantics(JobInfo j) =>
     '${j.keepAlive ? '常驻任务' : '后台任务'} ${j.title}${j.promoted ? '（$jobPromotedLabel）' : ''}，${jobStateLabel(j)}${j.showsReason ? '：${j.stopReason}' : ''}'
-    '${j.keepAlive && j.restarts > 0 ? '，已自动重启 ${j.restarts} 次' : ''}，用时 ${jobDuration(j.elapsed)}'
+    '${j.keepAlive && j.restarts > 0 ? '，已自动重启 ${j.restarts} 次' : ''}'
+    '${j.credentials.isEmpty ? '' : '，${jobCredentialsLabel(j.credentials)}'}，用时 ${jobDuration(j.elapsed)}'
     '${j.running && j.usage != null ? '，${jobUsageSemantics(j.usage!)}' : ''}'
     '${j.running && j.memoryMax != null ? '，内存上限 ${formatSize(j.memoryMax!)}' : ''}'
     '${j.boxTight ? '，${jobBoxLabel(j.box!)}' : ''}'

@@ -165,6 +165,7 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v2.14 改动卡认命令改的文件：FileChange.command；changesNote 小字“其中 N 个是命令改的”（和“N 个大文件不能撤销”用 · 连）。test/changes_block_test.dart。
 - v2.16 改动卡权限：FileChange.mode（服务器给的一句话，原样显示）；只改权限（+0 −0）时 changeTag 显示它，内容也改了时 DiffStat 前缀 + 读屏带上。test/file_mode_test.dart。
 - v2.17 移除的面板能找回：features/home/removed_panels.dart 唯一入口（removePanel 不再危险确认，提示条“撤销”；RemovedPanels 在“面板”段末一行，点开选一个放回）；HomeCard.removedAt/revivable；showToast 可带一个按钮。test/removed_panels_test.dart。
+- v2.20 命令借用账户：JobBlock / JobInfo.credentials（stringList 解析）+ models/job.dart jobCredentialsLabel（“用 GitHub 账户”）进底栏、电脑页行、读屏。test/job_credentials_test.dart。
 - v2.19 修好就重跑：ScheduledTask.wallRetrying → WallNotice 换同步图标 + “已经在重新运行”、隐藏“重试”（FadeSwitcher 切换）；保险箱 / MCP / OAuth 回调的提示用 task_wall.dart withRetried 接上服务端那句。test/wall_retry_test.dart。
 - v2.18 后台任务的改动区：blocks/changes_block.dart 拆出 ChangesPanel（不带外框，scope turn|job、onUndo）；任务卡结束后 RiseSwitcher 嵌一块，撤销走 /api/jobs/{id}/changes/undo；措辞 models/changes.dart（ChangesScope、jobChangesShown、changesConfirm、overlap/shared 小字）。test/job_changes_test.dart。
 - v2.15 碰壁条：ScheduledTask.wallLabel/wallReason/wallFixable/wallOpen/walled，TaskRun.wallLabel/walled；features/me/task_wall.dart WallNotice（FadeSwitcher 出现 / 收起，tileFill 底 + warning 图标；要你处理 → cardTargets[wallOpen] 直达 + “重试”）用在任务详情头卡和 Home 面板卡（标题行下、内容上）；碰壁运行锁图标 + runStateLabel “碰壁”。test/task_wall_test.dart。

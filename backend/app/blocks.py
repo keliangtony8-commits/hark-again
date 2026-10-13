@@ -148,6 +148,7 @@ class JobBlock(BaseModel):
     memory_peak: int | None = None  # v1.92 结束时的内存峰值（字节）
     disk: dict | None = None  # v1.96 结算时的磁盘账（app/job_disk.py wire 形状）
     promoted: bool | None = None  # v2.04 前台命令到点没跑完、转进后台接着跑的（app/jobs.py adopt）
+    credentials: list[str] | None = None  # v2.20 借用的已连接账户（服务名，如 ["GitHub"]；app/command_credentials.py）
     changes: dict | None = None  # v2.18 它改了哪些文件（app/job_changes.py：ChangesBlock 形状 + overlap/shared）；POST /api/jobs/{id}/changes/undo
 
 

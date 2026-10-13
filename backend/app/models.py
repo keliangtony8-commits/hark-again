@@ -408,3 +408,4 @@ class Job(Base):
     disk: Mapped[str | None] = mapped_column(Text, nullable=True)
     changes: Mapped[str | None] = mapped_column(Text, nullable=True)
     promoted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    credentials: Mapped[str | None] = mapped_column(String(200), nullable=True)  # v2.20 借用的连接（逗号分隔的服务商 id，app/command_credentials.py）

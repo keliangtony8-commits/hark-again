@@ -104,7 +104,7 @@ ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]{1,63}")
 ENV_RESERVED = frozenset({"PATH", "HOME", "LANG", "SHELL", "TMPDIR", "USER", "LOGNAME", "TERM", "COLORTERM", "PWD",
                           "OLDPWD", "HOSTNAME", "SHLVL", "IFS", "BASH_ENV", "ENV", "PS1", "LD_PRELOAD",
                           "LD_LIBRARY_PATH", "STDIN_B64"})
-ENV_MAX, ENV_VALUE_MAX = 30, 8192
+ENV_MAX, ENV_VALUE_MAX = 44, 8192  # 用户变量 30 个（command_env.ENV_MAX）+ 借用账户最多 14 个（command_credentials.ENV_EXTRA_MAX）
 
 
 def check_env(env: dict[str, str] | None) -> dict[str, str]:
