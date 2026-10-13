@@ -52,6 +52,13 @@ def clean(field: str, text: str | None) -> str | None:
     return _clean(text, RUNBOOK_MAX, "做法") if field == "runbook" else _clean(text, NOTE_MAX, "观察")
 
 
+# 第一次运行（还没有做法）的提示 = 唯一规则（v2.32，E2E B8）：只有用到来源或步骤的任务才写做法；
+# 到点提醒一句这种没有来源、没有步骤的任务写做法纯属多花一次调用（Hark 的 setup fire 也是“record the method you used”，没用方法就没得记）。
+SETUP_HINT = ("还没有做法：这是第一次运行。先把事情做完；这次查了网页、读了文件、跑了命令或走了好几步，"
+              "结束前就用 schedule_task action=set_runbook 写下具体步骤、用到的网址 / 来源、输出的样子，以后每次照着做，不必重新摸索。"
+              "只是到点提醒一句、没用到任何来源和步骤的任务不用写做法，直接给结果。")
+
+
 FIRE_FREE = frozenset({"list", "runs", "read", "set_runbook", "note", "report_wall", "create", "snooze", "unsnooze", "dismiss"})
 FIRE_REFUSED = ("计划是用户定的，这次自动运行不能改任何任务的时间、频率、指令或开关（也不能叫别的任务跑、跳过、删掉）。"
                 "觉得该调整，就在这次的结果里向用户建议，由他决定。")
@@ -95,8 +102,7 @@ def preface(task: ScheduledTask, runs: list[TaskRun]) -> str:
     if task.runbook:
         parts.append(f"做法（之前的运行写下的，照着做；和现实对不上了就重新摸索，并用 schedule_task action=set_runbook 改写）：\n{task.runbook}")
     else:
-        parts.append("还没有做法：这是第一次运行。先把事情做完，结束前用 schedule_task action=set_runbook 写下具体步骤、"
-                     "用到的网址 / 来源、输出的样子，以后每次照着做，不必重新摸索。")
+        parts.append(SETUP_HINT)
     if task.note:
         parts.append(f"观察（之前几次运行记下的）：\n{task.note}")
     parts.append(f"学到下次该知道的事（网站改版、来源失效、用户偏好）就用 schedule_task action=note 整段改写观察"

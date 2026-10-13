@@ -82,7 +82,7 @@ async def first(db, task_id, emit):
     return Reply("最低价 ¥820，比上周低 ¥60")
 run(tid, first)
 b = seen[-1]
-assert "还没有做法" in b and "set_runbook" in b and "[[SILENT]]" in b and "最近几次" not in b, b
+assert "还没有做法" in b and "不用写做法" in b and "set_runbook" in b and "[[SILENT]]" in b and "最近几次" not in b, b
 assert "以指令为准" in b and "机票盯价" in b
 t = task(tid)
 assert t["runbook"] == "1. 打开 example.com/fares\n2. 记最低价" and t["note"] == "网站周末很慢", t
