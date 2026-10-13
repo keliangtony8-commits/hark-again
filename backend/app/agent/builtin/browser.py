@@ -16,6 +16,8 @@
 登录过期（v1.36，判定在 browser_sessions.observe）：每张快照都经 _view：之前登录过的会话又是登录页 → 在快照前
 告诉模型“登录过期了”和怎么重登（保险箱有 → browser_login 直接重登；没有 → 登录卡 / 接管；定时任务里没人 →
 如实说明，并在 Home 上发一张系统提醒“X 的登录过期了”，带“去做”让用户在聊天里一键重登）。重登成功 → 收起提醒。
+表单控件（v2.53，规则在 browser/forms.py）：快照里下拉框带当前值和选项、勾选框带 ☑/☐；browser_select 选下拉框，
+browser_press 按键（Esc 关弹窗、↓ 回车选候选）。
 自动登录（v2.50）：登录页（过期或第一次）+ 保险箱有 + login_fields 判得准 → _view 里直接代填一次，模型拿到的是登录后的页面。"""
 import re
 import time
@@ -46,10 +48,28 @@ def _render(snap: dict, tab: Tab) -> str:
     lines = []
     for e in snap.get("elements", []):
         tab.names[e["ref"]] = e["name"]
-        kind = e["tag"] + (f":{e['type']}" if e["type"] and e["tag"] == "input" else "")
-        lines.append(f"[{e['ref']}] {kind} {e['name']}")
+        lines.append(element_line(e))
     return (tab_note(snap) + blocked_note(snap) + f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines)
             + f"\n\n页面文字：\n{snap.get('text', '')}")
+
+
+OPTIONS_SHOW = 12  # 快照里每个下拉框列出的选项数（多了用 browser_select 直接写文字，对不上时会列全）
+
+
+def element_line(e: dict) -> str:
+    """快照里一个可操作元素的一行（v2.53）：下拉框带当前值和选项，勾选框带 ☑/☐，禁用的标出来。"""
+    kind = e["tag"] + (f":{e['type']}" if e["type"] and e["tag"] == "input" else "")
+    line = f"[{e['ref']}] {kind}"
+    if "checked" in e:
+        line += " ☑" if e["checked"] else " ☐"
+    line += f" {e['name']}" if e["name"] else ""
+    if e["tag"] == "select":
+        opts = e.get("options") or []
+        more = f"…共 {e.get('count', len(opts))} 项" if e.get("count", len(opts)) > OPTIONS_SHOW else ""
+        line += f" = {e.get('value') or '（未选）'}（下拉框，用 browser_select；可选：{'、'.join(opts[:OPTIONS_SHOW])}{more}）"
+    if e.get("disabled"):
+        line += "（灰的，不能操作）"
+    return line
 
 
 def blocked_note(snap: dict) -> str:
@@ -268,6 +288,25 @@ async def browser_click(ctx: ToolContext, ref: str) -> ToolResult:
        "required": ["ref", "text"]})
 async def browser_type(ctx: ToolContext, ref: str, text: str, submit: bool = False) -> ToolResult:
     return await _act(ctx, "POST", "/act", {"action": "type", "ref": ref, "text": text, "submit": submit})
+
+
+@tool("browser_select", "正在选择",
+      "在编号为 ref 的下拉框（快照里标“下拉框”的 select）里选一项：option 写选项的文字（照快照抄），也可以写选项值。"
+      "对不上时结果会列出全部可选项。网站自己画的下拉菜单（不是 select）用 browser_click 点开再点选项。",
+      {"type": "object", "properties": {"ref": {"type": "string"}, "option": {"type": "string"}},
+       "required": ["ref", "option"]})
+async def browser_select(ctx: ToolContext, ref: str, option: str) -> ToolResult:
+    return await _act(ctx, "POST", "/act", {"action": "select", "ref": ref, "text": option})
+
+
+@tool("browser_press", "正在按键",
+      "在网页上按一个键：Escape 关弹窗、ArrowDown / Enter 选自动补全的候选、Tab 跳到下一格、PageDown 翻页等。"
+      "传 ref 时先聚焦那个元素再按。打字用 browser_type。",
+      {"type": "object", "properties": {"key": {"type": "string", "description": "Enter / Escape / Tab / ArrowDown 等"},
+                                        "ref": {"type": "string", "description": "可省略：按在当前焦点上"}},
+       "required": ["key"]}, deferred=True)
+async def browser_press(ctx: ToolContext, key: str, ref: str = "") -> ToolResult:
+    return await _act(ctx, "POST", "/act", {"action": "press", "text": key, "ref": ref or None})
 
 
 @tool("browser_scroll", "正在滚动页面", "向下（dy>0）或向上滚动页面，返回新快照。",

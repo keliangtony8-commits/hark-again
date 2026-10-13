@@ -11,6 +11,8 @@
   就 PUT /login-state 记一笔；goto 回报给后端（之前登录过的会话现在是登录页 = 登录过期），GET /sessions 列出给“我的电脑”
 - 标签页（v2.47，规则在 tabs.py）：网站开的新标签页自动切过去、页面被关退回上一个、渲染进程崩了在原网址重开，
   每次的变化放在快照的 tab 字段里告诉后端（后端 tab_note 说成话）；后退到头的弹出页 = 关掉它回原页
+- 表单控件（v2.53，规则在 forms.py）：快照里下拉框带当前值 + 选项、勾选框带 checked；/act select 按选项文字选，
+  /act press 按键（可先聚焦某个元素）
 - 文件（v1.32）：POST /upload 把后端传来的工作区文件放进网页的文件框（<input type=file> 直接设；
   别的按钮先等“选文件”对话框再设）；页面触发的下载存到 DOWNLOADS/<会话>/，GET /downloads 列出、
   取走后 DELETE——后端把它搬进工作区 downloads/（app/browser_files.py），这里只是中转，关会话就清掉
@@ -32,6 +34,7 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from pydantic import BaseModel
 
 import egress
+import forms
 import tabs
 
 TOKEN = os.environ["BROWSER_TOKEN"]
@@ -315,8 +318,22 @@ SNAPSHOT_JS = """
     const ref = String(++n); el.setAttribute('data-ref', ref);
     const val = el.type === 'password' || file ? '' : el.value;  // 密码框的值绝不进快照
     const label = file ? ((el.labels && el.labels[0] && el.labels[0].innerText) || el.accept || '选择文件') : '';
-    const name = (el.getAttribute('aria-label') || el.innerText || val || el.placeholder || el.title || el.alt || label || '').trim().replace(/\\s+/g, ' ').slice(0, 80);
-    out.push({ ref, tag: el.tagName.toLowerCase(), type: el.type || '', name });
+    // 下拉框 / 勾选框：名字取标签（innerText 是全部选项糊在一起，value 是 "on"），状态单独给（v2.53 forms.py）
+    const sel_ = el.tagName === 'SELECT', tick = el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio');
+    const lab = (el.labels && el.labels[0] && el.labels[0].innerText) || '';
+    const raw = sel_ || tick ? (el.getAttribute('aria-label') || lab || el.title || el.name || '')
+                             : (el.getAttribute('aria-label') || el.innerText || val || el.placeholder || el.title || el.alt || label || '');
+    const name = raw.trim().replace(/\\s+/g, ' ').slice(0, 80);
+    const item = { ref, tag: el.tagName.toLowerCase(), type: el.type || '', name };
+    if (sel_) {
+      const o = el.options[el.selectedIndex];
+      item.value = o ? o.text.trim().replace(/\\s+/g, ' ') : '';
+      item.options = [...el.options].slice(0, 40).filter(x => !x.disabled).map(x => x.text.trim().replace(/\\s+/g, ' ').slice(0, 40));
+      item.count = [...el.options].filter(x => !x.disabled).length;
+    }
+    if (tick) item.checked = el.checked;
+    if (el.disabled) item.disabled = true;
+    out.push(item);
     if (n >= 150) break;
   }
   return { url: location.href, title: document.title, text: document.body ? document.body.innerText : '', elements: out };
@@ -357,7 +374,7 @@ class GotoIn(BaseModel):
 
 
 class ActIn(BaseModel):
-    action: str             # click | type | press | scroll | back
+    action: str             # click | type | select | press | scroll | back
     ref: str | None = None
     text: str | None = None
     submit: bool = False
@@ -436,7 +453,7 @@ async def snapshot(name: str):
 async def act(name: str, body: ActIn):
     page = await _session(_check_name(name))
     el = page.locator(f'[data-ref="{body.ref}"]') if body.ref else None
-    if el is not None and body.action in ("click", "type") and await _gone(el):
+    if el is not None and body.action in ("click", "type", "select", "press") and await _gone(el):
         # 编号是上一张快照的（页面换了 / 切到了新标签页）：马上说清楚，不空等 8 秒超时
         raise HTTPException(400, f"当前页（{(await page.title())[:40] or page.url}）上没有编号 {body.ref}：页面已经换了，"
                                  "编号以最新那张快照为准；要点原来那页的东西先 browser_back。")
@@ -448,8 +465,11 @@ async def act(name: str, body: ActIn):
                 await el.fill(body.text or "", timeout=8000)
                 if body.submit:
                     await el.press("Enter")
+            case "select":
+                await _select(el, body.text or "")
             case "press":
-                await page.keyboard.press(body.text or "Enter")
+                key = _key(body.text)
+                await (el.press(key, timeout=8000) if el is not None else page.keyboard.press(key))
             case "scroll":
                 await page.mouse.wheel(0, body.dy)
             case "back":
@@ -464,6 +484,25 @@ async def act(name: str, body: ActIn):
             raise HTTPException(400, f"操作失败：{str(e)[:200]}")
         # 点的时候页面崩了 / 被网站关了：不算操作失败，_after 照 tabs 规则换页并在 tab 字段里说明
     return await _after(name)
+
+
+def _key(name: str | None) -> str:
+    try:
+        return forms.key(name or "")
+    except forms.KeyError_ as e:
+        raise HTTPException(400, str(e))
+
+
+async def _select(el, want: str) -> None:
+    """原生下拉框按选项文字 / 值选一项（forms.pick 定哪一项）；不是 <select> → 说清楚改用点击。"""
+    info = await el.evaluate("e => e.tagName === 'SELECT' ? [...e.options].map(o => ({text: o.text, value: o.value, disabled: o.disabled})) : null")
+    if info is None:
+        raise HTTPException(400, "这个不是原生下拉框：先 browser_click 点开它，再在新快照里点要的那一项。")
+    try:
+        index = forms.pick(info, want)
+    except forms.PickError as e:
+        raise HTTPException(400, str(e))
+    await el.select_option(index=index, timeout=8000)
 
 
 async def _gone(el) -> bool:

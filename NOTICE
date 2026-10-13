@@ -124,3 +124,4 @@
   移植到 sandbox/egress.py（v2.37）
 - openai/codex codex-rs/ext/skills/src/render.rs allocate_skill_lines / allocate_description_chars（技能目录预算三级退让、描述按字轮流分配）— Apache License 2.0, Copyright 2025 OpenAI, modified（按字数计成本；省略提示改指向 skill_search）
   移植到 backend/app/skill_catalog.py（v2.46）
+- browser/forms.py + browser_select / browser_press: semantics after microsoft/playwright-mcp browser_select_option / browser_press_key (Apache-2.0); own implementation, no code copied.

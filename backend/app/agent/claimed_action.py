@@ -17,7 +17,7 @@ ONCE = 1  # 每轮最多拦几次
 # 能做任何事的通用工具：命令、外部接口、浏览器操作、子助手、后台任务——用过就不追究“删了 / 发了 / 存了”
 GENERIC = frozenset({
     "run_command", "host_command", "api_request", "mcp_call", "browser_click", "browser_type", "browser_code",
-    "browser_upload", "browser_login", "browser_handoff", "delegate", "cancel_job", "restart_service",
+    "browser_upload", "browser_select", "browser_press", "browser_login", "browser_handoff", "delegate", "cancel_job", "restart_service",
 })
 # ask_user 表单的“记住”勾选会直接写记忆；save_skill 是“记住我的做法”（v2.44：全量冒烟发现两处误拦）
 MEMORY = frozenset({"remember", "update_memory", "forget", "memory_note", "ask_user", "save_skill", "edit_skill", "delete_skill"})
