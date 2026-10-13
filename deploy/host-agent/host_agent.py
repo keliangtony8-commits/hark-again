@@ -70,10 +70,25 @@ class HeadTail:
         tail = "".join(self.tail)
         if len(tail) > self.tail_max:
             tail = tail[-self.tail_max:]
-        omitted = self.total - len(head) - len(tail)
-        if omitted <= 0:
+        if self.total - len(head) - len(tail) <= 0:
             return head + tail, 0
+        head, tail = line_snap(head, tail)
+        omitted = self.total - len(head) - len(tail)
         return f"{head}\n…（中间省略 {omitted} 字符）…\n{tail}", omitted
+
+
+SNAP = 0.2  # 同 sandbox/runner.py line_snap（独立部署单元，不能 import）
+
+
+def line_snap(head: str, tail: str) -> tuple[str, str]:
+    """切口挪到换行处：开头截到最后一个完整行，结尾从第一个换行之后开始；退让 SNAP 内找不到换行就照原样。"""
+    i = head.rfind("\n", len(head) - int(len(head) * SNAP))
+    if i >= 0:
+        head = head[:i]
+    j = tail.find("\n", 0, int(len(tail) * SNAP))
+    if j >= 0:
+        tail = tail[j + 1:]
+    return head, tail
 
 
 def host_info() -> dict:

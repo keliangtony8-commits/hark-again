@@ -72,6 +72,19 @@ def _snap_tail(text: str, n: int) -> str:
     return text[cut + 1:] if cut >= 0 else text[start:]
 
 
+def line_snap(head: str, tail: str) -> tuple[str, str]:
+    """已经按字数切好的开头/结尾，切口再挪到换行处（中间要插一句带换行的省略说明时用）：开头截到最后一个完整行
+    （换行本身也算省略），结尾从第一个换行之后开始；退让 SNAP 内找不到换行就照原样。
+    沙盒 sandbox/runner.py、deploy/host-agent 各有一份同样的 line_snap（独立部署单元，不能 import 这里）。"""
+    i = head.rfind("\n", len(head) - int(len(head) * SNAP))
+    if i >= 0:
+        head = head[:i]
+    j = tail.find("\n", 0, int(len(tail) * SNAP))
+    if j >= 0:
+        tail = tail[j + 1:]
+    return head, tail
+
+
 def cut(text: str, budget: int) -> tuple[str, str, int]:
     """(开头, 结尾, 省略的字符数)。budget 是开头 + 结尾的总字符数；开头拿 ceil(一半)、结尾拿 floor(一半)，
     两段永不重叠、合计永不超 budget（retention.ts retainContent）。"""

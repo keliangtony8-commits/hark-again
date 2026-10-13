@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_env, command_guard, computer, foreground, quota, workspaces
+from . import command_env, command_guard, computer, foreground, quota, spill, workspaces
 from .config import settings
 from .models import Message
 
@@ -77,9 +77,9 @@ def reply_block(blocks: list[dict]) -> dict | None:
 def _clip(text: str, limit: int = OUTPUT_MAX) -> str:
     if len(text) <= limit:
         return text
-    head = limit * 2 // 5
-    tail = limit - head
-    return f"{text[:head]}\n…（中间省略 {len(text) - limit} 字符）…\n{text[-tail:]}"
+    n = limit * 2 // 5
+    head, tail = spill.line_snap(text[:n], text[-(limit - n):])
+    return f"{head}\n…（中间省略 {len(text) - len(head) - len(tail)} 字符）…\n{tail}"
 
 
 def _safe(text: str) -> str:

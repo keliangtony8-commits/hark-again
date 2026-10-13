@@ -118,8 +118,9 @@ assert r["output"] == "PASS 3 tests\ndone\n" and "spill" not in r, r
 r = runner._exec("p1", "for i in $(seq 1 40000); do printf '\\033[1mline %05d\\033[0m\\n' $i; done", 60)
 full = "".join(f"line {i:05d}\n" for i in range(1, 40001))
 head, _, tail = r["output"].partition(runner.SPILL_MARK)
-assert full.startswith(head) and full.endswith(tail) and len(head) + len(tail) == runner.MAX_OUTPUT, (len(head), len(tail))
-assert r["total"] == len(full) and r["omitted"] == len(full) - runner.MAX_OUTPUT and "spill_truncated" not in r
+assert full.startswith(head) and full.endswith(tail) and runner.MAX_OUTPUT - 30 <= len(head) + len(tail) <= runner.MAX_OUTPUT, (len(head), len(tail))
+assert full[len(head)] == "\n" and full[len(full) - len(tail) - 1] == "\n"  # v2.29：切口落在换行处（B6）
+assert r["total"] == len(full) and r["omitted"] == len(full) - len(head) - len(tail) and "spill_truncated" not in r
 spilled = os.path.join(runner.PROJECTS_ROOT, "p1", r["spill"])
 assert open(spilled, encoding="utf-8").read() == full, "落盘文件 = 洗过的全文"
 assert runner.SPILL_NAME_RE.match(os.path.basename(spilled))

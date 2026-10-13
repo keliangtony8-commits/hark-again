@@ -229,6 +229,27 @@ class HeadTail:
     def text(self) -> str:
         return "".join(self.parts())
 
+    def cut(self) -> tuple[str, str, int]:
+        """有省略时给（开头, 结尾, 省略字数）：切口挪到换行处（line_snap），不把一行拦腰截断。"""
+        head, tail = self.parts()
+        head, tail = line_snap(head, tail)
+        return head, tail, self.total() - len(head) - len(tail)
+
+
+SNAP = 0.2  # 切口往回找换行最多退让这段的 20%（后端 app/spill.py SNAP 同一个数；deploy/host-agent 同一条规则）
+
+
+def line_snap(head: str, tail: str) -> tuple[str, str]:
+    """中间省略处的唯一切口规则：开头截到最后一个完整行（换行本身也省略，标记自带换行），结尾从第一个换行之后开始；
+    退让范围内找不到换行（一整行特别长）就照原样切，宁可截半行也不丢一大段。"""
+    i = head.rfind("\n", len(head) - int(len(head) * SNAP))
+    if i >= 0:
+        head = head[:i]
+    j = tail.find("\n", 0, int(len(tail) * SNAP))
+    if j >= 0:
+        tail = tail[j + 1:]
+    return head, tail
+
 
 class JobIn(BaseModel):
     project_id: str
@@ -691,8 +712,8 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
         if sink is not None:
             sink.put(f"（二进制输出，{binary_bytes} 字节，不显示）")
     elif buf.omitted:
-        head, tail = buf.parts()
-        result.update(output=head + SPILL_MARK + tail, omitted=buf.omitted, total=buf.total())
+        head, tail, omitted = buf.cut()
+        result.update(output=head + SPILL_MARK + tail, omitted=omitted, total=buf.total())
         if spill:
             result["spill"] = spill.rel
             if spill.truncated:
@@ -759,8 +780,8 @@ def _promote(c, pid: str, jid: str, command: str, tok: str, buf: HeadTail, spill
     if binary_bytes is not None:
         out.update(output="", binary=binary_bytes)
     elif buf.omitted:
-        head, tail = buf.parts()
-        out.update(output=head + SPILL_MARK + tail, omitted=buf.omitted, total=buf.total(), spill=rel)
+        head, tail, omitted = buf.cut()
+        out.update(output=head + SPILL_MARK + tail, omitted=omitted, total=buf.total(), spill=rel)
     else:
         out["output"] = buf.text()
     return out
