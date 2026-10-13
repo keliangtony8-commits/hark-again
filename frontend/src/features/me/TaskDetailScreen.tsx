@@ -5,7 +5,7 @@ import { useTaskRuns } from "../../hooks/useTaskRuns";
 import { http } from "../../lib/api";
 import { formatDuration, formatWhen } from "../../lib/format";
 import WallNotice from "./WallNotice";
-import { autoPauseNote, canSkip, isScript, isSilent, isWalled, nextRunLabel, runStateLabel, scheduleLabel, skipLabel, taskOutputLabel } from "../../lib/taskLabels";
+import { autoPauseNote, canSkip, isScript, isSilent, usesModel, isWalled, nextRunLabel, runStateLabel, scheduleLabel, skipLabel, taskOutputLabel } from "../../lib/taskLabels";
 import TaskMemory from "./TaskMemory";
 import { JobLog } from "../../blocks/JobBlock";
 import type { JobInfo } from "../../lib/types";
@@ -65,7 +65,7 @@ export default function TaskDetailScreen() {
           <span className="row-icon"><TaskIcon task={task} /></span>
           <div className="row-body">
             <div className="row-title">{scheduleLabel(task)}</div>
-            <div className="row-sub">{[taskOutputLabel(task), isScript(task) ? null : taskModelLabel(task, cat)].filter(Boolean).join(" · ")}</div>
+            <div className="row-sub">{[taskOutputLabel(task), usesModel(task) ? taskModelLabel(task, cat) : null].filter(Boolean).join(" · ")}</div>
             {nextRunLabel(task) && <div className="row-sub task-next" key={nextRunLabel(task)}>{nextRunLabel(task)}</div>}
             {skipLabel(task) && <div className="row-sub task-skip" key={skipLabel(task)}>{skipLabel(task)}</div>}
           </div>

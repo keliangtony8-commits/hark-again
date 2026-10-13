@@ -6,12 +6,14 @@ import '../../models/resources.dart';
 import '../../ui/format.dart';
 
 /// 计划本身：每天 08:00 / 工作日 09:00 / 一次 · 明天 08:00。
-String scheduleLabel(ScheduledTask t, {DateTime? now}) =>
-    t.isOnce ? '一次 · ${formatWhen(t.runAt, now: now)}' : describeCron(t.cron);
+String scheduleLabel(ScheduledTask t, {DateTime? now}) => t.isLog
+    ? '你说一句就记一笔'
+    : t.isOnce ? '一次 · ${formatWhen(t.runAt, now: now)}' : describeCron(t.cron);
 
 /// 下次运行：已完成（一次性跑过）/ 连续失败已暂停 / 已结束（运行里按指令结束了自己）/ 已暂停 / 马上运行（过期补跑或一分钟内）/ 下次 明天 08:00；cron 无效时为空。
 /// 一次性任务的“下次”就是计划时刻，scheduleLabel 已经写了，这里不再重复。
 String nextRunLabel(ScheduledTask t, {DateTime? now}) {
+  if (t.isLog) return ''; // 零点翻篇是内部的事，不当“下次运行”给人看
   if (t.done) return '已完成';
   if (t.autoPaused) return '连续失败，已暂停';
   if (t.ended) return '已结束';
@@ -38,7 +40,9 @@ String? autoPauseNote(ScheduledTask t) => t.autoPaused
     : null;
 
 /// 行首/详情图标：面板 / 定时脚本（终端）/ 一次性（闹钟）/ 重复（时钟）。
-IconData taskIcon(ScheduledTask t) => t.isPanel
+IconData taskIcon(ScheduledTask t) => t.isLog
+    ? Icons.edit_note_rounded
+    : t.isPanel
     ? Icons.dashboard_outlined
     : t.isScript
         ? Icons.terminal_rounded
@@ -49,6 +53,7 @@ const notifyLabels = {'failure': '失败时告诉我', 'always': '每次都告�
 
 /// 详情页那行“去向”：面板 / 收件箱 / 脚本（在哪跑 · 何时告诉）。
 String taskOutputLabel(ScheduledTask t) {
+  if (t.isLog) return '记录面板 · 不调用模型';
   if (t.isPanel) return '刷新 Home 上的面板';
   if (!t.isScript) return '结果放进 Home 收件箱';
   return '${t.projectId == null ? '在我的文件里跑' : '在项目工作区里跑'} · ${notifyLabels[t.notify] ?? t.notify}';

@@ -210,7 +210,7 @@ export type ScheduledTask = { id: string; name: string; prompt: string; cron: st
   model?: string | null; reasoning?: string | null;
   /** v1.84 定时脚本：kind "script" = prompt 是 shell 命令，到点直接在工作区跑、不调模型；notify 何时告诉（failure | always | change）；
    *  project_id 在哪个项目的工作区跑（null = 我的文件）。老服务器没有 = agent / failure。 */
-  kind?: "agent" | "script"; notify?: "failure" | "always" | "change"; project_id?: string | null;
+  kind?: "agent" | "script" | "log"; notify?: "failure" | "always" | "change"; project_id?: string | null;
   /** v2.13 助手记下的做法 / 观察（每次运行开头读到，后端 app/task_brief.py）；skipped_at 被跳过的那次（还没到的才有）。老服务器没有 */
   runbook?: string | null; note?: string | null; skipped_at?: string | null;
   /** v2.15 碰壁（后端 app/task_wall.py）：最近一次运行碰到的障碍一句话 + 经过；wall_fixable 要你处理；wall_open 去哪页（cardTargets 键）。

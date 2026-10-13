@@ -344,6 +344,12 @@ class ScheduledTask {
   bool get isOnce => runAt != null;
   bool get isPanel => output == 'panel';
   bool get isScript => kind == 'script';
+
+  /// v2.55 记录面板（服务端 app/panel_log.py）：在聊天里说一句就记一笔，内容按记下的笔算，不调模型；只能改标题。
+  bool get isLog => kind == 'log';
+
+  /// 到点交给模型的任务（定时脚本、记录面板都不调模型：没有模型 / 做法可选）。
+  bool get usesModel => !isScript && !isLog;
   bool get lastFailed => lastStatus == 'error';
   bool get autoPaused => !active && pausedReason == 'failures';
 
@@ -351,7 +357,7 @@ class ScheduledTask {
   bool get ended => !active && pausedReason == 'ended';
 
   /// 能跳过下一次：重复任务、开着（一次性的取消或改时间就行）。
-  bool get canSkip => !isOnce && active && nextRunAt != null;
+  bool get canSkip => !isLog && !isOnce && active && nextRunAt != null;
 }
 
 /// 定时任务的一次运行（GET /api/tasks/{id}/runs，新的在前）。

@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from zoneinfo import ZoneInfo
 
-from ... import card_snooze, card_targets, home_offers, panel_trash, schedule, task_brief, task_runs, task_store, task_wall, web_guard
+from ... import card_snooze, card_targets, home_offers, panel_log, panel_trash, schedule, task_brief, task_runs, task_store, task_wall, web_guard
 from ...blocks import blocks_to_text
 from ...config import settings
 from ...db import SessionLocal
@@ -27,7 +27,8 @@ REFRESH_POLL = 2
 
 @tool("create_panel", "正在创建面板",
       "在 Home 上放一个会自动刷新的面板。prompt 写清楚每次刷新要查什么、怎么展示（它会被独立执行，看不到当前对话）。"
-      "cron 按变化快慢取最慢的合理频率：每天变的用每天一次，别用每小时。先用 manage_home list 看看是不是已经有同类面板，有就改它。",
+      "cron 按变化快慢取最慢的合理频率：每天变的用每天一次，别用每小时。先用 manage_home list 看看是不是已经有同类面板，有就改它。"
+      "只有用户自己报得出的数据（跑步、喝水、体重、记账、读书页数）不是这个，用 panel_log 记。",
       {"type": "object", "properties": {
           "title": {"type": "string", "description": "面板标题，几个字"},
           "prompt": {"type": "string"},
@@ -39,6 +40,51 @@ async def create_panel(ctx: ToolContext, title: str, prompt: str, cron: str) -> 
     except ValueError as e:
         return ToolResult(str(e))
     return ToolResult(f"面板「{title}」已放到 Home，半分钟内出第一份数据，之后按 {cron} 刷新。")
+
+
+@tool("panel_log", "正在记一笔",
+      "记录面板：用户自己报的数据（“今天跑了 5 公里”“喝了 300ml 水”“午饭 18 块”“读了 30 页”）记在 Home 的面板上，"
+      "面板自动算今天 / 近 7 天 / 连续几天，不花 token。action=add 记一笔：给 title（面板名，没有就新建，如“跑步”“记账”）"
+      "或 id，text 写这笔是什么，数量放 amount（数字）+ unit（公里 / 毫升 / ¥），过去的事给 at；"
+      "结果里有合计就照着说，别自己算。remove 删一笔（entry=id，或 last = 刚记的那笔）；list 看最近的笔和 id。"
+      "记错了先 remove 再 add。用户说“记一下”但没说数量、而这个面板一直记数量时，工具会让你先问那一个值。",
+      {"type": "object", "properties": {
+          "action": {"type": "string", "enum": ["add", "remove", "list"]},
+          "title": {"type": "string", "description": "面板名（几个字）；add 时没有同名面板就新建"},
+          "id": {"type": "string", "description": "面板卡片 id（manage_home list 里的），和 title 二选一"},
+          "text": {"type": "string", "description": "add：这一笔是什么，一句话"},
+          "amount": {"type": "number", "description": "add：数量，只写数字"},
+          "unit": {"type": "string", "description": "add：单位，如 公里、毫升、页、¥；同一面板保持一致"},
+          "at": {"type": "string", "description": "add：发生时刻，用户时区 YYYY-MM-DD 或 YYYY-MM-DD HH:MM；就是现在就别传"},
+          "entry": {"type": "string", "description": "remove：那一笔的 id，或 last"}},
+       "required": ["action"]})
+async def panel_log_tool(ctx: ToolContext, action: str, title: str | None = None, id: str | None = None,
+                         text: str | None = None, amount: float | None = None, unit: str | None = None,
+                         at: str | None = None, entry: str | None = None) -> ToolResult:
+    db = ctx.db
+    try:
+        task = await panel_log.find(db, id, title)
+        if action == "add":
+            if task is None:
+                if not title:
+                    return ToolResult("还没有记录面板：给 title 新建一个（如“跑步”）。")
+                panel_log.clean(text, amount, unit)  # 先验这一笔，免得建了空面板
+                panel_log.when(at)
+                task = await panel_log.create(db, title)
+                await db.flush()
+            _, receipt = await panel_log.add(db, task, text, amount, unit, at)
+            return ToolResult(receipt)
+        if task is None:
+            return ToolResult(("没找到这个记录面板。" if (id or title) else "") + panel_log.listing(await panel_log.panels(db)))
+        if action == "remove":
+            gone = await panel_log.remove(db, task, entry)
+            s = await panel_log.summary(db, task)
+            return ToolResult(f"已从「{task.name}」删掉：{gone.text}（id={gone.id}）。现在共 {s['total']} 笔，面板已更新。")
+        if action == "list":
+            return ToolResult(await panel_log.lines(db, task))
+    except panel_log.LogError as e:  # 规则都在写库之前抛（不 rollback：会让本轮会话里的对象过期）
+        return ToolResult(str(e))
+    return ToolResult(f"未知 action：{action}")
 
 
 @tool("offer_on_home", "正在放到主页",
@@ -89,7 +135,9 @@ async def offer_on_home(ctx: ToolContext, title: str, prompt: str = "", reason: 
 
 def _line(card: HomeCard, task: ScheduledTask | None) -> str:
     s = f"- id={card.id} [{_KIND.get(card.kind, card.kind)}]「{card.title}」"
-    if card.kind == "panel" and task is not None:
+    if card.kind == "panel" and panel_log.is_log(task):
+        s += " · 记录面板（记 / 删 / 看每一笔用 panel_log）"
+    elif card.kind == "panel" and task is not None:
         s += f" · cron {task.cron}" + ("" if task.active else " · 已暂停") + (" · 刷新中" if task.run_requested else "")
         s += f" · 碰壁：{task_wall.label(task.wall)}" if task.wall else (" · 上次刷新失败" if task.last_status == "error" else "")
         s += f" · 刷新指令：{task.prompt[:80]}"
@@ -192,6 +240,8 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
 
     if card.kind != "panel" or task is None:
         return ToolResult(f"「{card.title}」不是面板，只能 dismiss。")
+    if action == "read" and panel_log.is_log(task):
+        return ToolResult(_read(card, task) + "\n\n" + await panel_log.lines(db, task))
     if action == "read":
         return ToolResult(_read(card, task))
     if action == "runs":
@@ -205,6 +255,8 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
         task.run_requested = True
         await db.commit()
         return ToolResult(await _wait_refresh(task.id, card.id, asked))
+    if action == "update" and panel_log.is_log(task) and (prompt or cron):
+        return ToolResult(f"「{card.title}」是记录面板：内容按记下的每一笔自动算，只能改 title；记 / 删用 panel_log。")
     if action == "update":
         changes = {k: v for k, v in {"name": title, "prompt": prompt, "cron": cron}.items() if v}
         if not changes:

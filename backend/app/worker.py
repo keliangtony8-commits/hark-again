@@ -5,6 +5,7 @@
   碰到登录 / 连接器 / 付费墙这类壁时助手用 report_wall 记下：这次算失败，原因是那堵壁，面板保留旧内容（app/task_wall.py）；
   回复以 [[SILENT]] 开头 = 这次没东西可报，不发卡，运行记录写原因（app/task_brief.py；每次开头读到做法 / 观察 / 最近几次）
 - panel：原地更新面板卡的内容，执行用的对话随即删除（面板每小时刷新，不能把聊天列表刷满）
+kind=log 的记录面板也不调模型：到点按记下的笔重算（app/panel_log.py）。
 kind=script 的定时脚本不调模型：到点当后台任务跑命令，结束后按 notify 决定告不告诉用户（app/script_tasks.py）。
 顺带叫醒“稍后提醒”到点的 Home 卡片（app/card_snooze.py），并照看项目沙盒里的后台任务（app/jobs.py：结束了就在原对话里接着说一轮）。
 每次运行都记在 task_runs（成功/失败原因/耗时，首次失败在 Home 放提醒卡），见 app/task_runs.py。
@@ -22,7 +23,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import task_brief, task_wall, card_snooze, panel_trash, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
+from . import task_brief, task_wall, card_snooze, panel_log, panel_trash, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -65,6 +66,9 @@ async def run_task(task_id: str) -> None:
             return
         if script_tasks.is_script(task):  # 定时脚本：起后台任务就走，结束时 tick 里 settle_ready 收尾
             await script_tasks.launch(db, task)
+            return
+        if panel_log.is_log(task):  # 记录面板：按记下的每一笔重算，不调模型（app/panel_log.py）
+            await panel_log.run(db, task)
             return
         now = datetime.now(timezone.utc)
         run = await task_runs.start(db, task, now)

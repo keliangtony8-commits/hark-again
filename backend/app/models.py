@@ -200,6 +200,19 @@ class TaskRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class PanelEntry(Base):
+    """v2.55 记录面板里用户报的一笔（跑步 5 公里、喝水 300 毫升、午饭 ¥18）：规则只在 app/panel_log.py。
+    task_id = 记录面板背后的任务（kind=log）；面板移除时留着，找回后改指新任务，超过 30 天随卡清掉。"""
+    __tablename__ = "panel_entries"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    task_id: Mapped[str] = mapped_column(String(32), index=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)  # 这笔发生的时刻（UTC）
+    text: Mapped[str] = mapped_column(String(200))
+    amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class HomeCard(Base):
     """Home 上的卡片：kind=action（主动建议，可执行/忽略）| panel（可刷新的面板）
     | report（定时任务的结果，进收件箱，点开是完整对话）。内容同样是块列表，复用聊天的渲染器。"""

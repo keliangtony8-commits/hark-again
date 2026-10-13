@@ -20,10 +20,12 @@ GENERIC = frozenset({
     "browser_upload", "browser_select", "browser_press", "browser_login", "browser_handoff", "delegate", "cancel_job", "restart_service",
 })
 # ask_user 表单的“记住”勾选会直接写记忆；save_skill 是“记住我的做法”（v2.44：全量冒烟发现两处误拦）
-MEMORY = frozenset({"remember", "update_memory", "forget", "memory_note", "ask_user", "save_skill", "edit_skill", "delete_skill"})
+# v2.55 panel_log：“记下了（跑步 5 公里）”是记到记录面板
+MEMORY = frozenset({"remember", "update_memory", "forget", "memory_note", "ask_user", "save_skill", "edit_skill", "delete_skill",
+                    "panel_log"})
 FILES = frozenset({"write_file", "edit_file", "apply_patch", "render_document", "save_attachment", "display_file",
                    "publish_page", "save_skill", "edit_skill", "extract_data"}) | GENERIC
-SCHEDULE = frozenset({"schedule_task", "manage_home", "create_panel", "offer_on_home"})
+SCHEDULE = frozenset({"schedule_task", "manage_home", "create_panel", "offer_on_home", "panel_log"})
 # “发给你了”多半是交到聊天里：交付类工具也算发送（v2.45 E2E B18：write_file + display_file 后回“已保存并发送”被误拦）
 DELIVER = frozenset({"display_file", "render_document", "browser_screenshot", "publish_page", "preview_port"})
 SEND = frozenset({"confirm_order", "share_conversation", "connector_accounts", "projects", "project_brief"}) | DELIVER | GENERIC

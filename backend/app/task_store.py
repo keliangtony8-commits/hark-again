@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import delete, select, update as sql_update
 
-from . import model_router, reasoning, schedule, script_tasks, task_runs
+from . import model_router, panel_log, reasoning, schedule, script_tasks, task_runs
 from .config import settings
 from .models import Conversation, HomeCard, ScheduledTask
 
@@ -41,6 +41,7 @@ async def delete_cascade(db, task: ScheduledTask) -> None:
     """删除前的清理：面板/收件箱/失败提醒卡和运行记录跟着任务走（不 commit，不删任务本身）。"""
     await db.execute(delete(HomeCard).where(HomeCard.task_id == task.id))
     await task_runs.remove_for(db, task.id)
+    await panel_log.drop(db, [task.id])  # 记录面板的每一笔
 
 
 async def remove(db, task: ScheduledTask) -> None:

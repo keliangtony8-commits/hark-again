@@ -11,7 +11,7 @@ type Notify = keyof typeof NOTIFY_LABELS;
 /** model / reasoning：任务自己的模型和思考强度，null = 默认（TaskModelPicker）。 */
 /** kind / notify：定时脚本（kind 建好不改，changesOf 自然不会带它；notify 改了才发）。 */
 export type TaskDraft = Pick<ScheduledTask, "name" | "prompt" | "cron" | "active"> & { run_at: string | null; model: string | null; reasoning: string | null;
-  kind: "agent" | "script"; notify: Notify };
+  kind: "agent" | "script" | "log"; notify: Notify };
 export const EMPTY_TASK: TaskDraft = { name: "", prompt: "", cron: "0 8 * * *", run_at: null, active: true, model: null, reasoning: null,
   kind: "agent", notify: "failure" };
 export const EMPTY_SCRIPT: TaskDraft = { ...EMPTY_TASK, cron: "0 3 * * *", kind: "script" };
@@ -32,6 +32,7 @@ export default function TaskSheet({ initial, title, onSave, onClose, panel = fal
   const [d, setD] = useState<TaskDraft>(initial);
   const valid = !!d.name.trim() && !!d.prompt.trim() && (!!d.run_at || !!d.cron.trim());
   const script = d.kind === "script"; // 定时脚本：命令 + 什么时候告诉我，没有模型选择（不调模型）
+  const log = d.kind === "log"; // v2.55 记录面板：只能改标题（内容按记下的每一笔算）
   return (
     <Sheet title={title} onClose={onClose} actions={<>
       <button className="btn btn-ghost" onClick={onClose}>取消</button>
@@ -39,6 +40,8 @@ export default function TaskSheet({ initial, title, onSave, onClose, panel = fal
     </>}>
       <label className="form-field"><span>{panel ? "标题" : "名称"}</span>
         <input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="今日简报" /></label>
+      {log && <p className="form-note">在聊天里说一句就记一笔（“今天跑了 5 公里”），面板自动算今天、近 7 天和连续天数。</p>}
+      {!log && <>
       {script && <p className="form-note">到点直接在工作区跑这条命令，不调用模型、不花 token。</p>}
       <label className="form-field"><span>{panel ? "每次刷新查什么、怎么展示" : script ? "到点运行的命令" : "要我做什么"}</span>
         <textarea className={script ? "mono" : undefined} value={d.prompt} onChange={(e) => setD({ ...d, prompt: e.target.value })}
@@ -55,6 +58,7 @@ export default function TaskSheet({ initial, title, onSave, onClose, panel = fal
           <small key={d.notify} className="fade-swap">{NOTIFY_HINTS[d.notify]}</small>
         </div>
       ) : <TaskModelPicker value={{ model: d.model, reasoning: d.reasoning }} onChange={(m) => setD({ ...d, ...m })} />}
+      </>}
     </Sheet>
   );
 }

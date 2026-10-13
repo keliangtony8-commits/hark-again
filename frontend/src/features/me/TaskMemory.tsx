@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ScheduledTask } from "../../lib/types";
-import { isScript } from "../../lib/taskLabels";
+import { usesModel } from "../../lib/taskLabels";
 import { IconBrain, IconChevron, IconDoc, IconTrash } from "../../ui/icons";
 import { Section, Sheet } from "../../ui/kit";
 import CopyButton from "../../ui/CopyButton";
@@ -11,7 +11,7 @@ import { confirmDialog } from "../../ui/dialog";
  *  与 App features/me/task_memory.dart 同版面同文案；定时脚本没有这一块，两项都没有时整块不出现。 */
 type Memo = { field: "runbook" | "note"; title: string; hint: string; text: string };
 
-const memosOf = (t: ScheduledTask): Memo[] => isScript(t) ? [] : [
+const memosOf = (t: ScheduledTask): Memo[] => !usesModel(t) ? [] : [
   ...(t.runbook ? [{ field: "runbook" as const, title: "做法", hint: "第一次运行时写下的步骤和来源，之后照着做", text: t.runbook }] : []),
   ...(t.note ? [{ field: "note" as const, title: "观察", hint: "几次运行之间记下的经验", text: t.note }] : []),
 ];

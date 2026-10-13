@@ -24,7 +24,7 @@ from .blocks import text_to_blocks
 from .config import settings
 from .models import Conversation, HomeCard, Job, Message, Project, ScheduledTask, TaskRun
 
-KINDS = ("agent", "script")
+KINDS = ("agent", "script", "log")  # log = 记录面板（app/panel_log.py；只在聊天里建）
 NOTIFY = ("failure", "always", "change")
 NOTIFY_LABELS = {"failure": "失败时告诉我", "always": "每次都告诉我", "change": "输出变了告诉我"}
 COMMAND_MAX = 4000
@@ -52,6 +52,8 @@ def check(kind: str | None, command: str | None, notify: str | None, output: str
         raise ValueError(f"不认识的任务类型：{kind}（可选 {', '.join(KINDS)}）")
     if (notify or "failure") not in NOTIFY:
         raise ValueError(f"不认识的提醒方式：{notify}（可选 {', '.join(NOTIFY)}）")
+    if kind == "log" and output != "panel":
+        raise ValueError("记录面板只能在聊天里让助手建（说“帮我记跑步”）。")
     if kind != "script":
         return
     if output == "panel":

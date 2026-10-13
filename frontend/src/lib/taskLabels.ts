@@ -5,6 +5,7 @@ import type { ScheduledTask, TaskRun } from "./types";
 
 /** 计划本身：每天 08:00 / 工作日 09:00 / 一次 · 明天 08:00。 */
 export function scheduleLabel(t: ScheduledTask, now = new Date()): string {
+  if (isLog(t)) return "你说一句就记一笔";
   return t.run_at ? `一次 · ${formatWhen(t.run_at, now)}` : describeCron(t.cron);
 }
 
@@ -16,6 +17,7 @@ export const ended = (t: ScheduledTask) => !t.active && t.paused_reason === "end
 /** 已完成（一次性跑过）/ 连续失败已暂停 / 已结束 / 已暂停 / 马上运行（过期补跑或一分钟内）/ 下次 明天 08:00；cron 无效时为空。
  * 一次性任务的“下次”就是计划时刻，scheduleLabel 已经写了，这里不再重复。 */
 export function nextRunLabel(t: ScheduledTask, now = new Date()): string {
+  if (isLog(t)) return ""; // 零点翻篇是内部的事，不当“下次运行”给人看
   if (t.done) return "已完成";
   if (autoPaused(t)) return "连续失败，已暂停";
   if (ended(t)) return "已结束";
@@ -36,6 +38,10 @@ export function taskStateLabel(t: ScheduledTask, now = new Date()): string {
 }
 
 export const isScript = (t: ScheduledTask) => t.kind === "script";
+/** v2.55 记录面板（服务端 app/panel_log.py）：聊天里说一句就记一笔，内容按记下的笔算，不调模型；只能改标题。= App isLog */
+export const isLog = (t: ScheduledTask) => t.kind === "log";
+/** 到点交给模型的任务（定时脚本、记录面板都不调模型）。= App usesModel */
+export const usesModel = (t: ScheduledTask) => !isScript(t) && !isLog(t);
 
 /** 定时脚本“什么时候告诉我”三档（顺序即选择器顺序；与 App notifyLabels、后端 script_tasks.NOTIFY_LABELS 同措辞）。 */
 export const NOTIFY_LABELS = { failure: "失败时告诉我", always: "每次都告诉我", change: "输出变了告诉我" } as const;
@@ -47,6 +53,7 @@ export const NOTIFY_HINTS = {
 
 /** 详情页那行“去向”：面板 / 收件箱 / 脚本（在哪跑 · 何时告诉）。 */
 export function taskOutputLabel(t: ScheduledTask): string {
+  if (isLog(t)) return "记录面板 · 不调用模型";
   if (t.output === "panel") return "刷新 Home 上的面板";
   if (!isScript(t)) return "结果放进 Home 收件箱";
   return `${t.project_id ? "在项目工作区里跑" : "在我的文件里跑"} · ${NOTIFY_LABELS[t.notify ?? "failure"]}`;
@@ -60,7 +67,7 @@ export function autoPauseNote(t: ScheduledTask): string | null {
 }
 
 /** v2.13 能跳过下一次：重复任务、开着（一次性的取消或改时间就行）。与 App ScheduledTask.canSkip 同规则。 */
-export const canSkip = (t: ScheduledTask) => !t.run_at && t.active && !!t.next_run_at;
+export const canSkip = (t: ScheduledTask) => !isLog(t) && !t.run_at && t.active && !!t.next_run_at;
 
 /** 跳过后“下次”下面一行：跳过了 明天 08:00 那次。 */
 export const skipLabel = (t: ScheduledTask): string | null => (t.skipped_at ? `跳过了 ${formatWhen(t.skipped_at)} 那次` : null);

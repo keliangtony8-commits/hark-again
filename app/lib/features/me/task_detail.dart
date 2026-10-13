@@ -194,7 +194,7 @@ class _Header extends ConsumerWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(scheduleLabel(task), style: context.text.titleMedium),
               Text(
-                [taskOutputLabel(task), if (!task.isScript) ?_model(task, ref)].join(' · '),
+                [taskOutputLabel(task), if (task.usesModel) ?_model(task, ref)].join(' · '),
                 style: context.text.bodySmall,
               ),
               // 下次运行跟着开关/改时间变：SwapSwitcher 让文字换得不突兀

@@ -19,6 +19,7 @@ import 'task_model_picker.dart';
 
 Future<Map<String, dynamic>?> showTaskForm(BuildContext context, {ScheduledTask? task, TaskStarter? starter, bool script = false}) async {
   final panel = task?.isPanel ?? false;
+  final log = task?.isLog ?? false; // 记录面板：只能改标题（内容按记下的每一笔算）
   final isScript = task?.isScript ?? (script || (starter?.script ?? false));
   final notify = ValueNotifier(task?.notify ?? 'failure');
   final plan = ValueNotifier(task == null ? TaskPlan.repeat(starter?.cron ?? cronPresets.first.$2) : TaskPlan.of(task));
@@ -27,17 +28,21 @@ Future<Map<String, dynamic>?> showTaskForm(BuildContext context, {ScheduledTask?
   final v = await showFormSheet(
     context,
     title: task == null ? (isScript ? '新定时脚本' : '新定时任务') : (panel ? '编辑面板' : (isScript ? '编辑脚本' : '编辑任务')),
-    subtitle: isScript ? '到点直接在工作区跑这条命令，不调用模型、不花 token' : null,
+    subtitle: log
+        ? '在聊天里说一句就记一笔（“今天跑了 5 公里”），面板自动算今天、近 7 天和连续天数'
+        : (isScript ? '到点直接在工作区跑这条命令，不调用模型、不花 token' : null),
     submit: task == null ? '创建' : '保存',
     fields: [
       FieldSpec('name', panel ? '标题' : '名称', hint: panel ? '上海天气' : '早间简报', initial: task?.name ?? starter?.name ?? ''),
-      if (isScript)
+      if (log)
+        ...const <FieldSpec>[]
+      else if (isScript)
         FieldSpec('prompt', '到点运行的命令', hint: 'python3 scripts/fetch.py', lines: 3, initial: task?.prompt ?? starter?.prompt ?? '')
       else
         FieldSpec('prompt', panel ? '每次刷新查什么、怎么展示' : '要我做什么',
             hint: '查今天上海的天气和我的日程，简短总结', lines: 2, initial: task?.prompt ?? starter?.prompt ?? ''),
     ],
-    extra: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    extra: log ? null : Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SchedulePicker(controller: plan, repeatOnly: panel),
       const SizedBox(height: Sp.x3),
       if (isScript) NotifyPicker(controller: notify) else TaskModelPicker(controller: model),
@@ -56,6 +61,7 @@ Future<Map<String, dynamic>?> showTaskForm(BuildContext context, {ScheduledTask?
       if (isScript) ...{'kind': 'script', 'notify': told} else ...picked.toJson(),
     };
   }
+  if (log) return {if (v['name'] != task.name) 'name': v['name']};
   return {
     if (v['name'] != task.name) 'name': v['name'],
     if (v['prompt'] != task.prompt) 'prompt': v['prompt'],

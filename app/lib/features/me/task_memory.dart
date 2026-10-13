@@ -29,7 +29,7 @@ class TaskMemorySection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final memos = task.isScript ? const <_Memo>[] : _taskMemos(task);
+    final memos = task.usesModel ? _taskMemos(task) : const <_Memo>[];
     // 第一次运行写下做法时平滑长出来；清空后平滑收起
     return FadeSwitcher(
       alignment: AlignmentDirectional.topStart,

@@ -11,12 +11,13 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
 
-from . import schedule, task_runs
+from . import panel_log, schedule, task_runs
 from .models import HomeCard, ScheduledTask
 
 KEEP_DAYS = 30
 LISTED = 10  # 工具 list 里最多列几张最近移除的
-SPEC_KEYS = ("name", "prompt", "cron", "model", "reasoning", "runbook", "note")
+# v2.55 + kind（记录面板找回还是记录面板）、id（旧任务 id：找回时把它名下的每一笔接到新任务）
+SPEC_KEYS = ("id", "kind", "name", "prompt", "cron", "model", "reasoning", "runbook", "note")
 
 
 def _aware(t: datetime) -> datetime:
@@ -70,9 +71,10 @@ async def revive(db, card_id: str) -> tuple[HomeCard, ScheduledTask]:
         cron = "0 8 * * *"  # 快照里的 cron 现在不成立（极少见）：先每天早上刷新，用户可再改
     task = ScheduledTask(name=spec.get("name") or card.title, prompt=spec.get("prompt") or card.title, cron=cron,
                          output="panel", run_requested=True, model=spec.get("model"), reasoning=spec.get("reasoning"),
-                         runbook=spec.get("runbook"), note=spec.get("note"))
+                         runbook=spec.get("runbook"), note=spec.get("note"), kind=spec.get("kind") or "agent")
     db.add(task)
     await db.flush()
+    await panel_log.adopt(db, spec.get("id"), task.id)
     card.task_id = task.id
     card.title = task.name
     card.dismissed = False
@@ -93,7 +95,10 @@ async def recent(db) -> list[HomeCard]:
 async def purge(db, now: datetime | None = None) -> int:
     """删掉移除超过 KEEP_DAYS 天的面板卡。返回删了几张；commit。"""
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=KEEP_DAYS)
-    res = await db.execute(delete(HomeCard).where(HomeCard.kind == "panel", HomeCard.removed_at.is_not(None),
-                                                  HomeCard.removed_at < cutoff))
+    old = (await db.scalars(select(HomeCard).where(HomeCard.kind == "panel", HomeCard.removed_at.is_not(None),
+                                                   HomeCard.removed_at < cutoff))).all()
+    await panel_log.drop(db, [(c.revive_spec or {}).get("id") for c in old])  # 记录面板的每一笔跟着卡走
+    if old:  # 按 id 删（已载入会话：按时间比较会在 Python 里拿 naive / aware 比）
+        await db.execute(delete(HomeCard).where(HomeCard.id.in_([c.id for c in old])))
     await db.commit()
-    return res.rowcount or 0
+    return len(old)
