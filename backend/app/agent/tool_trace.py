@@ -69,7 +69,7 @@ def _args(raw: str) -> str:
 def _output(content) -> str:
     text = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
     if supersede.start(text) is not None:
-        text = supersede.stale(text)
+        text = supersede.stale(text, keep_text=True)  # 下一轮还要知道当时页上写了什么（节选）
     return clip(_mask(text))
 
 

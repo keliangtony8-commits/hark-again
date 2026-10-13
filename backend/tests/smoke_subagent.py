@@ -165,7 +165,7 @@ async def main():
     t = [x for x in evs[-1].blocks if x["type"] == "delegate"][0]["tasks"][0]
     assert t["state"] == "partial" and "预算" in t["note"] and t["result"] == "进度：找了一半", t
     last_msgs, last_tools = calls["没完"][-1]
-    assert last_tools == [] and last_msgs[-1]["content"] == subagent.WRAP_UP
+    assert last_tools == [] and last_msgs[-1]["content"].startswith(subagent.WRAP_UP)
     settings.subagent_max_steps = old
     print("ok: budget → partial with wrap-up")
 

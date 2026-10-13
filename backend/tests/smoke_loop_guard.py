@@ -190,7 +190,7 @@ async def main():
     settings.agent_max_steps = 4
     text = await run(*[[{"x": i}] for i in range(10)])
     assert len(saw) == 4 and len(calls) == 3 and text == "收尾"
-    assert saw[3]["tools"] is False and saw[3]["messages"][-1]["content"] == loop.WRAP_UP
+    assert saw[3]["tools"] is False and saw[3]["messages"][-1]["content"].startswith(loop.WRAP_UP)
     assert all(s["tools"] for s in saw[:3])
     settings.agent_max_steps = 1
     text = await run([{"x": 1}])
@@ -200,7 +200,7 @@ async def main():
 
     settings.agent_turn_tokens = 2500
     await run(*[[{"x": i}] for i in range(10)])
-    assert len(saw) == 4 and len(calls) == 3 and saw[3]["messages"][-1]["content"] == loop.WRAP_UP
+    assert len(saw) == 4 and len(calls) == 3 and saw[3]["messages"][-1]["content"].startswith(loop.WRAP_UP)
     settings.agent_turn_tokens = 0
     await run(*[[{"x": i}] for i in range(45)])
     assert len(saw) == 40 and len(calls) == 39  # 默认 40 步

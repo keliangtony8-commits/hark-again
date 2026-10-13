@@ -99,7 +99,10 @@ print("ok: done")
 settings.agent_max_steps = 3
 cid, reply = run([[{"x": i}] for i in range(10)])
 assert reply.status == "wrapped" and reply.to_wire()["status"] == "wrapped", reply.to_wire()
-assert sent[-1]["messages"][-1]["content"] == loop.WRAP_UP and not sent[-1]["tools"]
+assert sent[-1]["messages"][-1]["content"].startswith(loop.WRAP_UP) and not sent[-1]["tools"]
+# h4：收尾提示附上这一轮实际做过的步骤（activity.recap），模型别凭印象说“还没做 X”
+recap = sent[-1]["messages"][-1]["content"]
+assert "这一轮实际执行过的步骤" in recap and "1. " in recap and "2. " in recap and "：成功" in recap, recap
 assert "继续" in "".join(b.get("text", "") for b in reply.blocks)
 assert [s for s, _ in asyncio.run(stored(cid))] == ["wrapped"]
 settings.agent_max_steps = 40

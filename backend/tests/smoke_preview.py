@@ -208,7 +208,7 @@ async def tool_checks():
         ctx = ToolContext(db=db)
         res = await REGISTRY["preview_port"].run(ctx, port=SVC, title="小网页")
         assert not res.failed and res.blocks[0]["type"] == "preview" and res.blocks[0]["title"] == "小网页", res
-        assert "http://backend:8000/api/preview/" in res.content and res.blocks[0]["url"] not in res.content
+        assert "http://backend:8000/api/preview/" in res.content and res.blocks[0]["url"] in res.content and "绝不能自己编" in res.content  # v2.48 B20：给真链接防编造
         res = await REGISTRY["preview_port"].run(ctx, port=LOOP)
         assert res.failed and "0.0.0.0" in res.content
         res = await REGISTRY["preview_port"].run(ctx)  # 不给端口：本机可能还有别的监听端口，所以只要列出或直接用

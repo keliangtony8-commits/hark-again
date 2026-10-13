@@ -24,6 +24,7 @@ from .wire_time import iso
 DETAIL_KEYS = ("command", "url", "query", "pattern", "port", "path", "paths", "job_id", "title", "name", "skill", "server", "tool", "reason", "tasks")
 DETAIL_MAX = 120
 NOTE_MAX = 160
+RECAP_MAX = 12  # 收尾交代进度时最多列最近这么多步
 KEEP = 80  # 一条回复最多记这么多步（长任务可走到 agent_max_steps 次模型调用；更早的步骤只是噪音，留最近的）
 
 
@@ -90,6 +91,19 @@ class Recorder:
         """没走到执行（没批准 / 表单取消）：直接记一条 denied。"""
         self.start(call_id, tool, label, args)
         return self.finish(call_id, "denied", note)  # type: ignore[return-value]
+
+    def recap(self, limit: int = RECAP_MAX) -> str:
+        """预算到了收尾时给模型看的“这一轮实际做了哪些步”（按时间线，以此为准）：模型凭印象交代进度常说错
+        （真机 E2E h4：明明读到了保温杯页，收尾却说“还没看保温杯”）。只列标题 + 摘要 + 结果，不含工具输出；
+        最近 limit 步，更早的只报个数。没有步骤 → 空串。"""
+        steps = [s for s in self.steps if s.get("tool") != "compact_context"]
+        if not steps:
+            return ""
+        mark = {"done": "成功", "error": "失败", "denied": "没批准", "running": "未完成", "stopped": "被停"}
+        lines = [f"{i}. {s['title']}" + (f"（{s['detail']}）" if s.get("detail") else "") + f"：{mark.get(s['state'], s['state'])}"
+                 for i, s in enumerate(steps[-limit:], max(1, len(steps) - limit + 1))]
+        head = f"（更早还有 {len(steps) - limit} 步）\n" if len(steps) > limit else ""
+        return "这一轮实际执行过的步骤（以此为准，读到的内容在上面的工具结果里）：\n" + head + "\n".join(lines)
 
     def partial(self) -> list[dict]:
         """这一轮被停掉：还在跑的步骤记为 stopped。"""

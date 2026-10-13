@@ -31,7 +31,8 @@ async def preview_port(ctx: ToolContext, port: int | None = None, path: str = ""
     block = PreviewBlock(workspace=ctx.workspace, port=out["port"], url=out["url"], title=title.strip()[:60] or None,
                          command=out["command"], expires_at=out["expires_at"])
     return ToolResult(f"预览卡已展示给用户（端口 {out['port']}，{out['command'][:80] or '未知程序'}），"
-                      f"{preview.TTL_HOURS} 小时内有效；文字里不要再贴链接。"
+                      f"{preview.TTL_HOURS} 小时内有效。用户的链接就是卡片上这条：{out['url']}——文字里一般不用再贴；"
+                      "真要提，只能原样用这一条，绝不能自己编域名或地址。"
                       f"内部地址（只给你自己的 browser_open 用，别发给用户）：{out['internal_url']}\n"
                       "服务停了或电脑休眠后链接会打不开，用户反馈打不开时先确认服务还在跑。",
                       [block.model_dump()])

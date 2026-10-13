@@ -87,6 +87,22 @@ img = {"role": "user", "content": [{"type": "text", "text": "图"}, {"type": "im
 msgs = [dict(img), dict(img)]
 t = Tracker(); t.note_image(0); t.note_image(1)
 assert t.apply(msgs) == 1 and msgs[0]["content"] == IMAGE_PLACEHOLDER and isinstance(msgs[1]["content"], list)
+# v2.48 多页比较（真机 j1）：别的网址的旧快照留页面文字节选，每个网址只留最近一份；同网址的照旧全抹
+cup1 = snap("保温杯", "https://shop/1", "保温杯 价格 89 元，库存 12 件")
+cup2 = snap("保温杯", "https://shop/1", "保温杯 价格 88 元，库存 11 件")
+lst = snap("列表", "https://shop/", "列表 " + "长" * 1000)
+umb = snap("雨伞", "https://shop/2", "雨伞 45 元 缺货")
+msgs = [tool(cup1), tool(cup2), tool(lst), tool(umb)]
+assert tracked(msgs, ["browser_click"] * 4).apply(msgs) == 3
+assert msgs[0]["content"].endswith(PLACEHOLDER) and "89" not in msgs[0]["content"], msgs[0]
+assert supersede.PLACEHOLDER_KEPT in msgs[1]["content"] and "88 元，库存 11 件" in msgs[1]["content"] and "[1]" not in msgs[1]["content"]
+assert len(msgs[2]["content"]) < 800 and msgs[2]["content"].endswith("…"), len(msgs[2]["content"])
+assert msgs[3]["content"] == umb
+assert tracked(msgs, ["browser_click"] * 4).apply(msgs) == 0  # 已换过不再动
+msgs = [tool(snap("A", "https://a.com/x", "甲")), tool(snap("A", "https://a.com/x", "乙"))]
+tracked(msgs, ["browser_read"] * 2).apply(msgs)
+assert msgs[0]["content"].endswith(PLACEHOLDER), msgs[0]
+assert "甲" in supersede.stale(snap(text="甲"), keep_text=True) and supersede.url(snap()) == "https://a.com/"
 print("ok: our rules")
 
 # ---- 3. 模拟模型 ----
@@ -146,13 +162,16 @@ async def main():
     assert len(model_saw) == 4
     tools = [m for m in model_saw[-1] if m["role"] == "tool"]
     assert len(tools) == 3
-    assert tools[0]["content"].endswith(PLACEHOLDER) and "会话：" in tools[0]["content"], tools[0]["content"][:200]
+    # /goto 和最新的 /act 网址不同 → 留节选（≤ TEXT_KEEP 字，元素清单没了）；同为 /act 的旧快照照旧全抹
+    old = tools[0]["content"]
+    assert supersede.PLACEHOLDER_KEPT in old and "字" * supersede.TEXT_KEEP not in old and "[1]" not in old, old[:200]
     assert tools[1]["content"].endswith(PLACEHOLDER) and "字" * 100 not in tools[1]["content"]
+    assert "会话：" in tools[0]["content"]
     assert "字" * 2000 in tools[2]["content"] and PLACEHOLDER not in tools[2]["content"]
     # 第 2 次调模型时只有一份 → 完整
     assert "字" * 2000 in [m for m in model_saw[1] if m["role"] == "tool"][0]["content"]
     before = sum(len(json.dumps(m, ensure_ascii=False)) for m in model_saw[-1])
-    assert before < 4000, before  # 三份完整快照 > 6000 字
+    assert before < 5500, before  # 三份完整快照 > 6000 字；两份节选 + 一份完整
     print("ok: turn keeps only the newest snapshot")
 
     await run("s2", ("browser_open", {"url": "https://a.com/"}), ("browser_look", {}), ("browser_look", {}), "看完了")

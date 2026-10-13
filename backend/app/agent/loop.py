@@ -265,7 +265,8 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         over = step >= max_steps - 1 or 0 < limits.turn_tokens <= spent \
             or (limits.deadline is not None and time.monotonic() >= limits.deadline)
         if over and step:  # 预算到了：最后一步不给工具，让模型交代进度（第一步就是最后一步时不用交代）
-            messages.append({"role": "user", "content": limits.wrap_up})
+            recap = builder.timeline.recap()  # 实际做过的步骤（activity.recap）：别凭印象说“还没看 X”
+            messages.append({"role": "user", "content": limits.wrap_up + (f"\n\n{recap}" if recap else "")})
             limits.wrapped = True
         if ctx.plan is not None and ctx.plan.lifted:  # 方案刚被批准：系统提示里的计划模式规则拿掉（plan_mode.lift_prompt）
             plan_mode.lift_prompt(messages)
