@@ -13,6 +13,9 @@
   每次的变化放在快照的 tab 字段里告诉后端（后端 tab_note 说成话）；后退到头的弹出页 = 关掉它回原页
 - 表单控件（v2.53，规则在 forms.py）：快照里下拉框带当前值 + 选项、勾选框带 checked；/act select 按选项文字选，
   /act press 按键（可先聚焦某个元素）
+- 网页弹框（v2.56，规则在 dialogs.py）：alert / confirm / prompt / 离开提示当场处理（不挂着，挂着会卡死页面脚本），
+  confirm / prompt 按这次动作说好的 dialog（accept / dismiss，没说 = 取消）办；弹过什么放快照的 dialogs 字段；
+  用户在实时画面里亲手点 = accept
 - 文件（v1.32）：POST /upload 把后端传来的工作区文件放进网页的文件框（<input type=file> 直接设；
   别的按钮先等“选文件”对话框再设）；页面触发的下载存到 DOWNLOADS/<会话>/，GET /downloads 列出、
   取走后 DELETE——后端把它搬进工作区 downloads/（app/browser_files.py），这里只是中转，关会话就清掉
@@ -33,6 +36,7 @@ from fastapi.responses import FileResponse, Response
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from pydantic import BaseModel
 
+import dialogs
 import egress
 import forms
 import tabs
@@ -55,6 +59,10 @@ _sessions: dict[str, tuple[BrowserContext, Page]] = {}
 _used: dict[str, float] = {}
 _downloads: dict[str, list[dict]] = {}  # 会话 → [{id, name, size, state downloading|done|failed, error}]
 _tabs: dict[str, tabs.Tabs] = {}  # 会话 → 现在操作哪个标签页（规则在 tabs.py）
+_dialog_arm: dict[str, tuple[str | None, str | None, float]] = {}  # 会话 → (accept/dismiss/None, prompt 字, 有效到)
+_dialog_notes: dict[str, list[dict]] = {}  # 会话 → 上次快照以来弹过的框（dialogs.decide 的 note）
+_dialog_seen: dict[str, int] = {}  # 会话 → 这次动作里已弹过几个（连环弹框判定）
+ARM_AFTER_S = 2.0  # 动作返回后说好的处理再保留这么久（点完弹框可能稍后才到）
 _restored: set[str] = set()  # 这次是从存好的登录状态恢复出来的会话（goto 回报给后端，模型知道“沿用了登录”）
 _lock = asyncio.Lock()
 _egress = egress.Egress(egress.ALLOW_HOSTS)
@@ -111,6 +119,7 @@ def _forget_browser() -> None:
         _used.pop(name, None)
         _drop_downloads(name)
         _egress.forget(name)
+        _forget_dialogs(name)
 
 
 async def _ensure_browser() -> Browser:
@@ -205,6 +214,7 @@ async def _evict(name: str) -> None:
     await ctx.close()
     _drop_downloads(name)
     _egress.forget(name)
+    _forget_dialogs(name)
 
 
 # ---- 下载中转 ----
@@ -217,6 +227,7 @@ def _watch(name: str, page) -> None:
     _watched.add(id(page))
     page.on("download", lambda d: asyncio.ensure_future(_keep(name, d)))
     page.on("crash", lambda p, n=name: _tabs[n].on_crash(p) if n in _tabs else None)
+    page.on("dialog", lambda d, n=name: asyncio.ensure_future(_on_dialog(n, d)))  # 有人接 = Playwright 不再自动取消
 
 
 async def _keep(name: str, download) -> None:
@@ -352,10 +363,14 @@ async def _snapshot(page: Page) -> dict:
 
 
 def _with_blocked(name: str, snap: dict) -> dict:
-    """附上这个会话上次以来被出网关卡拦下的请求（[{host, reason}]）和标签页的变化（tab，tabs.py），没有就不带。"""
+    """附上这个会话上次以来被出网关卡拦下的请求（[{host, reason}]）、标签页的变化（tab，tabs.py）
+    和弹过的框（dialogs，dialogs.py），没有就不带。"""
     blocked = _egress.take_blocked(name)
     if blocked:
         snap["blocked"] = blocked
+    shown = _dialog_notes.pop(name, None)
+    if shown:
+        snap["dialogs"] = shown
     note = _tabs[name].take_note() if name in _tabs else None
     if note:
         snap["tab"] = note
@@ -379,6 +394,8 @@ class ActIn(BaseModel):
     text: str | None = None
     submit: bool = False
     dy: int = 600
+    dialog: str | None = None       # 这次动作弹出 confirm / prompt 时：accept | dismiss（没说 = 取消，dialogs.py）
+    dialog_text: str | None = None  # prompt 确定时填的字
 
 
 class LoginIn(BaseModel):
@@ -419,6 +436,7 @@ async def goto(name: str, body: GotoIn):
     if urlparse(body.url).scheme not in ("http", "https"):
         raise HTTPException(400, "只允许 http(s)")
     page = await _session(_check_name(name))
+    _arm(name, None)
     try:
         await page.goto(body.url, timeout=30000, wait_until="domcontentloaded")
     except Exception as e:
@@ -457,6 +475,7 @@ async def act(name: str, body: ActIn):
         # 编号是上一张快照的（页面换了 / 切到了新标签页）：马上说清楚，不空等 8 秒超时
         raise HTTPException(400, f"当前页（{(await page.title())[:40] or page.url}）上没有编号 {body.ref}：页面已经换了，"
                                  "编号以最新那张快照为准；要点原来那页的东西先 browser_back。")
+    _arm(name, dialogs.arm(body.dialog), body.dialog_text)
     try:
         match body.action:
             case "click":
@@ -483,7 +502,52 @@ async def act(name: str, body: ActIn):
         if id(page) not in _tabs[name].crashed and not page.is_closed():
             raise HTTPException(400, f"操作失败：{str(e)[:200]}")
         # 点的时候页面崩了 / 被网站关了：不算操作失败，_after 照 tabs 规则换页并在 tab 字段里说明
+    finally:
+        _disarm(name)
     return await _after(name)
+
+
+def _arm(name: str, armed: str | None, text: str | None = None) -> None:
+    """动作开始：说好这次弹框怎么办（dialogs.decide 用），连环弹框计数清零。"""
+    _dialog_arm[name] = (armed, text, float("inf"))
+    _dialog_seen[name] = 0
+
+
+def _disarm(name: str) -> None:
+    """动作结束：说好的处理只再管 ARM_AFTER_S 秒（点击触发的弹框可能晚一点到）。"""
+    armed, text, _ = _dialog_arm.get(name, (None, None, 0.0))
+    _dialog_arm[name] = (armed, text, time.time() + ARM_AFTER_S)
+
+
+async def _on_dialog(name: str, dialog) -> None:
+    """弹框当场按 dialogs.decide 处理并记下；处理失败（页面已关）就算了。"""
+    armed, text, until = _dialog_arm.get(name, (None, None, 0.0))
+    if time.time() > until:
+        armed, text = None, None
+    seen = _dialog_seen.get(name, 0)
+    _dialog_seen[name] = seen + 1
+    d = dialogs.decide(dialog.type, dialog.message, dialog.default_value, armed, seen, text)
+    notes = _dialog_notes.setdefault(name, [])
+    if len(notes) < dialogs.DIALOGS_MAX:
+        notes.append(d.note)
+    elif notes[-1].get("more") is None:
+        notes.append({"kind": "more", "more": 1})
+    else:
+        notes[-1]["more"] += 1
+    try:
+        if not d.accept:
+            await dialog.dismiss()
+        elif d.text is not None:
+            await dialog.accept(d.text)
+        else:
+            await dialog.accept()
+    except Exception:
+        pass
+
+
+def _forget_dialogs(name: str) -> None:
+    for m in (_dialog_arm, _dialog_notes, _dialog_seen):
+        m.pop(name, None)
 
 
 def _key(name: str | None) -> str:
@@ -528,6 +592,7 @@ async def _back(name: str, page: Page) -> None:
 async def login(name: str, body: LoginIn):
     """代填登录：密码只在这里出现一次，直接进输入框，返回的快照里没有它。"""
     page = await _session(_check_name(name))
+    _arm(name, None)
     try:
         await page.locator(f'[data-ref="{body.user_ref}"]').fill(body.username, timeout=8000)
         pw = page.locator(f'[data-ref="{body.pass_ref}"]')
@@ -558,6 +623,7 @@ async def upload(name: str, body: UploadIn):
     if sum(len(f["buffer"]) for f in payload) > UPLOAD_MAX:
         raise HTTPException(413, f"一次最多传 {UPLOAD_MAX // 1024 // 1024} MB")
     el = page.locator(f'[data-ref="{body.ref}"]')
+    _arm(name, None)
     try:
         kind = await el.evaluate("e => e.tagName.toLowerCase() + ':' + (e.type || '')", timeout=8000)
         if kind == "input:file":
@@ -718,7 +784,11 @@ async def screen(name: str, format: str = "jpeg", full: bool = False, quality: i
 @app.post("/sessions/{name}/mouse", dependencies=[Depends(auth)])
 async def mouse(name: str, body: PointIn):
     page = await _session(_check_name(name))
-    await page.mouse.click(body.x * VIEW["width"], body.y * VIEW["height"])
+    _arm(name, "accept")  # 用户亲手点：弹出的确认框就是他要确认的（dialogs 规则 5）
+    try:
+        await page.mouse.click(body.x * VIEW["width"], body.y * VIEW["height"])
+    finally:
+        _disarm(name)
     await _follow(name)  # 用户在画面里点开了新标签页：实时画面跟过去
     await _save(name)
     return {"ok": True}
@@ -727,10 +797,14 @@ async def mouse(name: str, body: PointIn):
 @app.post("/sessions/{name}/keyboard", dependencies=[Depends(auth)])
 async def keyboard(name: str, body: KeysIn):
     page = await _session(_check_name(name))
-    if body.text:
-        await page.keyboard.type(body.text, delay=20)
-    if body.key:
-        await page.keyboard.press(body.key)
+    _arm(name, "accept")
+    try:
+        if body.text:
+            await page.keyboard.type(body.text, delay=20)
+        if body.key:
+            await page.keyboard.press(body.key)
+    finally:
+        _disarm(name)
     await _follow(name)
     await _save(name)
     return {"ok": True}
@@ -760,6 +834,7 @@ async def close(name: str, forget: bool = False):
                 await ctx.close()
                 _drop_downloads(name)
                 _egress.forget(name)
+                _forget_dialogs(name)
             else:
                 await _evict(name)
         _restored.discard(name)

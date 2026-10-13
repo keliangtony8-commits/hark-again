@@ -126,6 +126,7 @@ docker compose --profile build-only build sandbox-image                      # �
 云浏览器服务 browser/
 - service.py     唯一运行 Chromium 的服务：快照、点击、输入、截图、人工接管
 - forms.py       表单控件唯一规则（v2.53）：下拉框选哪一项（文字 → 值 → 忽略大小写 → 唯一包含，禁用项不选）、按键名白名单；测试 browser/test_forms.py、真 Chromium browser/test_forms_chromium.py
+- dialogs.py     网页原生弹框唯一规则（v2.56）：alert 记原话、离开提示确定，confirm / prompt 照这次动作说好的（confirm=true）办，没说 = 取消；连环弹框限数；用户实时画面里亲手点 = 确定；测试 browser/test_dialogs.py、真 Chromium browser/test_dialogs_chromium.py
 - egress.py      浏览器出网关卡（v2.02）：Chromium 每个连接都走它（127.0.0.1 上的小代理，每会话一个代理账号），只放行公网、连查过的 IP；地址规则与后端 web_guard 一致（tests/smoke_browser_egress.py 对表）；测试 browser/test_egress.py、真 Chromium browser/test_egress_chromium.py
 
 沙盒服务 sandbox/

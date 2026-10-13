@@ -49,7 +49,7 @@ def _render(snap: dict, tab: Tab) -> str:
     for e in snap.get("elements", []):
         tab.names[e["ref"]] = e["name"]
         lines.append(element_line(e))
-    return (tab_note(snap) + blocked_note(snap) + f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines)
+    return (tab_note(snap) + dialog_note(snap) + blocked_note(snap) + f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines)
             + f"\n\n页面文字：\n{snap.get('text', '')}")
 
 
@@ -101,6 +101,42 @@ def tab_note(snap: dict) -> str:
             return (f"⚠ {url} 刚重开又崩溃了（页面太重、这台机器内存不够），没再重开，现在是空白页。别再反复打开它："
                     "换个轻一点的入口（手机版 m. 域名、搜索结果页，或用 web_fetch 只读文字），实在不行如实告诉用户。\n")
     return ""
+
+
+DIALOG_NAMES = {"alert": "提示框", "confirm": "确认框", "prompt": "输入框", "beforeunload": "离开页面提示"}
+
+
+def dialog_note(snap: dict) -> str:
+    """网页弹过的原生框（规则在 browser/dialogs.py，快照的 dialogs 字段）→ 快照前面每个一句；没有 → 空。
+    默认取消的确认框要说清楚“没做成”，不然模型会以为删除 / 取消订单已经成功。"""
+    items = snap.get("dialogs")
+    if not isinstance(items, list):
+        return ""
+    out = []
+    for d in items:
+        if not isinstance(d, dict):
+            continue
+        if d.get("kind") == "more":
+            out.append(f"⤷ 之后网页又弹了 {d.get('more')} 个框（没细记，确认类一律取消了）。\n")
+            continue
+        kind, msg = d.get("kind"), str(d.get("message") or "").strip()
+        said = f"：「{msg}」" if msg else ""
+        name = DIALOG_NAMES.get(kind, "弹框")
+        if kind == "alert":
+            out.append(f"⤷ 网页弹出提示框{said}（已点确定）。这句话就是网站对刚才操作的回应，照它判断成没成功。\n")
+        elif kind == "beforeunload":
+            out.append(f"⤷ 网页提示离开会丢失未保存的内容{said}，已确定离开。\n")
+        elif d.get("accepted"):
+            filled = f"，填了「{d.get('text')}」" if d.get("text") else ""
+            out.append(f"⤷ 网页弹出{name}{said}，已按你说的点了确定{filled}。\n")
+        elif d.get("flood"):
+            out.append(f"⤷ 网页连着弹框，这个{name}{said}被自动取消了。别反复点同一个按钮，看页面文字判断现状。\n")
+        elif d.get("auto"):
+            out.append(f"⤷ 网页弹出{name}{said}，你没说要确认，已点取消：刚才那一步没有生效。"
+                       "确实是用户要做的事，就再点一次同一个按钮并带 confirm=true；拿不准（删除、退订、付款）先问用户。\n")
+        else:
+            out.append(f"⤷ 网页弹出{name}{said}，已按你说的点了取消。\n")
+    return "".join(out)
 
 
 def _card(tab: Tab, live: bool = False, files: list[dict] | None = None, ws: str | None = None, down: str | None = None) -> dict:
@@ -275,10 +311,25 @@ async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolRes
     return await _after(ctx, tab, f"会话：{name}。{note}\n" + text, card=True)
 
 
+CONFIRM_DOC = {"type": "boolean", "description": "点了以后网页若弹出“确定要…吗？”的确认框：true = 点确定。"
+               "默认不确认（点取消），只在确实是用户要做的事时传 true"}
+PROMPT_DOC = {"type": "string", "description": "可省略：网页弹出要填字的输入框时填这段（同时要 confirm=true）"}
+
+
+def _dialog(confirm: bool, prompt_text: str | None) -> dict:
+    """click / press 的弹框处理（规则在 browser/dialogs.py）：confirm → accept，否则不说（= 取消）。"""
+    if not confirm:
+        return {}
+    return {"dialog": "accept", **({"dialog_text": prompt_text} if prompt_text is not None else {})}
+
+
 @tool("browser_click", "正在点击", "点击快照里编号为 ref 的元素，返回新快照。",
-      {"type": "object", "properties": {"ref": {"type": "string"}}, "required": ["ref"]}, risk=_click_risk)
-async def browser_click(ctx: ToolContext, ref: str) -> ToolResult:
-    return await _act(ctx, "POST", "/act", {"action": "click", "ref": ref})
+      {"type": "object", "properties": {"ref": {"type": "string"}, "confirm": CONFIRM_DOC, "prompt_text": PROMPT_DOC},
+       "required": ["ref"]}, risk=_click_risk)
+async def browser_click(ctx: ToolContext, ref: str, confirm: bool = False, prompt_text: str | None = None) -> ToolResult:
+    # 付款 / 删除这类按钮用户已在审批卡上同意：随后弹出的“确定吗？”是同一件事，直接确定，不再弹第二次卡
+    confirm = confirm or _click_risk({"ref": ref}, ctx) is not None
+    return await _act(ctx, "POST", "/act", {"action": "click", "ref": ref, **_dialog(confirm, prompt_text)})
 
 
 @tool("browser_type", "正在输入", "在编号为 ref 的输入框里填入文字；submit=true 时随后按回车。"
@@ -303,10 +354,11 @@ async def browser_select(ctx: ToolContext, ref: str, option: str) -> ToolResult:
       "在网页上按一个键：Escape 关弹窗、ArrowDown / Enter 选自动补全的候选、Tab 跳到下一格、PageDown 翻页等。"
       "传 ref 时先聚焦那个元素再按。打字用 browser_type。",
       {"type": "object", "properties": {"key": {"type": "string", "description": "Enter / Escape / Tab / ArrowDown 等"},
-                                        "ref": {"type": "string", "description": "可省略：按在当前焦点上"}},
+                                        "ref": {"type": "string", "description": "可省略：按在当前焦点上"},
+                                        "confirm": CONFIRM_DOC},
        "required": ["key"]}, deferred=True)
-async def browser_press(ctx: ToolContext, key: str, ref: str = "") -> ToolResult:
-    return await _act(ctx, "POST", "/act", {"action": "press", "text": key, "ref": ref or None})
+async def browser_press(ctx: ToolContext, key: str, ref: str = "", confirm: bool = False) -> ToolResult:
+    return await _act(ctx, "POST", "/act", {"action": "press", "text": key, "ref": ref or None, **_dialog(confirm, None)})
 
 
 @tool("browser_scroll", "正在滚动页面", "向下（dy>0）或向上滚动页面，返回新快照。",
