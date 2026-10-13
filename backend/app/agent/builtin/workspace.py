@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, omission, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, omission, quota, read_many, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -98,6 +98,22 @@ async def read_file(ctx: ToolContext, path: str = "", offset: int = 0, limit: in
         return await _read_attachment(attachment.strip(), offset, limit, pages, mode)
     p = safe_join(project_dir(ctx.workspace), path)
     return _with_rules(ctx, p, await _read_file(ctx, p, path, offset, limit, pages, mode))
+
+
+@tool("read_many_files", "正在读几个文件",
+      "一次读多个文本文件（配置 + 脚本 + 说明这类要一起看的），比一个个 read_file 省好几轮。"
+      "paths 每项是路径或 glob（如 [\"README.md\", \"src/*.py\", \"conf/**/*.yaml\"]），"
+      f"最多 {read_many.FILES_MAX} 个文件、合计约 {read_many.TOTAL_CHARS} 字，每个文件用“--- 路径 ---”隔开；"
+      "放不下的部分会注明，用 read_file 接着读。图片、PDF/Office 文档不在这里读，用 read_file。",
+      {"type": "object", "properties": {
+          "paths": {"type": "array", "items": {"type": "string"}, "description": "文件路径或 glob 列表"}},
+       "required": ["paths"]}, parallel=True)
+async def read_many_files(ctx: ToolContext, paths: list | None = None) -> ToolResult:
+    b = await asyncio.to_thread(read_many.read, ctx.workspace, paths or [])  # 规则全在 app/read_many.py
+    for p in b.read:
+        file_seen.observe(_owner(ctx), p)
+    r = ToolResult(b.text, detail=b.detail or None, failed=b.failed)
+    return _with_rules(ctx, b.read[0], r) if b.read else r
 
 
 async def _text(src, mode: str, offset: int, limit: int, head: str = "") -> ToolResult:
