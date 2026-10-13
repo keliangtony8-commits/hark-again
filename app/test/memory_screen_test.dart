@@ -28,6 +28,7 @@ class FakeApi implements Api {
   Future<dynamic> get(String path) async {
     calls.add('GET $path');
     if (path == '/api/memories') return memories;
+    if (path == '/api/memory-notes') return <Map<String, dynamic>>[];
     if (path == '/api/memory-digest') {
       if (digestMissing) throw ApiError('not found', 404);
       return {..._digest, 'memories': memories.length};

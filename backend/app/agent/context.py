@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, attachment_save, clock, command_credentials, command_env, documents, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, attachment_save, clock, command_credentials, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -60,6 +60,10 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
         p.add(STABLE, workspaces.prompt_line(workspaces.PERSONAL))
     # 工作区根目录的 AGENTS.md 一类规则文件（子目录的由文件工具碰到时追加）；规则在 app/workspace_instructions.py
     p.add(STABLE, workspace_instructions.baseline(workspaces.of(project_id)).text)
+
+    # 记忆笔记目录（v2.21，规则在 app/memory_notes.py）：很少变，放 STABLE 段最后，正文按需 memory_note read
+    if notes_index := memory_notes.index_text(await memory_notes.all_notes(db)):
+        p.add(STABLE, notes_index)
 
     # —— 以下每轮都可能变：放最后 ——
     now = datetime.now(ZoneInfo(settings.timezone))

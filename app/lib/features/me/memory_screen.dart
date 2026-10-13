@@ -1,11 +1,15 @@
 // 记忆：看、找、改、删我记住的事。
-// 版式自上而下（与保险箱/技能页同一套）：页头摘要 + 说明 →（空时起步卡）→“我对你的了解”概括卡 → 搜索框（≥7 条）→ 分类筛选条 → 按分类分组（带数量）。
-// 筛选纯客户端（models/memory.dart），列表来自 memoriesProvider；左滑删除，点击编辑（内容 + 分类），右上角新增。
+// 版式自上而下（与保险箱/技能页同一套）：页头摘要 + 说明 →（空时起步卡）→“我对你的了解”概括卡 → 搜索框（≥7 条）→ 分类筛选条
+// → 主题笔记（v2.21，memory_notes.dart：一个主题一篇 Markdown，同一个搜索框也筛它）→ 按分类分组（带数量）。
+// 筛选纯客户端（models/memory.dart、models/memory_note.dart），列表来自 memoriesProvider / memoryNotesProvider；
+// 左滑删除，点击编辑（内容 + 分类），右上角“+”选一句话记忆或主题笔记。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/resource.dart';
 import '../../models/memory.dart';
+import '../../models/memory_note.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -16,6 +20,7 @@ import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'memory_digest.dart';
+import 'memory_notes.dart';
 
 class MemoryScreen extends ConsumerStatefulWidget {
   const MemoryScreen({super.key});
@@ -44,7 +49,7 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen> {
     return SubPage(
       title: const Text('记忆'),
       actions: [
-        IconButton(icon: const Icon(Icons.add_rounded), tooltip: '新增记忆', onPressed: () => _add(context)),
+        IconButton(icon: const Icon(Icons.add_rounded), tooltip: '新增', onPressed: () => _addAny(context)),
       ],
       body: AsyncBody<MemoryItem>(
         value: ref.watch(memoriesProvider),
@@ -53,13 +58,17 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen> {
           final counts = categoryCounts(list);
           final category = counts.any((c) => c.$1 == _category) ? _category : null; // 选中的分类被删空了就回到全部
           final groups = filterMemories(list, query: _query.text, category: category);
-          final searchable = list.length >= memorySearchFrom || _query.text.isNotEmpty; // 搜着搜着删到门槛下也别把框收走
+          final notes = ref.watch(memoryNotesProvider).value ?? const [];
+          final noteHits = filterNotes(notes, _query.text);
+          // 笔记也算进门槛：搜着搜着删到门槛下也别把框收走
+          final searchable = list.length + notes.length >= memorySearchFrom || _query.text.isNotEmpty;
+          final empty = list.isEmpty && notes.isEmpty;
           var i = 0; // 整页错峰序号（Motion.stagger 自己封顶，长列表不会越排越慢）
           return PullRefresh(
-            onRefresh: () => ref.read(memoriesProvider.notifier).reload(),
+            onRefresh: () => Future.wait([ref.read(memoriesProvider.notifier).reload(), ref.read(memoryNotesProvider.notifier).reload()]),
             child: PageBody(children: [
-              PageIntro(summary: memorySummary(list), line: '每次对话我都会参考这些。聊天时我会自己记，说错了就改，不想让我记的直接删。'),
-              if (list.isEmpty)
+              PageIntro(summary: memorySummary(list, notes: notes.length), line: '每次对话我都会参考这些。聊天时我会自己记，说错了就改，不想让我记的直接删。'),
+              if (empty)
                 Padding(
                   padding: const EdgeInsets.only(top: Sp.x4),
                   child: StarterCard(
@@ -68,6 +77,7 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen> {
                     starters: [
                       for (final s in memoryStarters)
                         PillButton(label: s.label, icon: Icons.add_rounded, onTap: () => _add(context, content: s.content, category: s.category)),
+                      PillButton(label: '记一个人', icon: Icons.person_add_alt_outlined, onTap: () => context.push('/me/memory/notes/new')),
                     ],
                   ),
                 )
@@ -82,7 +92,8 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen> {
                   const SizedBox(height: Sp.x3),
                   _CategoryBar(counts: counts, total: list.length, selected: category, onSelect: (c) => setState(() => _category = c)),
                 ],
-                if (groups.isEmpty)
+                if (category == null) MemoryNotesSection(query: _query.text),
+                if (groups.isEmpty && (noteHits.isEmpty || category != null) && !(list.isEmpty && _query.text.isEmpty))
                   EmptyHint(
                     icon: Icons.search_off_rounded,
                     title: '没有匹配的记忆',
@@ -109,6 +120,20 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen> {
         },
       ),
     );
+  }
+
+  /// 页头“+”：一句话记忆（底部表单）还是主题笔记（整页编辑）。
+  Future<void> _addAny(BuildContext context) async {
+    final pick = await showActionSheet<String>(context, title: '新增', actions: const [
+      SheetAction(Icons.short_text_rounded, '一句话记忆', value: 'memory', subtitle: '一条偏好或事实，比如“我对花生过敏”'),
+      SheetAction(Icons.description_outlined, '主题笔记', value: 'note', subtitle: '关于一个人、地方或项目的一串细节'),
+    ]);
+    if (!context.mounted) return;
+    if (pick == 'note') {
+      context.push('/me/memory/notes/new');
+    } else if (pick == 'memory') {
+      await _add(context);
+    }
   }
 
   /// 新增一条：页头 + 用当前分类；起步按钮带着例句和分类打开同一张表。

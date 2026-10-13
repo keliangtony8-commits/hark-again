@@ -1,9 +1,9 @@
-"""长期记忆工具：remember 记 / update_memory 改 / forget 删 / search_memory 查（v2.11）。
+"""长期记忆工具：remember 记 / update_memory 改 / forget 删 / search_memory 查（v2.11）/ memory_note 主题笔记（v2.21）。
 写入逻辑全在 memory_store（查重覆盖、按短引用定位）；这里只做参数整理和给模型的回话，
 每次真改了记忆就附一张记忆卡（blocks.MemoryBlock），用户在聊天里看得见、能撤销。"""
 from sqlalchemy import select
 
-from ... import memory_store
+from ... import memory_notes, memory_store
 from ...db import SessionLocal
 from ...models import Memory
 from ..tools import ToolContext, ToolResult, tool
@@ -17,7 +17,8 @@ def _cat(c: str | None) -> str | None:
 
 @tool("remember", "正在记住",
       "把用户明确说出的、以后还用得上的偏好或事实存进长期记忆（如饮食禁忌、专业、作息）。"
-      "不要存一次性的事情、不要存密码和证件号。保持用户原意，不夸大。",
+      "不要存一次性的事情、不要存密码和证件号。保持用户原意，不夸大。"
+      "关于某个人、地方、项目的一串细节写进 memory_note 的主题笔记，这里只存一句话的偏好或事实。",
       {"type": "object", "properties": {
           "content": {"type": "string", "description": "一句话，如：不吃香菜"},
           "category": {"type": "string", "enum": CATEGORIES}},
@@ -91,5 +92,66 @@ async def search_memory(ctx: ToolContext, query: str = "", category: str | None 
     async with SessionLocal() as db:
         hits, total, vectors = await memory_store.search(db, query, cat, limit)
         text = memory_store.search_text(query, cat, hits, total, vectors)
+        notes = await memory_notes.search(db, query) if query.strip() and not cat else []
+    if notes:  # 笔记正文也搜（v2.21）：一句话记忆没命中时它常常就是答案
+        text += "\n\n" + memory_notes.search_text(notes)
     what = query.strip() or cat
-    return ToolResult(text, detail=f"{what} · {len(hits)} 条")
+    return ToolResult(text, detail=f"{what} · {len(hits)} 条" + (f" + {len(notes)} 篇笔记" if notes else ""))
+
+
+_ACTIONS = ["list", "read", "write", "append", "edit", "move", "delete"]
+
+
+@tool("memory_note", "正在整理笔记",
+      "记忆笔记：一个主题一篇 Markdown（一个人、一个地方、一个项目、一个长期兴趣），放一句话记不下的一串细节。"
+      "路径即名字，如 people/张三、locations/学校、考研计划；kind=contact 自动放 people/，place 放 locations/。"
+      "action：list 列目录；read 看全文；write 整篇写（没有就建，有就覆盖）；append 结尾加一段（没有就建）；"
+      "edit 用 old→new 精确替换（要唯一，先 read）；move 改路径（new_path）；delete 删。"
+      "只写用户说过的，保留他的条件，推断的标“（推断）”；不写密码证件号、不写一次性的事。先看上下文里的笔记目录，同一主题别建两篇。",
+      {"type": "object", "properties": {
+          "action": {"type": "string", "enum": _ACTIONS},
+          "path": {"type": "string", "description": "如 people/张三"},
+          "body": {"type": "string", "description": "write：整篇 Markdown；append：要加的一段"},
+          "title": {"type": "string", "description": "新建时的标题，默认是名字"},
+          "kind": {"type": "string", "enum": list(memory_notes.KINDS)},
+          "old": {"type": "string"}, "new": {"type": "string"},
+          "replace_all": {"type": "boolean"},
+          "new_path": {"type": "string"}},
+       "required": ["action"]})
+async def memory_note(ctx: ToolContext, action: str, path: str = "", body: str = "", title: str | None = None,
+                      kind: str | None = None, old: str = "", new: str = "", replace_all: bool = False,
+                      new_path: str = "") -> ToolResult:
+    db = ctx.db
+    if action not in _ACTIONS:
+        return ToolResult(f"action 只能是 {' / '.join(_ACTIONS)}。", failed="参数不对")
+    if action == "list":
+        notes = await memory_notes.all_notes(db)
+        return ToolResult(memory_notes.list_text(notes), detail=f"{len(notes)} 篇")
+    if not path.strip():
+        return ToolResult("要给 path（如 people/张三）。", failed="没给路径")
+    try:
+        if action == "read":
+            n = await memory_notes.find(db, path, kind)
+            if n is None:
+                return ToolResult(f"没有笔记 {path}。用 list 看目录，或 write 新建。", failed="没有这篇")
+            return ToolResult(memory_notes.read_text(n), detail=n.path)
+        if action == "write":
+            n, previous = await memory_notes.write(db, path, body, title, kind)
+            said = "新建了" if previous is None else "重写了"
+            return ToolResult(f"{said}笔记 {n.path}（{len(n.body)} 字）。", detail=f"{n.path} · {said}")
+        if action == "append":
+            n, created = await memory_notes.append(db, path, body, title, kind)
+            said = "新建了" if created else "加进了"
+            return ToolResult(f"{said}笔记 {n.path}（现在 {len(n.body)} 字）。", detail=f"{n.path} · {said}")
+        if action == "edit":
+            n, k = await memory_notes.edit(db, path, old, new, replace_all)
+            return ToolResult(f"改好了 {n.path}（{k} 处）。", detail=f"{n.path} · 改了 {k} 处")
+        if action == "move":
+            if not new_path.strip():
+                return ToolResult("move 要给 new_path。", failed="没给新路径")
+            n, was = await memory_notes.move(db, path, new_path, kind)
+            return ToolResult(f"{was} → {n.path}。", detail=f"{was} → {n.path}")
+        n = await memory_notes.delete(db, path)
+        return ToolResult(f"删掉了笔记 {n.path}。", detail=f"{n.path} · 删了")
+    except memory_notes.NoteError as e:
+        return ToolResult(str(e), failed=str(e)[:40])

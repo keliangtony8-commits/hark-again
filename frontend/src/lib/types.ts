@@ -241,3 +241,5 @@ export type Connector = { id: string; name: string; desc: string; logo: string; 
 export type McpServerInfo = { id: string; name: string; url: string; has_token: boolean; problem?: string | null; retried_note?: string | null };
 export type VaultSecret = { id: string; kind: "api_key" | "login" | "env"; name: string; username: string | null; hosts: string[]; header_name: string; header_prefix: string; preview: string; created_at: string; retried_note?: string | null };
 
+/** 记忆笔记（v2.21，服务器 app/memory_notes.py）：一个主题一篇 Markdown。 */
+export type MemoryNote = { id: string; path: string; title: string; kind: string; body: string; created_at?: string; updated_at?: string };

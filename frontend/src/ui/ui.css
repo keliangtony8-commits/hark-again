@@ -344,3 +344,18 @@ button.run-row:hover { background: var(--tile); }
 .file-diff-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono);
   font-size: var(--fs-xs); color: var(--text); text-align: start; transition: color var(--dur) var(--ease); }
 @media (prefers-reduced-motion: reduce) { .file-diff-row { animation: none; } .file-diff-path { transition: none; } }
+/* 记忆笔记（v2.21，features/me/MemoryNotes.tsx） */
+.note-row { display: flex; align-items: center; gap: var(--sp-3); }
+.note-row .row-title { -webkit-line-clamp: 1; }
+.note-row-icon { color: var(--text-2); display: inline-flex; flex: none; }
+.note-head { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.note-title { font-size: var(--fs-lg); }
+.note-meta { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--text-3); }
+.note-body { background: var(--tile); border-radius: var(--r-md); padding: var(--sp-4); }
+.note-empty, .note-foot { font-size: var(--fs-sm); color: var(--text-3); margin: 0; }
+.note-foot { margin-top: var(--sp-3); }
+.note-editor { min-height: 18em; font-family: var(--font-mono, monospace); font-size: var(--fs-sm); }
+.note-preview { display: block; margin-top: var(--sp-1); color: var(--text-3); animation: fade var(--dur) var(--ease) both; }
+.note-read, .note-form { animation: rise var(--dur) var(--ease) both; }
+@media (prefers-reduced-motion: reduce) { .note-preview, .note-read, .note-form { animation: none; } }
+.note-kind { padding: 2px var(--sp-2); border-radius: var(--r-full); background: var(--tile); color: var(--text-2); }

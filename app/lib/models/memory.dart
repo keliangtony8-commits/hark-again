@@ -46,11 +46,13 @@ List<(String, List<MemoryItem>)> filterMemories(List<MemoryItem> list, {String q
   return [for (final c in groups.keys.toList()..sort(compareCategory)) (c, groups[c]!)];
 }
 
-/// 页头小标签：“记得 12 件事 · 4 个分类”。
-String memorySummary(List<MemoryItem> list) {
-  if (list.isEmpty) return '还没有记忆';
+/// 页头小标签：“记得 12 件事 · 4 个分类 · 3 篇笔记”（笔记 v2.21）。
+String memorySummary(List<MemoryItem> list, {int notes = 0}) {
+  final tail = notes > 0 ? '$notes 篇笔记' : null;
+  if (list.isEmpty) return tail ?? '还没有记忆';
   final n = categoryCounts(list).length;
-  return n > 1 ? '记得 ${list.length} 件事 · $n 个分类' : '记得 ${list.length} 件事';
+  final head = n > 1 ? '记得 ${list.length} 件事 · $n 个分类' : '记得 ${list.length} 件事';
+  return tail == null ? head : '$head · $tail';
 }
 
 /// 条数到这个数才显示搜索框（少的时候一眼就看完，搜索框只是噪音）。和技能页同一个门槛。

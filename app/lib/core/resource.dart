@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/memory_note.dart';
 import '../models/resources.dart';
 import 'api.dart';
 import 'cache.dart';
@@ -100,6 +101,7 @@ ResourceProvider<T> _resource<T>(String path, T Function(Map<String, dynamic>) f
 
 final projectsProvider = _resource<Project>('/api/projects', Project.fromJson, (x) => x.id, cacheKey: 'projects');
 final memoriesProvider = _resource<MemoryItem>('/api/memories', MemoryItem.fromJson, (x) => x.id);
+final memoryNotesProvider = _resource<MemoryNote>('/api/memory-notes', MemoryNote.fromJson, (x) => x.id);
 final tasksProvider = _resource<ScheduledTask>('/api/tasks', ScheduledTask.fromJson, (x) => x.id);
 final cardsProvider = _resource<HomeCard>('/api/cards', HomeCard.fromJson, (x) => x.id, cacheKey: 'cards');
 final skillsProvider = _resource<Skill>('/api/catalog/skills', Skill.fromJson, (x) => x.id, replaceOnUpdate: true);

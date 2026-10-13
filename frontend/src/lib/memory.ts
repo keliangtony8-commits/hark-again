@@ -34,10 +34,12 @@ export function filterMemories(list: Memory[], query = "", category: string | nu
 }
 
 /** 页头小标签：“记得 12 件事 · 4 个分类”。 */
-export function memorySummary(list: Memory[]): string {
-  if (!list.length) return "还没有记忆";
+export function memorySummary(list: Memory[], notes = 0): string {
+  const tail = notes > 0 ? `${notes} 篇笔记` : "";
+  if (!list.length) return tail || "还没有记忆";
   const n = categoryCounts(list).length;
-  return n > 1 ? `记得 ${list.length} 件事 · ${n} 个分类` : `记得 ${list.length} 件事`;
+  const head = n > 1 ? `记得 ${list.length} 件事 · ${n} 个分类` : `记得 ${list.length} 件事`;
+  return tail ? `${head} · ${tail}` : head;
 }
 
 /** 到这么多条才显示搜索框（= App memorySearchFrom）。 */

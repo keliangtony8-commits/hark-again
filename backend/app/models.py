@@ -120,6 +120,19 @@ class Memory(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
 
+class MemoryNote(Base):
+    """记忆笔记（v2.21）：一个主题一篇 Markdown（一个人、一个地方、一个项目…），和一句话的 Memory 互补。
+    路径即名字（people/张三、locations/学校），大小写不敏感唯一；规则全在 app/memory_notes.py。"""
+    __tablename__ = "memory_notes"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    path: Mapped[str] = mapped_column(String(120), index=True)
+    title: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(16), default="misc", server_default="misc")
+    body: Mapped[str] = mapped_column(Text, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
 class MemoryDigest(Base):
     """“我对你的了解”：把全部记忆浓缩成一段话（单行表，id 固定 "me"）。
     只在用户点生成时调模型（花 token）；fingerprint = 生成时记忆集合的指纹，对不上就是“过期”，由客户端提示重新生成。"""

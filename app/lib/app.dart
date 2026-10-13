@@ -11,6 +11,7 @@ import 'features/home/home_screen.dart';
 import 'features/computer/computer_screen.dart';
 import 'features/me/connectors_screen.dart';
 import 'features/me/me_screen.dart';
+import 'features/me/memory_notes.dart';
 import 'features/me/memory_screen.dart';
 import 'features/me/pages_screen.dart';
 import 'features/me/skill_library.dart';
@@ -63,7 +64,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // 我的：点头像进入的全屏页，盖在外壳上面（不是 Tab）。深链 /me/connectors?… 直接打开时返回会回到主页（见 MeScreen）。
       GoRoute(path: '/me', builder: (_, _) => const MeScreen(), routes: [
-        GoRoute(path: 'memory', builder: (_, _) => const MemoryScreen()),
+        GoRoute(path: 'memory', builder: (_, _) => const MemoryScreen(), routes: [
+          GoRoute(path: 'notes/:id', builder: (_, s) => MemoryNoteScreen(id: s.pathParameters['id']!)),
+        ]),
         GoRoute(path: 'tasks', builder: (_, _) => const TasksScreen(), routes: [
           GoRoute(path: ':id', builder: (_, s) => TaskDetailScreen(id: s.pathParameters['id']!)),
         ]),
