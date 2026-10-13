@@ -73,7 +73,7 @@ async def forget(ctx: ToolContext, refs: list[str] | None = None, keyword: str |
 
 @tool("search_memory", "正在翻记忆",
       "在用户的全部长期记忆里查（上下文只放了最相关的一部分时用）：按字面和意思找，返回每条的 # 引用。"
-      "要用到用户的偏好或事实而上面没列出来、或要改/删一条看不到的记忆时先查。query 空 + category = 列出这一类。",
+      "要用到用户的偏好或事实而上面没列出来、或要改/删一条看不到的记忆时先查（用户存的做法 / 流程在技能里，用 skill_search）。query 空 + category = 列出这一类。",
       {"type": "object", "properties": {
           "query": {"type": "string", "description": "要找什么，如：过敏 / 喜欢的咖啡；整句用引号"},
           "category": {"type": "string", "enum": CATEGORIES},

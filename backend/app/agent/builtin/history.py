@@ -7,7 +7,7 @@ from ..tools import ToolContext, ToolResult, tool
 
 @tool("search_history", "正在翻以前的对话",
       "在用户过去的对话里找字（标题和每条消息，含定时任务的报告），或翻开某段对话读原文。用户提到以前聊过、"
-      "定过、发过的东西（“上次那家店”“之前说的方案”“我跟你讲过的…”），上下文和记忆里又没有时先用它，不要猜。"
+      "定过、发过的东西（“上次那家店”“之前说的方案”“我跟你讲过的…”），上下文和记忆里又没有时先用它，不要猜（“按我的做法 / 流程”先 skill_search）。"
       "给 query 搜（空格分开的词都要有，整句用引号；可加 after / before 限定时间）；"
       "给 conversation（+ 结果里的 message）读那段原文。",
       {"type": "object", "properties": {

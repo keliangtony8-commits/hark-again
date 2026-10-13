@@ -131,6 +131,31 @@ def save_skill(name: str, description: str, body: str, sid: str | None = None) -
     return _write(sid, name, description, body)
 
 
+def edit_skill(sid: str, find: str, replace: str) -> Skill:
+    """在技能全文（名称行 + 描述 + 正文）里把唯一一处 find 换成 replace（v2.46，学 Hark skill edit）。
+    内置技能先复制成自定义版再改。find 为空 / 找不到 / 不止一处 → ValueError（中文原因，给模型看）。
+    改完名称行必须还在（首行 `# 名称`），否则拒绝。"""
+    cur = get_skill(sid)
+    if cur is None:
+        raise KeyError(sid)
+    if not find:
+        raise ValueError("find 不能为空：写出要替换的原文（带上前后几个字让它唯一）。")
+    text = f"# {cur.name}\n{cur.description}\n\n{cur.body}\n"
+    n = text.count(find)
+    if n == 0:
+        raise ValueError("技能里没有这段原文（要逐字一致，含标点和换行）；先 use_skill 看当前全文再改。")
+    if n > 1:
+        raise ValueError(f"这段原文在技能里出现了 {n} 次，多带点上下文让它只出现一次。")
+    new = text.replace(find, replace, 1)
+    if not new.lstrip().startswith("# ") or not new.lstrip()[2:].split("\n", 1)[0].strip():
+        raise ValueError("改完首行必须还是 `# 技能名称`。")
+    if cur.builtin:
+        customize(sid)
+    SKILLS.mkdir(parents=True, exist_ok=True)
+    safe_join(SKILLS, f"{sid}.md").write_text(new.strip() + "\n", encoding="utf-8")
+    return get_skill(sid)  # type: ignore[return-value]
+
+
 def customize(sid: str) -> Skill:
     """把内置技能复制成自定义版（已经有了就原样返回）。"""
     src = _builtin_path(sid)

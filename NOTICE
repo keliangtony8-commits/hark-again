@@ -122,3 +122,5 @@
 - backend/app/read_many.py: idea and separator format from google-gemini/gemini-cli packages/core/src/tools/read-many-files.ts (Apache-2.0); own implementation, not a translation.
 - openai/codex codex-rs/network-proxy/src/domain_matcher.rs + policy.rs + runtime.rs host_blocked decision order (+ domain_matcher_tests.rs cases) — Apache License 2.0, Copyright 2025 OpenAI, modified（Python 重写；加 CIDR/IP 条目、去掉 IDNA/SOCKS/MITM/审批，公网默认放行）
   移植到 sandbox/egress.py（v2.37）
+- openai/codex codex-rs/ext/skills/src/render.rs allocate_skill_lines / allocate_description_chars（技能目录预算三级退让、描述按字轮流分配）— Apache License 2.0, Copyright 2025 OpenAI, modified（按字数计成本；省略提示改指向 skill_search）
+  移植到 backend/app/skill_catalog.py（v2.46）

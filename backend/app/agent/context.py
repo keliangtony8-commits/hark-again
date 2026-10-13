@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -32,9 +32,9 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     p.add(STABLE, settings.system_prompt)
     p.add(STABLE, parallel.prompt())  # 只读查询可以同一步一起发（agent/parallel.py）
 
-    skills = skills_store.enabled_skills()
-    if skills:  # 只放启用的目录，正文按需 use_skill 读取
-        p.add(STABLE, "可用技能：\n" + "\n".join(f"- {s.id}：{s.name}——{s.description}" for s in skills))
+    # 只放启用的目录，正文按需 use_skill 读取；超预算逐级退让，规则只在 skill_catalog
+    if catalog := skill_catalog.prompt_section(skills_store.enabled_skills()):
+        p.add(STABLE, catalog)
 
     # 只告诉模型“能调哪些服务”，不给任何凭证内容（按名字排序：库里的返回顺序不保证，乱序会打掉缓存）
     access = sorted(f"- {PROVIDERS[c.provider].name}（{c.account}）：{', '.join(PROVIDERS[c.provider].api_hosts)}"
@@ -70,6 +70,8 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     # —— 以下每轮都可能变：放最后 ——
     now = datetime.now(ZoneInfo(settings.timezone))
     p.add(VOLATILE, f"现在是 {clock.day_text(now.date())} {now:%H:%M}（{settings.timezone}）。")
+    if hint := skill_catalog.relevant_section(skills_store.enabled_skills(), query):
+        p.add(VOLATILE, hint)  # 目录省略了技能时，按这句话点名相关的（规则在 skill_catalog）
     mems = await memory_store.relevant(db, query)
     if mems:
         p.add(VOLATILE, "关于用户你已知道（# 后是引用，改/删时传给 update_memory / forget）：\n"
