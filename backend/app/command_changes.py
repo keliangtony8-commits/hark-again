@@ -15,6 +15,8 @@ size/mtime 判断没变不重算，同 git index 的 stat 缓存），但不用 
   最多 FILES_MAX 个文件 / TIME_BUDGET 秒；扫不完（capped）时不判“新建”和“删除”（没看到 ≠ 没有），只比看到的。
 - 一轮里命令期间别的东西（后台任务）改的文件也会算进来：卡片说的是“这一轮期间改了的文件”。
 - 出错从不抛：记不了只是卡上少几行、少撤销。
+- v2.16 权限位也进 stat 缓存（index 每项第 4 个 = st_mode & 0o777，同 git index 记 mode）：chmod +x 不改 mtime，
+  只比 size/mtime 会漏；旧的 3 项 index 当作过期重读。基线权限交给 tracker.modes，撤销时 chmod 回去。
 """
 import hashlib
 import json
@@ -40,7 +42,7 @@ _locks_guard = threading.Lock()
 
 @dataclass
 class Scan:
-    files: dict[str, tuple[int, int]] = field(default_factory=dict)  # 相对路径 → (size, mtime_ns)
+    files: dict[str, tuple[int, int, int]] = field(default_factory=dict)  # 相对路径 → (size, mtime_ns, 权限位)
     capped: bool = False
 
 
@@ -65,7 +67,7 @@ def scan(root: Path) -> Scan:
                 continue
             if not os.path.isfile(p) or os.path.islink(p):
                 continue
-            s.files[p.relative_to(root).as_posix()] = (st.st_size, st.st_mtime_ns)
+            s.files[p.relative_to(root).as_posix()] = (st.st_size, st.st_mtime_ns, st.st_mode & turn_changes.PERM)
             if len(s.files) >= FILES_MAX:
                 s.capped = True
                 return s
@@ -116,17 +118,17 @@ def _sync(root: Path, s: Scan, protect: frozenset = frozenset()) -> dict[str, li
             stored += e[0]
 
     pending = []
-    for rel, (size, mtime) in s.files.items():
+    for rel, (size, mtime, mode) in s.files.items():
         e = old.get(rel)
-        if e and e[0] == size and e[1] == mtime and (not e[2] or (d / "obj" / e[2]).exists()):
-            keep(rel, e)
+        if e and len(e) == 4 and e[0] == size and e[1] == mtime and (not e[2] or (d / "obj" / e[2]).exists()):
+            keep(rel, [size, mtime, e[2], mode])  # 权限变了不用重读内容
         else:
-            pending.append((rel, size, mtime))
+            pending.append((rel, size, mtime, mode))
     if s.capped:  # 没扫到的不当成删了
         for rel, e in old.items():
-            if rel not in s.files:
+            if rel not in s.files and len(e) == 4:
                 keep(rel, e)
-    for rel, size, mtime in pending:
+    for rel, size, mtime, mode in pending:
         sha = None
         if size <= FILE_MAX and stored + size <= STORE_MAX:
             try:
@@ -140,7 +142,7 @@ def _sync(root: Path, s: Scan, protect: frozenset = frozenset()) -> dict[str, li
                 tmp.write_bytes(raw)
                 tmp.replace(obj)
             size = len(raw)
-        keep(rel, [size, mtime, sha])
+        keep(rel, [size, mtime, sha, mode])
     for obj in (d / "obj").iterdir():  # 没人引用的对象（旧版本、没写完的 .tmp）清掉
         if obj.name not in sizes and obj.name not in protect:
             obj.unlink(missing_ok=True)
@@ -157,7 +159,7 @@ def before(ws: str, tracker: turn_changes.Tracker) -> None:
             index = _sync(root, s, frozenset(e[2] for e in tracker.seen.values() if e[2]))
         tracker.root = tracker.root or str(root)
         for rel, e in index.items():
-            tracker.seen.setdefault(rel, (e[0], e[1], e[2]))
+            tracker.seen.setdefault(rel, (e[0], e[1], e[2], e[3]))
         tracker.seen_capped = tracker.seen_capped or s.capped
         tracker.scanned = True
     except Exception:
@@ -186,11 +188,12 @@ def after(ws: str, tracker: turn_changes.Tracker) -> list[str]:
                 if s.capped:
                     continue  # 这次没扫全：没看到 ≠ 删了
                 base = _object(d, first, tracker)
-            elif (first[0], first[1]) == now:
+            elif (first[0], first[1], first[3]) == now:
                 continue
             else:
                 base = _object(d, first, tracker)
             tracker.base[key] = base
+            tracker.modes[key] = first[3] if first else None
             tracker.rel[key] = rel
             tracker.command.add(key)
             found.append(rel)

@@ -16,9 +16,13 @@
 - write_file / edit_file / apply_patch 写之前记；v2.14 起会改东西的前台 run_command 前后各扫一遍，命令改的文件也进来
   （规则在 command_changes.py，标 command）；后台任务之后改的不算。
 - 记录保留 KEEP_DAYS 天，每次 finish 顺手清理过期的。
+- v2.16 权限位（Gemini 影子 git 仓库靠 core.filemode 记可执行位；Codex 一律写 100644 不记）：基线同时记 st_mode & 0o777，
+  只改权限（chmod +x）也算净改动、卡上写 mode_note 的话；撤销写回字节后再 chmod 回原权限（chmod 不了只少恢复权限）；
+  撤销前核对时权限也算“之后又被改过”。
 """
 import hashlib
 import json
+import os
 import shutil
 import time
 import uuid
@@ -34,6 +38,7 @@ TURN_MAX = 16 * 1024 * 1024    # 一轮基线累计上限
 FILES_MAX = 30                 # 卡上最多列几个文件（撤销仍覆盖全部）
 KEEP_DAYS = 30
 BIG = object()                 # 基线太大没记
+PERM = 0o777                   # 记哪些权限位（setuid 之类不记：撤销不该替人加回特殊位）
 
 
 class UndoError(Exception):
@@ -57,6 +62,7 @@ class Tracker:
     seen_capped: bool = False
     scanned: bool = False
     command: set[str] = field(default_factory=set)  # 基线是命令前扫到的那些绝对路径（卡上标“命令”）
+    modes: dict[str, int | None] = field(default_factory=dict)  # v2.16 绝对路径 → 基线权限位（不存在 / 读不到 = None）
 
     def before(self, root: Path, p: Path) -> None:
         """写 p 之前调：第一次碰这个路径时记下基线。从不抛异常（记不了就当 BIG）。"""
@@ -69,6 +75,7 @@ class Tracker:
             if not p.exists():
                 self.base[key] = None
                 return
+            self.modes[key] = mode_of(p)
             n = p.stat().st_size
             if not p.is_file() or n > TRACK_MAX or self.size + n > TURN_MAX:
                 self.base[key] = BIG
@@ -100,6 +107,26 @@ def _text(b: bytes | None) -> str | None:
         return ""  # 二进制：diff 只算新的一侧（同 workspace._old_text）
 
 
+def mode_of(p: Path) -> int | None:
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    return st.st_mode & PERM if p.is_file() else None
+
+
+def mode_note(before: int | None, after: int | None) -> str | None:
+    """权限变了给一句人话（卡上和给模型的历史都用）：“加了可执行” / “去掉可执行” / “权限 644→600”；没变或不知道 → None。"""
+    if before is None or after is None or before == after:
+        return None
+    x0, x1 = before & 0o111, after & 0o111
+    if (before & ~0o111) == (after & ~0o111) and not x0 and x1:
+        return "加了可执行"
+    if (before & ~0o111) == (after & ~0o111) and x0 and not x1:
+        return "去掉可执行"
+    return f"权限 {before:o}→{after:o}"
+
+
 def _sha(b: bytes | None) -> str | None:
     return None if b is None else hashlib.sha256(b).hexdigest()
 
@@ -123,9 +150,13 @@ def finish(tracker: Tracker | None, workspace: str) -> dict | None:
     for key in sorted(tracker.base, key=lambda k: tracker.rel.get(k, k)):
         rel, base = tracker.rel.get(key, key), tracker.base[key]
         now = _read(Path(key))
-        if base is not BIG and base == now:
+        m0, m1 = tracker.modes.get(key), (mode_of(Path(key)) if now is not None else None)
+        note = mode_note(m0, m1)
+        if base is not BIG and base == now and not note:
             continue  # 改了又改回去：没有净改动（Codex left == right → None）
-        if base is BIG and now is None:
+        if base is not BIG and base == now:
+            c = {"path": rel, "added": 0, "removed": 0, "diff": ""}  # 只改了权限
+        elif base is BIG and now is None:
             c = {"path": rel, "added": 0, "removed": 0, "diff": "", "big": True, "deleted": True}
         elif base is BIG:
             c = file_edit.change(rel, "", _text(now) or "")
@@ -137,9 +168,11 @@ def finish(tracker: Tracker | None, workspace: str) -> dict | None:
             c = file_edit.change(rel, _text(base), _text(now) or "")
         if key in tracker.command:
             c["command"] = True
+        if note:
+            c["mode"] = note
         files.append(c)
         if base is not BIG:
-            saved.append((rel, base, _sha(now)))
+            saved.append((rel, base, _sha(now), m0, m1))
     if not files:
         return None
     token = ""
@@ -149,12 +182,12 @@ def finish(tracker: Tracker | None, workspace: str) -> dict | None:
         try:
             d.mkdir(parents=True, exist_ok=True)
             manifest = []
-            for i, (rel, base, after) in enumerate(saved):
+            for i, (rel, base, after, m0, m1) in enumerate(saved):
                 blob = None
                 if base is not None:
                     blob = f"{i}.bin"
                     (d / blob).write_bytes(base)
-                manifest.append({"path": rel, "before": blob, "after": after})
+                manifest.append({"path": rel, "before": blob, "after": after, "mode": m0, "after_mode": m1})
             (d / "manifest.json").write_text(json.dumps({"files": manifest}, ensure_ascii=False), encoding="utf-8")
         except OSError:
             shutil.rmtree(d, ignore_errors=True)
@@ -181,7 +214,14 @@ def _manifest(workspace: str, token: str) -> tuple[Path, Path, list[dict]]:
 def conflicts(workspace: str, token: str) -> list[str]:
     """哪些文件在这一轮之后又被改过（撤销会冲掉它们）。"""
     root, _, files = _manifest(workspace, token)
-    return [f["path"] for f in files if _sha(_read((root / f["path"]).resolve())) != f["after"]]
+
+    def changed(f: dict) -> bool:
+        p = (root / f["path"]).resolve()
+        if _sha(_read(p)) != f["after"]:
+            return True
+        m = f.get("after_mode")  # v2.16 前的记录没有：只比内容
+        return m is not None and mode_of(p) != m
+    return [f["path"] for f in files if changed(f)]
 
 
 def undo(workspace: str, token: str) -> list[str]:
@@ -200,6 +240,11 @@ def undo(workspace: str, token: str) -> list[str]:
         else:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes((d / f["before"]).read_bytes())
+            if f.get("mode") is not None:
+                try:
+                    os.chmod(p, f["mode"])
+                except OSError:
+                    pass  # 文件属主不是后端（容器里 root 建的）：内容回来了，权限没法回
         done.append(f["path"])
     shutil.rmtree(d, ignore_errors=True)
     return done
@@ -212,7 +257,8 @@ def history_text(b: dict) -> str:
             return f"{f['path']}（大文件）"
         if f.get("deleted"):
             return f"{f['path']}（已不在）"
-        return f"{f['path']}（{'命令 ' if f.get('command') else ''}{'新建 ' if f.get('created') else ''}{file_edit.stat(f)}）"
+        mode = f" {f['mode']}" if f.get("mode") else ""
+        return f"{f['path']}（{'命令 ' if f.get('command') else ''}{'新建 ' if f.get('created') else ''}{file_edit.stat(f)}{mode}）"
     names = "、".join(one(f) for f in b.get("files") or [])
     more = f" 等 {len(b['files']) + b['more']} 个文件" if b.get("more") else ""
     line = f"[这一轮改了文件（write_file / edit_file / apply_patch / 命令）：{names}{more}"

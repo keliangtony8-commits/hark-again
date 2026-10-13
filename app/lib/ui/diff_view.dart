@@ -22,6 +22,7 @@ class DiffStat extends StatelessWidget {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       if (change.created) Text('新建 ', style: small?.copyWith(color: p.text3)),
       if (change.movedFrom.isNotEmpty) Text('改名 ', style: small?.copyWith(color: p.text3)),
+      if (change.mode.isNotEmpty) Text('${change.mode} ', style: small?.copyWith(color: p.text3)),
       Text('+${change.added}', style: small?.copyWith(fontFamily: monoFont, color: p.success)),
       if (change.removed > 0) Text(' −${change.removed}', style: small?.copyWith(fontFamily: monoFont, color: p.danger)),
     ]);

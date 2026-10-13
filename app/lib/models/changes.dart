@@ -25,8 +25,9 @@ String? changesNote(ChangesBlock b) {
   return parts.isEmpty ? null : parts.join(' · ');
 }
 
-/// 每行右侧状态：“新建”“已删除”“大文件”或空（显示 +N −M）。
-String? changeTag(FileChange f) => f.deleted ? '已不在' : (f.big ? '大文件' : null);
+/// 每行右侧状态：“已不在”“大文件”、v2.16 只改了权限（+0 −0）时那句权限的话，或空（显示 +N −M）。
+String? changeTag(FileChange f) =>
+    f.deleted ? '已不在' : (f.big ? '大文件' : (f.mode.isNotEmpty && f.added == 0 && f.removed == 0 ? f.mode : null));
 
 String changesSemantics(ChangesBlock b) {
   final (a, r) = changesTotals(b);

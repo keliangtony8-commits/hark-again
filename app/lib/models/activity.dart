@@ -7,7 +7,7 @@ enum ActivityState { running, done, error, denied, stopped }
 /// 这一步改了工作区里的文件（v1.34：write_file / edit_file）：服务器 app/file_edit.py 的 change。
 /// diff = unified diff 去掉文件头（@@ 段头、+ 新增、- 删除、空格开头是上下文）；hidden = 像密钥的文件，不给 diff。
 class FileChange {
-  const FileChange({required this.path, this.added = 0, this.removed = 0, this.diff = '', this.created = false, this.hidden = false, this.big = false, this.deleted = false, this.movedFrom = '', this.command = false});
+  const FileChange({required this.path, this.added = 0, this.removed = 0, this.diff = '', this.created = false, this.hidden = false, this.big = false, this.deleted = false, this.movedFrom = '', this.command = false, this.mode = ''});
 
   static FileChange? fromJson(Object? raw) {
     if (raw is! Map<String, dynamic>) return null;
@@ -22,6 +22,7 @@ class FileChange {
       deleted: raw['deleted'] == true,
       movedFrom: raw['moved_from'] as String? ?? '',
       command: raw['command'] == true,
+      mode: raw['mode'] as String? ?? '',
     );
   }
 
@@ -34,6 +35,9 @@ class FileChange {
 
   /// v2.14 命令改的（run_command 前后扫出来的，后端 app/command_changes.py），不是 write_file / edit_file。
   final bool command;
+
+  /// v2.16 权限变了的那句话（后端 turn_changes.mode_note：“加了可执行” / “权限 644→600”），空 = 没变。
+  final String mode;
 
   /// v1.69 apply_patch 改名：从哪个路径改过来（diff 按原文件算）。
   final String movedFrom;
@@ -48,6 +52,7 @@ class FileChange {
   String get semantics => [
         if (created) '新建',
         if (movedFrom.isNotEmpty) '从 $movedFrom 改名',
+        if (mode.isNotEmpty) mode,
         '增加 $added 行',
         if (removed > 0) '删除 $removed 行',
       ].join('，');

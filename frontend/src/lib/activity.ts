@@ -45,7 +45,7 @@ export const STEP_STATE_LABEL: Record<ActivityStep["state"], string> = {
 
 /** 读屏：“新建，增加 3 行” / “增加 2 行，删除 1 行”（与 App FileChange.semantics 同款）。 */
 export function changeSemantics(c: FileChange): string {
-  return [c.created ? "新建" : "", c.moved_from ? `从 ${c.moved_from} 改名` : "", `增加 ${c.added} 行`,
+  return [c.created ? "新建" : "", c.moved_from ? `从 ${c.moved_from} 改名` : "", c.mode ?? "", `增加 ${c.added} 行`,
     c.removed > 0 ? `删除 ${c.removed} 行` : ""].filter(Boolean).join("，");
 }
 

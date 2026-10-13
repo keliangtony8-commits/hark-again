@@ -163,4 +163,5 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v2.09：历史面板搜索多个词（空格分开、引号整词）都标亮（ui/kit.dart searchTerms + highlightSpans，与后端 chat_search.terms 同规则；test/history_test.dart）。
 - v2.13 定时任务“助手记下的”：ScheduledTask.runbook/note/skippedAt/canSkip，TaskRun.silentReason/silent；task_memory.dart TaskMemorySection（做法 / 观察两行预览 → showAppScrollSheet 全文 + 复制 + 清空 confirmDanger → PATCH ""，FadeSwitcher 长出 / 收起）；task_detail “跳过下一次 / 撤销跳过”（POST / DELETE skip）+ “跳过了 X 那次”、没打扰你的运行静音图标 + 原因（_RunLayout detail）；文案 task_labels skipLabel / runStateLabel。test/task_brief_test.dart。
 - v2.14 改动卡认命令改的文件：FileChange.command；changesNote 小字“其中 N 个是命令改的”（和“N 个大文件不能撤销”用 · 连）。test/changes_block_test.dart。
+- v2.16 改动卡权限：FileChange.mode（服务器给的一句话，原样显示）；只改权限（+0 −0）时 changeTag 显示它，内容也改了时 DiffStat 前缀 + 读屏带上。test/file_mode_test.dart。
 - v2.15 碰壁条：ScheduledTask.wallLabel/wallReason/wallFixable/wallOpen/walled，TaskRun.wallLabel/walled；features/me/task_wall.dart WallNotice（FadeSwitcher 出现 / 收起，tileFill 底 + warning 图标；要你处理 → cardTargets[wallOpen] 直达 + “重试”）用在任务详情头卡和 Home 面板卡（标题行下、内容上）；碰壁运行锁图标 + runStateLabel “碰壁”。test/task_wall_test.dart。

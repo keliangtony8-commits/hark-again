@@ -123,7 +123,8 @@ export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<S
 export type Role = "user" | "assistant";
 /** 活动时间线的一步（v1.28，backend/app/activity.py）：每次工具调用一步，随消息落库（Message.steps）。 */
 /** 这一步改了工作区文件（v1.34 write_file / edit_file；形状见 backend/app/file_edit.py）。hidden = 像密钥的文件，不给 diff。 */
-export type FileChange = { path: string; added: number; removed: number; diff: string; created?: boolean; hidden?: boolean; big?: boolean; deleted?: boolean; moved_from?: string; command?: boolean };
+export type FileChange = { path: string; added: number; removed: number; diff: string; created?: boolean; hidden?: boolean; big?: boolean; deleted?: boolean; moved_from?: string; command?: boolean;
+  /** v2.16 权限变了的那句话（后端 turn_changes.mode_note：“加了可执行”…），原样显示 */ mode?: string | null };
 /** v1.68 这一轮改过的文件（后端 app/turn_changes.py）：token 非空 = 能整轮撤销。 */
 /** v1.71 计划模式下交给你批准的方案（后端 app/plan_mode.py）：批准 / 再改改走 approval.reply。 */
 /** workspace + path（v1.72）= 批准后方案存进工作区的位置（老卡没有）。 */

@@ -20,7 +20,9 @@ export function changesNote(b: ChangesBlock): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
-export const changeTag = (f: FileChange) => (f.deleted ? "已不在" : f.big ? "大文件" : null);
+/** 行右侧代替 “+N −M” 的字：已不在 / 大文件 / v2.16 只改了权限（+0 −0）时那句权限的话。 */
+export const changeTag = (f: FileChange) =>
+  f.deleted ? "已不在" : f.big ? "大文件" : f.mode && !f.added && !f.removed ? f.mode : null;
 
 export function changesSemantics(b: ChangesBlock): string {
   const [a, r] = changesTotals(b);

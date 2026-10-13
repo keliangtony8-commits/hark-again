@@ -192,6 +192,7 @@ class ChangedFile(BaseModel):
     big: bool | None = None      # 太大没记基线：列出来，不能撤销
     deleted: bool | None = None  # 这一轮之后已经不在了（命令删的）
     command: bool | None = None  # v2.14 命令改的（app/command_changes.py），不是 write_file / edit_file
+    mode: str | None = None      # v2.16 权限变了的那句话（turn_changes.mode_note：“加了可执行”…），客户端原样显示
 
 
 class ChangesBlock(BaseModel):

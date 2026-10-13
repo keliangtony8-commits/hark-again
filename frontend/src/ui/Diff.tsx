@@ -9,6 +9,7 @@ export function DiffStat({ c }: { c: FileChange }) {
     <>
       {c.created && <span className="step-new">新建</span>}
       {c.moved_from && <span className="step-new">改名</span>}
+      {c.mode && <span className="step-new">{c.mode}</span>}
       <span className="diff-add">+{c.added}</span>
       {c.removed > 0 && <span className="diff-remove">−{c.removed}</span>}
     </>
