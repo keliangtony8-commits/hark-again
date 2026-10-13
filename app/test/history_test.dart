@@ -34,4 +34,16 @@ void main() {
     expect([for (final s in spans) s.style == hit], [true, false, true]);
     expect(highlightSpans('abc', '  ', hit).single.text, 'abc');
   });
+
+  test('搜索高亮：多个词都标亮，引号整词，最长优先', () {
+    const hit = TextStyle(fontWeight: FontWeight.w700);
+    expect(searchTerms(' 咖啡  推荐 咖啡 '), ['咖啡', '推荐']);
+    expect(searchTerms('"手冲 咖啡" 店'), ['手冲 咖啡', '店']);
+    expect(searchTerms('“北京 南站”「周五」 x'), ['北京 南站', '周五', 'x']);
+    expect(searchTerms(List.generate(20, (i) => 'w$i').join(' ')).length, 6);
+    final spans = highlightSpans('Seesaw 手冲很好，Seesaw 开门早', 'seesaw 开门', hit);
+    expect([for (final s in spans) if (s.style == hit) s.text], ['Seesaw', 'Seesaw', '开门']);
+    final long = highlightSpans('咖啡店', '咖啡 咖啡店', hit);
+    expect([for (final s in long) s.text], ['咖啡店']);
+  });
 }

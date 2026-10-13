@@ -162,6 +162,7 @@ class Settings(BaseSettings):
         "需要最新或可核实的信息时先 web_search，再按需 web_fetch，不要编造；要配图先 image_search，图片地址只用搜到的。\n"
         "用户给 YouTube / B 站视频链接要总结或问内容时用 analyze_video 读字幕（长视频再 search_transcript），引用时间点附跳转链接。\n"
         "要说出或用到相对日期（明天、下周三、10 天后）先 resolve_relative_date，别的时区的钟点用 convert_time，不要心算日期和时差。\n"
+        "用户提到以前聊过、定过的事（上次、之前说的）而上文和记忆里没有时，先 search_history 翻以前的对话，引用以原文为准，别凭印象编。\n"
         "用户说出以后还用得上的偏好或事实时调用 remember；某条记忆变了用 update_memory，要求忘掉用 forget（都按记忆后的 # 引用）。\n"
         "多行同类对比用 show_table，要点开的页面用 show_links；用户拿去发的文字（邮件、消息、帖子）用 show_draft；"
         "长的计划、行程、简报用 show_summary；用户想看样子时用 show_images（图片地址只用网页里真实出现的）；挑要买/要订、样子也算数的一组东西用 show_products（商品宫格）；付款前必须用 confirm_order 让用户在订单卡上确认，下单成功后用 show_receipt 出回执。卡片里有的内容文字里不要重复。\n"

@@ -361,16 +361,34 @@ class HighlightText extends StatelessWidget {
   }
 }
 
+/// 搜索词：与后端 chat_search.terms 同规则——空格分开、引号（"…" “…” 「…」）里当一个词、不分大小写去重、最多 6 个。
+List<String> searchTerms(String query) {
+  final q = query.trim();
+  final quote = RegExp(r'"([^"]+)"|“([^”]+)”|「([^」]+)」');
+  final out = <String>[
+    for (final m in quote.allMatches(q)) (m.group(1) ?? m.group(2) ?? m.group(3)!).trim(),
+    ...q.replaceAll(quote, ' ').split(RegExp(r'\s+')),
+  ];
+  final seen = <String>{};
+  return [for (final t in out) if (t.isNotEmpty && seen.add(t.toLowerCase())) t].take(6).toList();
+}
+
+/// 把每个搜索词在 text 里的所有出现（不分大小写）标亮；同一位置多个词都能匹配时取最长的。
 List<TextSpan> highlightSpans(String text, String query, TextStyle hit) {
-  final q = query.trim().toLowerCase();
-  if (q.isEmpty) return [TextSpan(text: text)];
+  final words = [for (final t in searchTerms(query)) t.toLowerCase()]..sort((a, b) => b.length - a.length);
+  if (words.isEmpty) return [TextSpan(text: text)];
   final lower = text.toLowerCase();
   final out = <TextSpan>[];
-  var from = 0;
-  for (var i = lower.indexOf(q); i >= 0; i = lower.indexOf(q, from)) {
+  var from = 0, i = 0;
+  while (i < lower.length) {
+    final w = words.where((w) => lower.startsWith(w, i)).firstOrNull;
+    if (w == null) {
+      i++;
+      continue;
+    }
     if (i > from) out.add(TextSpan(text: text.substring(from, i)));
-    out.add(TextSpan(text: text.substring(i, i + q.length), style: hit));
-    from = i + q.length;
+    out.add(TextSpan(text: text.substring(i, i + w.length), style: hit));
+    i = from = i + w.length;
   }
   if (from < text.length) out.add(TextSpan(text: text.substring(from)));
   return out;

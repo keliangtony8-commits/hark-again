@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import conversation_share, conversation_title, model_router, plan_mode, quota, reasoning, turn_changes, turn_journal, usage, workspaces
+from .. import chat_search, conversation_share, conversation_title, model_router, plan_mode, quota, reasoning, turn_changes, turn_journal, usage, workspaces
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -14,8 +14,6 @@ from ..wire_time import iso
 from .inbox import mark_read
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"], dependencies=[Depends(require_user)])
-
-SNIPPET = 36  # 命中位置前后各取多少字
 
 
 def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
@@ -27,45 +25,18 @@ def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
     return out
 
 
-def _like(q: str) -> str:
-    return "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-
-
-def snippet_of(text: str, q: str) -> str:
-    """命中词前后一小段，压成一行；找不到就取开头。"""
-    flat = " ".join(text.split())
-    i = flat.lower().find(q.lower())
-    if i < 0:
-        return flat[: SNIPPET * 2]
-    start, end = max(0, i - SNIPPET), min(len(flat), i + len(q) + SNIPPET)
-    return ("…" if start else "") + flat[start:end] + ("…" if end < len(flat) else "")
-
-
 @router.get("")
 async def list_conversations(project_id: str | None = None, q: str = "", db: AsyncSession = Depends(get_session)):
-    """不带 project_id = 主聊天的对话；带 = 该项目内的对话。q = 按标题和消息内容搜索。置顶在前。"""
-    scope = Conversation.project_id == project_id if project_id else Conversation.project_id.is_(None)
-    stmt = select(Conversation).where(scope)
+    """不带 project_id = 主聊天的对话；带 = 该项目内的对话。q = 按标题和消息内容搜索（空格分开的词都要有）。置顶在前。"""
     q = q.strip()
-    if q:
-        hit = select(Message.conversation_id).where(Message.search_text.ilike(_like(q), escape="\\"))
-        stmt = stmt.where(or_(Conversation.title.ilike(_like(q), escape="\\"), Conversation.id.in_(hit)))
-    rows = (await db.scalars(
-        stmt.order_by(Conversation.pinned.desc(), Conversation.updated_at.desc()).limit(50 if q else 100))).all()
-    if not q:
-        return [_summary(c) for c in rows]
-    # 内容命中的给最近一条命中消息的 id + 摘录（标题已命中的不需要：打开就是了）
-    need = [c.id for c in rows if q.lower() not in c.title.lower()]
-    found: dict[str, tuple[str, str]] = {}
-    if need:
-        msgs = await db.execute(
-            select(Message.conversation_id, Message.id, Message.search_text)
-            .where(Message.conversation_id.in_(need), Message.search_text.ilike(_like(q), escape="\\"))
-            .order_by(Message.created_at.desc()))
-        for cid, mid, text in msgs.all():
-            if cid not in found:
-                found[cid] = (mid, snippet_of(text, q))
-    return [_summary(c, found.get(c.id)) for c in rows]
+    if q:  # 规则在 chat_search（拆词 AND、摘录、最佳命中消息）；标题已含全部词的不带摘录/定位
+        found = await chat_search.search(db, q, scope=project_id or None, limit=50)
+        return [_summary(h.conversation, None if h.title_hit or not h.message_id else (h.message_id, h.snippet))
+                for h in found]
+    scope = Conversation.project_id == project_id if project_id else Conversation.project_id.is_(None)
+    rows = (await db.scalars(select(Conversation).where(scope)
+                             .order_by(Conversation.pinned.desc(), Conversation.updated_at.desc()).limit(100))).all()
+    return [_summary(c) for c in rows]
 
 
 class ConversationPatch(BaseModel):

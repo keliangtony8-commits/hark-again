@@ -163,19 +163,32 @@ export function SearchField({ value, onChange, placeholder, className = "" }: { 
   );
 }
 
-/** 把 q 在 text 里的所有出现（不分大小写）标亮。与 App 的 HighlightText 同规则。 */
+/** 搜索词：与后端 chat_search.terms、App searchTerms 同规则——空格分开、引号里当一个词、不分大小写去重、最多 6 个。 */
+export function searchTerms(query: string): string[] {
+  const quote = /"([^"]+)"|“([^”]+)”|「([^」]+)」/g;
+  const q = query.trim();
+  const out = [...q.matchAll(quote)].map((m) => (m[1] ?? m[2] ?? m[3] ?? "").trim());
+  out.push(...q.replace(quote, " ").split(/\s+/));
+  const seen = new Set<string>();
+  return out.filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase())).slice(0, 6);
+}
+
+/** 把每个搜索词在 text 里的所有出现（不分大小写）标亮，同一位置取最长的词。与 App 的 highlightSpans 同规则。 */
 export function Highlight({ text, q }: { text: string; q: string }) {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return <>{text}</>;
+  const words = searchTerms(q).map((t) => t.toLowerCase()).sort((a, b) => b.length - a.length);
+  if (!words.length) return <>{text}</>;
   const out: ReactNode[] = [];
   const lower = text.toLowerCase();
-  let at = 0;
-  for (let i = lower.indexOf(needle); i >= 0; i = lower.indexOf(needle, at)) {
-    if (i > at) out.push(text.slice(at, i));
-    out.push(<mark key={i} className="hl">{text.slice(i, i + needle.length)}</mark>);
-    at = i + needle.length;
+  let from = 0;
+  let i = 0;
+  while (i < lower.length) {
+    const w = words.find((x) => lower.startsWith(x, i));
+    if (!w) { i++; continue; }
+    if (i > from) out.push(text.slice(from, i));
+    out.push(<mark key={i} className="hl">{text.slice(i, i + w.length)}</mark>);
+    i = from = i + w.length;
   }
-  out.push(text.slice(at));
+  out.push(text.slice(from));
   return <>{out}</>;
 }
 
