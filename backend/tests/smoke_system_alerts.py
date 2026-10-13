@@ -76,8 +76,9 @@ oauth._token_request = fake_token_request
 api_status = {"code": 200}
 real_client = httpx.AsyncClient
 # 同一个 httpx 模块：api_request 和 oauth.complete 的 userinfo 都走它
-httpx.AsyncClient = lambda **kw: real_client(transport=httpx.MockTransport(
-    lambda req: httpx.Response(api_status["code"], json={"login": "keliang"})), **kw)
+# （web_guard.client 会带自己的 transport，这里整个换成假的）
+httpx.AsyncClient = lambda **kw: real_client(**{**kw, "transport": httpx.MockTransport(
+    lambda req: httpx.Response(api_status["code"], json={"login": "keliang"}))})
 
 async def seed_connection(expired=True):
     async with SessionLocal() as db:

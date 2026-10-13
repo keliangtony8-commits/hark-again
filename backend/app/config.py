@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     monthly_budget: float = 0.0     # 每月预算，0 = 不设；只用于提示，不拦截调用
     budget_alerts: list[float] = [0.8, 1.0]  # 本月花费跨过预算的这些比例时，在 Home 放一张提醒卡（每月每档一次）
     searxng_url: str = "http://searxng:8080"
+    # 助手按模型给的地址出网时（web_guard.py）默认拒内网 / 本机；确需读内网某台机器就在这里列主机名（逗号分隔）
+    outbound_allow_hosts: str = ""
     timezone: str = "Asia/Shanghai"
     data_dir: str = "/data"
     max_upload_mb: int = 20
@@ -153,7 +155,7 @@ class Settings(BaseSettings):
 
     system_prompt: str = (
         "你是用户的私人助手。先给答案，再给理由；简洁、具体、不说套话。\n"
-        "需要最新或可核实的信息时先 web_search，再按需 web_fetch，不要编造。\n"
+        "需要最新或可核实的信息时先 web_search，再按需 web_fetch，不要编造；要配图先 image_search，图片地址只用搜到的。\n"
         "要说出或用到相对日期（明天、下周三、10 天后）先 resolve_relative_date，别的时区的钟点用 convert_time，不要心算日期和时差。\n"
         "用户说出以后还用得上的偏好或事实时调用 remember；某条记忆变了用 update_memory，要求忘掉用 forget（都按记忆后的 # 引用）。\n"
         "多行同类对比用 show_table，要点开的页面用 show_links；用户拿去发的文字（邮件、消息、帖子）用 show_draft；"

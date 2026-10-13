@@ -40,7 +40,7 @@ GRACE_SECONDS = 60      # 截止时间之后再等多久（最后一步在写结
 # 不给：问用户的表单与登录、浏览器（多个子助手共用会话会抢页面）、展示卡片（结果只交回主助手）、记忆 / 定时任务 / Home 等
 # 改用户设置的、计划清单（属于主助手那张）、派活工具本身（深度 1）。
 CHILD_TOOLS = frozenset({
-    "web_search", "web_fetch",
+    "web_search", "web_fetch", "image_search",
     "list_files", "glob", "grep", "read_file", "write_file", "edit_file", "apply_patch",
     "run_command", "job_status", "cancel_job", "restart_service",
     "api_request", "mcp_tools", "mcp_call", "use_skill",

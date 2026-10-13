@@ -6,6 +6,7 @@ import asyncio
 
 import httpx
 
+from ... import web_guard
 from ...blocks import DraftBlock, ImagesBlock, LinksBlock, ProductsBlock, StatsBlock, SummaryBlock, TableBlock
 from ..tools import ToolContext, ToolResult, tool
 
@@ -80,7 +81,7 @@ async def probe_image(client: httpx.AsyncClient, url: str) -> bool:
     try:
         async with client.stream("GET", url) as r:
             return r.status_code < 400 and r.headers.get("content-type", "").lower().startswith("image/")
-    except (httpx.HTTPError, ValueError):
+    except (httpx.HTTPError, ValueError, web_guard.Blocked):  # 内网地址也算打不开
         return False
 
 
@@ -94,7 +95,7 @@ async def show_images(ctx: ToolContext, items: list[dict]) -> ToolResult:
     wanted = [i for i in items if str(i.get("url", "")).lower().startswith(("http://", "https://"))][:MAX_IMAGES]
     if not wanted:
         return ToolResult("没有可用的图片地址（要 http(s) 开头、来自网页的真实地址），没有展示。")
-    async with httpx.AsyncClient(timeout=IMAGE_PROBE_TIMEOUT, follow_redirects=True,
+    async with web_guard.client(timeout=IMAGE_PROBE_TIMEOUT, follow_redirects=True,
                                  headers={"User-Agent": "Mozilla/5.0 (assistant image check)"}) as client:
         ok = await asyncio.gather(*(probe_image(client, i["url"]) for i in wanted))
     good = [{"url": i["url"], "caption": (i.get("caption") or "").strip() or None} for i, y in zip(wanted, ok) if y]
@@ -131,7 +132,7 @@ async def show_products(ctx: ToolContext, items: list[dict], title: str | None =
         return ToolResult("没有可展示的商品（每项至少要有名字），没有展示。")
     pics = [r for r in rows if r["image"]]
     if pics:
-        async with httpx.AsyncClient(timeout=IMAGE_PROBE_TIMEOUT, follow_redirects=True,
+        async with web_guard.client(timeout=IMAGE_PROBE_TIMEOUT, follow_redirects=True,
                                      headers={"User-Agent": "Mozilla/5.0 (assistant image check)"}) as client:
             ok = await asyncio.gather(*(probe_image(client, r["image"]) for r in pics))
         for r, y in zip(pics, ok):

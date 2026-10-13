@@ -103,3 +103,5 @@
   移植到 backend/app/agent_mentions.py（v1.91）
 - openai/codex codex-rs/core/src/tools/handlers/multi_agents/resume_agent.rs（按 id 冷恢复子线程、深度检查）— Apache License 2.0, modified
   移植到 backend/app/agent/subagent_threads.py（v1.97）
+- google-gemini/gemini-cli packages/core/src/utils/fetch.ts（isAddressPrivate / safeLookup / sanitizeHostname）与 packages/core/src/tools/web-fetch.ts（convertGithubUrlToRaw、checkRateLimit、normalizeUrl）— Apache License 2.0, modified
+  移植到 backend/app/web_guard.py、backend/app/web_page.py（v2.01）

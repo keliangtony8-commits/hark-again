@@ -87,7 +87,7 @@ def handler(req: httpx.Request):
         return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "error": {"message": "参数不对"}})
     return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": "找到 3 条"}]}})
 real_client = httpx.AsyncClient
-httpx.AsyncClient = lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw)
+httpx.AsyncClient = lambda **kw: real_client(**{**kw, "transport": httpx.MockTransport(handler)})
 
 async def seed():
     async with SessionLocal() as db:

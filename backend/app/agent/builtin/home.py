@@ -1,12 +1,11 @@
 """Home：把“要反复看的信息”做成定时刷新的面板（create_panel），以及在对话里管理 Home 上已有的东西（manage_home）：
 “我主页上有什么”“把天气面板改成每天 7 点”“删掉那个比分面板”“收件箱那条不用管了”。
 面板本质是 output=panel 的定时任务，增删改都走 app/task_store.py（与接口、客户端同一套规则：改名卡片跟着改、删除连卡带记录）。"""
-import httpx
 from sqlalchemy import select
 
 from zoneinfo import ZoneInfo
 
-from ... import card_snooze, card_targets, home_offers, schedule, task_store
+from ... import card_snooze, card_targets, home_offers, schedule, task_store, web_guard
 from ...config import settings
 from ...models import HomeCard, ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
@@ -60,7 +59,7 @@ async def offer_on_home(ctx: ToolContext, title: str, prompt: str = "", reason: 
     except ValueError:
         image, note = None, " 配图地址不是真实网址，没放图。"
     if image:
-        async with httpx.AsyncClient(timeout=IMAGE_PROBE_TIMEOUT, follow_redirects=True,
+        async with web_guard.client(timeout=IMAGE_PROBE_TIMEOUT, follow_redirects=True,
                                      headers={"User-Agent": "Mozilla/5.0 (assistant image check)"}) as client:
             if not await probe_image(client, image):
                 image, note = None, " 配图打不开（或不是图片），没放图。"

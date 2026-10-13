@@ -20,7 +20,7 @@ import re
 import time
 import uuid
 
-from ... import browser_client, browser_files, browser_sessions, system_alerts, vault
+from ... import browser_client, browser_files, browser_sessions, system_alerts, vault, web_guard
 from ...browser_sessions import Tab
 from ...config import settings
 from .. import approvals
@@ -139,6 +139,10 @@ def _click_risk(args: dict, ctx: ToolContext | None = None) -> str | None:
                                         "session": {"type": "string", "description": "会话名，可省略（按网站自动起名）"}},
        "required": ["url"]})
 async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolResult:
+    try:  # 浏览器容器和后端同在内网：模型给的地址先过出网检查（之后页面里的跳转由部署隔离兜底）
+        await web_guard.check(url, unresolved_ok=True)
+    except web_guard.Blocked as e:
+        return ToolResult(str(e), failed=str(e))
     tab = _tab(ctx)
     name = browser_sessions.clean(session) or browser_sessions.name_for(url)
     switched = tab.session if tab.session and tab.session != name else ""
