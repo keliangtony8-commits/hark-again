@@ -9,6 +9,8 @@
 - 空闲 15 分钟自动关闭会话
 - 登录状态标记（v1.36）：/state/<name>.meta.json 记 {signed_in, expired}（unix 秒）——后端看到“登录成功”/“登录页又出来了”
   就 PUT /login-state 记一笔；goto 回报给后端（之前登录过的会话现在是登录页 = 登录过期），GET /sessions 列出给“我的电脑”
+- 标签页（v2.47，规则在 tabs.py）：网站开的新标签页自动切过去、页面被关退回上一个、渲染进程崩了在原网址重开，
+  每次的变化放在快照的 tab 字段里告诉后端（后端 tab_note 说成话）；后退到头的弹出页 = 关掉它回原页
 - 文件（v1.32）：POST /upload 把后端传来的工作区文件放进网页的文件框（<input type=file> 直接设；
   别的按钮先等“选文件”对话框再设）；页面触发的下载存到 DOWNLOADS/<会话>/，GET /downloads 列出、
   取走后 DELETE——后端把它搬进工作区 downloads/（app/browser_files.py），这里只是中转，关会话就清掉
@@ -30,6 +32,7 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from pydantic import BaseModel
 
 import egress
+import tabs
 
 TOKEN = os.environ["BROWSER_TOKEN"]
 STATE = "/state"
@@ -48,6 +51,7 @@ _browser: Browser | None = None
 _sessions: dict[str, tuple[BrowserContext, Page]] = {}
 _used: dict[str, float] = {}
 _downloads: dict[str, list[dict]] = {}  # 会话 → [{id, name, size, state downloading|done|failed, error}]
+_tabs: dict[str, tabs.Tabs] = {}  # 会话 → 现在操作哪个标签页（规则在 tabs.py）
 _restored: set[str] = set()  # 这次是从存好的登录状态恢复出来的会话（goto 回报给后端，模型知道“沿用了登录”）
 _lock = asyncio.Lock()
 _egress = egress.Egress(egress.ALLOW_HOSTS)
@@ -100,6 +104,7 @@ def _forget_browser() -> None:
     _browser = None
     for name in list(_sessions):
         _sessions.pop(name, None)
+        _tabs.pop(name, None)
         _used.pop(name, None)
         _drop_downloads(name)
         _egress.forget(name)
@@ -146,12 +151,43 @@ async def _session(name: str) -> Page:
             else:
                 _restored.discard(name)
             await ctx.route("**/*", _guard)
-            ctx.on("page", lambda p, n=name: _watch(n, p))  # 弹出的新标签页里的下载也要收
+            ctx.on("page", lambda p, n=name: _on_page(n, p))  # 网站开的新标签页：记下（follow 切过去）+ 收下载
             page = await ctx.new_page()
+            _tabs[name] = tabs.Tabs(page)
             _watch(name, page)
             _sessions[name] = (ctx, page)
     _used[name] = time.time()
-    return _sessions[name][1]
+    return await _follow(name)
+
+
+def _on_page(name: str, page) -> None:
+    if name in _tabs:
+        _tabs[name].on_page(page)
+    _watch(name, page)
+
+
+async def _follow(name: str) -> Page:
+    """照 tabs.follow 换到该用的标签页：开新页 / 关崩掉和多余的页都在这里做。"""
+    ctx, _ = _sessions[name]
+    t = _tabs[name]
+    mv = tabs.follow(t, list(ctx.pages))
+    for p in mv.close:
+        try:
+            await p.close()
+        except Exception:
+            pass
+    page = mv.page
+    if page is None:
+        page = await ctx.new_page()
+        t.adopt(page)
+        _watch(name, page)
+        if mv.reload:
+            try:
+                await page.goto(mv.reload, timeout=30000, wait_until="domcontentloaded")
+            except Exception:
+                pass  # 重开也失败：快照照常给出（多半是空白 / 错误页），tab 字段已说明崩过
+    _sessions[name] = (ctx, page)
+    return page
 
 
 async def _evict(name: str) -> None:
@@ -161,6 +197,7 @@ async def _evict(name: str) -> None:
     except Exception:
         pass
     ctx, _ = _sessions.pop(name)
+    _tabs.pop(name, None)
     _used.pop(name, None)
     await ctx.close()
     _drop_downloads(name)
@@ -176,6 +213,7 @@ def _watch(name: str, page) -> None:
         return
     _watched.add(id(page))
     page.on("download", lambda d: asyncio.ensure_future(_keep(name, d)))
+    page.on("crash", lambda p, n=name: _tabs[n].on_crash(p) if n in _tabs else None)
 
 
 async def _keep(name: str, download) -> None:
@@ -297,11 +335,21 @@ async def _snapshot(page: Page) -> dict:
 
 
 def _with_blocked(name: str, snap: dict) -> dict:
-    """附上这个会话上次以来被出网关卡拦下的请求（[{host, reason}]，没有就不带）。"""
+    """附上这个会话上次以来被出网关卡拦下的请求（[{host, reason}]）和标签页的变化（tab，tabs.py），没有就不带。"""
     blocked = _egress.take_blocked(name)
     if blocked:
         snap["blocked"] = blocked
+    note = _tabs[name].take_note() if name in _tabs else None
+    if note:
+        snap["tab"] = note
     return snap
+
+
+async def _after(name: str) -> dict:
+    """动作做完：先跟到该看的标签页（网站可能开了新页 / 关了页 / 崩了），存登录，再拍快照。"""
+    page = await _follow(name)
+    await _save(name)
+    return _with_blocked(name, await _snapshot(page))
 
 
 class GotoIn(BaseModel):
@@ -357,15 +405,15 @@ async def goto(name: str, body: GotoIn):
     try:
         await page.goto(body.url, timeout=30000, wait_until="domcontentloaded")
     except Exception as e:
-        if "Download is starting" not in str(e):  # 网址直接是个文件：不是打不开，是下载了（后端随后取走）
+        crashed = id(page) in _tabs[name].crashed  # 打开时渲染进程崩了：_after 照 tabs 规则重开一次并说明
+        if "Download is starting" not in str(e) and not crashed:  # 网址直接是个文件：不是打不开，是下载了（后端随后取走）
             blocked = _egress.take_blocked(name)
             if blocked:  # 打开的地址（或它的重定向）进了内网：说清楚是被拦，不是网站坏了
                 raise HTTPException(403, "被拦下：" + "；".join(b["reason"] for b in blocked[:3])
                                     + "。助手的浏览器不能访问内网 / 本机地址。")
             raise HTTPException(502, f"打不开：{e}")
         await page.wait_for_timeout(1500)
-    await _save(name)
-    snap = _with_blocked(name, await _snapshot(page))
+    snap = await _after(name)
     snap["restored"] = name in _restored
     snap["login"] = _meta(name)
     return snap
@@ -388,6 +436,10 @@ async def snapshot(name: str):
 async def act(name: str, body: ActIn):
     page = await _session(_check_name(name))
     el = page.locator(f'[data-ref="{body.ref}"]') if body.ref else None
+    if el is not None and body.action in ("click", "type") and await _gone(el):
+        # 编号是上一张快照的（页面换了 / 切到了新标签页）：马上说清楚，不空等 8 秒超时
+        raise HTTPException(400, f"当前页（{(await page.title())[:40] or page.url}）上没有编号 {body.ref}：页面已经换了，"
+                                 "编号以最新那张快照为准；要点原来那页的东西先 browser_back。")
     try:
         match body.action:
             case "click":
@@ -401,16 +453,36 @@ async def act(name: str, body: ActIn):
             case "scroll":
                 await page.mouse.wheel(0, body.dy)
             case "back":
-                await page.go_back(timeout=15000)
+                await _back(name, page)
             case _:
                 raise HTTPException(400, "未知动作")
         await page.wait_for_timeout(800)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(400, f"操作失败：{str(e)[:200]}")
-    await _save(name)
-    return _with_blocked(name, await _snapshot(page))
+        if id(page) not in _tabs[name].crashed and not page.is_closed():
+            raise HTTPException(400, f"操作失败：{str(e)[:200]}")
+        # 点的时候页面崩了 / 被网站关了：不算操作失败，_after 照 tabs 规则换页并在 tab 字段里说明
+    return await _after(name)
+
+
+async def _gone(el) -> bool:
+    try:
+        return await el.count() == 0
+    except Exception:
+        return False
+
+
+async def _back(name: str, page: Page) -> None:
+    """后退。网站开的弹出页退到头了（没有上一页、网址没变）→ 关掉它，follow 退回原来那页（tab.kind = returned）。"""
+    before = page.url
+    went = await page.go_back(timeout=15000)
+    if went is None and page.url == before and await page.opener() is not None and len(_sessions[name][0].pages) > 1:
+        await page.close()
+        await _follow(name)
+        t = _tabs[name]
+        if t.note and t.note.get("kind") == "closed":
+            t.note["kind"] = "returned"
 
 
 @app.post("/sessions/{name}/login", dependencies=[Depends(auth)])
@@ -430,8 +502,7 @@ async def login(name: str, body: LoginIn):
         raise
     except Exception as e:
         raise HTTPException(400, f"代填失败：{str(e)[:200]}")
-    await _save(name)
-    return _with_blocked(name, await _snapshot(page))
+    return await _after(name)
 
 
 @app.post("/sessions/{name}/upload", dependencies=[Depends(auth)])
@@ -466,8 +537,7 @@ async def upload(name: str, body: UploadIn):
         raise
     except Exception as e:
         raise HTTPException(400, f"上传失败（{str(e)[:160]}）：ref 要是文件框或点了会弹出选文件的按钮")
-    await _save(name)
-    return _with_blocked(name, await _snapshot(page))
+    return await _after(name)
 
 
 @app.get("/sessions/{name}/downloads", dependencies=[Depends(auth)])
@@ -589,7 +659,7 @@ async def screen(name: str, format: str = "jpeg", full: bool = False, quality: i
         _forget_browser()
     if name not in _sessions:
         raise HTTPException(404)
-    page = _sessions[name][1]
+    page = await _follow(name)  # 画面跟着当前标签页（网站开的新页、崩了重开的页）
     kw: dict = {"type": format}
     if format == "jpeg":
         kw["quality"] = max(30, min(95, quality))
@@ -610,6 +680,7 @@ async def screen(name: str, format: str = "jpeg", full: bool = False, quality: i
 async def mouse(name: str, body: PointIn):
     page = await _session(_check_name(name))
     await page.mouse.click(body.x * VIEW["width"], body.y * VIEW["height"])
+    await _follow(name)  # 用户在画面里点开了新标签页：实时画面跟过去
     await _save(name)
     return {"ok": True}
 
@@ -621,6 +692,7 @@ async def keyboard(name: str, body: KeysIn):
         await page.keyboard.type(body.text, delay=20)
     if body.key:
         await page.keyboard.press(body.key)
+    await _follow(name)
     await _save(name)
     return {"ok": True}
 
@@ -644,6 +716,7 @@ async def close(name: str, forget: bool = False):
         if name in _sessions:
             if forget:
                 ctx, _ = _sessions.pop(name)
+                _tabs.pop(name, None)
                 _used.pop(name, None)
                 await ctx.close()
                 _drop_downloads(name)

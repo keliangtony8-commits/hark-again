@@ -29,13 +29,16 @@ shots: list = []
 class Page:
     height = 900
     viewport_size = {"width": 1280, "height": 800}
+    url = "https://a.com/"
+    def is_closed(self): return False
     async def evaluate(self, js): return self.height
     async def screenshot(self, **kw):
         shots.append(kw); return png(1280, 800) if kw["type"] == "png" else jpg(1280, 800)
 async def svc():
     page = Page()
     service._browser = None
-    service._sessions["a-com"] = (None, page)
+    service._sessions["a-com"] = (NS(pages=[page]), page)
+    service._tabs["a-com"] = service.tabs.Tabs(page)
     r = await service.screen("a-com")
     assert shots[-1] == {"type": "jpeg", "quality": 60} and r.media_type == "image/jpeg" and r.headers["x-shot-cut"] == "0", shots
     await service.screen("a-com", format="png")

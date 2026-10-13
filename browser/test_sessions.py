@@ -6,14 +6,20 @@ saved, closed = [], []
 
 
 class Page(str):
+    url = "about:blank"
     def on(self, *a): pass
+    def is_closed(self): return False
 
 
 class Ctx:
     def __init__(self, n): self.n = n
     async def route(self, *a): pass
     def on(self, *a): pass
-    async def new_page(self): return Page(f"page-{self.n}")
+    pages: list = []
+    async def new_page(self):
+        p = Page(f"page-{self.n}")
+        self.pages = [p]
+        return p
     async def storage_state(self, path): saved.append(os.path.basename(path))
     async def close(self): closed.append(self.n)
 

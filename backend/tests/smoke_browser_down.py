@@ -26,13 +26,16 @@ launches = [0]
 class Page:
     url = "about:blank"
     def on(self, *a): pass
+    def is_closed(self): return False
     async def goto(self, url, **kw): self.url = url
     async def wait_for_timeout(self, *a): pass
     async def evaluate(self, js): return {"url": self.url, "title": "T", "text": "hi", "elements": []}
 class Ctx:
     async def route(self, *a): pass
     def on(self, *a): pass
-    async def new_page(self): return Page()
+    async def new_page(self):
+        self.pages = [Page()]
+        return self.pages[0]
     async def storage_state(self, path): open(path, "w").write('{"cookies": []}')
     async def close(self): pass
 class Browser:

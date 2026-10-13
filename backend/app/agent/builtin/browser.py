@@ -47,13 +47,39 @@ def _render(snap: dict, tab: Tab) -> str:
         tab.names[e["ref"]] = e["name"]
         kind = e["tag"] + (f":{e['type']}" if e["type"] and e["tag"] == "input" else "")
         lines.append(f"[{e['ref']}] {kind} {e['name']}")
-    return (blocked_note(snap) + f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines)
+    return (tab_note(snap) + blocked_note(snap) + f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines)
             + f"\n\n页面文字：\n{snap.get('text', '')}")
 
 
 def blocked_note(snap: dict) -> str:
     """浏览器出网关卡（browser/egress.py）拦下的页面内请求：说法统一在 app/egress_note.py。"""
     return egress_note.note(snap.get("blocked"), "browser")
+
+
+def tab_note(snap: dict) -> str:
+    """标签页变了（规则在 browser/tabs.py，快照的 tab 字段）→ 放在快照最前面的一句话；没变 → 空。"""
+    t = snap.get("tab")
+    if not isinstance(t, dict):
+        return ""
+    url, n = str(t.get("url") or ""), t.get("tabs")
+    more = f"（现在开着 {n} 个标签页）" if isinstance(n, int) and n > 1 else ""
+    match t.get("kind"):
+        case "opened":
+            return (f"⤷ 网站在新标签页里打开了 {url}，已切过去{more}；之后的点击、输入都在这页上，"
+                    "看完要回原来那页用 browser_back。\n")
+        case "returned":
+            return f"⤷ 这个标签页没有上一页，已关掉它，回到原来的 {url}。\n"
+        case "closed":
+            if url and not url.startswith("about:"):
+                return f"⤷ 刚才那个标签页被网站关掉了，已退回 {url}{more}。\n"
+            return "⤷ 网站把页面关掉了，现在是空白页：要接着做就用 browser_open 重新打开要去的网址。\n"
+        case "crashed":
+            return (f"⚠ 页面崩溃了（多半是页面太重、这台机器内存不够），已自动重新打开 {url}；"
+                    "刚才填到一半的内容可能没了，先看这张快照再接着做。\n")
+        case "crash_loop":
+            return (f"⚠ {url} 刚重开又崩溃了（页面太重、这台机器内存不够），没再重开，现在是空白页。别再反复打开它："
+                    "换个轻一点的入口（手机版 m. 域名、搜索结果页，或用 web_fetch 只读文字），实在不行如实告诉用户。\n")
+    return ""
 
 
 def _card(tab: Tab, live: bool = False, files: list[dict] | None = None, ws: str | None = None, down: str | None = None) -> dict:
@@ -197,6 +223,13 @@ async def browser_type(ctx: ToolContext, ref: str, text: str, submit: bool = Fal
       {"type": "object", "properties": {"dy": {"type": "integer", "default": 600}}})
 async def browser_scroll(ctx: ToolContext, dy: int = 600) -> ToolResult:
     return await _act(ctx, "POST", "/act", {"action": "scroll", "dy": dy})
+
+
+@tool("browser_back", "正在返回上一页",
+      "浏览器后退一页，返回新快照。网站在新标签页里打开的页面退到头时，会关掉这个标签页、回到原来那页。",
+      {"type": "object", "properties": {}})
+async def browser_back(ctx: ToolContext) -> ToolResult:
+    return await _act(ctx, "POST", "/act", {"action": "back"})
 
 
 @tool("browser_read", "正在查看页面", "重新读取当前页面（例如用户在实时画面里操作完之后）。",

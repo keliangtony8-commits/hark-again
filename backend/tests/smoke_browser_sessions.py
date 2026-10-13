@@ -43,6 +43,7 @@ saved_files: dict = {}
 class Page:
     def __init__(self): self.url = "about:blank"
     def on(self, *a): pass
+    def is_closed(self): return False
     async def goto(self, url, **kw): self.url = url
     async def wait_for_load_state(self, *a, **kw): pass
     async def evaluate(self, js): return {"url": self.url, "title": "T", "text": "hi", "elements": []}
@@ -50,7 +51,9 @@ class Ctx:
     def __init__(self, state): self.state, self.closed = state, False
     async def route(self, *a): pass
     def on(self, *a): pass
-    async def new_page(self): return Page()
+    async def new_page(self):
+        self.pages = [Page()]
+        return self.pages[0]
     async def storage_state(self, path):
         with open(path, "w") as f:
             json.dump({"cookies": [{"domain": ".taobao.com", "name": "sid", "value": "SECRET"},

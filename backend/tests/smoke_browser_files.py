@@ -46,6 +46,7 @@ class Locator:
 class Page:
     def __init__(self): self.url, self.handlers = "about:blank", {}
     def on(self, ev, cb): self.handlers[ev] = cb
+    def is_closed(self): return False
     async def goto(self, url, **kw):
         self.url = url
         if url.endswith(".pdf"):
@@ -61,7 +62,7 @@ class Ctx:
     async def route(self, *a): pass
     def on(self, ev, cb): self.page_cb = cb
     async def new_page(self):
-        p = Page(); self.page_cb(p); return p
+        p = Page(); self.pages = [p]; self.page_cb(p); return p
     async def storage_state(self, path): open(path, "w").write('{"cookies":[]}')
     async def close(self): pass
 contexts: list = []
