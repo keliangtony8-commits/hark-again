@@ -4,9 +4,10 @@ import { auth, http, notifyUnauthorized, server } from "../../lib/api";
 import { setSolid, useLook } from "../../lib/look";
 import { outbox } from "../../lib/outbox";
 import { APPEARANCES, setAppearance, useAppearance } from "../../lib/theme";
+import { twoFactorRowSubtitle, type TwoFactorStatus } from "../../lib/twoFactor";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, type UsageReport } from "../../lib/usage";
 import { Avatar } from "../../ui/glass";
-import { IconBack, IconBrain, IconChevron, IconClock, IconComputer, IconLayout, IconPlug, IconShield, IconSpark } from "../../ui/icons";
+import { IconBack, IconBrain, IconChevron, IconClock, IconComputer, IconLayout, IconLock, IconPlug, IconShield, IconSpark } from "../../ui/icons";
 import { Section, Segmented, Toggle, stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
 import AvatarColorPop from "./AvatarColorPop";
@@ -23,6 +24,9 @@ const GROUPS = [
   { title: "连接", items: [
     { to: "/me/connectors", icon: IconPlug, title: "连接器", sub: "Gmail、日历、GitHub 和 MCP 服务器" },
     { to: "/me/vault", icon: IconShield, title: "保险箱", sub: "加密保存的登录和密钥，模型看不到明文" },
+  ] },
+  { title: "安全", items: [
+    { to: "/me/security", icon: IconLock, title: "两步验证", sub: "" }, // 副标题按状态（twoFactorRowSubtitle）
   ] },
 ];
 
@@ -81,6 +85,8 @@ export default function MeScreen() {
   const closePop = useCallback(() => setPop(false), []);
   // 从站内点头像进来 → 返回上一页；直接打开（深链接 / 刷新）→ 回到主页
   const root = !((window.history.state as { idx?: number } | null)?.idx);
+  const [tf, setTf] = useState<TwoFactorStatus | null>(null);
+  useEffect(() => { http.get<TwoFactorStatus>("/api/auth/2fa").then(setTf).catch(() => setTf(null)); }, []);
   const logout = () => { auth.clear(); outbox.clear(); notifyUnauthorized(); };
   return (
     <div className="page me">
@@ -101,7 +107,7 @@ export default function MeScreen() {
               {g.items.map(({ to, icon: Icon, title, sub }) => {
                 const inner = <>
                   <span className="row-icon"><Icon /></span>
-                  <div className="row-body"><div className="row-title">{title}</div><div className="row-sub">{sub}</div></div>
+                  <div className="row-body"><div className="row-title">{title}</div><div className="row-sub">{to === "/me/security" ? twoFactorRowSubtitle(tf) : sub}</div></div>
                   <span className="row-trail"><IconChevron /></span>
                 </>;
                 return <Link key={to} to={to} className="row">{inner}</Link>;

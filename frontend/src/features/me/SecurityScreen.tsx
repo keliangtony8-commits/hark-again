@@ -1,0 +1,166 @@
+import { useCallback, useEffect, useState } from "react";
+import { http } from "../../lib/api";
+import {
+  RECOVERY_LOW, cleanCode, looksLikeTotp, qrDrawable, qrPath, recoveryCodesText, recoveryLine, twoFactorSummary,
+  type TwoFactorSetup, type TwoFactorStatus,
+} from "../../lib/twoFactor";
+import CopyButton from "../../ui/CopyButton";
+import { IconChevron, IconKey, IconLock, IconShield } from "../../ui/icons";
+import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton } from "../../ui/kit";
+
+/** 安全（v2.58，= App features/me/security_screen.dart；对标 Hark 设置 → 安全 → 两步验证）。
+ *  版式同保险箱：页头摘要 + 一句说明 → 一组行。打开：扫码（电脑上用手机扫）→ 回填 6 位码 → 一次性展示恢复码；
+ *  关闭 / 重新生成恢复码要密码 + 一个码（错了服务器回 403，不会把你登出）。 */
+type Ask = { kind: "disable" | "recovery" } | null;
+
+export default function SecurityScreen() {
+  const [s, setS] = useState<TwoFactorStatus | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [setup, setSetup] = useState<TwoFactorSetup | null>(null);
+  const [codes, setCodes] = useState<{ list: string[]; title: string; account: string } | null>(null);
+  const [ask, setAsk] = useState<Ask>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setErr(null);
+    http.get<TwoFactorStatus>("/api/auth/2fa").then(setS).catch((e) => setErr(e instanceof Error ? e.message : "读不到安全设置"));
+  }, []);
+  useEffect(load, [load]);
+
+  const start = async () => {
+    setNote(null);
+    try { setSetup(await http.post<TwoFactorSetup>("/api/auth/2fa/setup", {})); }
+    catch (e) { setNote(e instanceof Error ? e.message : "没打开"); }
+  };
+
+  return (
+    <Page header={<PageHeader title="安全" back />}>
+      <PageIntro loading={!s && !err} summary={s ? twoFactorSummary(s) : ""}
+        line={s?.enabled
+          ? "登录时除了密码，还要验证器 App 里的 6 位码；手机丢了用恢复码。"
+          : "打开后，登录要多填验证器 App（Google Authenticator、Microsoft Authenticator 等）里的 6 位码。密码泄露了，别人也进不来。"} />
+      {note && <div className="notice ok" role="status" onClick={() => setNote(null)}>{note}</div>}
+      {err ? (
+        <div className="error-banner">{err} <button className="text-link" onClick={load}>重试</button></div>
+      ) : !s ? <Skeleton rows={2} /> : (
+        <Section enter={1}>
+          <div key={String(s.enabled)} className="list fade-swap">
+            {!s.enabled ? (
+              <button className="row" onClick={start}>
+                <span className="row-icon"><IconShield /></span>
+                <div className="row-body"><div className="row-title">打开两步验证</div>
+                  <div className="row-sub">{s.pending ? "上次没设置完，重新扫一次码" : "大约一分钟，需要一个验证器 App"}</div></div>
+                <span className="row-trail"><IconChevron /></span>
+              </button>
+            ) : (<>
+              <div className="row">
+                <span className="row-icon"><IconLock /></span>
+                <div className="row-body"><div className="row-title">两步验证</div>
+                  <div className="row-sub">{s.enabled_at ? `${new Date(s.enabled_at).toLocaleDateString("zh-CN")} 打开` : "已开"}</div></div>
+              </div>
+              <button className="row" onClick={() => setAsk({ kind: "recovery" })}>
+                <span className="row-icon"><IconKey /></span>
+                <div className="row-body"><div className="row-title">恢复码</div>
+                  <div className="row-sub">{s.recovery_left <= RECOVERY_LOW && <span className="warn-text">{s.recovery_left === 0 ? "用完了" : "快用完了"} · </span>}{recoveryLine(s.recovery_left)}</div></div>
+                <span className="row-trail"><IconChevron /></span>
+              </button>
+              <button className="row" onClick={() => setAsk({ kind: "disable" })}>
+                <span className="row-icon"><IconShield /></span>
+                <div className="row-body"><div className="row-title danger-text">关闭两步验证</div><div className="row-sub">需要密码和一个验证码</div></div>
+              </button>
+            </>)}
+          </div>
+        </Section>
+      )}
+      {setup && <SetupSheet setup={setup} onClose={() => { setSetup(null); load(); }}
+        onDone={(list) => { setSetup(null); load(); setCodes({ list, title: "两步验证已打开", account: setup.account }); }} />}
+      {codes && <CodesSheet {...codes} onClose={() => setCodes(null)} />}
+      {ask && <ConfirmSheet kind={ask.kind} onClose={() => setAsk(null)} onDone={(r) => {
+        setAsk(null); setS(r);
+        if (ask.kind === "disable") setNote("两步验证已关闭");
+        else if (r.recovery_codes) setCodes({ list: r.recovery_codes, title: "新的恢复码", account: "" });
+      }} />}
+    </Page>
+  );
+}
+
+function SetupSheet({ setup, onClose, onDone }: { setup: TwoFactorSetup; onClose: () => void; onDone: (codes: string[]) => void }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const submit = async () => {
+    setBusy(true); setErr(null);
+    try { onDone((await http.post<{ recovery_codes: string[] }>("/api/auth/2fa/enable", { code: cleanCode(code) })).recovery_codes); }
+    catch (e) { setErr(e instanceof Error ? e.message : "没打开"); }
+    finally { setBusy(false); }
+  };
+  const ready = looksLikeTotp(code) && !busy;
+  return (
+    <Sheet title="打开两步验证" onClose={onClose} actions={<>
+      <button className="btn btn-ghost" onClick={onClose}>取消</button>
+      <button className="btn btn-primary" disabled={!ready} onClick={submit}>{busy ? "确认中…" : "确认并打开"}</button>
+    </>}>
+      <p className="row-sub wrap">① 用手机上的验证器 App 扫这个码（在手机上打开本页时，直接点“在这台设备上添加”）</p>
+      {qrDrawable(setup.qr) && <QrCode rows={setup.qr} />}
+      <div className="tf-actions"><a className="btn btn-ghost" href={setup.uri}>在这台设备上添加</a></div>
+      <div className="tf-secret"><div><small>或手动输入秘钥</small><code className="mono">{setup.secret}</code></div>
+        <CopyButton text={setup.secret.replace(/ /g, "")} label="复制秘钥" /></div>
+      <label className="form-field"><span>② 填验证器里显示的 6 位码</span>
+        <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" maxLength={7} autoFocus
+          onKeyDown={(e) => { if (e.key === "Enter" && ready) void submit(); }} /></label>
+      {err && <div className="error-banner">{err}</div>}
+    </Sheet>
+  );
+}
+
+/** 二维码：服务器给模块矩阵，这里画成一条 SVG path。永远黑码白底（--qr-dark / --qr-light）。 */
+export function QrCode({ rows, quiet = 2 }: { rows: string[]; quiet?: number }) {
+  const n = rows.length + quiet * 2;
+  return (
+    <svg className="tf-qr enter" viewBox={`0 0 ${n} ${n}`} role="img" aria-label="两步验证二维码" shapeRendering="crispEdges">
+      <rect width={n} height={n} fill="var(--qr-light)" />
+      <path d={qrPath(rows, quiet)} fill="var(--qr-dark)" />
+    </svg>
+  );
+}
+
+function CodesSheet({ list, title, account, onClose }: { list: string[]; title: string; account: string; onClose: () => void }) {
+  return (
+    <Sheet title={title} onClose={onClose} actions={<>
+      <CopyButton text={recoveryCodesText(list, account)} label="复制全部" />
+      <button className="btn btn-primary" onClick={onClose}>我已存好</button>
+    </>}>
+      <p className="row-sub wrap">把这些恢复码存到安全的地方（密码管理器、纸上）。手机丢了时，每个能代替验证码登录一次。关掉后不会再显示。</p>
+      <div className="tf-codes">{list.map((c, i) => <code key={c} className="mono enter" style={{ animationDelay: `${i * 30}ms` }}>{c}</code>)}</div>
+    </Sheet>
+  );
+}
+
+type Result = TwoFactorStatus & { recovery_codes?: string[] };
+
+function ConfirmSheet({ kind, onClose, onDone }: { kind: "disable" | "recovery"; onClose: () => void; onDone: (r: Result) => void }) {
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const disable = kind === "disable";
+  const submit = async () => {
+    setBusy(true); setErr(null);
+    try { onDone(await http.post<Result>(disable ? "/api/auth/2fa/disable" : "/api/auth/2fa/recovery", { password, code: cleanCode(code) })); }
+    catch (e) { setErr(e instanceof Error ? e.message : "没成功"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Sheet title={disable ? "关闭两步验证" : "重新生成恢复码"} onClose={onClose} actions={<>
+      <button className="btn btn-ghost" onClick={onClose}>取消</button>
+      <button className={disable ? "btn btn-danger-fill" : "btn btn-primary"} disabled={!password || !cleanCode(code) || busy} onClick={submit}>{disable ? "关闭" : "生成"}</button>
+    </>}>
+      <p className="row-sub wrap">{disable ? "关掉后登录只要密码。" : "旧的恢复码会全部作废。"}</p>
+      <label className="form-field"><span>当前密码</span>
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus /></label>
+      <label className="form-field"><span>验证码或恢复码</span>
+        <input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" placeholder="6 位数字，或 xxxx-xxxx" /></label>
+      {err && <div className="error-banner">{err}</div>}
+    </Sheet>
+  );
+}

@@ -15,6 +15,8 @@
   --warning: #b86e00;
   --success: #2e7d4f; /* v1.34 diff 的新增行与 +N；删除用 --danger */
   --knob: #ffffff;              /* 开关圆钮 */
+  --qr-dark: #000000;   /* 两步验证二维码：永远黑码白底（验证器只认这一种），深色模式也不反色 */
+  --qr-light: #ffffff;
   --scrim: rgba(0, 0, 0, 0.32); /* 弹层/抽屉背后的遮罩 */
   color-scheme: light;
 

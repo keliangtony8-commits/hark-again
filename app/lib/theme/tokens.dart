@@ -253,6 +253,13 @@ abstract final class AvatarColors {
   static Color inkOn(Color c) => c.computeLuminance() > 0.45 ? darkInk : lightInk;
 }
 
+/// 两步验证的二维码（v2.58）：永远黑码白底——验证器 App 只认得这一种，深色模式也不反色。
+abstract final class QrColors {
+  static const dark = Color(0xFF000000), light = Color(0xFFFFFFFF);
+  static const quiet = 2; // 四周留白（模块数）
+  static const size = 184.0; // 显示边长
+}
+
 /// 不透明度
 abstract final class Op {
   static const dimmed = 0.6; // 停用/下线的行：还在，但退到背景里

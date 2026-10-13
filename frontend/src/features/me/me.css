@@ -29,3 +29,16 @@
 .hue-hole { position: absolute; inset: 30px; border-radius: var(--r-full); box-shadow: 0 0 0 4px var(--glass); transition: background var(--dur) var(--ease); }
 .hue-knob { position: absolute; inset: 0; pointer-events: none; transition: transform var(--dur) var(--ease); }
 .hue-knob i { position: absolute; top: 3px; left: 50%; width: 24px; height: 24px; margin-left: -12px; border-radius: var(--r-full); box-shadow: 0 0 0 3px var(--knob), var(--elev-knob); }
+
+/* v2.58 安全 / 两步验证（SecurityScreen.tsx）：二维码永远黑码白底；恢复码两列等宽 */
+.tf-qr { display: block; width: 184px; height: 184px; margin: var(--sp-3) auto; border-radius: var(--r-md); }
+.tf-actions { display: flex; justify-content: center; margin-bottom: var(--sp-3); }
+.tf-secret { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.tf-secret > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tf-secret small { color: var(--text-3); font-size: var(--fs-xs); }
+.tf-secret code { font-size: var(--fs-sm); color: var(--text); word-break: break-all; }
+.tf-codes { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2) var(--sp-5); padding: var(--sp-4); border-radius: var(--r-md); background: var(--tile); }
+.tf-codes code { font-size: var(--fs-md); color: var(--text); font-variant-numeric: tabular-nums; }
+.row-sub.wrap { white-space: normal; margin: 0 0 var(--sp-2); }
+.warn-text { color: var(--warning); font-weight: var(--fw-title); }
+@media (prefers-reduced-motion: reduce) { .tf-qr, .tf-codes code { animation: none; } }

@@ -19,6 +19,7 @@ import 'features/me/skills_screen.dart';
 import 'features/me/task_detail.dart';
 import 'features/me/tasks_screen.dart';
 import 'features/me/usage_screen.dart';
+import 'features/me/security_screen.dart';
 import 'features/me/vault_screen.dart';
 import 'features/projects/project_brief_screen.dart';
 import 'features/projects/projects_screen.dart';
@@ -72,6 +73,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ]),
         GoRoute(path: 'connectors', builder: (_, s) => ConnectorsScreen(oauth: OAuthResult.fromQuery(s.uri.queryParameters))),
         GoRoute(path: 'vault', builder: (_, _) => const VaultScreen()),
+        GoRoute(path: 'security', builder: (_, _) => const SecurityScreen()),
         GoRoute(path: 'computer', builder: (_, _) => const ComputerScreen()),
         GoRoute(path: 'pages', builder: (_, _) => const PagesScreen()),
         GoRoute(path: 'usage', builder: (_, _) => const UsageScreen()),

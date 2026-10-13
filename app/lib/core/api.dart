@@ -75,10 +75,12 @@ class Api {
       });
 
   /// 登录不经过 session（还没有 token），所以单独一个方法。
-  static Future<String> login(String server, String username, String password) async {
+  /// 开着两步验证时没给 [code] → ApiError 状态码 428（登录页据此展开验证码框）。
+  static Future<String> login(String server, String username, String password, {String? code}) async {
     final res = await http
         .post(Uri.parse('$server/api/auth/login'),
-            headers: {'Content-Type': 'application/json'}, body: jsonEncode({'username': username, 'password': password}))
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'username': username, 'password': password, if (code != null && code.isNotEmpty) 'code': code}))
         .timeout(const Duration(seconds: 15));
     final data = _decode(res);
     if (res.statusCode >= 400) throw ApiError(_detail(data) ?? '登录失败', res.statusCode);

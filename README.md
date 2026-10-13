@@ -189,6 +189,7 @@ docker compose --profile build-only build sandbox-image                      # �
 客户端 → `user.message`（text、attachments、project_files、project_id）/ `approval.reply`（id、approved）
 
 ## 安全边界
+- v2.58 两步验证（我的 → 两步验证）：登录多一道验证器 App 的 6 位码（TOTP，RFC 6238，±30 秒容差、同一码只认一次），8 个一次性恢复码；秘钥加密存（钥匙由 JWT_SECRET 派生），恢复码只存哈希；关闭/重新生成要密码 + 码；登录/验证码连续错 5 次锁 5 分钟。手机和恢复码都丢了：服务器上 `docker compose exec backend python -m app.two_factor --reset`。已登录的设备不会被踢下线（换 JWT_SECRET 才会）。
 - 密钥：只在 `vault.headers_for()` 解密，直接进 HTTP 头；接口无明文读取；响应里回显的密钥会被抹掉
 - 高风险动作（提交/推送代码、强删、发布、对外写请求）先弹审批卡；定时任务无人值守时一律拒绝
 - 代码执行在独立沙盒服务里，后端和模型都碰不到 Docker

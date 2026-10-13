@@ -68,6 +68,20 @@ async function upload<T>(path: string, file: File): Promise<T> {
 /** <img>/<a> 无法带请求头，下载地址用 ?token= 鉴权。 */
 export const fileUrl = (path: string) => `${server.get()}${path}?token=${encodeURIComponent(auth.get() ?? "")}`;
 
-export const api = {
-  login: (username: string, password: string) => http.post<{ token: string }>("/api/auth/login", { username, password }),
-};
+/** 带状态码的错误：登录页靠 428 判断“开着两步验证、要填验证码”。 */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+/** 登录不走 request()：它把 401 当“登录过期”去退出，而登录时 401 只是密码/验证码不对。 */
+async function login(username: string, password: string, code?: string): Promise<{ token: string; recovery_left?: number }> {
+  const res = await fetch(server.get() + "/api/auth/login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password, ...(code ? { code } : {}) }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(typeof body.detail === "string" ? body.detail : res.statusText || "登录失败", res.status);
+  return body;
+}
+
+export const api = { login };

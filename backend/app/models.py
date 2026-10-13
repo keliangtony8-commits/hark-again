@@ -213,6 +213,19 @@ class PanelEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class OwnerSecurity(Base):
+    """v2.58 主人的两步验证（单行 id=1）：规则只在 app/two_factor.py。secret/pending 是加密后的 TOTP 秘钥，
+    recovery 是恢复码的 SHA-256 列表（用掉即删），last_step 防同一个码用两次。"""
+    __tablename__ = "owner_security"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pending: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_step: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    recovery: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class HomeCard(Base):
     """Home 上的卡片：kind=action（主动建议，可执行/忽略）| panel（可刷新的面板）
     | report（定时任务的结果，进收件箱，点开是完整对话）。内容同样是块列表，复用聊天的渲染器。"""

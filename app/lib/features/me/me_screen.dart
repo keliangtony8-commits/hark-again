@@ -1,12 +1,13 @@
 // 我的：点右上角头像进入的全屏页（设计 v2）。不是 Tab，没有 AppBar——和一级页面同一张壁纸、同一套玻璃。
 // 从上到下：返回钮 → 页头（大头像，点它改颜色；衬线“我的” + 服务器）→ 用量卡（本月花费 / 预算 + 查看用量）
 //   → 分组卡：了解你（记忆、技能、定时任务）· 连接（连接器、保险箱、Pages）· 外观与偏好（浅深色、减少透明度、头像颜色）
-//   → 服务器 → 单独一行“退出登录”。页头身份行：用户名（GET /api/auth/me，取到后淡入）+ 服务器域名。每项一个子页面，路由在 app.dart（子页面是 ui/sub_page.dart 的 SubPage：同一张壁纸 + 玻璃标题栏）。
+//   → 服务器 · 两步验证（v2.58 /me/security）→ 单独一行“退出登录”。页头身份行：用户名（GET /api/auth/me，取到后淡入）+ 服务器域名。每项一个子页面，路由在 app.dart（子页面是 ui/sub_page.dart 的 SubPage：同一张壁纸 + 玻璃标题栏）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/session.dart';
+import '../../models/two_factor.dart';
 import '../../models/usage.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/appearance.dart';
@@ -18,6 +19,7 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'avatar_color_sheet.dart';
+import 'security_screen.dart';
 import 'usage_screen.dart';
 
 class MeScreen extends ConsumerWidget {
@@ -127,6 +129,12 @@ class _MeBody extends ConsumerWidget {
         delay: Motion.stagger(5),
         child: GlassGroup(children: [
           RowTile(icon: Icons.dns_outlined, title: '服务器', subtitle: server.isEmpty ? '未设置' : '$server · 退出后可在登录页更换'),
+          RowTile(
+            icon: Icons.shield_outlined,
+            title: '两步验证',
+            subtitle: twoFactorRowSubtitle(ref.watch(twoFactorProvider).value),
+            onTap: () => context.push('/me/security'),
+          ),
         ]),
       ),
       gap,
