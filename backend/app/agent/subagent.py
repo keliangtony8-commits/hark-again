@@ -45,7 +45,7 @@ CHILD_TOOLS = frozenset({
     "run_command", "job_status", "cancel_job", "restart_service",
     "api_request", "mcp_tools", "mcp_call", "use_skill",
     "get_current_time", "convert_time", "resolve_relative_date", "analyze_video", "search_transcript", "search_history", "search_memory",
-    "extract_data", "save_attachment",
+    "extract_data", "save_attachment", "render_document",
 })
 
 STATES = ("running", "done", "partial", "failed", "stopped")

@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -391,6 +391,39 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
         blocks.append(d.block)
         notes.append(d.note)
     return ToolResult("\n".join(notes), blocks)
+
+
+@tool("render_document", "正在排版",
+      "把工作区里的 Markdown / HTML / 纯文本排成 PDF（报告、简历、讲义、作业）或一张长图 PNG（海报、卡片、网页效果图），"
+      "中文字体齐全、PDF 带页码。交付文档时用户要读的是 PDF，不要直接给 .md。先用 write_file 写好源文件"
+      "（图片放工作区里用相对路径引用；HTML 可以带自己的 CSS 和 @page；排版时不联网、不跑脚本），再调这个。"
+      "默认排完直接给用户文件卡（show=false 只生成不交付，比如先排成 PNG 自己 read_file 检查）。会覆盖同名输出。",
+      {"type": "object", "properties": {
+          "path": {"type": "string", "description": "源文件（.md / .html / .txt），相对工作区"},
+          "output": {"type": "string", "default": "", "description": "输出文件 .pdf / .png；空 = 源文件换后缀"},
+          "format": {"type": "string", "enum": list(doc_render.FORMATS), "description": "output 没写后缀时用；默认 pdf"},
+          "paper": {"type": "string", "enum": list(doc_render.PAPERS), "default": "A4"},
+          "landscape": {"type": "boolean", "default": False, "description": "横向"},
+          "width": {"type": "integer", "description": f"长图宽度像素（{doc_render.WIDTH_MIN}–{doc_render.WIDTH_MAX}，默认 {doc_render.WIDTH_DEFAULT}）"},
+          "page_numbers": {"type": "boolean", "default": True, "description": "PDF 页脚页码"},
+          "show": {"type": "boolean", "default": True, "description": "排完直接交给用户"}},
+       "required": ["path"]}, deferred=True)
+async def render_document(ctx: ToolContext, path: str, output: str = "", format: str | None = None, paper: str = "A4",
+                          landscape: bool = False, width: int = 0, page_numbers: bool = True, show: bool = True) -> ToolResult:
+    try:
+        r = await doc_render.render(ctx.workspace, path, output, format, paper, landscape, width, page_numbers,
+                                    ctx.changes, _owner(ctx))
+    except doc_render.RenderError as e:
+        return ToolResult(f"没排成：{e}", failed="没排成")
+    blocks = []
+    if show:
+        try:
+            blocks.append((await asyncio.to_thread(deliver.deliver, ctx.workspace, r.rel)).block)
+        except deliver.DeliverError as e:
+            show = False
+            r.notes.append(f"没交付：{e}")
+    c = file_edit.change(r.rel, "" if r.overwrote else None, "")
+    return ToolResult(doc_render.for_model(r, show), blocks, change=c, detail=doc_render.detail(r))
 
 
 async def _promoted(ctx: ToolContext, command: str, r: foreground.Outcome, borrowed: list[str] | None = None) -> ToolResult:

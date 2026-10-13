@@ -86,3 +86,22 @@ async def login_state(session: str, state: str) -> None:
         raise RuntimeError(f"云浏览器没连上：{e}") from e
     if r.status_code >= 400:
         raise RuntimeError(_detail(r))
+
+
+async def render(html: str, fmt: str = "pdf", paper: str = "A4", landscape: bool = False, width: int = 1024,
+                 page_numbers: bool = True) -> tuple[bytes, int, bool]:
+    """排好的 HTML → PDF / PNG 字节（v2.22，doc_render 用）。返回 (数据, 没加载的网络资源数, 长图是否被截断)；
+    连不上 / 浏览器报错 → RuntimeError（中文原因）。"""
+    body = {"html": html, "format": fmt, "paper": paper, "landscape": landscape, "width": width, "page_numbers": page_numbers}
+    try:
+        async with httpx.AsyncClient(base_url=settings.browser_url, timeout=90) as c:
+            r = await c.post("/render", headers=_h(), json=body)
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"云浏览器没连上，排不了版：{e}") from e
+    if r.status_code >= 400:
+        raise RuntimeError(_detail(r))
+    try:
+        blocked = int(r.headers.get("x-render-blocked", "0"))
+    except ValueError:
+        blocked = 0
+    return r.content, blocked, r.headers.get("x-render-cut") == "1"

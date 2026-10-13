@@ -72,17 +72,23 @@ def _check_name(name: str) -> str:
     return name
 
 
-async def _session(name: str) -> Page:
+async def _ensure_browser() -> Browser:
+    """在 _lock 里调：第一次用到时才起 Chromium（会话和渲染共用一个进程，小 VPS 只养一个）。"""
     global _pw, _browser
+    if not _browser:
+        if not _egress.port:
+            await _egress.start()
+        _pw = await async_playwright().start()
+        # proxy per-context：先给浏览器一个占位代理，每个会话再用自己的代理账号（被拦记到对的会话上）；
+        # WebRTC 只许走代理（不然 UDP 能绕过关卡直连内网）
+        _browser = await _pw.chromium.launch(proxy={"server": "http://per-context"}, args=[
+            "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
+    return _browser
+
+
+async def _session(name: str) -> Page:
     async with _lock:
-        if not _browser:
-            if not _egress.port:
-                await _egress.start()
-            _pw = await async_playwright().start()
-            # proxy per-context：先给浏览器一个占位代理，每个会话再用自己的代理账号（被拦记到对的会话上）；
-            # WebRTC 只许走代理（不然 UDP 能绕过关卡直连内网）
-            _browser = await _pw.chromium.launch(proxy={"server": "http://per-context"}, args=[
-                "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
+        await _ensure_browser()
         if name not in _sessions:
             while len(_sessions) >= MAX_SESSIONS:
                 await _evict(min(_sessions, key=lambda n: _used.get(n, 0)))
@@ -446,6 +452,82 @@ async def download_done(name: str, did: str):
     except FileNotFoundError:
         pass
     return {"ok": True}
+
+
+# ---- 渲染文档（v2.22）：后端排好的 HTML → PDF / PNG ----
+# 一次性上下文：不联网（offline + 只放行 data:/about:）、不跑脚本、不带任何会话的 cookie；渲染完就关。
+# 网页里引用的网络资源一律不加载，数量回报给后端（X-Render-Blocked），后端告诉模型“渲染时不联网”。
+RENDER_HTML_MAX = 16 * 1024 * 1024  # 后端 doc_render.HTML_MAX 同值
+RENDER_TIMEOUT_MS = 30_000
+RENDER_PNG_MAX_H = 16_384  # 长图最高像素（再高 Chromium 截图会失败 / 吃内存）
+PAPERS = ("A3", "A4", "A5", "Letter", "Legal")
+_render_lock = asyncio.Semaphore(1)  # 一次只渲染一份（4G 机器）
+FOOTER = ('<div style="width:100%;font-size:8px;color:#8a8a8a;text-align:center;font-family:sans-serif">'
+          '<span class="pageNumber"></span> / <span class="totalPages"></span></div>')
+
+
+class RenderIn(BaseModel):
+    html: str
+    format: str = "pdf"  # pdf | png
+    paper: str = "A4"
+    landscape: bool = False
+    width: int = 1024  # png 视口宽
+    page_numbers: bool = True
+
+
+@app.post("/render", dependencies=[Depends(auth)])
+async def render(body: RenderIn):
+    if body.format not in ("pdf", "png"):
+        raise HTTPException(400, "format 只能是 pdf 或 png")
+    if body.paper not in PAPERS:
+        raise HTTPException(400, f"纸张只能是 {'/'.join(PAPERS)}")
+    if len(body.html.encode()) > RENDER_HTML_MAX:
+        raise HTTPException(413, f"HTML 超过 {RENDER_HTML_MAX // 1024 // 1024} MB")
+    width = min(max(body.width, 320), 2000)
+    blocked: set[str] = set()
+    cut = False
+
+    async def guard(route):
+        u = route.request.url
+        if u.startswith(("data:", "about:")):
+            return await route.continue_()
+        if u.startswith(("http:", "https:")):
+            blocked.add(u)
+        await route.abort("blockedbyclient")
+
+    async with _render_lock:
+        async with _lock:
+            browser = await _ensure_browser()
+        ctx = await browser.new_context(viewport={"width": width, "height": 800 if body.format == "pdf" else 64}, java_script_enabled=False,
+                                        offline=True, service_workers="block", locale="zh-CN")
+        try:
+            await ctx.route("**/*", guard)
+            page = await ctx.new_page()
+            await page.set_content(body.html, wait_until="load", timeout=RENDER_TIMEOUT_MS)
+            if body.format == "pdf":
+                data = await page.pdf(format=body.paper, landscape=body.landscape, print_background=True,
+                                      prefer_css_page_size=True, display_header_footer=body.page_numbers,
+                                      header_template="<span></span>", footer_template=FOOTER if body.page_numbers else "<span></span>",
+                                      margin={"top": "16mm", "bottom": "18mm", "left": "16mm", "right": "16mm"})
+                kind = "application/pdf"
+            else:
+                data, kind = await page.screenshot(type="png", full_page=True, timeout=RENDER_TIMEOUT_MS), "image/png"
+                if png_height(data) > RENDER_PNG_MAX_H:  # 太长：只要最上面 RENDER_PNG_MAX_H 像素
+                    data = await page.screenshot(type="png", full_page=True, timeout=RENDER_TIMEOUT_MS,
+                                                 clip={"x": 0, "y": 0, "width": width, "height": RENDER_PNG_MAX_H})
+                    cut = True
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(422, f"渲染失败：{str(e)[:200]}")
+        finally:
+            await ctx.close()
+    return Response(data, media_type=kind, headers={"X-Render-Blocked": str(len(blocked)), "X-Render-Cut": "1" if cut else "0"})
+
+
+def png_height(data: bytes) -> int:
+    """PNG 头里的高度（IHDR 第 20–24 字节）；不是 PNG → 0。"""
+    return int.from_bytes(data[20:24], "big") if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24 else 0
 
 
 # ---- 实时画面与人工接管 ----
