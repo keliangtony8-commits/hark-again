@@ -289,6 +289,27 @@ class SubagentThread(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
+class VideoTranscript(Base):
+    """读过的视频字幕（v2.03，规则在 app/video_transcript.py）：analyze_video 取一次存下，同一段对话里
+    search_transcript 按编号（vt_xxxxxx）或链接再查，不再联网。只属于读它的那段对话（定时任务里为 None）。"""
+    __tablename__ = "video_transcripts"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    conversation_id: Mapped[str | None] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"),
+                                                        nullable=True, index=True)
+    platform: Mapped[str] = mapped_column(String(16))
+    video_id: Mapped[str] = mapped_column(String(32))
+    page: Mapped[int] = mapped_column(Integer, default=1)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    author: Mapped[str] = mapped_column(String(100), default="")
+    duration: Mapped[float] = mapped_column(Float, default=0.0)
+    language: Mapped[str] = mapped_column(String(32), default="")
+    language_name: Mapped[str] = mapped_column(String(64), default="")
+    generated: Mapped[bool] = mapped_column(Boolean, default=False)
+    available: Mapped[str] = mapped_column(Text, default="[]")    # JSON：其他可选字幕的显示名
+    segments: Mapped[str] = mapped_column(Text, default="[]")     # JSON：[[start, end, text], …]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
 class AlertSent(Base):
     """“这条提醒已经发过”的去重表：key 唯一（如 budget:2026-10:80:30）。
     不放在卡片上，是因为用户删卡/忽略卡后不该再被同一条提醒打扰。"""

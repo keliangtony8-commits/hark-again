@@ -105,3 +105,5 @@
   移植到 backend/app/agent/subagent_threads.py（v1.97）
 - google-gemini/gemini-cli packages/core/src/utils/fetch.ts（isAddressPrivate / safeLookup / sanitizeHostname）与 packages/core/src/tools/web-fetch.ts（convertGithubUrlToRaw、checkRateLimit、normalizeUrl）— Apache License 2.0, modified
   移植到 backend/app/web_guard.py、backend/app/web_page.py（v2.01）
+- jdepoix/youtube-transcript-api youtube_transcript_api/_transcripts.py + _settings.py（watch 页 → INNERTUBE_API_KEY → player 接口取 captionTracks、consent cookie、playability 失败分类、选字幕顺序、timedtext XML 解析）— MIT License, Copyright (c) 2018 Jonas Depoix, modified
+  移植到 backend/app/video_sources.py、backend/app/video_transcript.py（v2.03）
