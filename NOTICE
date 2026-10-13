@@ -120,3 +120,5 @@
 - google-gemini/gemini-cli packages/core/src/tools/omissionPlaceholderDetector.ts (+ .test.ts)（省略占位行检测）— Apache License 2.0, Copyright 2025 Google LLC, modified（更多注释外壳与括号、… 省略号、扩展英文短语、中文占位、散文文件更严、只拦“新出现的”占位、三个写文件工具共用）
   移植到 backend/app/omission.py（v2.24）
 - backend/app/read_many.py: idea and separator format from google-gemini/gemini-cli packages/core/src/tools/read-many-files.ts (Apache-2.0); own implementation, not a translation.
+- openai/codex codex-rs/network-proxy/src/domain_matcher.rs + policy.rs + runtime.rs host_blocked decision order (+ domain_matcher_tests.rs cases) — Apache License 2.0, Copyright 2025 OpenAI, modified（Python 重写；加 CIDR/IP 条目、去掉 IDNA/SOCKS/MITM/审批，公网默认放行）
+  移植到 sandbox/egress.py（v2.37）

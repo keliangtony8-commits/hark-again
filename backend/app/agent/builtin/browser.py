@@ -22,7 +22,7 @@ import uuid
 
 import asyncio
 
-from ... import browser_client, browser_files, browser_sessions, browser_shot, deliver, file_edit, file_seen, system_alerts, task_wall, vault, web_guard
+from ... import browser_client, browser_files, browser_sessions, browser_shot, deliver, egress_note, file_edit, file_seen, system_alerts, task_wall, vault, web_guard
 from ...storage import project_dir
 from ...browser_sessions import Tab
 from ...config import settings
@@ -51,18 +51,9 @@ def _render(snap: dict, tab: Tab) -> str:
             + f"\n\n页面文字：\n{snap.get('text', '')}")
 
 
-BLOCKED_SHOW = 3
-
-
 def blocked_note(snap: dict) -> str:
-    """浏览器出网关卡（browser/egress.py）拦下的页面内请求：告诉模型是被拦、不是网站坏了，别换法子硬闯。"""
-    items = [b for b in snap.get("blocked") or [] if isinstance(b, dict) and b.get("host")]
-    if not items:
-        return ""
-    shown = "；".join(str(b.get("reason") or b["host"])[:80] for b in items[:BLOCKED_SHOW])
-    more = f"等 {len(items)} 个地址" if len(items) > BLOCKED_SHOW else ""
-    return (f"⚠ 页面里有请求被拦下（{shown}{more}）：助手的浏览器不能访问内网 / 本机地址。"
-            "页面缺的部分多半就是它，别换地址或换工具去绕；用户确实要读自己内网的机器，请他把主机加进 OUTBOUND_ALLOW_HOSTS。\n")
+    """浏览器出网关卡（browser/egress.py）拦下的页面内请求：说法统一在 app/egress_note.py。"""
+    return egress_note.note(snap.get("blocked"), "browser")
 
 
 def _card(tab: Tab, live: bool = False, files: list[dict] | None = None, ws: str | None = None, down: str | None = None) -> dict:

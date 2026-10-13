@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_env, command_guard, computer, foreground, quota, spill, workspaces
+from . import command_env, command_guard, computer, egress_note, foreground, quota, spill, workspaces
 from .config import settings
 from .models import Message
 
@@ -117,6 +117,8 @@ def _note(r: foreground.Outcome) -> str | None:
         parts.append("内存超过这台电脑的上限，被系统结束了")
     if r.woke in computer.WAKE_TEXT:
         parts.append(f"电脑刚才{computer.WAKE_TEXT[r.woke]}，这条命令把它重新开机了；之前在前台跑的程序已经停了")
+    if blocked := egress_note.for_user(r.egress):
+        parts.append(blocked)
     return "；".join(parts) or None
 
 

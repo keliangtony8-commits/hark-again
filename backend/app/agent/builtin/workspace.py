@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, file_edit, file_read, file_seen, foreground, job_memory, job_startup, jobs, memory_view, omission, quota, read_many, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, file_read, file_seen, foreground, job_memory, job_startup, jobs, memory_view, omission, quota, read_many, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -569,7 +569,7 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     if r.promoted:
         return await _promoted(ctx, command, r, borrowed)
     timed_out, status, out, shown = r.timed_out, r.status, r.out, r.shown
-    hint = ""
+    hint = f"\n{egress_note.note(r.egress).rstrip()}" if r.egress else ""  # v2.37 出网被拦：别让模型以为网站坏了
     if timed_out:
         why = f"没能转入后台（{refusal}）" if refusal else "被终止"
         hint = f"\n（前台最多 120 秒，到点{why}；这种长活用 background=true 放到后台重跑）"

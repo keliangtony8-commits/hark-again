@@ -43,7 +43,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_credentials, command_env, job_changes, job_disk, job_restart, quota, sandbox_client, term_text
+from . import command_credentials, command_env, egress_note, job_changes, job_disk, job_restart, quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -302,6 +302,8 @@ def describe(job: Job) -> str:
         line += f"；{disk}"
     if changed := job_changes.text(job_changes.wire(job)):
         line += f"；{changed}"
+    if blocked := egress_note.note(egress_note.read_job(job_dir(job)), "job"):  # v2.37 沙盒服务记的出网被拦
+        line += f"。\n{blocked.rstrip()}"
     if job.stop_reason == OOM_REASON:
         return f"{line}。{oom_hint()}"
     return f"{line}。{memcap_hint()}" if (job.stop_reason or "").startswith(MEMCAP_PREFIX) else line

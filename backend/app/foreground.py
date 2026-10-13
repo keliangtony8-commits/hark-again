@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from . import command_env, jobs, sandbox_client, spill, term_text
+from . import command_env, egress_note, jobs, sandbox_client, spill, term_text
 
 MAX_SECONDS = 120  # 沙盒前台单次上限（sandbox/runner.py 同一个数）
 
@@ -27,6 +27,7 @@ class Outcome:
     shown: str = ""          # 给人看：中间省略处一句“省略 N 字符”
     woke: object = None      # 这条命令把休眠的电脑开起来了：原因（computer.wake_note 用）
     seconds: float = 0.0
+    egress: tuple = ()       # v2.37 出网关卡拦下的 [{host, reason}]（app/egress_note.py 说给模型 / 用户）
     promoted: str = ""       # v2.04 到点没跑完、沙盒已把它转成这个后台任务（out/shown = 到目前的输出），调用方 jobs.adopt
 
     @property
@@ -79,4 +80,5 @@ async def run(workspace: str, command: str, timeout: int, stdin: str | None = No
         shown = shown.replace(spill.MARK, f"\n…（中间省略 {omitted} 字符）…\n")
     return Outcome(exit_code=r.get("exit_code"), timed_out=timed_out, oom=bool(r.get("oom")),
                    memory_limit=r.get("memory_limit"), status=status, out=out, shown=shown,
-                   woke=r.get("woke"), seconds=seconds, promoted=str(r.get("promoted") or ""))
+                   woke=r.get("woke"), seconds=seconds, promoted=str(r.get("promoted") or ""),
+                   egress=tuple(egress_note.items(r.get("egress_blocked"))))

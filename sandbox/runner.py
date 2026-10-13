@@ -16,6 +16,9 @@
   （v1.78：stopped_by / woke 落盘到 SANDBOX_STATE，本服务重启 / 更新后不丢；只经 _mark_stopped/_woken/_take_woke/_forget 改）
 - 端口预览（/sandboxes/<id>/ports、/preview/<id>/<port>/…）：容器都接在专用网络 SANDBOX_NETWORK 上（本服务也在），
   这里能直连容器里起的网页服务；后端带签名链接把用户的请求转进来（见 backend/app/preview.py），容器端口从不对外暴露
+- 出网关卡（v2.37，规则在 egress.py）：每条命令 / 后台任务的环境里带本服务出网代理的账号（HTTP(S)_PROXY），
+  公网放行，内网 / 本机 / 云元数据地址拦下；前台命令结果带 egress_blocked，后台任务写 .jobs/<id>/egress。
+  compose 里 sandboxes 网络是 internal：容器没有别的出网路。SANDBOX_EGRESS=off 关掉（本机开发）
 - 后台任务（/jobs/*）：后端把 .jobs/<id>/run.sh 写进工作区（脚本约定见 backend/app/jobs.py），
   这里只负责 setsid 脱离启动、查活、整组杀掉；日志和退出码都落在工作区文件里，
   所以这个服务或后端重启都不丢任务状态
@@ -37,6 +40,8 @@ import time
 import docker
 import httpx
 from docker.errors import NotFound
+
+import egress as egress_rules
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
@@ -71,6 +76,10 @@ STATE_FILE = os.environ.get("SANDBOX_STATE", "/state/stopped.json")
 STATE_KEEP_S = 30 * 86400  # 停了这么久的记录就不留了：再开机时只说“电脑开过机”也无妨
 REASONS = ("idle", "room")
 PID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+# v2.37 出网关卡：代理开在本服务上（sandboxes 网络里容器按服务名 sandbox 找到它）
+EGRESS_ON = os.environ.get("SANDBOX_EGRESS", "proxy") != "off"
+EGRESS_PORT = int(os.environ.get("SANDBOX_EGRESS_PORT", "3128"))
+EGRESS_HOST = os.environ.get("SANDBOX_EGRESS_HOST", "sandbox")  # 容器里看到的本服务地址
 log = logging.getLogger("sandbox")
 
 client = docker.from_env()
@@ -82,6 +91,26 @@ _state_lock = threading.Lock()  # 写 STATE_FILE（线程池里的请求和 reap
 _room_lock = threading.Lock()  # 数开机台数 → 停 → 开 要一气呵成，别两条请求同时挤进来都以为有空位
 oom_seen: dict[str, int] = {}  # 每个容器上次看到的 OOM 杀进程次数：前台命令退出 137 时比一比，判断是不是内存打满
 app = FastAPI()
+
+
+def _job_blocked(pid: str, kind: str, tag: str, item: dict) -> None:
+    """后台任务（含前台转后台的）被拦：写进工作区 .jobs/<id>/egress，任务结束时后端读给模型。"""
+    if kind != "j":
+        return
+    d = os.path.join(PROJECTS_ROOT, pid, ".jobs", tag)
+    if os.path.isdir(d):
+        path = os.path.join(d, egress_rules.JOB_FILE)
+        egress_rules.append_job_file(path, item)
+        _own(path)
+
+
+egress = egress_rules.Egress(TOKEN, os.environ.get("SANDBOX_ALLOW_HOSTS", ""), os.environ.get("SANDBOX_DENY_HOSTS", ""),
+                             on_block=_job_blocked)
+
+
+def egress_env(pid: str, kind: str, tag: str) -> dict[str, str]:
+    """这条命令 / 任务的代理环境变量（写在用户变量之后：同名的以关卡为准）；关卡没开 → 空。"""
+    return egress.env(pid, kind, tag, EGRESS_HOST) if EGRESS_ON else {}
 
 
 def auth(authorization: str = Header("")) -> None:
@@ -602,7 +631,9 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
         oom_seen[pid] = _oom_count(c) or 0
     oom_before = oom_seen.get(pid, 0)
     tok = tok or os.urandom(6).hex()
-    env = dict(env_vars or {})  # 用户变量先放，STDIN_B64 后写（Codex exec_env：运行时注入的最后写、赢）
+    env = dict(env_vars or {})  # 用户变量先放，出网代理、STDIN_B64 后写（Codex exec_env：运行时注入的最后写、赢）
+    kind, tag = ("j", promote[0]) if promote else ("e", tok)  # 转后台的命令一开始就用任务的账号：转过去之后被拦的也算它的
+    env.update(egress_env(pid, kind, tag))
     if stdin is not None:
         env["STDIN_B64"] = base64.b64encode(stdin.encode()).decode()
     env = env or None
@@ -687,6 +718,7 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
                     moved["teed"] = moved["log"] is None
                     if was:
                         result["woke"] = was
+                    _with_blocked(result, pid, kind, tag)
                     return result
             done.wait()  # 正好在到点那一刻结束：照前台结果给
         if spill:
@@ -699,6 +731,7 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
     result = {"exit_code": code, "timed_out": code == 124, "output": buf.text()}
     if was:
         result["woke"] = was
+    _with_blocked(result, pid, kind, tag)
     if code == 137:  # 被 SIGKILL：看 cgroup 计数有没有涨，涨了就是内存超上限被内核杀的
         n = _oom_count(c)
         if n is not None and n > oom_seen.get(pid, 0):
@@ -719,6 +752,12 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
             if spill.truncated:
                 result["spill_truncated"] = True
     return result
+
+
+def _with_blocked(result: dict, pid: str, kind: str, tag: str) -> None:
+    """这条命令跑的时候出网被拦的（[{host, reason}]）带回给后端（app/egress_note.py 说给模型）。"""
+    if blocked := egress.take_blocked(egress.user(pid, kind, tag)):
+        result["egress_blocked"] = blocked
 
 
 def _own(path: str) -> None:
@@ -956,7 +995,7 @@ async def exec_stream(body: ExecIn):
 @app.post("/jobs/start", dependencies=[Depends(auth)])
 async def job_start(body: JobIn):
     jid = _check_job(body.job_id)
-    env = check_env(body.env) or None
+    env = {**check_env(body.env), **egress_env(body.project_id, "j", jid)} or None
 
     def go():
         c = _container(body.project_id)
@@ -1023,6 +1062,7 @@ async def remove(pid: str):
             pass
         last_used.pop(pid, None)
         oom_seen.pop(pid, None)
+        egress.forget(pid)
         _forget(pid)
     await asyncio.to_thread(go)
     return {"ok": True}
@@ -1526,5 +1566,7 @@ def _adopt() -> None:
 
 @app.on_event("startup")
 async def _start():
+    if EGRESS_ON:
+        await egress.start("0.0.0.0", EGRESS_PORT)
     await asyncio.to_thread(_adopt)
     asyncio.create_task(_reaper())

@@ -48,6 +48,10 @@ services:
       SANDBOX_MAX_RUNNING: ${SANDBOX_MAX_RUNNING:-3}
       SANDBOX_HOST_RESERVE: ${SANDBOX_HOST_RESERVE:-256m}
       SANDBOX_NETWORK: assistant-sandboxes
+      # v2.37 出网关卡（sandbox/egress.py）：容器里命令的上网都走本服务 3128 端口的代理，公网放行、内网拦下。
+      # 允许名单与后端 OUTBOUND_ALLOW_HOSTS 同一份；拒绝名单另给（例：*.example.com, 203.0.113.0/24）
+      SANDBOX_ALLOW_HOSTS: ${OUTBOUND_ALLOW_HOSTS:-}
+      SANDBOX_DENY_HOSTS: ${SANDBOX_DENY_HOSTS:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOST_DATA_DIR}/projects:/projects
@@ -130,3 +134,7 @@ volumes:
 networks:
   sandboxes:
     name: assistant-sandboxes
+    # v2.37：internal = 这个网络没有通往外面的路由。沙盒容器只接这一个网络，所以它们唯一的出网路是
+    # sandbox 服务上的出网代理（它另外接 default 网络才能出去）；也连不到宿主机端口和云主机元数据。
+    # 旧部署的网络不是 internal：deploy/update.sh 会删掉重建（沙盒容器先删，下次用到自动重建，工作区不丢）
+    internal: true
