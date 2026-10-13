@@ -527,6 +527,33 @@ _WRAP = ('echo $$ > /tmp/.exec-{tok}; '
          'else exec </dev/null; fi; '
          'exec timeout -k 5 {timeout} bash -lc "$1"')
 
+# v2.06 转后台的命令不再靠本服务转写（CORE 26）：带 promote 时换这个包装脚本。
+# 输出经 tee -p 同时进 docker 流（前台实时显示）和工作区 .jobs/.fg-<id>.log；本服务重启、流断了，tee 只是不再写流，文件照写。
+# 到点转后台时本服务把这个文件原子改名成 .jobs/<id>/log（tee 开着的文件句柄跟着走），之后的输出不经本服务。
+# 命令结束由脚本自己照 run.sh 的约定写结论：.jobs/<id>/ 在（已转后台）→ 内存超上限 touch oom、exit 原子落盘；不在 → 删掉 .fg 文件。
+# timeout 放后台跑再 wait：$! 才是进程组组长（pid 文件记它，停止时整组杀）；0<&0 显式接 stdin（否则 & 默认接 /dev/null）。
+# .fg 文件建不了（.jobs 没权限 / 盘满）→ F 为空、不 tee：转后台时退回由本服务转写（v2.04 的做法）。
+FG_KEEP_MIN = 1440  # 沙盒被停机打断留下的 .fg 文件：一天前的顺手清掉
+_WRAP_PROMOTE = ('echo $$ > /tmp/.exec-{tok}; '
+                 'if [ -n "${{STDIN_B64+x}}" ]; then exec < <(printf %s "$STDIN_B64" | base64 -d); unset STDIN_B64; '
+                 'else exec </dev/null; fi; '
+                 'J=.jobs/{jid}; F=.jobs/.fg-{jid}.log; '
+                 'mkdir -p .jobs 2>/dev/null; '
+                 'find .jobs -maxdepth 1 -name ".fg-*.log" -mmin +' + str(FG_KEEP_MIN) + ' -delete 2>/dev/null; '
+                 '{{ : > "$F"; }} 2>/dev/null || F=; '
+                 'before=$(' + _OOM + '); '
+                 'run() {{ timeout -k 5 {timeout} bash -lc "$1" 0<&0 & echo $! > /tmp/.exec-{tok}; wait $!; '
+                 'echo $? > /tmp/.exec-{tok}.rc; }}; '
+                 'if [ -n "$F" ]; then run "$1" 2>&1 | tee -p -a "$F"; else run "$1" 2>&1; fi; '
+                 'code=$(cat /tmp/.exec-{tok}.rc 2>/dev/null || echo 255); '
+                 'if [ -n "$F" ]; then '
+                 'if [ -d "$J" ]; then '
+                 'after=$(' + _OOM + '); '
+                 '[ "$code" = 137 ] && [ -n "$after" ] && [ "$after" -gt "${{before:-0}}" ] && touch "$J/oom"; '
+                 '[ -e "$J/exit" ] || {{ echo $code > "$J/exit.tmp" && mv "$J/exit.tmp" "$J/exit"; }}; '
+                 'else rm -f "$F"; fi; fi; '
+                 'rm -f /tmp/.exec-{tok} /tmp/.exec-{tok}.rc; exit $code')
+
 
 def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: str | None = None,
           sink: Sink | None = None, env: dict[str, str] | None = None, promote: tuple[str, int] | None = None) -> dict:
@@ -539,7 +566,8 @@ def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: s
 # 等到点还没跑完：不杀，现场把它登记成工作区 .jobs/<id>/（cmd.sh、pid=进程组组长、log=到目前为止的全部输出），
 # 之后的输出由排水线程接着追加进 log，结束时照 run.sh 的约定原子写 exit（内存超上限再 touch oom）——
 # 后端从此按普通后台任务看它（observe / 查活 / 整组杀 / 结束通知）。到点前就结束的照常返回，什么文件都不留。
-# 已知边界：转后台之后本服务重启，排水线程没了，后面的输出收不到、exit 也写不了：进程结束后后端判“中断了”。
+# v2.06：带 promote 的命令用 _WRAP_PROMOTE，输出由容器里的 tee 直接写文件、结论由包装脚本自己写——转后台之后本服务重启也不丢
+# （排水线程只剩把流读空；.fg 文件建不了时才退回由排水线程转写，那种情况下重启仍会判“中断了”）。
 PROMOTE_MAX_S = 24 * 3600
 PROMOTE_OOM_ADJ = 500  # 同 backend/app/jobs.py OOM_ADJ：转成普通后台任务后内存打满时先杀它，保住常驻服务
 
@@ -558,18 +586,22 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
         env["STDIN_B64"] = base64.b64encode(stdin.encode()).decode()
     env = env or None
     limit = promote[1] if promote else timeout
-    ex = client.api.exec_create(c.id, ["bash", "-c", _WRAP.format(tok=tok, timeout=limit), "_", command],
+    wrap = _WRAP_PROMOTE.format(tok=tok, timeout=limit, jid=promote[0]) if promote else _WRAP.format(tok=tok, timeout=limit)
+    ex = client.api.exec_create(c.id, ["bash", "-c", wrap, "_", command],
                                 workdir="/workspace", environment=env)
     dec, clean, buf = codecs.getincrementaldecoder("utf-8")("replace"), Cleaner(), HeadTail(MAX_OUTPUT)
     spill, sniff, binary_bytes = None, b"", None  # spill：超过 MAX_OUTPUT 才开的落盘文件 _SpillFile
     lock = threading.Lock()
-    moved = {"log": None, "finished": False}  # 转后台后：log = 打开的 .jobs/<id>/log，之后的输出只往里写
+    # 转后台后：teed = 容器里的 tee 在写 .jobs/<id>/log，流里的输出读了就扔；否则 log = 打开的日志，之后的输出只往里写
+    moved = {"log": None, "teed": False, "finished": False}
 
     def take(text: str) -> None:
         nonlocal spill
         if not text:
             return
         with lock:
+            if moved["teed"]:
+                return
             if moved["log"] is not None:
                 try:
                     moved["log"].write(text)
@@ -620,9 +652,9 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
                 errors.append(e)
             with lock:
                 moved["finished"] = True
-                log = moved["log"]
+                log, teed = moved["log"], moved["teed"]
             done.set()
-            if log is not None:
+            if log is not None or teed:
                 _promoted_exit(pid, promote[0], ex["Id"], tok, log, oom_before, not errors)
 
         threading.Thread(target=pump, daemon=True, name=f"exec-{tok}").start()
@@ -631,6 +663,7 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
                 if not moved["finished"]:
                     result = _promote(c, pid, promote[0], command, tok, buf, spill, binary_bytes, timeout)
                     moved["log"] = result.pop("_log")
+                    moved["teed"] = moved["log"] is None
                     if was:
                         result["woke"] = was
                     return result
@@ -675,36 +708,53 @@ def _own(path: str) -> None:
 
 
 def _promote(c, pid: str, jid: str, command: str, tok: str, buf: HeadTail, spill, binary_bytes, waited: int) -> dict:
-    """到点还在跑：登记成 .jobs/<jid>/，返回给后端的结果（带 promoted；_log = 之后接着写的日志文件）。
-    调用方持着输出锁：这期间排水线程的新输出等着，登记完直接进 log，一个字都不丢、不重复。"""
-    d = f"{PROJECTS_ROOT}/{pid}/.jobs/{jid}"
-    os.makedirs(d)
+    """到点还在跑：登记成 .jobs/<jid>/，返回给后端的结果（带 promoted；_log = 之后由排水线程接着写的日志，None = tee 在写）。
+    调用方持着输出锁：这期间排水线程的新输出等着，一个字都不丢、不重复。
+    先在 .jobs/.p-<jid>/ 里备齐 cmd.sh / log / pid，再整个改名成 .jobs/<jid>/：包装脚本看到目录就一定是齐的。
+    log：优先把 tee 正在写的 .jobs/.fg-<jid>.log 改名进去（全文都在，之后照写）；没有（建不了 / 命令刚好结束删了）
+    才退回 v2.04 的做法——把到目前的输出写进去、之后由排水线程转写。"""
+    jobs_dir = f"{PROJECTS_ROOT}/{pid}/.jobs"
+    d, tmp = f"{jobs_dir}/{jid}", f"{jobs_dir}/.p-{jid}"
+    if os.path.exists(d):
+        raise FileExistsError(d)
+    os.makedirs(tmp, exist_ok=True)
     rel = f".jobs/{jid}/log"
-    with open(f"{d}/cmd.sh", "w", encoding="utf-8") as f:
+    with open(f"{tmp}/cmd.sh", "w", encoding="utf-8") as f:
         f.write(command + "\n")
-    log = open(f"{d}/log", "a", encoding="utf-8")
-    if binary_bytes is not None:
-        log.write(f"（二进制输出，到目前 {binary_bytes} 字节，不保存）\n")
-    elif spill:  # 超长：完整的在 spill 文件里（buf 只有头尾）
-        spill.close()
-        try:
-            with open(spill.path, encoding="utf-8") as f:
-                while part := f.read(1 << 20):
-                    log.write(part)
-        except OSError:
+    log = None
+    try:
+        fg = f"{jobs_dir}/.fg-{jid}.log"
+        if not stat.S_ISREG(os.lstat(fg).st_mode):  # 只认 tee 建的普通文件（目录 / 符号链接不搬）
+            raise IsADirectoryError(fg)
+        os.rename(fg, f"{tmp}/log")
+        if spill:  # 全文已在 tee 的文件里：spill 那份不要了
+            spill.close()
+            spill.discard()
+    except OSError:
+        log = open(f"{tmp}/log", "a", encoding="utf-8")
+        if binary_bytes is not None:
+            log.write(f"（二进制输出，到目前 {binary_bytes} 字节，不保存）\n")
+        elif spill:  # 超长：完整的在 spill 文件里（buf 只有头尾）
+            spill.close()
+            try:
+                with open(spill.path, encoding="utf-8") as f:
+                    while part := f.read(1 << 20):
+                        log.write(part)
+            except OSError:
+                log.write(buf.text())
+            spill.discard()
+        else:
             log.write(buf.text())
-        spill.discard()
-    else:
-        log.write(buf.text())
-    log.flush()
+        log.flush()
     group = (c.exec_run(["cat", f"/tmp/.exec-{tok}"]).output or b"").decode().strip()
-    with open(f"{d}/pid", "w") as f:
+    with open(f"{tmp}/pid", "w") as f:
         f.write(group + "\n")
     if group.isdigit():  # 前台命令没调过 oom_score_adj：转成普通后台任务就和 run.sh 一样调高（只能调高，不需要特权）
         c.exec_run(["bash", "-c", f"for p in $(pgrep -g {group}); do echo {PROMOTE_OOM_ADJ} > /proc/$p/oom_score_adj; "
                     "done 2>/dev/null; exit 0"], detach=True)
-    for path in (f"{PROJECTS_ROOT}/{pid}/.jobs", d, f"{d}/cmd.sh", f"{d}/log", f"{d}/pid"):
+    for path in (jobs_dir, tmp, f"{tmp}/cmd.sh", f"{tmp}/log", f"{tmp}/pid"):
         _own(path)
+    os.rename(tmp, d)
     out = {"exit_code": None, "timed_out": False, "promoted": jid, "waited": waited, "_log": log}
     if binary_bytes is not None:
         out.update(output="", binary=binary_bytes)
@@ -718,14 +768,19 @@ def _promote(c, pid: str, jid: str, command: str, tok: str, buf: HeadTail, spill
 
 def _promoted_exit(pid: str, jid: str, eid: str, tok: str, log, oom_before: int, clean_end: bool) -> None:
     """转后台的命令结束了：照 run.sh 的约定写结论（exit 原子落盘；内存超上限 touch oom），收拾 pid 文件。
-    流是断掉的（不是命令结束）就什么都不写：后端查活发现进程没了、又没有 exit，按“中断了”结算。"""
-    try:
-        log.close()
-    except OSError:
-        pass
+    v2.06 起通常包装脚本已经写过了（有 exit 就不动）；这里兜底 .fg 文件没用上、或命令恰好在登记那一刻结束的情况。
+    流是断掉的（不是命令结束）就什么都不写：包装脚本自己会写；它也没写，后端查活发现进程没了、按“中断了”结算。"""
+    if log is not None:
+        try:
+            log.close()
+        except OSError:
+            pass
     if not clean_end:
         return
     d = f"{PROJECTS_ROOT}/{pid}/.jobs/{jid}"
+    if os.path.exists(f"{d}/exit"):
+        last_used[pid] = time.time()
+        return
     try:
         code = client.api.exec_inspect(eid).get("ExitCode")
         c = _existing(pid)

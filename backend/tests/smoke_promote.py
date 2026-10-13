@@ -20,17 +20,23 @@ r = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=roo
 assert r.returncode == 0, r.stderr
 
 # ---- 1. 真 runner：docker 换成本机 bash ----
-procs = {}
+procs, broken = {}, set()
 class FakeApi:
     def exec_create(self, cid_, argv, workdir=None, environment=None):
         eid = f"e{len(procs)}"
+        cwd = tmp
+        if workdir == "/workspace":  # 容器里的 /workspace = 本服务看到的 /projects/<pid>
+            cwd = os.path.join(runner.PROJECTS_ROOT, "p1"); os.makedirs(cwd, exist_ok=True)
         procs[eid] = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                      env={**os.environ, **(environment or {})}, cwd=tmp)
+                                      env={**os.environ, **(environment or {})}, cwd=cwd)
         return {"Id": eid}
     def exec_start(self, eid, stream=False):
         p = procs[eid]
         while (b := p.stdout.read1(64)):
             yield b
+            if eid in broken:  # 模拟本服务重启：流断了（读的一端关掉），排水线程没了
+                p.stdout.close()
+                raise ConnectionError("stream gone")
     def exec_inspect(self, eid):
         return {"ExitCode": procs[eid].wait()}
 class FakeContainer:
@@ -62,6 +68,7 @@ def wait_for(path, s=8.0):
 r = runner._exec("p1", "echo a; sleep 0.3; echo b", 3, promote=("j00000a", 60))
 assert r == {"exit_code": 0, "timed_out": False, "output": "a\nb\n"}, r
 assert not os.path.exists(J("j00000a"))
+assert not [f for f in os.listdir(os.path.dirname(J("x"))) if f.startswith(".")], "按时结束：.fg 文件删掉、没有半成品目录"
 
 # 到点没完：转后台
 t0 = time.time()
@@ -82,6 +89,31 @@ assert not os.path.exists(f"{d}/oom")
 time.sleep(0.2)
 assert not any(f.startswith(".exec-") and os.path.getmtime(f"/tmp/{f}") > t0 for f in os.listdir("/tmp")), "pid 文件应被清掉"
 print("promote basic ok")
+
+# v2.06：转后台之后本服务“重启”（流断了、排水线程没了）——tee 照写日志，包装脚本自己写 exit / 不丢输出
+r = runner._exec("p1", "echo one; sleep 1.2; for i in 1 2 3; do echo after$i; done; exit 5", 1, promote=("j00000r", 60))
+assert r["promoted"] == "j00000r" and r["output"] == "one\n", r
+broken.add(f"e{len(procs) - 1}")
+wait_for(f"{J('j00000r')}/exit")
+assert open(f"{J('j00000r')}/exit").read().strip() == "5"
+assert open(f"{J('j00000r')}/log").read() == "one\nafter1\nafter2\nafter3\n", open(f"{J('j00000r')}/log").read()
+assert not os.path.exists(J("j00000r") + "/exit.tmp") and not os.path.exists(os.path.dirname(J("x")) + "/.fg-j00000r.log")
+assert not os.path.exists(os.path.dirname(J("x")) + "/.p-j00000r")
+
+# stdin 照样接得上（& 默认会接 /dev/null，包装脚本显式 0<&0）
+r = runner._exec("p1", "read a; echo got-$a; sleep 1.2; echo bye", 1, stdin="hi\n", promote=("j00000s", 60))
+assert r["promoted"] == "j00000s" and r["output"] == "got-hi\n", r
+wait_for(f"{J('j00000s')}/exit")
+assert open(f"{J('j00000s')}/log").read() == "got-hi\nbye\n"
+
+# .fg 文件建不了（这里先占一个同名目录）→ 退回由本服务转写（v2.04 的做法），结果一样
+os.makedirs(os.path.dirname(J("x")) + "/.fg-j00000t.log")
+r = runner._exec("p1", "echo f1; sleep 1.2; echo f2; exit 4", 1, promote=("j00000t", 60))
+assert r["promoted"] == "j00000t" and r["output"] == "f1\n", r
+wait_for(f"{J('j00000t')}/exit")
+assert open(f"{J('j00000t')}/exit").read().strip() == "4" and open(f"{J('j00000t')}/log").read() == "f1\nf2\n"
+os.rmdir(os.path.dirname(J("x")) + "/.fg-j00000t.log")
+print("promote survives service restart ok")
 
 # 超长输出到点：log 是全文，spill 文件并进去后删掉
 spill_dir = os.path.join(runner.PROJECTS_ROOT, "p1", ".spill")
