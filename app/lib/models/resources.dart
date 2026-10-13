@@ -422,6 +422,8 @@ class HomeCard {
     this.unread = false,
     this.updatedAt,
     this.snoozedUntil,
+    this.removedAt,
+    this.revivable = false,
   });
   factory HomeCard.fromJson(Map<String, dynamic> j) => HomeCard(
     id: j['id'] as String,
@@ -442,6 +444,8 @@ class HomeCard {
     unread: j['unread'] as bool? ?? false,
     updatedAt: _date(j['updated_at']),
     snoozedUntil: _date(j['snoozed_until']),
+    removedAt: _date(j['removed_at']),
+    revivable: j['revivable'] as bool? ?? false,
   );
   final String id, kind, title;
   final List<Block> blocks;
@@ -487,6 +491,10 @@ class HomeCard {
   /// 稍后提醒到这个时刻（本地时间）。非空就先不显示；到点由服务端放回（清空 + 重新未读），客户端不比本机时钟。
   final DateTime? snoozedUntil;
   bool get snoozed => snoozedUntil != null;
+
+  /// v2.17 从 Home 移除的面板：移除时刻 + 还能不能找回（服务端 app/panel_trash.py 判定，30 天内；客户端只认 [revivable]）。
+  final DateTime? removedAt;
+  final bool revivable;
 }
 
 /// GET /api/inbox：未读数 + 最新一条未读（轮询用的轻量摘要）。

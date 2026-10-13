@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, select
 
 from ..models import Conversation, HomeCard, Job, Memory, Project, ScheduledTask
-from .. import task_brief, card_snooze, project_brief, sandbox_client, schedule, script_tasks, task_store
+from .. import task_brief, card_snooze, panel_trash, project_brief, sandbox_client, schedule, script_tasks, task_store
 from ..storage import PROJECTS
 from .crud import crud_router
 
@@ -152,5 +152,5 @@ routers = [
                 on_delete=task_store.delete_cascade, extra=schedule.wire, on_update=_check_task_patch,
                 after_update=task_store.after_patch),
     crud_router("/api/cards", HomeCard, CardIn, CardPatch, order_by=HomeCard.updated_at.desc(),
-                extra=card_snooze.wire, on_update=_check_card_patch),
+                extra=lambda c: {**card_snooze.wire(c), **panel_trash.wire(c)}, on_update=_check_card_patch),
 ]

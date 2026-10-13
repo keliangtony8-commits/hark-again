@@ -210,7 +210,9 @@ export type HomeCard = { id: string; kind: "action" | "panel" | "report"; conver
   /** 稍后提醒到这个时刻：非空就先不显示，到点服务端放回（清空 + 重新未读）。旧服务器没有这个字段。 */
   snoozed_until?: string | null;
   /** 报告卡的“一眼”：摘要卡标题 + 一句话（backend app/report_gist.py；拼法见 lib/reportGlance.ts）。旧服务器没有。 */
-  headline?: string | null; gist?: string | null };
+  headline?: string | null; gist?: string | null;
+  /** v2.17 移除的面板：移除时刻 + 还能不能找回（服务端 app/panel_trash.py 判定，30 天内；见 features/home/RemovedPanels.tsx）。旧服务器没有。 */
+  removed_at?: string | null; revivable?: boolean };
 export type InboxItem = { id: string; kind: HomeCard["kind"]; title: string; conversation_id: string | null; created_at: string;
   headline?: string | null; gist?: string | null };
 export type InboxSummary = { unread: number; latest: InboxItem | null };

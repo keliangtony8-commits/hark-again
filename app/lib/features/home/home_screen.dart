@@ -29,6 +29,7 @@ import '../me/task_form.dart';
 import '../me/task_wall.dart';
 import '../me/tasks_screen.dart' show createTask;
 import 'new_panel.dart';
+import 'removed_panels.dart';
 import 'today_agenda.dart';
 
 String hm(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -90,6 +91,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final actions = items.where((c) => c.kind == 'action').toList();
     final panels = items.where((c) => c.kind == 'panel').toList();
     final reports = items.where((c) => c.kind == 'report').take(5).toList();
+    final removed = removedPanels(cards.value ?? const <HomeCard>[]); // v2.17 最近移除、还能找回的面板
     final unread = ref.watch(inboxProvider.select((s) => s.unread));
 
     return Scaffold(
@@ -132,6 +134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                         ]),
             ),
+            RemovedPanels(cards: removed),
             FadeSlideIn(
               delay: Motion.stagger(panels.length),
               child: WidePill(icon: Icons.add_rounded, label: '创建一个新面板', onTap: () => createPanel(context, ref)),
@@ -358,11 +361,8 @@ class _PanelCard extends ConsumerWidget {
       await ref.read(tasksProvider.notifier).reload();
     }
 
-    Future<void> remove() async {
-      if (!await confirmDanger(context, title: '移除「${card.title}」？', text: '它不会再刷新。', action: '移除')) return;
-      if (card.taskId != null) await ref.read(tasksProvider.notifier).remove(card.taskId!); // 后端会连卡一起删
-      await ref.read(cardsProvider.notifier).reload();
-    }
+    // v2.17 移除可以撤销 / 30 天内找回，所以不再弹危险确认（removed_panels.dart）
+    Future<void> remove() => removePanel(context, ref, card);
 
     // 改标题/刷新指令/频率：和任务详情同一张表单；改名由服务端同步到卡片，所以之后重拉一次卡片
     Future<void> edit() async {

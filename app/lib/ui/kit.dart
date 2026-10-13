@@ -436,8 +436,14 @@ class SearchField extends StatelessWidget {
   }
 }
 
-void showToast(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text(text)));
+/// 底部一条提示；给了 [action] 就带一个按钮（“撤销”之类，点了调 [onAction]）。
+void showToast(BuildContext context, String text, {String? action, VoidCallback? onAction}) =>
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(text),
+        action: action == null ? null : SnackBarAction(label: action, textColor: context.palette.onInk, onPressed: onAction ?? () {}),
+      ));
 
 /// 浮在内容底部的一条（输入胶囊）：内容铺满到底、从它下面滚过去。
 /// 它量出底条的实际高度（多行、附件托盘、编辑条都会变高）加进 MediaQuery.padding.bottom，

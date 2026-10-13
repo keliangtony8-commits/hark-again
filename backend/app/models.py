@@ -216,6 +216,9 @@ class HomeCard(Base):
     unread: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # 稍后提醒：非空 = 先收起，到点由 worker 叫醒（清空 + 重新未读 + 顶到最前），见 app/card_snooze.py
     snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    # v2.17 移除的面板（app/panel_trash.py）：removed_at = 从 Home 拿掉的时刻，revive_spec = 背后任务的做法快照；30 天内可找回
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revive_spec: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 

@@ -22,7 +22,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import task_brief, task_wall, card_snooze, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
+from . import task_brief, task_wall, card_snooze, panel_trash, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -113,6 +113,8 @@ async def tick() -> None:
     async with SessionLocal() as db:
         if n := await card_snooze.wake_due(db, now):  # 稍后提醒到点的卡放回 Home
             log.info("woke %d snoozed cards", n)
+        if n := await panel_trash.purge(db, now):  # 移除超过 30 天的面板彻底删掉
+            log.info("purged %d removed panels", n)
         tasks = (await db.scalars(select(ScheduledTask).where(
             or_(ScheduledTask.active.is_(True), ScheduledTask.run_requested.is_(True))))).all()
         due = [t.id for t in tasks if is_due(t, now)]

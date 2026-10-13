@@ -1,7 +1,7 @@
 # 冒烟：Home 管理（模拟模型，不打真接口）。
 # create_panel 走 task_store（坏 cron 拒绝）；接口 PATCH 面板任务改名 → 卡片标题跟着改（crud after_update 钩子）；
 # 工具 manage_home：list 分组带 id 与 cron、只列未隐藏；refresh 置 run_requested；update 改名/cron（卡片同步、坏 cron 拒绝、
-# 非面板拒绝）；dismiss 建议 = 隐藏并清未读，dismiss 面板 = 连任务带卡删除；未知 id 提示先 list。
+# 非面板拒绝）；dismiss 建议 = 隐藏并清未读，dismiss 面板 = 删任务、卡进最近移除；未知 id 提示先 list。
 # 运行：python tests/smoke_manage_home.py
 import os, sys, asyncio, subprocess, tempfile
 db_path = os.path.join(tempfile.mkdtemp(), "t.db")
@@ -89,8 +89,9 @@ assert "已从 Home 拿掉" in asyncio.run(call("manage_home", action="dismiss",
 a = c.get(f"/api/cards/{action['id']}").json()
 assert a["dismissed"] is True and a["unread"] is False, a
 assert "没找到" in asyncio.run(call("manage_home", action="dismiss", id=action["id"]))  # 已隐藏的不再可操作
-assert "已删除面板" in asyncio.run(call("manage_home", action="dismiss", id=score["id"]))
-assert c.get(f"/api/tasks/{score['task_id']}").status_code == 404
-assert c.get(f"/api/cards/{score['id']}").status_code == 404
+assert "30 天内可以用 revive 找回" in asyncio.run(call("manage_home", action="dismiss", id=score["id"]))
+assert c.get(f"/api/tasks/{score['task_id']}").status_code == 404  # 任务删了（worker 不会再刷新）
+gone = c.get(f"/api/cards/{score['id']}").json()  # 卡留着，进“最近移除”（规则见 smoke_panel_trash.py）
+assert gone["dismissed"] is True and gone["revivable"] is True and gone["task_id"] is None, gone
 
 print("smoke_manage_home OK")

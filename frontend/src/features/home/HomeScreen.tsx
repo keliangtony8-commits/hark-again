@@ -16,11 +16,11 @@ import TaskSheet, { changesOf, draftOf, EMPTY_TASK } from "../me/TaskSheet";
 import WallNotice from "../me/WallNotice";
 import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
+import { RemovedRow, removedPanels, removePanel as removeCard, revivePanel } from "./RemovedPanels";
 import { InboxRow } from "./InboxRow";
 import { OfferImage, OfferSource } from "./OfferMedia";
 import { agendaDetail, agendaHint, agendaNowAt, clockOf, agendaProblem, agendaSummary, briefTaskOf, MORNING_BRIEF, PREP_DAY_LABEL, PREP_DAY_PROMPT, SCHEDULE_BRIEF_LABEL, todayAgenda } from "./todayAgenda";
 import "./home.css";
-import { confirmDialog } from "../../ui/dialog";
 
 /** 错峰入场第 i 拍（.enter 读 --i；超过 10 拍不再加，= App Motion.stagger）。 */
 const nth = stagger;
@@ -88,11 +88,10 @@ export default function HomeScreen() {
   }, [refreshing.size]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshPanel = async (taskId: string) => { await http.post(`/api/tasks/${taskId}/run`, {}); tasks.reload(); };
-  const removePanel = async (c: HomeCard) => {
-    if (!(await confirmDialog({ title: `移除面板「${c.title}」？`, text: "它不会再刷新。", action: "移除" }))) return;
-    if (c.task_id) await tasks.remove(c.task_id); // 删任务时后端会连卡一起删
-    cards.reload();
-  };
+  // v2.17 移除 = 停止刷新、进“最近移除”，30 天内可放回（RemovedPanels.tsx），所以不再弹危险确认
+  const removePanel = async (c: HomeCard) => { await removeCard(c); cards.reload(); tasks.reload(); };
+  const revive = async (c: HomeCard) => { await revivePanel(c); cards.reload(); tasks.reload(); };
+  const removed = removedPanels(cards.items);
   // 编辑面板 = 编辑它的任务（同一张 TaskSheet）；改名由服务端同步到卡片，存完重拉卡片
   const [editing, setEditing] = useState<ScheduledTask | null>(null);
   const [schedulingBrief, setSchedulingBrief] = useState(false);
@@ -191,6 +190,7 @@ export default function HomeScreen() {
             </div>
           );
         })}
+        {!cards.loading && <RemovedRow cards={removed} onRevive={revive} />}
         <div className="enter" style={nth(panels.length)}><WidePill label="创建一个新面板" onClick={() => setNewPanel(true)} /></div>
       </Section>
 

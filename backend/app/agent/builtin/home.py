@@ -1,6 +1,7 @@
 """Home：把“要反复看的信息”做成定时刷新的面板（create_panel），以及在对话里管理 Home 上已有的东西（manage_home）：
 “我主页上有什么”“把天气面板改成每天 7 点”“删掉那个比分面板”“收件箱那条不用管了”。
-面板本质是 output=panel 的定时任务，增删改都走 app/task_store.py（与接口、客户端同一套规则：改名卡片跟着改、删除连卡带记录）。"""
+面板本质是 output=panel 的定时任务，增删改都走 app/task_store.py（与接口、客户端同一套规则：改名卡片跟着改）；
+移除 / 找回面板走 app/panel_trash.py（v2.17：30 天内可 revive）。"""
 import asyncio
 from datetime import datetime, timedelta, timezone
 
@@ -8,7 +9,7 @@ from sqlalchemy import select
 
 from zoneinfo import ZoneInfo
 
-from ... import card_snooze, card_targets, home_offers, schedule, task_runs, task_store, task_wall, web_guard
+from ... import card_snooze, card_targets, home_offers, panel_trash, schedule, task_runs, task_store, task_wall, web_guard
 from ...blocks import blocks_to_text
 from ...config import settings
 from ...db import SessionLocal
@@ -112,11 +113,12 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
       "查看和管理 Home 上的卡片。action=list 列出建议、面板、收件箱（带 id）；"
       "read 看一个面板的完整内容和刷新状态（上次结果、下次时间、连续失败、碰壁、是否暂停）；runs 看它最近几次刷新；"
       "refresh 让面板立即刷新并最多等一分钟告诉你结果（用户说面板不对 / 没更新时先 read，再 runs，再 refresh）；update 改面板的 title/prompt/cron（cron 同 create_panel）；"
-      "dismiss 拿掉一张卡：建议/收件箱只是隐藏，面板会连同它的定时刷新一起删除（不可恢复，用户没明确要删就先问）；"
+      "dismiss 拿掉一张卡：建议/收件箱只是隐藏；面板停止刷新、移到“最近移除”（只在用户明确要拿掉时做，别为腾地方或整理主页而删）；"
+      "revive 找回最近 30 天移除的面板（list 末尾列着 id）：标题、刷新指令、频率、做法都回来，并马上重新取数据——用户想要回丢掉的面板时先找它，别重建；"
       "snooze 把建议/收件箱先收起，到 until 再放回来并提醒（“明早再提醒我”）；unsnooze 现在就放回来。"
       "id 先用 list 拿到。",
       {"type": "object", "properties": {
-          "action": {"type": "string", "enum": ["list", "read", "runs", "refresh", "update", "dismiss", "snooze", "unsnooze"]},
+          "action": {"type": "string", "enum": ["list", "read", "runs", "refresh", "update", "dismiss", "revive", "snooze", "unsnooze"]},
           "id": {"type": "string", "description": "卡片 id"},
           "title": {"type": "string"},
           "prompt": {"type": "string"},
@@ -135,7 +137,20 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
         for kind in ("action", "panel", "report"):
             group = [c for c in cards if c.kind == kind][: REPORTS_LISTED if kind == "report" else None]
             out += [_line(c, tasks.get(c.task_id)) for c in group]
+        gone = await panel_trash.recent(db)
+        if gone:
+            out += ["最近移除的面板（30 天内可 revive 找回）："]
+            out += [f"- id={c.id} [已移除面板]「{c.title}」 · 移除于 {_local(c.removed_at)}" for c in gone]
         return ToolResult("\n".join(out) if out else "Home 上还什么都没有。")
+
+    if action == "revive":
+        if not id:
+            return ToolResult("revive 要给 id：先用 action=list 看“最近移除的面板”。")
+        try:
+            card, task = await panel_trash.revive(db, id)
+        except LookupError as e:
+            return ToolResult(f"{e}。先用 action=list 看“最近移除的面板”。")
+        return ToolResult(f"面板「{card.title}」已放回 Home · cron {task.cron}，正在重新取数据（半分钟左右）。")
 
     card = await db.get(HomeCard, id) if id else None
     if card is None or card.dismissed:
@@ -143,9 +158,9 @@ async def manage_home(ctx: ToolContext, action: str, id: str | None = None, titl
     task = await db.get(ScheduledTask, card.task_id) if card.task_id else None
 
     if action == "dismiss":
-        if card.kind == "panel" and task is not None:
-            await task_store.remove(db, task)  # 连卡带运行记录
-            return ToolResult(f"已删除面板「{card.title}」，它不会再刷新。")
+        if card.kind == "panel":
+            await panel_trash.remove(db, card)
+            return ToolResult(f"已从 Home 拿掉面板「{card.title}」，它不再刷新；30 天内可以用 revive 找回。")
         card.dismissed = True
         card.unread = False
         card.snoozed_until = None
