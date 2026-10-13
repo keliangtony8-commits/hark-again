@@ -33,7 +33,7 @@ class FormBlockView extends StatefulWidget {
   static IconData iconOf(FormBlock b) => switch (b.purpose) {
         'login' => Icons.lock_outline_rounded,
         'code' => Icons.sms_outlined,
-        'env' => Icons.key_rounded,
+        'env' || 'token' => Icons.key_rounded,
         _ => Icons.edit_note_rounded,
       };
 
@@ -41,6 +41,7 @@ class FormBlockView extends StatefulWidget {
   static String privacyNote(String purpose) => switch (purpose) {
         'info' => '你填的内容会交给助手，用来接着办这件事',
         'env' => '只存进保险箱，助手只知道名字；在 我的 → 保险箱 里可以换值或删除',
+        'token' => '只用来连接这台 MCP 服务器，加密保存，助手看不到；在 连接器 页可以删掉',
         _ => '只交给浏览器填写，助手看不到',
       };
 
@@ -209,7 +210,7 @@ class _FormBlockViewState extends State<FormBlockView> {
         'multiline' => TextInputType.multiline,
         _ => TextInputType.text,
       },
-      autofillHints: widget.block.purpose == 'env' ? null : switch (f.kind) { // 环境变量不是网站密码：别让密码管理器存
+      autofillHints: widget.block.asksKey ? null : switch (f.kind) { // 环境变量 / 令牌不是网站密码：别让密码管理器存
         'password' => const [AutofillHints.password],
         'code' => const [AutofillHints.oneTimeCode],
         'email' => const [AutofillHints.email],

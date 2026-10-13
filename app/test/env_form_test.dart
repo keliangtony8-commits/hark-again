@@ -1,4 +1,5 @@
 // 要环境变量卡（v1.88 request_env，purpose=env）：解析 min_length；钥匙图标 + “只存进保险箱”；
+// v2.49 token（mcp_servers 要 MCP 令牌）同样钥匙图标 + 不让密码管理器存 + 自己的去向说明；
 // 太短时框下提示且不能提交，够长才回调（不带“记住”）；发出后清空收起；提交后状态“已存好”。
 import 'package:assistant/blocks/block_actions.dart';
 import 'package:assistant/blocks/block_view.dart';
@@ -45,6 +46,21 @@ void main() {
     expect(FormBlockView.iconOf(b), Icons.key_rounded);
     expect(FormBlockView.privacyNote('env'), contains('保险箱'));
     expect((Block.fromJson({...env('pending'), 'fields': [{'name': 'a', 'label': 'A'}]}) as FormBlock).fields.single.minLength, 0);
+    expect(b.asksKey, isTrue);
+  });
+
+  testWidgets('MCP 令牌卡：钥匙图标、说明去向、不让密码管理器存', (tester) async {
+    final t = Block.fromJson({...env('pending'), 'purpose': 'token', 'title': '添加 MCP「notion」需要令牌',
+      'site': 'mcp.notion.com', 'action': '连接'}) as FormBlock;
+    expect(t.asksKey, isTrue);
+    expect((Block.fromJson({...env('pending'), 'purpose': 'login'}) as FormBlock).asksKey, isFalse);
+    expect(FormBlockView.iconOf(t), Icons.key_rounded);
+    await pump(tester, t, onForm: (_, _, _) => true);
+    expect(find.textContaining('只用来连接这台 MCP 服务器'), findsOneWidget);
+    expect(find.textContaining('保险箱'), findsNothing);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.autofillHints, isNull);
+    expect(field.obscureText, isTrue);
   });
 
   testWidgets('太短提示、够长才提交，发出后清空', (tester) async {

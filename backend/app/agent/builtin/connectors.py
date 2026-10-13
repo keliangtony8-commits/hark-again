@@ -17,7 +17,7 @@ def _risk(args: dict, ctx=None) -> str | None:
 
 
 @tool("connector_accounts", "正在查看连接器",
-      "管理用户的账户连接器（参数 action + provider=连接器 id；Google 的 Gmail/日历/云端硬盘、GitHub…）和 MCP 服务器。"
+      "管理用户的账户连接器（参数 action + provider=连接器 id；Google 的 Gmail/日历/云端硬盘、GitHub…）。MCP 服务器用 mcp_servers。"
       "list：每个连接器的状态（已连接 / 授权失效 / 可以连接 / 服务器没配）和账户；"
       "connect：要用某个还没连（或失效、想换号）的账户时，在聊天里给用户一张连接卡，用户点了去服务商页面授权——"
       "别再叫用户自己去设置里找；"

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import connector_accounts, task_wall, vault
+from .. import connector_accounts, mcp_servers, task_wall
 from ..config import settings
 from ..auth import require_user
 from ..connectors import mcp, oauth
@@ -112,18 +112,12 @@ async def list_mcp(db: AsyncSession = Depends(get_session)):
 
 @router.post("/mcp")
 async def add_mcp(body: McpIn, db: AsyncSession = Depends(get_session)):
-    if not body.url.startswith(("https://", "http://")):
-        raise HTTPException(400, "地址要以 http(s):// 开头")
-    s = McpServer(name=body.name.strip(), url=body.url.strip(),
-                  token_ciphertext=vault.encrypt(body.token) if body.token else None)
-    try:  # 先连一次，确认能用再保存
-        tools = await mcp.list_tools(s)
-    except Exception as e:
-        raise HTTPException(400, f"连不上这个 MCP 服务器：{e}")
-    db.add(s)
-    note = await _retry(db, s.name)
-    await db.commit()
-    return {**_mcp_public(s), "tools": [t["name"] for t in tools], "retried_note": note}
+    # 检查、先连一次、重名 / 重复地址、重跑卡住的任务——规则只在 app/mcp_servers.py（助手的 mcp_servers 工具同一份）
+    try:
+        a = await mcp_servers.add(db, body.name, body.url, body.token, by="user")
+    except mcp_servers.AddError as e:
+        raise HTTPException(409 if e.kind == "dupe" else 400, str(e))
+    return {**_mcp_public(a.server), "tools": a.tools, "retried_note": a.retried}
 
 
 async def _retry(db: AsyncSession, *names: str) -> str | None:
@@ -148,5 +142,5 @@ async def mcp_tools(sid: str, db: AsyncSession = Depends(get_session)):
 @router.delete("/mcp/{sid}")
 async def remove_mcp(sid: str, db: AsyncSession = Depends(get_session)):
     if s := await db.get(McpServer, sid):
-        await mcp.forget(db, s)
+        await mcp_servers.remove(db, s)
     return {"ok": True}

@@ -693,7 +693,8 @@ class FormAnswer {
 }
 
 /// 表单卡：任务进行中向用户要东西（网站登录、验证码、助手缺的信息），答复走 form.reply。
-/// login / code 的值只发给服务器交给浏览器，env（request_env）的值只发给服务器存进保险箱，都不写进卡片；
+/// login / code 的值只发给服务器交给浏览器，env（request_env）的值只发给服务器存进保险箱，
+/// token（mcp_servers 添加服务器要的访问令牌）的值只发给服务器加密存进那台服务器，都不写进卡片；
 /// info（ask_user）提交后服务器把 answers 写回卡片。
 class FormBlock extends Block {
   const FormBlock({
@@ -728,6 +729,9 @@ class FormBlock extends Block {
   final List<FormAnswer> answers;
   final bool remember; // 是否提供“记住”（login → 保险箱；info → 长期记忆）
   bool get pending => state == 'pending';
+
+  /// 要的是一把密钥（环境变量 / MCP 令牌），不是网站密码：钥匙图标、不让系统密码管理器填或存。
+  bool get asksKey => purpose == 'env' || purpose == 'token';
 
   /// 填好了没有：必填的都不是空白（选填可以空着），填了的都够长。
   bool completeWith(Map<String, String> values) => fields.every((f) {

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { formComplete, formPrivacy, tooShort, type FormBlock as F, type FormInput } from "../lib/types";
+import { formAsksKey, formComplete, formPrivacy, tooShort, type FormBlock as F, type FormInput } from "../lib/types";
 import { useBlockActions } from "./actions";
 import { IconChat, IconCheck, IconEdit, IconEye, IconEyeOff, IconKey, IconLock, IconSms } from "../ui/icons";
 import { Toggle } from "../ui/kit";
@@ -11,7 +11,7 @@ const AUTOCOMPLETE = { password: "current-password", code: "one-time-code", emai
 /** 表单卡：任务里向你要登录信息、验证码，或助手缺的信息（对标 Hark “在它自己的表单上问你”）。
  *  等填写：输入框 + 取消 / 提交（必填齐才能点）；登录卡是真正的 <form autocomplete>，浏览器密码管理器能直接填。
  *  info 卡（ask_user）：标题下说为什么问，候选可点选，选填可空；提交后服务器写回 answers → 一问一答。
- *  env 卡（request_env）：一个遮住的框，值直接存进保险箱（助手只知道名字）；太短时框下提示，不让密码管理器填 / 存。
+ *  env 卡（request_env）/ token 卡（mcp_servers）：一个遮住的框，值直接存进保险箱 / 那台服务器（助手看不到）；太短时框下提示，不让密码管理器填 / 存。
  *  发出后清空并收起，只剩状态；login/code 的值从不进卡片。断线（replyForm 返回 false）保留输入。 */
 export default function FormBlock({ block }: { block: F }) {
   const { replyForm } = useBlockActions();
@@ -24,7 +24,7 @@ export default function FormBlock({ block }: { block: F }) {
   const open = block.state === "pending" && !!replyForm && !sent;
   const complete = formComplete(block, values);
   const info = block.purpose === "info";
-  const Icon = block.state === "submitted" ? IconCheck : block.purpose === "login" ? IconLock : block.purpose === "code" ? IconSms : block.purpose === "env" ? IconKey : IconEdit;
+  const Icon = block.state === "submitted" ? IconCheck : block.purpose === "login" ? IconLock : block.purpose === "code" ? IconSms : formAsksKey(block) ? IconKey : IconEdit;
 
   const reply = (submit: boolean) => {
     if (!replyForm || sent || (submit && !complete)) return;
@@ -43,7 +43,7 @@ export default function FormBlock({ block }: { block: F }) {
       {open && (
         <form className="blk-form-body fade-in" autoComplete="on" onSubmit={(e) => { e.preventDefault(); reply(true); }}>
           {block.fields.map((f, i) => (
-            <Field key={f.name} field={f} login={block.purpose === "login"} env={block.purpose === "env"} value={values[f.name] ?? ""}
+            <Field key={f.name} field={f} login={block.purpose === "login"} env={formAsksKey(block)} value={values[f.name] ?? ""}
               inputRef={i === 0 ? first : undefined} autoFocus={i === 0 && block.fields.every((x) => !x.value)}
               shown={shown.has(f.name)} onShow={() => setShown((s) => { const n = new Set(s); n.has(f.name) ? n.delete(f.name) : n.add(f.name); return n; })}
               onChange={(v) => setValues((o) => ({ ...o, [f.name]: v }))} />

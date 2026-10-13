@@ -63,10 +63,12 @@ export type OrderBlock = { type: "order"; id: string; merchant: string;
 export type FormInput = { name: string; label: string; kind?: "text" | "email" | "password" | "code" | "phone" | "multiline"; value?: string | null;
   options?: string[] | null; optional?: boolean; min_length?: number | null };
 /** note = 为什么问；answers 只有 info 卡提交后才有（用户有意告诉助手的，login/code/env 的值从不进卡片；
- *  env = request_env 要的命令环境变量，值只存进保险箱）。 */
-export type FormBlock = { type: "form"; id: string; purpose?: "login" | "code" | "info" | "env"; title: string; site?: string | null;
+ *  env = request_env 要的命令环境变量，值只存进保险箱；token = mcp_servers 添加服务器要的访问令牌）。 */
+export type FormBlock = { type: "form"; id: string; purpose?: "login" | "code" | "info" | "env" | "token"; title: string; site?: string | null;
   fields: FormInput[]; remember?: boolean; action?: string; state: "pending" | "submitted" | "cancelled" | "expired";
   note?: string | null; answers?: { label: string; value: string }[] | null };
+/** 要的是一把密钥（环境变量 / MCP 令牌），不是网站密码：钥匙图标、不让浏览器密码管理器填或存。 */
+export const formAsksKey = (b: FormBlock) => b.purpose === "env" || b.purpose === "token";
 /** 填了但不够长（空着不算，空着归必填规则）。 */
 export const tooShort = (f: FormInput, v: string) => !!v.trim() && v.length < (f.min_length ?? 0);
 /** 填好了没有：必填不空、填了的够长。 */
@@ -76,6 +78,7 @@ export const formComplete = (b: FormBlock, values: Record<string, string>) =>
 export const formPrivacy = (purpose: FormBlock["purpose"]) =>
   purpose === "info" ? "你填的内容会交给助手，用来接着办这件事"
     : purpose === "env" ? "只存进保险箱，助手只知道名字；在 我的 → 保险箱 里可以换值或删除"
+    : purpose === "token" ? "只用来连接这台 MCP 服务器，加密保存，助手看不到；在 连接器 页可以删掉"
     : "只交给浏览器填写，助手看不到";
 /** 项目沙盒里的后台任务卡（后端 app/jobs.py）。运行中卡片自己轮询 /api/jobs/{id}（lib/jobs.ts）。 */
 export type JobState = "running" | "done" | "failed" | "timed_out" | "cancelled" | "lost";
