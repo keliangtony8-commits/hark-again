@@ -146,10 +146,11 @@ async def recover(db: AsyncSession, conversation_id: str | None = None, now: dat
         q = q.where(TurnJournal.conversation_id == conversation_id)
     rows = [r for r in (await db.scalars(q)).all() if dead(r.owner, r.beat_at, now)]
     from .agent import tool_trace
+    from . import jobs
     for r in rows:
         trace = r.trace if tool_trace.valid(r.trace) else []  # 坏的/老行没有 → 退回步骤摘要（context 的 digest）
         db.add(Message(conversation_id=r.conversation_id, role="assistant", status="interrupted",
-                       blocks=settle_blocks(r.blocks or []), steps=interrupted_steps(r.steps or []), trace=trace,
+                       blocks=await jobs.current_blocks(db, settle_blocks(r.blocks or [])), steps=interrupted_steps(r.steps or []), trace=trace,
                        created_at=_aware(r.started_at) or _now()))
         await db.delete(r)
     if rows:

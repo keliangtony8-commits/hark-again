@@ -68,6 +68,8 @@ def chunk(text=None, tool=None, u=None):
 async def fake_create(model, messages, stream=False, stream_options=None, tools=None, **kw):
     seen.append(messages)
     step = script.pop(0)
+    if callable(step):
+        step = step(messages)
     async def gen():
         if isinstance(step, tuple):
             yield chunk(tool=[NS(index=0, id=f"c{len(script)}", function=NS(name=step[0], arguments=json.dumps(step[1], ensure_ascii=False)))])
@@ -277,5 +279,27 @@ async def fake_timeout():
         (jobs.job_dir(jb) / "cancelled").unlink(missing_ok=True)
         return jobs.observe(jb)
 assert run(fake_timeout()) == ("timed_out", 124)
+
+# ---- 13. v2.27 同一轮里模型自己取消：落库的卡片是终态，不再停在 running（e2e B2） ----
+import re as _re
+def _cancel_started(messages):
+    tool_out = next(m["content"] for m in reversed(messages) if m["role"] == "tool")
+    return ("cancel_job", {"job_id": _re.search(r"j[0-9a-f]{12}", tool_out).group(0)})
+script.extend([("run_command", {"command": "sleep 30", "background": True, "title": "长任务"}), _cancel_started, "已经停掉了。"])
+reply = run(turn())
+jb = next(b for b in reply.blocks if b["type"] == "job")
+assert jb["state"] == "cancelled" and jb.get("stopped_by") == "agent" and jb.get("finished_at"), jb
+async def stored(mid):
+    async with SessionLocal() as db:
+        return next(b for b in (await db.get(Message, mid)).blocks if b["type"] == "job")
+assert run(stored(reply.id))["state"] == "cancelled"
+assert "运行中" not in blocks_to_text([run(stored(reply.id))])
+async def unknown():
+    async with SessionLocal() as db:
+        keep = {"type": "job", "id": "jgone", "title": "t", "command": "c", "state": "running"}
+        txt = {"type": "text", "text": "hi"}
+        assert await jobs.current_blocks(db, [txt]) == [txt]
+        assert await jobs.current_blocks(db, [txt, keep]) == [txt, keep]  # 表里没有：原样留着
+run(unknown())
 
 print("smoke_jobs OK")

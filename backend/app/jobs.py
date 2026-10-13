@@ -469,6 +469,20 @@ async def patch_blocks(db: AsyncSession, job: Job) -> None:
             m.blocks = [block(job) if b.get("type") == "job" and b.get("id") == job.id else b for b in m.blocks]
 
 
+async def current_blocks(db: AsyncSession, blocks: list[dict]) -> list[dict]:
+    """v2.27 一轮落库前：任务卡一律按 Job 表现状重画（这一轮里就结束/被取消的任务，settle 那时消息还没落库、
+    patch_blocks 找不到卡；不在这里补，卡片会永远停在 running）。表里找不到的卡原样留着。唯一入口。"""
+    if not any(b.get("type") == "job" and b.get("id") for b in blocks):
+        return blocks
+    out = []
+    for b in blocks:
+        job = await db.get(Job, b["id"]) if b.get("type") == "job" and b.get("id") else None
+        if job is not None:
+            await db.refresh(job)  # 别的会话（worker / 接口）可能刚结掉它：读库里最新的
+        out.append(block(job) if job is not None else b)
+    return out
+
+
 async def settle(db: AsyncSession, job: Job, state: str, exit_code: int | None) -> bool:
     """记下结论（只第一次算数）并提交。返回这次是否真的结了。"""
     if job.state != "running":

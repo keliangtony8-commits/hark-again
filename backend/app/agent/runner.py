@@ -217,6 +217,7 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
     if plan is not None and plan.exited:  # 这一轮方案被批准、已退出计划模式：客户端把“计划”钮关掉（在 message.done 之前）
         await _try_emit(emit, {"type": "conversation.mode", "conversation_id": cid, "mode": plan_mode.DEFAULT})
     blocks = builder.partial() if status == "stopped" else builder.final()
+    blocks = await jobs.current_blocks(db, blocks)  # v2.27 这一轮里已经结束的任务：卡片别停在“运行中”
     if card := turn_changes.finish(ctx.changes, ctx.workspace):  # 这一轮改过的文件：净改动卡 + 整轮撤销（被停下也出）
         blocks = [*blocks, card]
     reply = None
