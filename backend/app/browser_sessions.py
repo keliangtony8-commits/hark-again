@@ -10,6 +10,9 @@
   （服务端记 expired，“我的电脑”显示登录已过期；每次打开只提醒模型一次）；在这个 tab 里见过登录页、随后一次
   登录类动作（browser_login / browser_code / 接管交还，auth=True）之后不再是登录页 → "signed_in"（清掉过期）。
   只看 auth 动作：用户点“返回”离开登录页不算登录成功。
+- 自动重登（v2.50）：login_fields(snap) 是“这张登录页能不能不问模型直接代填”的唯一判定：恰好一个密码框，
+  它前面最近的一个文本类输入框（text/email/tel/无类型）当用户名框 → (user_ref, pass_ref)；否则 None
+  （只有用户名的两步登录、没有表单只有“请重新登录”字样、多个密码框的注册/改密页都不自动填）。
 - 旧版本只有一个会话 "main"，它的登录存档照常列出（标成“早先的浏览器会话”），可以退出。
 """
 import re
@@ -86,6 +89,21 @@ def login_page(snap: dict) -> bool:
     return bool(EXPIRED_TEXT.search((snap.get("text") or "")[:EXPIRED_SCAN]))
 
 
+USER_TYPES = {"", "text", "email", "tel"}
+
+
+def login_fields(snap: dict) -> tuple[str, str] | None:
+    """登录页上可以直接代填的 (用户名框编号, 密码框编号)；判不准 → None（交给模型看着办）。"""
+    els = [e for e in snap.get("elements", []) if e.get("tag") == "input"]
+    pw = [i for i, e in enumerate(els) if e.get("type") == "password"]
+    if len(pw) != 1:
+        return None
+    user = [e for e in els[:pw[0]] if (e.get("type") or "") in USER_TYPES]
+    if not user:
+        return None
+    return str(user[-1]["ref"]), str(els[pw[0]]["ref"])
+
+
 @dataclass
 class Tab:
     """一段对话（或一次定时任务）此刻在用的浏览器会话。"""
@@ -96,12 +114,13 @@ class Tab:
     expired: bool = False     # 已判定过期（服务端标记过）
     login_seen: bool = False  # 这次打开后见过登录页（之后的 auth 动作成功 → signed_in）
     noted: bool = False       # 这次打开已经提醒过模型“登录过期”
+    autofilled: bool = False  # 这次打开已经用保险箱自动代填过（v2.50，每次打开最多一次）
 
     def opened(self, login: dict | None) -> None:
         """browser_open 之后：按服务端的登录标记重置这次打开的状态。"""
         login = login or {}
         self.signed_in, self.expired = bool(login.get("signed_in")), bool(login.get("expired"))
-        self.login_seen = self.noted = False
+        self.login_seen = self.noted = self.autofilled = False
 
     @property
     def host(self) -> str:

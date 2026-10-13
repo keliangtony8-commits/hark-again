@@ -15,7 +15,8 @@
 
 登录过期（v1.36，判定在 browser_sessions.observe）：每张快照都经 _view：之前登录过的会话又是登录页 → 在快照前
 告诉模型“登录过期了”和怎么重登（保险箱有 → browser_login 直接重登；没有 → 登录卡 / 接管；定时任务里没人 →
-如实说明，并在 Home 上发一张系统提醒“X 的登录过期了”，带“去做”让用户在聊天里一键重登）。重登成功 → 收起提醒。"""
+如实说明，并在 Home 上发一张系统提醒“X 的登录过期了”，带“去做”让用户在聊天里一键重登）。重登成功 → 收起提醒。
+自动登录（v2.50）：登录页（过期或第一次）+ 保险箱有 + login_fields 判得准 → _view 里直接代填一次，模型拿到的是登录后的页面。"""
 import re
 import time
 import uuid
@@ -105,32 +106,80 @@ def expired_note(tab: Tab, has_vault: bool, unattended: bool) -> str:
 
 
 async def _view(ctx: ToolContext, tab: Tab, snap: dict, auth: bool = False) -> str:
-    """快照 → 给模型的文字，顺带判定登录过期 / 登录成功（只此一处调 browser_sessions.observe）。"""
+    """快照 → 给模型的文字，顺带判定登录过期 / 登录成功（只此一处调 browser_sessions.observe）。
+    v2.50 自动登录：登录页（过期的或第一次要登录的都算）+ 保险箱有这个网站的登录 + 用户名框和密码框判得准
+    （browser_sessions.login_fields）→ 每次打开先自动代填一次（_autologin），模型直接拿到登录后的页面；
+    判不准 → 告诉模型保险箱里有，用 browser_login。"""
     text = _render(snap, tab)
     event = await browser_sessions.observe(tab, snap, auth)
-    subject = browser_sessions.alert_subject(tab.session)
-    if event == "expired":
-        has_vault = bool(await vault.find_for_url(ctx.db, tab.url, kind="login"))
-        unattended = ctx.ask is nobody
-        if unattended and not has_vault:
-            await _alert(ctx, tab, subject)
-        return expired_note(tab, has_vault, unattended) + "\n" + text
     if event == "signed_in":
-        try:
-            await system_alerts.clear(ctx.db, subject)
-            await ctx.db.commit()  # 0 张也要提交：DELETE 已经拿了写锁
-        except Exception:
-            await ctx.db.rollback()
+        await _clear_alert(ctx, tab)
+        return text
+    secret = None
+    if browser_sessions.login_page(snap) and not tab.autofilled:
+        secret = await vault.find_for_url(ctx.db, tab.url, kind="login")
+        refs = browser_sessions.login_fields(snap)
+        if secret and secret.username and refs:
+            tab.autofilled = True
+            again = await _autologin(ctx, tab, secret, refs, expired=event == "expired")
+            if again is not None:
+                return again
+        if secret and event != "expired":
+            return (f"⚠ 这页要登录。保险箱里有这个网站的登录「{secret.name}」：用 browser_login（填快照里的用户名框、"
+                    "密码框编号）直接登录，不用问用户、也别让用户自己登。\n" + text)
+    if event == "expired":
+        if secret is None:
+            secret = await vault.find_for_url(ctx.db, tab.url, kind="login")
+        unattended = ctx.ask is nobody
+        if unattended and not secret:
+            await _alert(ctx, tab, browser_sessions.alert_subject(tab.session))
+        return expired_note(tab, bool(secret), unattended) + "\n" + text
     return text
 
 
-async def _alert(ctx: ToolContext, tab: Tab, subject: str) -> None:
-    """定时任务碰到登录过期、自己重登不了：Home 上发一张系统提醒（同一会话同一次过期只发一次）。"""
+async def _clear_alert(ctx: ToolContext, tab: Tab) -> None:
+    try:
+        await system_alerts.clear(ctx.db, browser_sessions.alert_subject(tab.session))
+        await ctx.db.commit()  # 0 张也要提交：DELETE 已经拿了写锁
+    except Exception:
+        await ctx.db.rollback()
+
+
+async def _autologin(ctx: ToolContext, tab: Tab, secret, refs: tuple[str, str], expired: bool) -> str | None:
+    """登录页 → 用保险箱自动代填一次（每次打开最多一次：tab.autofilled）。成功 → 登录后的页面 + 一句说明；
+    代填后还是登录页 → 说明没成功、别用同一份密码再试；浏览器代填出错 → None（退回普通提示，让模型自己 browser_login）。"""
     site = browser_sessions.site_of(tab.url) or tab.host
+    try:
+        snap = await browser_client.snapshot_call(tab.session, "POST", "/login", {
+            "user_ref": refs[0], "pass_ref": refs[1], "username": secret.username, "password": vault.reveal(secret)})
+    except Exception:  # 代填失败（框变了、超时、浏览器断了、保险箱解不开）：交给模型，下一步自然会碰到同样的错
+        return None
+    text = _render(snap, tab)
+    event = await browser_sessions.observe(tab, snap, auth=True)
+    if event == "signed_in":
+        await _clear_alert(ctx, tab)
+        why = "登录过期了，已" if expired else "要登录，已"
+        return (f"⟳ 会话 {tab.session} 在 {site} {why}用保险箱「{secret.name}」自动{'重新' if expired else ''}登录（你看不到密码），"
+                "下面是登录后的页面：接着做原来的事，不用再登录、也不用告诉用户。\n" + text)
+    head = (f"⚠ 会话 {tab.session} 在 {site} {'的登录过期了' if expired else '要登录'}，已用保险箱「{secret.name}」自动代填过一次，但还停在登录页"
+            "（可能要验证码，或保险箱里的密码已经改了）。别用同一份密码反复试：")
+    if ctx.ask is nobody:
+        await _alert(ctx, tab, browser_sessions.alert_subject(tab.session), stale=True)
+        return head + "现在是定时任务、用户不在，如实说明这一步做不了；已在用户的 Home 上放了一张提醒。\n" + text
+    return head + ("页面要验证码就用 browser_code，要滑块/扫码就用 browser_handoff；页面说密码错了就告诉用户"
+                   "保险箱里「" + secret.name + "」的密码可能过期了，请他更新。\n" + text)
+
+
+async def _alert(ctx: ToolContext, tab: Tab, subject: str, stale: bool = False) -> None:
+    """定时任务碰到登录过期、自己重登不了：Home 上发一张系统提醒（同一会话同一次过期只发一次）。
+    stale=True：保险箱里有账号但自动代填没登上（多半密码改了 / 要验证码）。"""
+    site = browser_sessions.site_of(tab.url) or tab.host
+    why = ("保险箱里的账号自动代填后没登上（密码可能改了，或要验证码），只能你来登一次。" if stale
+           else "保险箱里也没有它的账号，只能你来登一次。")
     try:
         await system_alerts.post(
             ctx.db, subject=subject, once="expired", title=f"{site} 的登录过期了",
-            text=f"定时任务要用 {site}，但云浏览器里的登录已经失效，保险箱里也没有它的账号，只能你来登一次。",
+            text=f"定时任务要用 {site}，但云浏览器里的登录已经失效，{why}",
             open=f"task:{ctx.task_id}" if ctx.task_id else "vault",
             prompt=f"帮我在云浏览器里重新登录 {site}（会话 {tab.session}）。")
         await ctx.db.commit()
