@@ -1,10 +1,12 @@
 // 用户消息里点名的标签（气泡上方一排胶囊）：
 // - `$技能`（v1.81）：这次按哪个技能做，点一下打开技能页里的这条（看正文 / 改）。规则在服务器 app/skill_mentions.py。
 // - `@子助手`（v1.91）：这件事交给了子助手（结果在回复里的子任务卡上），不可点。规则在服务器 app/agent_mentions.py。
+// - 追问（v1.97）：在子任务卡上点“追问”发的消息，“追问 · 标题”；上下文不在了图标换成断开。
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/block.dart';
+import '../models/delegate.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../ui/glass.dart';
@@ -28,9 +30,13 @@ class AgentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-        label: '交给${block.name}',
+        label: agentChipSemantics(block),
         excludeSemantics: true,
-        child: _Pill(icon: Icons.call_split_rounded, label: block.name),
+        child: _Pill(
+            icon: block.target == null
+                ? Icons.call_split_rounded
+                : (block.gone ? Icons.link_off_rounded : Icons.reply_rounded),
+            label: agentChipLabel(block)),
       );
 }
 

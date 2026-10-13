@@ -65,7 +65,7 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   });
 
   return (
-    <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval, replyForm: chat.replyForm, onJobSettled: chat.refreshActive, undoChanges: chat.undoChanges }}>
+    <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval, replyForm: chat.replyForm, onJobSettled: chat.refreshActive, undoChanges: chat.undoChanges, followUp: chat.followUp }}>
       <div className={`chat ${leading ? "with-bar" : "floating"} ${drawer ? "drawer-open" : ""}`}>
         <ConversationList title={listTitle} list={chat.list} activeId={chat.activeId}
           onOpen={open} onDelete={chat.remove} onClose={() => setDrawer(false)} />

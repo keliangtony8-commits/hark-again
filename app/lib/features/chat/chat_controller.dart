@@ -490,6 +490,7 @@ class ChatController extends Notifier<ChatState> {
       if (projectId.isNotEmpty) 'project_id': projectId,
       'text': plainText(m.blocks),
       ..._wireFiles(m.blocks),
+      ..._wireFollow(m.blocks),
       'client_id': m.id,
       ..._modelField(),
     });
@@ -616,6 +617,27 @@ class ChatController extends Notifier<ChatState> {
     _flush();
   }
 
+  /// 接着问某个子助手（v1.97，子任务卡上的“追问”）：气泡带一枚“追问 · 标题”标签；正在回答时排队等这一轮结束
+  /// （不插进正在进行的那一轮——那是新的一件事，服务器 steering 也不收）。
+  void followUp(String id, String title, String text) {
+    final t = text.trim();
+    if (t.isEmpty || id.isEmpty) return;
+    final m = Message(
+        id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}',
+        role: 'user',
+        blocks: [TextBlock(t), AgentBlock(target: id, title: title)],
+        outbox: Outbox.queued,
+        createdAt: DateTime.now());
+    state = state.copyWith(error: () => null, messages: [...state.messages, m]);
+    _flush();
+  }
+
+  /// 消息里的追问标签 → user.message 的 follow / follow_title（服务器以库里的标题为准）。
+  static Map<String, String> _wireFollow(List<Block> blocks) {
+    final a = blocks.whereType<AgentBlock>().where((a) => a.target != null).firstOrNull;
+    return a == null ? const {} : {'follow': a.target!, if (a.title != null) 'follow_title': a.title!};
+  }
+
   /// 消息里的附件 → user.message 的线格式：上传的进 attachments，工作区文件进 project_files。
   static Map<String, List<String>> _wireFiles(List<Block> blocks) => {
         'attachments': [for (final f in blocks.whereType<FileBlock>()) if (f.source != 'project') f.id],
@@ -645,15 +667,16 @@ class ChatController extends Notifier<ChatState> {
   /// 重新生成最后一条回复；最后一条是用户消息时 = 重试（不带 message_id）。
   void regenerate() => _rewind();
 
-  /// 改写最后一条用户消息并重答。附件保留；文字清空且没有附件 = 不发。
+  /// 改写最后一条用户消息并重答。附件、“追问”标签保留（服务器 runner.rewind 同规则）；文字清空且没有附件 = 不发。
   void edit(String text) {
     final id = state.editableId;
     if (id == null) return;
     final old = state.messages.lastWhere((m) => m.id == id);
     final files = old.blocks.whereType<FileBlock>();
+    final follow = old.blocks.whereType<AgentBlock>().where((a) => a.target != null);
     final t = text.trim();
     if (t.isEmpty && files.isEmpty) return;
-    _rewind(edited: old.copyWith(blocks: [if (t.isNotEmpty) TextBlock(t), ...files]));
+    _rewind(edited: old.copyWith(blocks: [if (t.isNotEmpty) TextBlock(t), ...files, ...follow]));
   }
 
   /// 重新生成与编辑的共同流程：发请求 → 本地撤掉最后一条用户消息之后的回复（编辑时顺带换上新气泡）→ 等新一轮。

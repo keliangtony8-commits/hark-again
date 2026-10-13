@@ -33,8 +33,8 @@ void main() {
     expect(delegateTaskLine(const DelegateTask('x', DelegateState.failed, note: '出错：502')), '出错：502');
     expect(delegateTaskLine(const DelegateTask('x', DelegateState.partial)), '交了半截');
     expect(delegateTaskLine(const DelegateTask('x', DelegateState.stopped)), '这一轮被停下了');
-    expect(delegateCanOpen(b.tasks[1]), isTrue);
-    expect(delegateCanOpen(b.tasks[0]), isFalse);
+    expect(delegateHasResult(b.tasks[1]), isTrue);
+    expect(delegateHasResult(b.tasks[0]), isFalse);
     expect(delegateProgress(_d([{'title': 'a', 'state': 'done'}, {'title': 'b', 'state': 'done'}])), '2 个都完成了');
     expect(delegateProgress(_d([{'title': 'a', 'state': 'done'}, {'title': 'b', 'state': 'failed'}])), '完成 1/2');
     expect(delegateSemantics(_d([{'title': 'a', 'state': 'done', 'steps': 1}])), '子助手，1 个都完成了；a，完成，1 步');

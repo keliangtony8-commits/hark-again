@@ -10,6 +10,8 @@ export type BlockActions = {
   onJobSettled?: () => void;
   /** 改动卡的整轮撤销（v1.68）：返回 null = 成功（消息已换成服务器版本），否则是给用户看的原因。 */
   undoChanges?: (token: string) => Promise<string | null>;
+  /** 子任务卡的“追问”（v1.97）：接着问某个子助手（id = 编号）。没给（Home）就不显示。 */
+  followUp?: (id: string, title: string, text: string) => void;
 };
 export const BlockActionsContext = createContext<BlockActions>({});
 export const useBlockActions = () => useContext(BlockActionsContext);

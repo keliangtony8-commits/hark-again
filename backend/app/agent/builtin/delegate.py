@@ -14,16 +14,19 @@ from ..tools import ToolContext, ToolResult, tool
       "子助手看不到这段对话：prompt 要自成一体，写清目标、相关路径和材料、约束、要交回什么。"
       f"互相独立的子任务一次全部放进 tasks（并行跑，最多 {settings.subagent_max_tasks} 个）；不要让两个子任务改同一个文件，"
       "也不要和子任务重复做同一件事。子助手能读写同一个工作区、跑命令、搜网页、调已授权的 API，"
-      "但不能问用户、不能开浏览器、需要批准的操作会被拒绝（它会把要做的事写进结果，你再去请用户批准）。",
+      "但不能问用户、不能开浏览器、需要批准的操作会被拒绝（它会把要做的事写进结果，你再去请用户批准）。"
+      "要接着问之前派过的某个子助手（它记得自己查过 / 做过的，不用重来），tasks 里放 {continue: 它的编号, prompt: 接着要它做的}。",
       {"type": "object", "properties": {
           "tasks": {"type": "array", "description": "要并行做的子任务",
-                    "items": {"type": "object", "additionalProperties": False, "required": ["title", "prompt"], "properties": {
-                        "title": {"type": "string", "description": "几个字的标题，给用户看，如“查竞品定价”"},
+                    "items": {"type": "object", "additionalProperties": False, "required": ["prompt"], "properties": {
+                        "title": {"type": "string", "description": "几个字的标题，给用户看，如“查竞品定价”（新派必填；续问可省）"},
+                        "continue": {"type": "string", "description": "续问：之前子任务结果里的编号（sa_ 开头）；新派不填"},
                         "prompt": {"type": "string", "description": "完整、自成一体的任务说明：目标、路径 / 材料、约束、要交回的结果形式"}}}}},
        "required": ["tasks"]})
 async def delegate(ctx: ToolContext, tasks: object = None) -> ToolResult:
     try:
         items = subagent.normalize(tasks)
+        await subagent.attach(ctx.db, ctx.conversation_id, items)
     except subagent.DelegateError as e:
         return ToolResult(f"没有派出去：{e}。改好后重试。", failed=str(e))
     await subagent.run_all(ctx, items)

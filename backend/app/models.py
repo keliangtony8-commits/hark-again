@@ -274,6 +274,21 @@ class Routing(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
+class SubagentThread(Base):
+    """子助手的上下文（v1.97，规则在 app/agent/subagent_threads.py）：子任务结束后留下它自己的消息列表，
+    主助手（或用户点卡片“追问”）可以按 id 冷恢复接着问（Codex resume_agent）。只属于派它的那段对话。"""
+    __tablename__ = "subagent_threads"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str | None] = mapped_column(String(64), nullable=True)   # 派它时用的模型（续问沿用）
+    history: Mapped[str] = mapped_column(Text, default="[]")              # JSON：OpenAI 消息形状（不含系统提示）
+    state: Mapped[str] = mapped_column(String(16), default="done")
+    rounds: Mapped[int] = mapped_column(Integer, default=1)               # 第几轮（1 = 刚派出去那次）
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
 class AlertSent(Base):
     """“这条提醒已经发过”的去重表：key 唯一（如 budget:2026-10:80:30）。
     不放在卡片上，是因为用户删卡/忽略卡后不该再被同一条提醒打扰。"""

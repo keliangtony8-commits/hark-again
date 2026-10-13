@@ -172,6 +172,7 @@
 .skill-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .skill-chip:hover { filter: brightness(.97); color: var(--text); }
 .skill-chip.is-static:hover { filter: none; color: var(--text-2); } /* @子助手 标签不可点 */
+.skill-chip.is-gone { opacity: .6; } /* v1.97 追问的子助手上下文已经不在了 */
 .msg.user .msg-files { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-2); }
 
 /* 语音录制：整行替换成录音条，主按钮位置不变（变成“完成”） */

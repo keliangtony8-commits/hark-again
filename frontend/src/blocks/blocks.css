@@ -354,8 +354,18 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-delegate-result { margin: var(--sp-2) 0 0 calc(18px + var(--sp-2)); padding: var(--sp-3); max-height: 240px; overflow: auto;
   background: var(--tile); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--text-2); white-space: pre-wrap;
   animation: rise var(--dur) var(--ease); }
+/* v1.97 追问：结论下面一颗小字按钮，点了就地展开输入框 */
+.blk-delegate-follow { margin: var(--sp-2) 0 0 calc(18px + var(--sp-2)); padding: var(--sp-1) var(--sp-2); border: 0; background: none;
+  color: var(--text-2); font-size: var(--fs-sm); border-radius: var(--r-sm); cursor: pointer; transition: background var(--dur) var(--ease); }
+.blk-delegate-follow:hover { background: var(--tile); color: var(--text); }
+.blk-delegate-ask { margin: var(--sp-2) 0 0 calc(18px + var(--sp-2)); display: flex; flex-direction: column; gap: var(--sp-2);
+  animation: rise var(--dur) var(--ease); }
+.blk-delegate-ask textarea { resize: vertical; min-height: 56px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border);
+  border-radius: var(--r-sm); background: var(--tile); color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.blk-delegate-ask-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
 @media (prefers-reduced-motion: reduce) {
-  .blk-delegate-task, .blk-delegate-mark, .blk-delegate-progress, .blk-delegate-line, .blk-delegate-result { animation: none; }
+  .blk-delegate-task, .blk-delegate-mark, .blk-delegate-progress, .blk-delegate-line, .blk-delegate-result, .blk-delegate-ask { animation: none; }
+  .blk-delegate-follow { transition: none; }
   .blk-delegate-chev { transition: none; }
 }
 /* 主机命令审批卡（v1.49） */

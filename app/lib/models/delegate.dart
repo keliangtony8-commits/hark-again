@@ -22,8 +22,13 @@ String delegateStateLabel(DelegateState s) => switch (s) {
       DelegateState.stopped => '被停下',
     };
 
-/// 子任务标题下的一行：在做 “第 3 步 · 正在搜索”；完成 “7 步 · 42 秒”；没成 / 半截 给原因。
+/// 子任务标题下的一行：在做 “第 3 步 · 正在搜索”；完成 “7 步 · 42 秒”；没成 / 半截 给原因。续问的那次前面加“第 2 轮 · ”。
 String delegateTaskLine(DelegateTask t) {
+  final line = _taskLine(t);
+  return t.round > 1 ? '第 ${t.round} 轮 · $line' : line;
+}
+
+String _taskLine(DelegateTask t) {
   final took = [if (t.steps > 0) '${t.steps} 步', if (t.seconds != null) formatDuration(t.seconds! * 1000)].join(' · ');
   return switch (t.state) {
     DelegateState.running => t.now?.isNotEmpty ?? false
@@ -36,9 +41,24 @@ String delegateTaskLine(DelegateTask t) {
 }
 
 /// 有结论可看：结束了且带 result。
-bool delegateCanOpen(DelegateTask t) => delegateEnded(t) && (t.result?.trim().isNotEmpty ?? false);
+bool delegateHasResult(DelegateTask t) => delegateEnded(t) && (t.result?.trim().isNotEmpty ?? false);
+
+/// 能接着问（v1.97，服务器 agent/subagent_threads.py）：这一轮已经结束、子任务带编号（老卡片没有）、结束了。
+/// 上下文被清掉的情况服务器会照实说（gone），这里不猜。
+bool delegateCanFollow(DelegateBlock b, DelegateTask t) => !b.live && delegateEnded(t) && (t.id?.isNotEmpty ?? false);
+
+/// 能展开：有结论，或者能追问（没结论的也给个追问入口）。
+bool delegateCanOpen(DelegateBlock b, DelegateTask t) => delegateHasResult(t) || delegateCanFollow(b, t);
+
+/// 追问弹窗的标题、气泡上的标签。
+String delegateFollowTitle(String title) => '追问「$title」';
+
+String agentChipLabel(AgentBlock a) => a.target == null ? a.name : '追问 · ${a.title?.isNotEmpty ?? false ? a.title! : '子任务'}';
+
+String agentChipSemantics(AgentBlock a) =>
+    a.target == null ? '交给${a.name}' : '追问子助手 ${a.title ?? ''}${a.gone ? '，它的上下文已经不在了' : ''}';
 
 String delegateSemantics(DelegateBlock b) => [
       '子助手，${delegateProgress(b)}',
-      for (final t in b.tasks) '${t.title}，${delegateStateLabel(t.state)}，${delegateTaskLine(t)}',
+      for (final t in b.tasks) '${t.title}，${delegateStateLabel(t.state)}，${delegateTaskLine(t)}${delegateCanFollow(b, t) ? '，可以追问' : ''}',
     ].join('；');

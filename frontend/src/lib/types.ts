@@ -8,7 +8,8 @@ export type CodeBlock = { type: "code"; language?: string; title?: string; sourc
 /** v1.81 用户消息里 `$技能` 点名的技能（后端 app/skill_mentions.py）：只有 id + 名字，气泡上方一枚小标签。 */
 export type SkillBlock = { type: "skill"; id: string; name: string };
 /** v1.91 用户消息里 `@子助手` 点名交给子助手（后端 app/agent_mentions.py）：气泡上方一枚标签。 */
-export type AgentBlock = { type: "agent"; id?: string; name?: string };
+/** v1.91 `@子助手`；v1.97 追问：target = 子助手编号、title = 子任务标题、gone = 它的上下文已经不在了。 */
+export type AgentBlock = { type: "agent"; id?: string; name?: string; target?: string | null; title?: string | null; gone?: boolean | null };
 export type FileBlock = { type: "file"; source: "upload" | "project"; id: string; name: string; mime: string; size: number; project_id?: string | null };
 /** 审批卡。主机命令卡（v1.49 target = host）多带机器名、note（为什么要你看一眼；warn = 危险提示）、批准范围 options（第一个 = 批准按钮）、批准后 granted。 */
 export type ApprovalOption = { id: string; label: string };
@@ -75,7 +76,7 @@ export type PlanItem = { content: string; status: PlanStatus };
 /** 计划清单（v1.47，后端 app/plan.py）：一条回复一张，助手边做边勾；settled = 这一轮已结束。 */
 export type PlanBlock = { type: "plan"; items: PlanItem[]; explanation?: string | null; settled?: boolean };
 export type DelegateState = "running" | "done" | "partial" | "failed" | "stopped";
-export type DelegateTask = { title: string; state: DelegateState; steps?: number; now?: string | null; seconds?: number | null;
+export type DelegateTask = { id?: string | null; round?: number | null; title: string; state: DelegateState; steps?: number; now?: string | null; seconds?: number | null;
   result?: string | null; note?: string | null };
 /** 子助手（v1.48，后端 agent/subagent.py）：一次并行派出的几个子任务；live = 还在跑。 */
 export type DelegateBlock = { type: "delegate"; tasks: DelegateTask[]; live?: boolean | null };

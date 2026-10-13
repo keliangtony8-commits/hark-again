@@ -62,7 +62,8 @@ sealed class Block {
         'job' => JobBlock.fromJson(j),
         'shell' => ShellBlock.fromJson(j),
         'skill' => SkillBlock(id: j['id'] as String? ?? '', name: j['name'] as String? ?? ''),
-        'agent' => AgentBlock(name: j['name'] as String? ?? '子助手'),
+        'agent' => AgentBlock(
+            name: j['name'] as String? ?? '子助手', target: j['target'] as String?, title: j['title'] as String?, gone: j['gone'] == true),
         'preview' => PreviewBlock.fromJson(j),
         'plan' => PlanBlock.fromJson(j),
         'delegate' => DelegateBlock.fromJson(j),
@@ -480,7 +481,7 @@ class DelegateBlock extends Block {
 enum DelegateState { running, done, partial, failed, stopped }
 
 class DelegateTask {
-  const DelegateTask(this.title, this.state, {this.steps = 0, this.now, this.seconds, this.result, this.note});
+  const DelegateTask(this.title, this.state, {this.id, this.round = 1, this.steps = 0, this.now, this.seconds, this.result, this.note});
   factory DelegateTask.fromJson(Map<String, dynamic> j) => DelegateTask(
         j['title'] as String? ?? '',
         switch (j['state']) {
@@ -490,6 +491,8 @@ class DelegateTask {
           'stopped' => DelegateState.stopped,
           _ => DelegateState.running,
         },
+        id: j['id'] as String?,
+        round: (j['round'] as num?)?.toInt() ?? 1,
         steps: (j['steps'] as num?)?.toInt() ?? 0,
         now: j['now'] as String?,
         seconds: (j['seconds'] as num?)?.toInt(),
@@ -498,6 +501,8 @@ class DelegateTask {
       );
   final String title;
   final DelegateState state;
+  final String? id; // v1.97 子助手编号（续问用；老卡片没有）
+  final int round; // 第几轮（续问的那次 ≥2）
   final int steps;
   final String? now; // 正在做的那一步（“正在搜索”）
   final int? seconds;
@@ -513,8 +518,13 @@ class SkillBlock extends Block {
 
 /// 用户消息里 `@子助手` 点名交给子助手（v1.91，服务器 app/agent_mentions.py）：气泡上方一枚小标签。
 class AgentBlock extends Block {
-  const AgentBlock({this.name = '子助手'});
+  const AgentBlock({this.name = '子助手', this.target, this.title, this.gone = false});
   final String name;
+
+  /// v1.97 续问：在子任务卡上点“追问”的那个子助手（编号 sa_xxxxxx）和它的标题；gone = 它的上下文已经不在了。
+  final String? target;
+  final String? title;
+  final bool gone;
 }
 
 class UnknownBlock extends Block {

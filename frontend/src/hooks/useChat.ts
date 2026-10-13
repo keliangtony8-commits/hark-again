@@ -8,6 +8,7 @@ import type { Block, FileBlock, Message, OutgoingFile, ServerEvent, TextBlock } 
 import { mergeStep, stepFromStatus } from "../lib/activity";
 import { mergeRetry, RETRY_CLEARS_ON, retryNotice } from "../lib/retry";
 import { asFileBlock } from "../lib/files";
+import { followField } from "../lib/delegate";
 import { useConversations } from "./useConversations";
 
 /** 眼前这段对话：id 和消息总是一起换，持久化发件箱时才不会把 A 的消息写进 B。 */
@@ -313,6 +314,7 @@ export function useChat(projectId?: string) {
       type: "user.message", conversation_id: thread.id, project_id: projectId, text: plainText(m.blocks),
       attachments: fileIds(m.blocks, "upload"),
       project_files: fileIds(m.blocks, "project"),
+      ...followField(m.blocks),
       client_id: m.id,
       ...modelField(),
     });
@@ -406,9 +408,10 @@ export function useChat(projectId?: string) {
     const old = thread.messages.find((m) => m.id === editableId);
     if (!old) return;
     const files = old.blocks.filter((b) => b.type === "file");
+    const follow = old.blocks.filter((b) => b.type === "agent" && !!b.target); // 追问标签跟着这条走（后端 runner.rewind 同规则）
     const t = text.trim();
     if (!t && files.length === 0) return;
-    rewind({ ...old, blocks: [...(t ? [{ type: "text" as const, text: t }] : []), ...files] });
+    rewind({ ...old, blocks: [...(t ? [{ type: "text" as const, text: t }] : []), ...files, ...follow] });
   }, [thread.messages, editableId, rewind]);
 
   /** 停止生成。不排队：线断了这一轮本来就会在服务器上停下（断线即停、半截落库），重连后同步即可。 */
@@ -447,6 +450,15 @@ export function useChat(projectId?: string) {
     ];
     setMessages((m) => [...m, { id: `local-${crypto.randomUUID()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
   }, [busy, canSteer, link, thread.id, projectId]);
+
+  /** 接着问某个子助手（v1.97，子任务卡上的“追问”）：气泡带“追问 · 标题”；正在回答时排队等这一轮结束（不插进这一轮）。 */
+  const followUp = useCallback((id: string, title: string, text: string) => {
+    const t = text.trim();
+    if (!t || !id) return;
+    setError(null);
+    const blocks: Block[] = [{ type: "text", text: t }, { type: "agent", id: "delegate", name: "子助手", target: id, title }];
+    setMessages((m) => [...m, { id: `local-${crypto.randomUUID()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
+  }, []);
 
   /** 失败的消息重新排队：挪到末尾（回复会接在它后面），线通就发。 */
   const resend = useCallback((id: string) => {
@@ -540,7 +552,7 @@ export function useChat(projectId?: string) {
   return {
     refreshActive, undoChanges, seek,
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
-    canRegenerate, canStop, canSteer, editableId, focus, model, routed, setModel, effort, setEffort, planMode, setPlanMode, takeFocus: useCallback(() => setFocus(null), []), open, send, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
+    canRegenerate, canStop, canSteer, editableId, focus, model, routed, setModel, effort, setEffort, planMode, setPlanMode, takeFocus: useCallback(() => setFocus(null), []), open, send, followUp, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };
 }
 

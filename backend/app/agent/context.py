@@ -78,8 +78,8 @@ def _render(blocks: list[dict], current: bool = False) -> str:
     for b in blocks:
         if b.get("type") == "skill":
             text += "\n\n" + skill_mentions.render(b)
-    if any(b.get("type") == "agent" for b in blocks):  # `@子助手`：当前这一问给提示、更早的一句记录（agent_mentions）
-        text += "\n\n" + agent_mentions.render(current)
+    if agent := next((b for b in blocks if b.get("type") == "agent"), None):  # `@子助手` / 追问：当前给提示、更早一句记录（agent_mentions）
+        text += "\n\n" + agent_mentions.render(current, agent)
     for b in blocks:
         if b.get("type") != "file":
             continue

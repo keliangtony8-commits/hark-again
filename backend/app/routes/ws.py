@@ -85,8 +85,9 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
             db.add(conv)
             await db.flush()
         apply_choice(conv, event)
+        follow = await agent_mentions.follow(db, conv.id, event.get("follow"), event.get("follow_title")) if text else []
         user_msg = Message(conversation_id=conv.id, role="user",
-                           blocks=(text_to_blocks(text) if text else []) + files + _skills(text) + _agents(text))
+                           blocks=(text_to_blocks(text) if text else []) + files + _skills(text) + (follow or _agents(text)))
         db.add(user_msg)
         await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
@@ -110,7 +111,7 @@ async def _steer(event: dict) -> bool:
         return False
     ids, picked = event.get("attachments") or [], event.get("project_files") or []
     ids, picked = (ids if isinstance(ids, list) else []), (picked if isinstance(picked, list) else [])
-    if steering.reason(text, files=len(ids) + len(picked), agent=bool(_agents(text)),
+    if steering.reason(text, files=len(ids) + len(picked), agent=bool(_agents(text) or event.get("follow")),
                        command=user_shell.parse(text) is not None or init_command.parse(text) is not None):
         return False
     async with SessionLocal() as db:

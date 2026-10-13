@@ -23,6 +23,14 @@ NUDGE = ("<system_note>\n用户点名这次交给子助手做：用 delegate 工
          "只有一件也交给一个子助手），子助手看不到这段对话，prompt 要写全。等结论回来再整理后告诉用户，不要自己先做一遍。\n</system_note>")
 RECORD = "[这一问用户点名交给了子助手]"
 
+# v1.97 续问（卡片上点“追问”）：块带 target = 子助手编号，同一条 delegate 路（Codex resume_agent 冷恢复，规则在 agent/subagent_threads.py）
+FOLLOW = ("<system_note>\n用户在子任务卡上点了“追问”，要接着问子助手「{title}」（编号 {target}）：用 delegate 工具，tasks 里放 "
+          "{{continue: \"{target}\", prompt: 用户这句话（它看不到这段对话，代词、上下文替它补全）}}。等它的结论回来再整理后告诉用户，不要自己先做一遍。\n</system_note>")
+GONE = ("<system_note>\n用户想接着问子助手「{title}」，但它的上下文已经清掉了（或不是这段对话派的）：告诉用户这一点，"
+        "然后照常回答——需要的话新派一个子助手，prompt 写全。\n</system_note>")
+FOLLOW_RECORD = "[这一问用户追问了子助手「{title}」（编号 {target}）]"
+TITLE_MAX = 24
+
 
 def enabled() -> bool:
     return settings.subagent_max_tasks > 0
@@ -57,6 +65,23 @@ def blocks(text: str | None, have: list[dict] | None = None) -> list[dict]:
     return [dict(BLOCK)]
 
 
-def render(current: bool) -> str:
-    """给模型看的样子：当前这一问 = Gemini agentNudge；更早的 = 一句记录。"""
+async def follow(db, conversation_id: str | None, target: object, title: object = None) -> list[dict]:
+    """用户点“追问”：target 是这段对话派过、上下文还在的子助手 → 带 target / title 的 agent 块；不在了 → gone 块（模型照实说）；
+    开关关着 / target 不像编号 → []（当普通消息）。"""
+    from .agent import subagent_threads as threads
+    if not enabled() or not threads.valid_id(target):
+        return []
+    row = await threads.load(db, conversation_id, target)
+    name = row.title if row is not None else " ".join(str(title or "").split())[:TITLE_MAX]
+    out = {**BLOCK, "target": target, "title": name or "子任务"}
+    return [out if row is not None else {**out, "gone": True}]
+
+
+def render(current: bool, b: dict | None = None) -> str:
+    """给模型看的样子：当前这一问 = Gemini agentNudge（续问 = FOLLOW / GONE）；更早的 = 一句记录。"""
+    if b and b.get("target"):
+        fill = {"title": b.get("title") or "子任务", "target": b["target"]}
+        if not current:
+            return FOLLOW_RECORD.format(**fill)
+        return (GONE if b.get("gone") else FOLLOW).format(**fill)
     return NUDGE if current else RECORD

@@ -92,8 +92,9 @@ async def rewind(db: AsyncSession, conversation_id: str, message_id: str | None,
         raise RewindError("这条回复已经不是最新的了，刷新后再试")
     user_msg = rows[last_user]
     if text is not None:
-        files = [b for b in user_msg.blocks if b.get("type") == "file"]
-        if not text.strip() and not files:
+        files = [b for b in user_msg.blocks if b.get("type") == "file"
+                 or (b.get("type") == "agent" and b.get("target"))]  # 附件、卡片上点的“追问”跟着这条消息走（@子助手 按新文字重认）
+        if not text.strip() and not any(b.get("type") == "file" for b in files):
             raise RewindError("消息不能为空")
         user_msg.blocks = (text_to_blocks(text.strip()) if text.strip() else []) + files  # 整体赋值，JSON 列才会被标脏
     if conv.summary_upto in {user_msg.id, *(m.id for m in trailing)}:  # 正常不会发生（当前一问总是原文），防御

@@ -72,10 +72,14 @@ class SkillBlock(BaseModel):
 
 
 class AgentBlock(BaseModel):
-    """用户消息里 `@子助手` 点名交给子助手（规则在 app/agent_mentions.py）：只是一枚标签，提示每轮由 agent/context 给。"""
+    """用户消息里 `@子助手` 点名交给子助手（规则在 app/agent_mentions.py）：只是一枚标签，提示每轮由 agent/context 给。
+    v1.97 续问：target = 子助手编号（sa_xxxxxx，在卡片上点“追问”）、title = 那个子任务的标题；gone = 它的上下文已经不在了。"""
     type: Literal["agent"] = "agent"
     id: str = "delegate"
     name: str = "子助手"
+    target: str | None = None
+    title: str | None = None
+    gone: bool | None = None
 
 
 class ApprovalOption(BaseModel):
@@ -159,6 +163,8 @@ class PlanBlock(BaseModel):
 
 
 class DelegateTask(BaseModel):
+    id: str | None = None       # v1.97 子助手编号（续问用；老卡片没有）
+    round: int | None = None    # 第几轮（续问那次 ≥2）
     title: str
     state: Literal["running", "done", "partial", "failed", "stopped"] = "running"
     steps: int = 0
@@ -418,7 +424,7 @@ def blocks_to_text(blocks: list[dict]) -> str:
         elif t == "skill":
             parts.append(f"[技能：{b['name']}]")
         elif t == "agent":
-            parts.append("[交给子助手]")
+            parts.append(f"[追问子助手「{b.get('title') or ''}」]" if b.get("target") else "[交给子助手]")
         elif t == "job":
             state = {"running": "运行中（结束时你会收到通知，也可用 job_status 查看）", "done": "已完成", "failed": "失败",
                      "timed_out": "超时被终止", "cancelled": "已取消", "lost": "中断了"}.get(b.get("state"), "")
