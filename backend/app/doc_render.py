@@ -117,12 +117,27 @@ def _source(root: Path, path: str) -> Path:
     if hidden(p.relative_to(root).parts):
         raise RenderError(f"{path} 在隐藏目录里，先复制出来再排版。")
     if not p.is_file():
-        raise RenderError(f"没有 {path} 这个文件。")
+        raise RenderError(f"没有 {path} 这个文件。" + output_mixup(root, p))
     if p.stat().st_size > SOURCE_MAX:
         raise RenderError(f"{path} 超过 {SOURCE_MAX // 1024 // 1024} MB，拆小再排。")
     if p.suffix.lower() not in MD_EXT | HTML_EXT and not looks_text(p):
         raise RenderError(f"{path} 不是文本（只排 Markdown / HTML / 纯文本；PDF、Word 这类先 read_file 读出来再写成 Markdown）。")
     return p
+
+
+SOURCE_GUESS = (".md", ".markdown", ".html", ".htm", ".txt")
+
+
+def output_mixup(root: Path, p: Path) -> str:
+    """path 写成了输出文件（todo.pdf）= 把 path 和 output 弄反了（v2.38 B12，真实 E2E f10）：说清 path 是源文件，
+    有同名源文件就点名它，免得模型另写一份副本再排。不是 .pdf/.png 就空串。"""
+    if p.suffix.lower().lstrip(".") not in FORMATS:
+        return ""
+    found = [c for c in (p.with_suffix(x) for x in SOURCE_GUESS) if c.is_file() and not hidden(c.relative_to(root).parts)]
+    tip = f"已有 {found[0].relative_to(root).as_posix()}，直接 path={found[0].relative_to(root).as_posix()}" if found \
+        else "先把内容写进一个 .md 文件，再把它当 path"
+    return (f"path 是要排版的源文件（.md / .html / .txt），输出文件名写在 output（如 output=\"{p.relative_to(root).as_posix()}\"）；"
+            f"{tip}，不要另写一份副本。")
 
 
 def title_of(text: str, fallback: str) -> str:

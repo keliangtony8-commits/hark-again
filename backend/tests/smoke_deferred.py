@@ -165,7 +165,8 @@ assert "没有可用的工具 fly_kite" in unknown and "- publish_page：" in un
 assert "arguments 要是参数对象" in notobj and "参数（JSON Schema）" in notobj
 assert "action 只能是" in act
 assert reply.steps and reply.steps[-1]["tool"] == "manage_home" and reply.steps[-1]["state"] == "done", reply.steps  # 直接按名字调
-assert "save_skill 的参数：" in tool_msgs[5]["content"], tool_msgs[5]          # 直接调写错也第一次就给签名
+# 同一轮前面已经给过 save_skill 的签名：直接调再写错只说哪里错，不重复整段签名（v2.38 Streak.signature_once）
+assert "参数不对" in tool_msgs[5]["content"] and "save_skill 的参数：" not in tool_msgs[5]["content"], tool_msgs[5]
 
 tool_msgs.clear()
 reply = asyncio.run(turn("c3", "计划一下发个网页", [

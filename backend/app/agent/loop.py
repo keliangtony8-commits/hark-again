@@ -456,9 +456,13 @@ def _args(raw: str) -> object:
         return raw
 
 
-def _hint(t, streak_hint: str) -> str:
-    """参数写错时的提醒：按需工具模型多半没看过参数，第一次就附完整签名（deferred.signature）。"""
-    return streak_hint or (deferred.signature(t) if deferred.deferred(t) else "")
+def _hint(t, streak: tool_args.Streak, streak_hint: str, guessing: bool = False) -> str:
+    """参数写错时的提醒。模型在猜参数时（按需工具多半没 describe 过；或给了不认识的参数）第一次就附完整签名，
+    省掉一次 describe；同一工具一轮只附一次（Streak.signature_once，v2.38 B12）。连错三次的提醒自带签名。"""
+    if streak_hint:
+        streak.shown.add(t.name)
+        return streak_hint
+    return streak.signature_once(t.name, t.parameters) if guessing or deferred.deferred(t) else ""
 
 
 async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: tool_args.Parsed | None = None,
@@ -474,7 +478,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
     streak = streak or tool_args.Streak()
     parsed = parsed or tool_args.parse(call.arguments)
     if parsed.args is None:
-        yield ToolResult(parsed.error + _hint(t, streak.fail(call.name, t.parameters)))
+        yield ToolResult(parsed.error + _hint(t, streak, streak.fail(call.name, t.parameters)))
         return
     args = dict(parsed.args)
     args.pop("grant", None)  # 批准范围只能来自用户在卡上的选择，不能来自模型
@@ -482,11 +486,13 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
         args.pop("form", None)  # 表单值只能来自用户，不能来自模型
     checked = tool_args.check(t.parameters, args, t.accepts)
     if checked.error:
-        yield ToolResult(checked.error + _hint(t, streak.fail(call.name, t.parameters)))
+        yield ToolResult(checked.error + _hint(t, streak, streak.fail(call.name, t.parameters), bool(checked.unknown)))
         return
     streak.ok(call.name)
     args = checked.args
     notes = ([parsed.repaired] if parsed.repaired else []) + checked.notes
+    # 给了不认识的参数 = 在猜：照常执行，但结果后面附上真正的参数（B12：免得再 describe 一次）
+    guess = _hint(t, streak, "", True) if checked.unknown else ""
     rec = builder.timeline
 
     def denied(note: str) -> ToolStatus:
@@ -537,7 +543,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
 
     if t.quiet:  # 控制类工具：不进时间线，结果块直接上卡（同单例原地换）
         async for ev in _quiet(t, call, ctx, builder, args, card_at):
-            yield ToolResult(_with_notes(ev.content, notes), ev.blocks, ev.images) if isinstance(ev, ToolResult) else ev
+            yield ToolResult(_with_notes(ev.content, notes, guess), ev.blocks, ev.images) if isinstance(ev, ToolResult) else ev
         return
     yield ToolStatus(call.id, call.name, t.label, "running", rec.start(call.id, call.name, t.label, args))
     live = _Live(builder)
@@ -550,7 +556,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
         if (ev := live.settle()) is not None:
             yield ev
         yield ToolStatus(call.id, call.name, t.label, "error", rec.finish(call.id, "error", str(e)) or {})
-        yield ToolResult(f"工具出错：{e}")
+        yield ToolResult(f"工具出错：{e}" + guess)
         return
     blocks = list(result.blocks)
     if (ev := live.settle(blocks.pop(0) if blocks and live.index is not None else None)) is not None:
@@ -564,15 +570,15 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
         yield builder.update(card_at, **result.card)
     state = "error" if result.failed else "done"
     yield ToolStatus(call.id, call.name, t.label, state, rec.finish(call.id, state, result.failed, result.change, result.detail) or {})
-    content = _with_notes(result.content, notes)
+    content = _with_notes(result.content, notes, guess)
     if call.name not in SELF_PAGED:  # 太长：开头 + 结尾给模型，全文落盘（spill.py）；日志型再补中间段要点（distill.py）
         content = await distill.bound(content, settings.tool_result_max, ctx.workspace, call.name, ctx.db)
     await command_env.ensure(ctx.db)  # 任何工具读到的用户命令环境变量值（文件、日志、网页回显）都打码再给模型
     yield ToolResult(command_env.scrub(content), images=result.images)
 
-def _with_notes(content: str, notes: list[str]) -> str:
-    """参数层（tool_args）做过的修补/丢弃附在结果末尾，模型下次就会写对。"""
-    return f"{content}\n\n（{'；'.join(notes)}）" if notes else content
+def _with_notes(content: str, notes: list[str], guess: str = "") -> str:
+    """参数层（tool_args）做过的修补/丢弃附在结果末尾，模型下次就会写对；guess = 猜错参数时附的签名。"""
+    return (f"{content}\n\n（{'；'.join(notes)}）" if notes else content) + guess
 
 
 async def _quiet(t, call, ctx: ToolContext, builder: MessageBuilder, args: dict, card_at: int | None = None):

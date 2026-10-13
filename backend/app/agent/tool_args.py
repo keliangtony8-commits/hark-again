@@ -274,12 +274,13 @@ class Checked:
     args: dict
     error: str = ""                       # 非空 = 不执行，把它还给模型
     notes: list[str] = field(default_factory=list)
+    unknown: list[str] = field(default_factory=list)  # 丢掉的未知参数名（模型在猜参数 → loop 附签名）
 
 
 def check(schema: dict, args: dict, accepts: set[str] | None = None) -> Checked:
     """修正 → 校验 → 丢掉函数收不下的未知参数。accepts = 工具函数能收的参数名（None = 全收，如带 **kwargs）。"""
     fixed, n = coerce(schema, args)
-    notes = []
+    notes, unknown = [], []
     props = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
     required = schema.get("required") if isinstance(schema.get("required"), list) else []
     for k in [k for k, v in fixed.items() if v is None and k not in required and not _nullable(props.get(k))]:
@@ -294,10 +295,10 @@ def check(schema: dict, args: dict, accepts: set[str] | None = None) -> Checked:
     if violations:
         shown = violations[:VIOLATIONS_MAX]
         more = f"；还有 {len(violations) - len(shown)} 处" if len(violations) > len(shown) else ""
-        return Checked(fixed, "参数不对：" + "；".join(shown) + more + "。请按这个工具的参数说明改好再调用。", notes)
+        return Checked(fixed, "参数不对：" + "；".join(shown) + more + "。请按这个工具的参数说明改好再调用。", notes, unknown)
     if n:
         notes.append(f"按参数说明修正了 {n} 处写法（如把 \"5\" 当成 5）")
-    return Checked(fixed, "", notes)
+    return Checked(fixed, "", notes, unknown)
 
 
 # —— 工具名写错（Gemini getToolSuggestion，换成 Python 编辑距离） ——
@@ -382,6 +383,14 @@ class Streak:
     def __init__(self):
         self.per: dict[str, int] = {}
         self.total = 0
+        self.shown: set[str] = set()  # 这一轮已经给过签名的工具
+
+    def signature_once(self, tool: str, schema: dict | None) -> str:
+        """模型在猜参数（按需工具第一次写错 / 给了不认识的参数）时附的签名；同一工具一轮只附一次（v2.38 B12）。"""
+        if tool in self.shown:
+            return ""
+        self.shown.add(tool)
+        return "\n\n" + signature(tool, schema or {})
 
     @property
     def stopped(self) -> bool:

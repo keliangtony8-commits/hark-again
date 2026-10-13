@@ -129,11 +129,6 @@ def describe(t: Tool) -> str:
             f"调用：deferred_tool(action=\"call\", tool=\"{t.name}\", arguments={{…}})")
 
 
-def signature(t: Tool) -> str:
-    """按需工具参数写错时附上的完整签名（模型多半没 describe 过，第一次就给，不等连错三次）。"""
-    return "\n" + tool_args.signature(t.name, t.parameters)
-
-
 @tool(
     META, "查看可用工具",
     "（说明在请求里按当前可用的按需工具生成：agent/deferred.description）",
