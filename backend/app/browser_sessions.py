@@ -115,6 +115,7 @@ class Tab:
     login_seen: bool = False  # 这次打开后见过登录页（之后的 auth 动作成功 → signed_in）
     noted: bool = False       # 这次打开已经提醒过模型“登录过期”
     autofilled: bool = False  # 这次打开已经用保险箱自动代填过（v2.50，每次打开最多一次）
+    vault_failed: str = ""    # 自动代填后仍停在登录页的保险箱条目 id（v2.51；这段对话里一直记着，browser_login 改弹登录卡问新密码）
 
     def opened(self, login: dict | None) -> None:
         """browser_open 之后：按服务端的登录标记重置这次打开的状态。"""

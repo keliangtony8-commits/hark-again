@@ -252,6 +252,28 @@ async def turns():
     await run("c9", None, never, ("browser_open", {"url": "https://shop.example.com/orders"}), "好")
     assert "保险箱里有这个网站的登录「shop」：用 browser_login" in tool_out(0), tool_out(0)
     print("ok: auto login (expired success / wrong password / unattended alert / two-step skipped / first-time)")
+    # f5（v2.51 h7）. 保险箱密码代填没登上 → browser_login 改弹登录卡（预填用户名）；填新密码 + 记住 → 原地更新那条，不另建
+    from app.models import Secret
+    seen_forms = []
+    async def new_pw(fid, form):
+        seen_forms.append(form); return FormReply({"username": "me", "password": "new-9"}, remember=True)
+    async def by_pw(session, method, path, body=None):
+        if path == "/login" and (body or {}).get("password") == "new-9":
+            return {**HOME, "url": "https://www.douban.com/mine"}
+        return await real(session, method, path, body)
+    browser_client.snapshot_call = by_pw
+    await run("c10", None, new_pw, ("browser_open", {"url": "https://www.douban.com/"}),
+              ("browser_login", {"user_ref": "1", "pass_ref": "2"}), "好")
+    browser_client.snapshot_call = real
+    out0 = tool_out(0)
+    assert "browser_login：这次它会在聊天里弹登录卡" in out0 and "绝不要让用户在聊天里把账号密码发给你" in out0, out0
+    assert len(seen_forms) == 1 and "没登上" in seen_forms[0]["title"], seen_forms
+    assert seen_forms[0]["fields"][0]["value"] == "me" and seen_forms[0]["fields"][1].get("value") is None, seen_forms
+    assert "已按用户的选择记到保险箱" in tool_out(1) and "new-9" not in json.dumps(model_saw[-1], ensure_ascii=False), tool_out(1)
+    async with SessionLocal() as db:
+        rows = (await db.scalars(select(Secret).where(Secret.name == "douban"))).all()
+        assert len(rows) == 1 and vault.reveal(rows[0]) == "new-9" and rows[0].username == "me", rows
+    print("ok: stale vault password → login card → vault updated in place")
 asyncio.run(turns())
 
 # ---- 3. listing + 退出登录收起提醒 ----

@@ -45,6 +45,11 @@ def create(name: str, value: str, hosts: list[str], kind: str = "api_key", usern
                   ciphertext=encrypt(value), preview="" if login else value[-4:])  # 密码连末位都不露
 
 
+def replace_login(secret: Secret, username: str, password: str) -> None:
+    """用户在登录卡上填了新密码并勾了记住 → 原地更新这条登录（不另建一条同网站的）。"""
+    secret.username, secret.ciphertext, secret.preview = username, encrypt(password), ""
+
+
 def host_matches(host: str, allowed: list[str]) -> bool:
     return any(host == a or host.endswith("." + a) for a in allowed)
 

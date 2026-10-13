@@ -38,6 +38,8 @@ class Limits:
         return cls(settings.agent_max_steps, settings.agent_turn_tokens)
 
 
+REJECTED = ("用户没有批准这个操作，已取消，没有执行。不要换个写法绕过同一件事；如实告诉用户这一步没做、哪些已经做好了，"
+            "如果有不含这一步的办法，说一句问他要不要换着做。别说自己“没有权限”，也别让用户自己去跑命令。")
 SKIPPED = "没有执行：同一批里前面的调用已被判定为原地打转。"
 SKIPPED_BAD = "没有执行：前面已经连续多次写错参数，这一轮先停下。"
 SELF_PAGED = {"read_file"}  # 自己按 offset 分页的工具，结果不再落盘截断
@@ -540,7 +542,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
                 yield ev
         if grant is None:
             yield denied("你没有批准")
-            yield ToolResult(ask.rejected or "用户没有批准这个操作，已取消。不要换方式绕过，告诉用户即可。")
+            yield ToolResult(ask.rejected or REJECTED)
             return
         if t.grants:
             args["grant"] = grant

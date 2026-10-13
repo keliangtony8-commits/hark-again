@@ -33,6 +33,8 @@ browser_calls: list = []
 async def fake_snapshot(session, method, path, body=None):
     assert session == "example-com", session  # 按网站起的会话名
     browser_calls.append((path, body))
+    if path == "/login":  # 代填后进了订单页（v2.51：还停在登录页 = 密码没登上，会改弹卡）
+        return {"title": "我的订单", "url": "https://shop.example.com/orders", "elements": [], "text": "订单"}
     return {"title": "登录 - 示例商城", "url": "https://shop.example.com/login",
             "elements": [{"ref": "1", "tag": "input", "type": "text", "name": "账号"},
                          {"ref": "2", "tag": "input", "type": "password", "name": "密码"}], "text": "欢迎"}

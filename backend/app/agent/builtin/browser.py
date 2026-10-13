@@ -163,11 +163,13 @@ async def _autologin(ctx: ToolContext, tab: Tab, secret, refs: tuple[str, str], 
                 "下面是登录后的页面：接着做原来的事，不用再登录、也不用告诉用户。\n" + text)
     head = (f"⚠ 会话 {tab.session} 在 {site} {'的登录过期了' if expired else '要登录'}，已用保险箱「{secret.name}」自动代填过一次，但还停在登录页"
             "（可能要验证码，或保险箱里的密码已经改了）。别用同一份密码反复试：")
+    tab.vault_failed = secret.id
     if ctx.ask is nobody:
         await _alert(ctx, tab, browser_sessions.alert_subject(tab.session), stale=True)
         return head + "现在是定时任务、用户不在，如实说明这一步做不了；已在用户的 Home 上放了一张提醒。\n" + text
-    return head + ("页面要验证码就用 browser_code，要滑块/扫码就用 browser_handoff；页面说密码错了就告诉用户"
-                   "保险箱里「" + secret.name + "」的密码可能过期了，请他更新。\n" + text)
+    return head + ("页面要验证码就用 browser_code，要滑块/扫码就用 browser_handoff；页面说账号或密码错了就用 browser_login："
+                   "这次它会在聊天里弹登录卡请用户填新的（勾“记住”就更新保险箱「" + secret.name + "」，你看不到密码），"
+                   "直接调就行。绝不要让用户在聊天里把账号密码发给你。\n" + text)
 
 
 async def _alert(ctx: ToolContext, tab: Tab, subject: str, stale: bool = False) -> None:
@@ -354,17 +356,21 @@ async def _login_form(ctx: ToolContext, args: dict) -> dict | None:
     """保险箱里有这个网站的登录就直接代填，不打扰用户；没有就在聊天里弹登录卡。"""
     tab = _tab(ctx)
     host = tab.host
-    if not tab.session or not host or await vault.find_for_url(ctx.db, tab.url, kind="login"):
+    if not tab.session or not host:
         return None
-    return {"type": "form", "purpose": "login", "title": "登录以继续", "site": host, "action": "登录",
-            "remember": bool(settings.vault_key),
-            "fields": [{"name": "username", "label": "账号", "kind": "text"},
+    secret = await vault.find_for_url(ctx.db, tab.url, kind="login")
+    if secret and secret.id != tab.vault_failed:
+        return None
+    stale = secret is not None  # v2.51：保险箱那条刚代填没登上 → 问用户新的，预填原用户名
+    return {"type": "form", "purpose": "login", "title": "保险箱里的密码没登上，请填新的" if stale else "登录以继续",
+            "site": host, "action": "登录", "remember": bool(settings.vault_key),
+            "fields": [{"name": "username", "label": "账号", "kind": "text", "value": (secret.username or None) if stale else None},
                        {"name": "password", "label": "密码", "kind": "password"}]}
 
 
 @tool("browser_login", "正在登录",
       "登录当前网页。user_ref/pass_ref 是快照里用户名框和密码框的编号。保险箱里有这个网站的登录就直接代填；"
-      "没有就会在聊天里给用户弹登录卡，用户填完自动代填（你始终看不到账号密码），不用你另外询问。",
+      "没有（或保险箱那条刚自动代填没登上）就会在聊天里给用户弹登录卡，用户填完自动代填、勾记住就存进/更新保险箱（你始终看不到账号密码），不用你另外询问。",
       {"type": "object", "properties": {"user_ref": {"type": "string"}, "pass_ref": {"type": "string"}},
        "required": ["user_ref", "pass_ref"]}, form=_login_form)
 async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: FormReply | None = None) -> ToolResult:
@@ -378,7 +384,12 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
             return ToolResult("用户没有把账号和密码填完整，登录没做。")
         if form.remember:
             try:
-                ctx.db.add(vault.create(tab.host, password, [tab.host], kind="login", username=username))
+                old = await vault.find_for_url(ctx.db, tab.url, kind="login")
+                if old is not None:  # 保险箱那条密码过期了：原地更新，不再建一条
+                    vault.replace_login(old, username, password)
+                    tab.vault_failed = ""
+                else:
+                    ctx.db.add(vault.create(tab.host, password, [tab.host], kind="login", username=username))
                 retried = await task_wall.retry_fixed(ctx.db, "needs_login", hosts=[tab.host])
                 await ctx.db.commit()
                 note = "已按用户的选择记到保险箱，下次自动登录。" + (f"{task_wall.retry_note(retried)}。" if retried else "")
@@ -396,6 +407,7 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
             "user_ref": user_ref, "pass_ref": pass_ref, "username": username, "password": password})
     except browser_client.BrowserDown as e:
         return _down(tab, e)
+    tab.autofilled = True  # 刚亲手代填过：还停在登录页也别再用同一份密码自动代填一遍
     return await _after(ctx, tab, f"已用{source}代填登录（你看不到密码）。登录状态存在会话 {tab.session}，"
                         f"以后打开这个网站会接着用。{note}\n" + await _view(ctx, tab, snap, auth=True))
 
