@@ -13,6 +13,8 @@ npm install 写了 300 MB node_modules、爬虫落了 2 GB 图片、训练脚本
 什么时候数：结算时（jobs.settle）数一次存进 jobs.disk（JSON，之后文件被删也不改，是“当时的账”）；
 运行中的任务按需数（任务卡轮询 / job_status），每个任务 CACHE_S 秒内用缓存（遍历工作区要碰磁盘）。
 同步函数会碰磁盘，异步代码里用 asyncio.to_thread 调。
+v1.98 leaders(db, ws)：“我的电脑”页磁盘一节的“谁写得最多”——最近 WINDOW_DAYS 天结束的任务按结算账（written + log）排前 LEADERS_MAX，
+只读库里存的账、不重新遍历工作区（页面每次打开都调）；第二项 = 日志目录还在（一键清理能腾出 log 那份，written 是用户文件，不清）。
 
 参考：deepseek-harness / Codex / Gemini CLI 都在本机跑命令，没有逐任务磁盘账，无代码可搬（core-research.md CORE 21）；
 口径借 `find -newermt`（按修改时间圈出一段时间内写的文件）+ `du`（按顶层目录汇总）。
@@ -21,7 +23,7 @@ import asyncio
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import func, or_, select
@@ -36,6 +38,9 @@ TOP_MAX = 3          # 给几组“最大的”
 NOTE_MIN = 1 << 20   # 给模型的结论里，写入或日志到这么大才提（太小的不占篇幅）
 CACHE_S = 30
 SKIP = frozenset({".jobs", ".spill", ".turns", ".git"})
+WINDOW_DAYS = 7
+LEADERS_MAX = 5
+LEADERS_SCAN = 500   # 窗口里最多看这么多个结束的任务（按结束时间倒序；正常远不到）
 FIELDS = ("log", "written", "files", "top", "overlap", "partial")
 
 _cache: dict[str, tuple[float, dict]] = {}
@@ -185,6 +190,21 @@ async def of(db: AsyncSession, job: Job) -> dict | None:
 def stored(job: Job) -> dict | None:
     """同步读结算时存的账（describe / block 用）。"""
     return wire(job.disk) if job.state != "running" and job.disk else None
+
+
+def total(d: dict) -> int:
+    return d["written"] + d["log"]
+
+
+async def leaders(db: AsyncSession, ws: str, now: datetime | None = None) -> list[tuple[Job, bool]]:
+    """最近 WINDOW_DAYS 天结束的任务里，磁盘账（written + log）最大的 LEADERS_MAX 个 → [(任务, 日志目录还在)]；账为 0 / 坏的不列。"""
+    since = (now or datetime.now(timezone.utc)) - timedelta(days=WINDOW_DAYS)
+    rows = (await db.scalars(select(Job).where(Job.project_id == ws, Job.state != "running", Job.disk.is_not(None),
+                                               Job.finished_at >= since)
+                             .order_by(Job.finished_at.desc()).limit(LEADERS_SCAN))).all()
+    ranked = [(total(d), job) for job in rows if (d := wire(job.disk)) is not None and total(d) > 0]
+    ranked.sort(key=lambda t: (-t[0], t[1].id))
+    return [(job, _job_root(job).is_dir()) for _, job in ranked[:LEADERS_MAX]]
 
 
 def forget(job_id: str | None = None) -> None:

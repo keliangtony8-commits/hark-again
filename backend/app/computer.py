@@ -7,7 +7,8 @@ status(db, ws) 把三处事实拼在一起，只读不启动：
   - 正在跑的后台任务（jobs.wire，带日志尾巴，前端可取消、看日志）；
   - 磁盘配额（v1.31，quota.py）：disk_limit / disk_level ok|tight|full|off，满了写不进、后台任务被停；
   - 在监听的端口（v1.30，只在运行中时问沙盒；旁边“预览”按钮走 POST …/computer/preview，规则在 preview.py）；
-  - 内存去哪了（v1.94，memory_view.py）：按后台任务 / 常驻服务 / 零散程序排出谁占的内存，余下归“其它”。
+  - 内存去哪了（v1.94，memory_view.py）：按后台任务 / 常驻服务 / 零散程序排出谁占的内存，余下归“其它”；
+  - 磁盘谁写得最多（v1.98，job_disk.leaders）：最近 7 天结束的后台任务按结算时的磁盘账排前 5（disk_jobs：jobs.wire + log_kept）。
 v1.27 补齐“像一台电脑”的那几样：CPU（占配额的百分比）、正在跑的程序（按 CPU 排前 8）、内存打满被系统杀过几次（OOM）、
 磁盘按用途拆开（文件 / 装的软件 / 任务日志 / 长输出存档 / 下载缓存）、装过的工具清单（pip / npm 用户级安装，直接读工作区
 ~/.local，不用开机）；cleanup(db, ws) 一键清掉能安全删的：长输出存档 .spill、已结束任务的日志目录（卡片和结论里的
@@ -26,7 +27,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import job_usage, jobs, memory_view, preview, quota, sandbox_client, services, workspaces
+from . import job_disk, job_usage, jobs, memory_view, preview, quota, sandbox_client, services, workspaces
 from .models import Job
 from .storage import project_dir
 from .wire_time import iso
@@ -171,7 +172,9 @@ async def status(db: AsyncSession, ws: str) -> dict:
             # v1.82 常驻服务单独一节（services.py：健康、端口、手动重启），running_jobs 只剩普通后台任务
             "running_jobs": [{**jobs.wire(j, chars=600), "usage": usage.get(j.id)} for j in running if not j.keep_alive],
             "services": await services.listing(db, ws, running, ports, usage),
-            "memory": memory_view.build(raw, running, usage)}  # v1.94 内存去哪了（memory_view.py）
+            "memory": memory_view.build(raw, running, usage),  # v1.94 内存去哪了（memory_view.py）
+            # v1.98 谁写得最多：任务本身（disk 带结算账）+ log_kept 日志还在（一键清理能腾出那份）
+            "disk_jobs": [{**jobs.wire(j, chars=200), "log_kept": kept} for j, kept in await job_disk.leaders(db, ws)]}
 
 
 def _remove(p: Path) -> int:

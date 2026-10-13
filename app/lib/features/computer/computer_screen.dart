@@ -1,6 +1,6 @@
 // 电脑详情页：我的 → 我的电脑（个人工作区，v1.25）和项目首屏点“电脑”进来的 /projects/<id>/computer（v1.27）共用。
 // 页头一句说明 → “状态”（ComputerSection：运行/休眠、CPU/内存、内存打满警示、后台任务、重启；运行中一直刷新）
-// → “正在监听的端口”（PortsSection，v1.30：点一下预览网页）→ “内存”（MemorySection，v1.94：谁占的内存，从大到小）→ “正在运行的程序”（ProcessSection）→ “磁盘”（StorageSection：按用途拆开、点“文件”开文件弹层、装过的工具、清理）
+// → “正在监听的端口”（PortsSection，v1.30：点一下预览网页）→ “内存”（MemorySection，v1.94：谁占的内存，从大到小）→ “正在运行的程序”（ProcessSection）→ “磁盘”（StorageSection：按用途拆开、点“文件”开文件弹层、装过的工具、清理）→ “最近 7 天谁写得最多”（DiskJobsSection，v1.98：按任务结算的磁盘账，点开看日志）
 // → 个人电脑才有的“浏览器登录”（v1.26 BrowserSessionsSection）和“服务器主机”（v1.49 HostSection：主机模式开关 + 以后都允许的命令）。下拉刷新一起刷。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,8 +44,9 @@ class ComputerScreen extends ConsumerWidget {
           MemorySection(ws: ws, delay: Motion.stagger(2)),
           ProcessSection(ws: ws, delay: Motion.stagger(3)),
           StorageSection(ws: ws, delay: Motion.stagger(4), onFiles: () => showProjectFiles(context, ws)),
-          if (personal) BrowserSessionsSection(delay: Motion.stagger(5)),
-          if (personal) HostSection(delay: Motion.stagger(6)),
+          DiskJobsSection(ws: ws, delay: Motion.stagger(5)),
+          if (personal) BrowserSessionsSection(delay: Motion.stagger(6)),
+          if (personal) HostSection(delay: Motion.stagger(7)),
         ]),
       ),
     );

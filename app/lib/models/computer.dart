@@ -7,7 +7,7 @@ import 'preview.dart';
 class ComputerStatus {
   const ComputerStatus({required this.workspace, required this.state, this.memoryUsed, this.memoryLimit, this.startedAt,
       this.idleMinutes, this.outdated = false, this.diskUsed = 0, this.diskPartial = false, this.jobs = const [],
-      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy, this.services = const [], this.memory});
+      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy, this.services = const [], this.memory, this.diskJobs = const []});
 
   factory ComputerStatus.fromJson(Map<String, dynamic> j) {
     final sb = (j['sandbox'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -45,6 +45,10 @@ class ComputerStatus {
           if (x is Map) ListeningPort.fromJson(x.cast<String, dynamic>())
       ],
       memory: j['memory'] is Map ? MemoryView.fromJson((j['memory'] as Map).cast<String, dynamic>()) : null,
+      diskJobs: [
+        for (final x in (j['disk_jobs'] as List? ?? const []))
+          if (x is Map) ?DiskJob.tryParse(x.cast<String, dynamic>())
+      ],
     );
   }
 
@@ -82,6 +86,9 @@ class ComputerStatus {
 
   /// v1.94 内存去哪了（服务器 app/memory_view.py）：只在运行中有。
   final MemoryView? memory;
+
+  /// v1.98 最近 7 天谁写得最多（服务器 job_disk.leaders）：从大到小，最多 5 个；不用开机。
+  final List<DiskJob> diskJobs;
   bool get diskFull => diskLevel == 'full';
   bool get diskTight => diskLevel == 'tight' || diskFull;
 
@@ -416,4 +423,60 @@ String memorySemantics(MemoryView v) => [
       ?memoryTightNote(v),
       for (final r in v.rows) '${memoryRowTitle(r)}，${formatSize(r.memory)}，${memoryRowLine(r)}',
       if (v.other > 0) '$memoryOtherTitle ${formatSize(v.other)}',
+    ].join('；');
+
+// ---- v1.98 磁盘谁写得最多（服务器 app/job_disk.leaders；网页版 lib/computer.ts 同一套）----
+
+/// 最近 7 天结束的一个后台任务和它结算时的磁盘账。logKept = 完整日志还在（“清理”能腾出日志那份；写的文件是你的，不清）。
+class DiskJob {
+  const DiskJob({required this.job, required this.disk, this.logKept = false});
+
+  /// 没有可用的磁盘账 → null（不列）。
+  static DiskJob? tryParse(Map<String, dynamic> j) {
+    final d = JobDisk.tryParse(j['disk']);
+    if (d == null || d.written + d.log <= 0) return null;
+    return DiskJob(job: JobInfo.fromJson(j), disk: d, logKept: j['log_kept'] == true);
+  }
+
+  final JobInfo job;
+  final JobDisk disk;
+  final bool logKept;
+
+  /// 日志清掉了就只剩写的文件那份还算数。
+  int get total => disk.written + (logKept ? disk.log : 0);
+}
+
+const diskJobsTitle = '最近 7 天谁写得最多';
+
+/// 这一节的行：去掉已经算不出东西的（日志清了、也没写文件），从大到小。
+List<DiskJob> diskJobRows(ComputerStatus s) =>
+    [for (final r in s.diskJobs) if (r.total > 0) r]..sort((a, b) => b.total.compareTo(a.total));
+
+/// 占整个工作区已用的比例（0–1）；不知道已用 → 按最大那行算。
+double diskJobShare(ComputerStatus s, DiskJob r) {
+  final rows = diskJobRows(s);
+  final base = s.diskUsed > 0 ? s.diskUsed : (rows.isEmpty ? 0 : rows.first.total);
+  return base <= 0 ? 0 : (r.total / base).clamp(0, 1).toDouble();
+}
+
+/// 行的副标题：“2 天前 · 主要写在 node_modules/ · 日志 2 MB”。日志清了 → “日志已清”。
+String diskJobLine(DiskJob r, {DateTime? now}) => [
+      if (r.job.finishedAt != null) formatAgo(r.job.finishedAt, now: now),
+      if (r.disk.top.isNotEmpty) '主要写在 ${jobDiskGroupName(r.disk.top.first.path)}' else if (r.disk.written == 0) '只有日志',
+      if (r.disk.log > 0) r.logKept ? '日志 ${formatSize(r.disk.log)}' : '日志已清',
+      if (r.disk.overlap > 0 && r.disk.written > 0) '含同时段任务',
+    ].join(' · ');
+
+/// 行尾的大小（写入有 partial 时带“+”：只数了一部分）。
+String diskJobSize(DiskJob r) => '${formatSize(r.total)}${r.disk.partial ? '+' : ''}';
+
+/// 头一句：写的文件是你的，不会被“清理”删；日志能清多少。
+String diskJobsNote(ComputerStatus s) {
+  final logs = diskJobRows(s).where((r) => r.logKept).fold<int>(0, (a, r) => a + r.disk.log);
+  return '按任务结束时数的账；写下的文件不会被清理，要腾地方得删它们${logs > 0 ? '，日志共 ${formatSize(logs)} 可以清' : ''}';
+}
+
+String diskJobsSemantics(ComputerStatus s, {DateTime? now}) => [
+      diskJobsTitle,
+      for (final r in diskJobRows(s)) '${r.job.title}，${diskJobSize(r)}，${diskJobLine(r, now: now)}',
     ].join('；');

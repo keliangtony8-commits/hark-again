@@ -38,3 +38,6 @@ button.computer-mem:hover { background: var(--tile); }
 .computer-mem-head .row-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .computer-mem .row-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .computer-warn { color: var(--warning); }
+/* v1.98 最近 7 天谁写得最多：头一句说明（换了数淡入） */
+.computer-diskjobs-note { padding: var(--sp-3) var(--sp-4) 0; animation: fade var(--dur) var(--ease) both; }
+@media (prefers-reduced-motion: reduce) { .computer-diskjobs-note { animation: none; } }

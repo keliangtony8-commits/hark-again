@@ -11,6 +11,9 @@
 //     大任务      后台任务 · 2 个进程 · 占 44%       350 MB   ▬▬▬▬▭  点 = 看它的完整日志
 //     python bot.py  程序 · PID 9 · 占 15%            120 MB
 //     其它        系统和零碎小程序 · 占 41%           330 MB
+//   最近 7 天谁写得最多（v1.98）  ← 有结算账的已结束任务才出现（服务器 job_disk.leaders），不用开机
+//     按任务结束时数的账；写下的文件不会被清理……（头一句）
+//     装依赖     2 天前 · 主要写在 node_modules/ · 日志 2 MB      302 MB  ▬▬▬▭  点 = 看它的完整日志与磁盘明细
 //   正在监听的端口（v1.30）     ← 只在运行中且有端口时出现
 //     端口 8000  python3 -m http.server …       ↗   点 = 签预览链接并用浏览器打开；长按 = 复制链接
 //     端口 5173  只监听本机，预览打不开（要监听 0.0.0.0）  ← 警示“打不开”，不可点
@@ -174,13 +177,16 @@ class _MemoryHead extends StatelessWidget {
   }
 }
 
-/// 一个占用者：图标 · 名字 / 归属与占比 · 大小，下面一条占比细条（数变了条平滑走过去）。
+/// 一个占用者（内存一节、v1.98 磁盘谁写得最多共用）：图标 · 名字 / 归属与占比 · 大小，下面一条占比细条（数变了条平滑走过去）。
 class _MemoryRowTile extends StatelessWidget {
   const _MemoryRowTile(
-      {super.key, required this.icon, required this.title, required this.line, required this.bytes, required this.share, this.warn = false, this.onTap});
+      {super.key, required this.icon, required this.title, required this.line, this.bytes = 0, this.size, required this.share, this.warn = false, this.onTap});
   final IconData icon;
   final String title, line;
   final int bytes;
+
+  /// 行尾的字；不给 = formatSize(bytes)（磁盘一节要带“+”）。
+  final String? size;
   final double share;
   final bool warn;
   final VoidCallback? onTap;
@@ -188,7 +194,7 @@ class _MemoryRowTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final size = formatSize(bytes);
+    final size = this.size ?? formatSize(bytes);
     final tile = Padding(
       padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -214,6 +220,53 @@ class _MemoryRowTile extends StatelessWidget {
       ]),
     );
     return onTap == null ? tile : InkWell(onTap: onTap, child: tile);
+  }
+}
+
+/// 最近 7 天谁写得最多（v1.98）：和内存一节同一种行（图标 · 名字 / 说明 · 大小 + 占比细条），点了看完整日志。
+class DiskJobsSection extends ConsumerWidget {
+  const DiskJobsSection({super.key, required this.ws, this.delay = Duration.zero});
+  final String ws;
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(computerProvider(ws)).value;
+    final rows = s == null ? const <DiskJob>[] : diskJobRows(s);
+    return RiseSwitcher(
+      child: rows.isEmpty
+          ? const SizedBox.shrink(key: ValueKey('nodiskjobs'))
+          : FadeSlideIn(
+              key: const ValueKey('diskjobs'),
+              delay: delay,
+              child: Semantics(
+                container: true,
+                label: diskJobsSemantics(s!),
+                excludeSemantics: true,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const SectionTitle(diskJobsTitle),
+                  GlassGroup(children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3 - 2, Sp.x4, 0),
+                      child: SwapSwitcher(
+                        child: Text(diskJobsNote(s), key: ValueKey(diskJobsNote(s)), style: context.text.bodySmall),
+                      ),
+                    ),
+                    for (final r in rows)
+                      _MemoryRowTile(
+                        key: ValueKey('diskjob-${r.job.id}'),
+                        icon: r.disk.top.isNotEmpty && r.disk.top.first.path == '.home/' ? Icons.extension_outlined : Icons.work_outline_rounded,
+                        title: r.job.title,
+                        line: diskJobLine(r),
+                        size: diskJobSize(r),
+                        share: diskJobShare(s, r),
+                        onTap: () => showJobLog(context, ref, r.job),
+                      ),
+                  ]),
+                ]),
+              ),
+            ),
+    );
   }
 }
 

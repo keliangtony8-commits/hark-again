@@ -6,7 +6,7 @@ import { Page, PageHeader, PageIntro } from "../../ui/kit";
 import ProjectFiles from "../projects/ProjectFiles";
 import BrowserSessionsSection from "./BrowserSessionsSection";
 import HostSection from "./HostSection";
-import { MemorySection, PortsSection, ProcessSection, StorageSection } from "./ComputerDetails";
+import { DiskJobsSection, MemorySection, PortsSection, ProcessSection, StorageSection } from "./ComputerDetails";
 import ComputerSection from "./ComputerSection";
 import { useComputer } from "./useComputer";
 
@@ -30,8 +30,9 @@ export default function ComputerScreen() {
       <MemorySection ctl={ctl} enter={3} />
       <ProcessSection ctl={ctl} enter={4} />
       <StorageSection ws={ws} ctl={ctl} enter={5} onFiles={() => setFiles(true)} />
-      {personal && <BrowserSessionsSection enter={6} />}
-      {personal && <HostSection enter={7} />}
+      <DiskJobsSection ctl={ctl} enter={6} />
+      {personal && <BrowserSessionsSection enter={7} />}
+      {personal && <HostSection enter={8} />}
       {files && <ProjectFiles projectId={ws} onClose={() => setFiles(false)} />}
     </Page>
   );

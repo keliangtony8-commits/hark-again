@@ -3,7 +3,8 @@ import { http } from "../../lib/api";
 import { CLEANUP_TEXT, type CleanupResult, type ComputerStatus, EMPTY_STORAGE, type InstalledTool, type StorageKey, cleanupDone, cleanupLabel,
   computerDiskLine, computerDiskNote, computerDiskRatio, computerPath, diskTight, processLine, processTitle, storageRows, toolsSummary,
   MEMORY_OTHER_TITLE, type MemoryRow, memoryOtherLine, memoryOtherShare, memoryRatio, memoryRowKey, memoryRowLine, memoryRowTitle,
-  memoryTight, memoryTightNote, memoryViewLine, memoryViewOf } from "../../lib/computer";
+  memoryTight, memoryTightNote, memoryViewLine, memoryViewOf,
+  DISK_JOBS_TITLE, diskJobLine, diskJobRows, diskJobShare, diskJobSize, diskJobsNote } from "../../lib/computer";
 import { JobLog } from "../../blocks/JobBlock";
 import type { JobInfo } from "../../lib/types";
 import { formatSize } from "../../lib/files";
@@ -87,6 +88,34 @@ export function MemorySection({ ctl, enter }: { ctl: ComputerCtl; enter?: number
             </div>
           </div>
         )}
+      </div>
+      {log && <JobLog job={log} onClose={() => setLog(null)} />}
+    </Section>
+  );
+}
+
+/** 最近 7 天谁写得最多（v1.98，= App DiskJobsSection）：按任务结算时的磁盘账从大到小，和内存一节同一种行；点了看完整日志。 */
+export function DiskJobsSection({ ctl, enter }: { ctl: ComputerCtl; enter?: number }) {
+  const [log, setLog] = useState<JobInfo | null>(null);
+  const s = ctl.s;
+  const rows = s ? diskJobRows(s) : [];
+  if (!s || !rows.length) return null;
+  return (
+    <Section title={DISK_JOBS_TITLE} enter={enter}>
+      <div className="list">
+        <div key={diskJobsNote(s)} className="row-sub computer-diskjobs-note">{diskJobsNote(s)}</div>
+        {rows.map((r) => (
+          <button key={r.job.id} className="row computer-mem" onClick={() => setLog(r.job)}
+            aria-label={`${r.job.title}，${diskJobSize(r)}，${diskJobLine(r)}，看日志`}>
+            <span className="row-icon">{r.disk.top[0]?.path === ".home/" ? <IconSettings /> : <IconDisk />}</span>
+            <div className="row-body">
+              <div className="computer-mem-head"><span className="row-title">{r.job.title}</span>
+                <span key={r.total} className="row-hint computer-hint">{diskJobSize(r)}</span></div>
+              <div className="row-sub">{diskJobLine(r)}</div>
+              <div className="meter computer-meter"><span style={{ transform: `scaleX(${diskJobShare(s, r)})` }} /></div>
+            </div>
+          </button>
+        ))}
       </div>
       {log && <JobLog job={log} onClose={() => setLog(null)} />}
     </Section>

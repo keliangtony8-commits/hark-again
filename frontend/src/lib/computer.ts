@@ -2,8 +2,9 @@
 // v1.27 CPU、内存打满警示、程序行、磁盘拆分、清理、装过的工具；v1.82 常驻服务健康。
 import { formatSize } from "./files";
 import type { ListeningPort } from "./preview";
-import { jobDuration, jobUsage, jobUsageLabel } from "./jobs";
-import type { JobInfo } from "./types";
+import { jobDisk, jobDiskGroupName, jobDuration, jobUsage, jobUsageLabel } from "./jobs";
+import { formatAgo } from "./format";
+import type { JobDisk, JobInfo } from "./types";
 
 export type ComputerState = "running" | "stopped" | "none" | "unreachable";
 export type ComputerStopReason = "idle" | "room";
@@ -21,6 +22,7 @@ export type ComputerStatus = {
   // v1.31 磁盘配额（服务器 app/quota.py）：上限字节（null = 不限）；ok / tight ≥85% / full 满了（新文件写不进、后台任务会被停）/ off
   disk_limit?: number | null; disk_level?: DiskLevel;
   memory?: MemoryView | null; // v1.94 内存去哪了（服务器 app/memory_view.py，只在运行中有）
+  disk_jobs?: (JobInfo & { log_kept?: boolean })[]; // v1.98 最近 7 天谁写得最多（服务器 job_disk.leaders，不用开机）
 };
 export type DiskLevel = "ok" | "tight" | "full" | "off";
 /** 常驻服务的健康：up 在跑 / restarting 进程退出了、等自动重启 / gave_up 已停止自动重启（或别的意外结束）。 */
@@ -219,3 +221,35 @@ export const memoryRowLine = (r: MemoryRow) => [
 
 export const MEMORY_OTHER_TITLE = "其它";
 export const memoryOtherLine = (v: MemoryView) => `系统和零碎小程序 · 占 ${memoryPercent(memoryOtherShare(v))}`;
+
+// ---- v1.98 磁盘谁写得最多（服务器 app/job_disk.leaders；App models/computer.dart 同一套）----
+/** 最近 7 天结束的一个任务和它结算时的磁盘账；logKept = 完整日志还在（清理能腾出那份；写下的文件是你的，不清）。 */
+export type DiskJob = { job: JobInfo; disk: JobDisk; logKept: boolean; total: number };
+export const DISK_JOBS_TITLE = "最近 7 天谁写得最多";
+export function diskJobRows(s: ComputerStatus): DiskJob[] {
+  const out: DiskJob[] = [];
+  for (const j of s.disk_jobs ?? []) {
+    const d = jobDisk(j.disk);
+    if (!d || d.written + d.log <= 0) continue;
+    const logKept = j.log_kept === true;
+    const total = d.written + (logKept ? d.log : 0); // 日志清掉了就只剩写的文件
+    if (total > 0) out.push({ job: j, disk: d, logKept, total });
+  }
+  return out.sort((a, b) => b.total - a.total);
+}
+export function diskJobShare(s: ComputerStatus, r: DiskJob): number {
+  const rows = diskJobRows(s);
+  const base = s.disk_used > 0 ? s.disk_used : rows[0]?.total ?? 0;
+  return base > 0 ? clamp01(r.total / base) : 0;
+}
+export const diskJobLine = (r: DiskJob, now = new Date()) => [
+  ...(r.job.finished_at ? [formatAgo(r.job.finished_at, now)] : []),
+  ...(r.disk.top.length ? [`主要写在 ${jobDiskGroupName(r.disk.top[0].path)}`] : r.disk.written === 0 ? ["只有日志"] : []),
+  ...(r.disk.log > 0 ? [r.logKept ? `日志 ${formatSize(r.disk.log)}` : "日志已清"] : []),
+  ...(r.disk.overlap > 0 && r.disk.written > 0 ? ["含同时段任务"] : []),
+].join(" · ");
+export const diskJobSize = (r: DiskJob) => `${formatSize(r.total)}${r.disk.partial ? "+" : ""}`;
+export function diskJobsNote(s: ComputerStatus): string {
+  const logs = diskJobRows(s).filter((r) => r.logKept).reduce((a, r) => a + r.disk.log, 0);
+  return `按任务结束时数的账；写下的文件不会被清理，要腾地方得删它们${logs > 0 ? `，日志共 ${formatSize(logs)} 可以清` : ""}`;
+}
