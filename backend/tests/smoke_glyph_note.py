@@ -63,6 +63,7 @@ except ImportError:
     print("(matplotlib not installed: rc parse check skipped)")
 from app import workspaces
 assert "Noto Sans CJK" in workspaces.PREINSTALLED
+assert "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc" in workspaces.PREINSTALLED  # v2.45 i2：Pillow 直接用这个路径
 
 # 4) run_command / 后台任务
 from app import jobs, llm, sandbox_client

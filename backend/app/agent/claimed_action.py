@@ -24,7 +24,9 @@ MEMORY = frozenset({"remember", "update_memory", "forget", "memory_note", "ask_u
 FILES = frozenset({"write_file", "edit_file", "apply_patch", "render_document", "save_attachment", "display_file",
                    "publish_page", "save_skill", "extract_data"}) | GENERIC
 SCHEDULE = frozenset({"schedule_task", "manage_home", "create_panel", "offer_on_home"})
-SEND = frozenset({"confirm_order", "share_conversation", "connector_accounts", "projects", "project_brief"}) | GENERIC
+# “发给你了”多半是交到聊天里：交付类工具也算发送（v2.45 E2E B18：write_file + display_file 后回“已保存并发送”被误拦）
+DELIVER = frozenset({"display_file", "render_document", "browser_screenshot", "publish_page", "preview_port"})
+SEND = frozenset({"confirm_order", "share_conversation", "connector_accounts", "projects", "project_brief"}) | DELIVER | GENERIC
 
 
 @dataclass(frozen=True)
@@ -117,4 +119,6 @@ def nudge(kind: Kind, phrase: str) -> str:
     return (f"[系统提示] 你刚才的回复说「{phrase}」，但这一轮并没有成功调用任何{kind.name}相关的工具（{kind.hint}），"
             "那段回复没有交给用户。用户看不到你没做的事，说了做完却没做，他会信以为真。"
             "如果这件事确实该做：现在就调用对应工具去做，做完再简短告诉用户结果；"
-            "如果做不到、不该做或其实之前已经做过：如实告诉用户实际情况，不要说这一轮做了。")
+            "如果做不到、不该做或其实之前已经做过：如实告诉用户实际情况，不要说这一轮做了；"
+            "如果其实已经用别的工具做到了：把原来那段回复照样再说一遍。"
+            "这条是系统自动检查，不是用户说的，用户也看不到它：回复里不要提这次检查，不要说“你误会了”之类回应它的话。")

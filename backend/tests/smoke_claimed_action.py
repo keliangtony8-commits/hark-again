@@ -2,6 +2,7 @@
 # 1) 规则：宣称删掉/记住/设好/发送/保存而本轮没有对应工具成功 → 命中；有对应工具 / 否定 / 疑问 / 将来 / 以前的事 → 不命中；
 # 2) 一轮模拟模型（真机 h5b 原样）：第一步 0 工具回“删除了那条长期记忆” → 撤回 + 内部提示 → 模型调 forget → 记忆真没了，
 #    交付的回复里没有那句假话；
+# 1b) v2.45 B18：交付类工具（display_file 等）算“发给你了”；提示写明是系统检查、别回应它。
 # 3) 第二次照样宣称：只拦一次，照常交付（总共 2 次调用）；普通回答不多花调用。
 # 运行：python tests/smoke_claimed_action.py
 import os, sys, asyncio, subprocess, tempfile, json
@@ -51,12 +52,16 @@ CASES = [
     ("已经删掉了。", {"ask_user"}, "操作"),
     ("刚才被打断了，a 装好了，我看看 b。", set(), None),  # 说的是上一轮
     ("刚才被打断了。已经删掉了那条记忆。", set(), "记忆"),  # 只放过讲过去的那一句
+    ("已保存并发送：\n\n- `en.txt`：The early bird catches the worm.", {"write_file", "display_file"}, None),  # v2.45 B18 i1 原话
+    ("截图已经发给你了。", {"browser_screenshot"}, None),
+    ("已经发给你了。", {"write_file"}, "发送或提交"),  # 只写了文件、没交付：照样拦
 ]
 bad = [(t, a, got and got[0].name, w) for t, a, w in CASES if ((got := claims(t, a)) and got[0].name) != w and (got or w)]
 assert not bad, bad
 k, phrase = claims("删除了那条长期记忆。", set())
 n = nudge(k, phrase)
 assert "删除了那条长期记忆" in n and "forget" in n and "如实" in n, n
+assert "不是用户说的" in n and "你误会了" in n and "照样再说一遍" in n, n  # v2.45 B18：模型把提示当成用户在挑刺
 print("rules ok")
 
 # 2) 一轮模拟模型

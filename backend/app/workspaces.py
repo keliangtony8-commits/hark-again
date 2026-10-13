@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .models import Project
 
 # 容器里的环境（与 sandbox/image/Dockerfile 预装清单 + workspace-env.sh 同步）：模型据此知道什么装得上、装了留不留得住
-PREINSTALLED = "python3、node/npm、git、curl、gcc/make、jq、ripgrep、zip/unzip、sqlite3、poppler-utils（pdftotext）、ImageMagick、中文字体（Noto Sans CJK，matplotlib 已默认用它画中文）、procps（ps/top）"
+PREINSTALLED = "python3、node/npm、git、curl、gcc/make、jq、ripgrep、zip/unzip、sqlite3、poppler-utils（pdftotext）、ImageMagick、中文字体（Noto Sans CJK，matplotlib 已默认用它画中文；Pillow 等其他库画中文要自己指定字体文件 /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc，不用再找）、procps（ps/top）"
 HOME_DIR = ".home"  # 工作区里的家目录（隐藏）：pip/npm 用户级安装、git 全局配置都在这里
 ENVIRONMENT = (f"沙盒是非 root 的 Debian（没有 sudo/apt），已预装：{PREINSTALLED}。"
                "Python 包直接 pip install、Node 命令行工具 npm i -g：都装进工作区（~/.local），以后的对话和后台任务都能接着用，"
