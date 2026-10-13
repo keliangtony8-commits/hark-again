@@ -257,6 +257,7 @@ class ScheduledTask {
     this.wallReason,
     this.wallFixable = false,
     this.wallOpen,
+    this.wallRetrying = false,
   });
   factory ScheduledTask.fromJson(Map<String, dynamic> j) => ScheduledTask(
     id: j['id'] as String,
@@ -285,6 +286,7 @@ class ScheduledTask {
     wallReason: _line(j['wall_reason']),
     wallFixable: j['wall_fixable'] as bool? ?? false,
     wallOpen: _line(j['wall_open']),
+    wallRetrying: j['wall_retrying'] as bool? ?? false,
   );
   final String id, name, prompt, cron, output;
 
@@ -297,6 +299,9 @@ class ScheduledTask {
 
   /// 去哪一页处理（'vault' / 'connectors'；cardTargets 的键），没有 = null。
   final String? wallOpen;
+
+  /// v2.19 修好就重跑：你刚存了对应的登录 / 连好了连接器（或点了重试），重跑已经排上、还没跑完。
+  final bool wallRetrying;
   bool get walled => wallLabel != null;
 
   /// v2.13 助手自己记下的做法（第一次运行写）与观察（之后滚动改）；每次运行开头都读到（后端 app/task_brief.py）。没有 = null。
@@ -565,7 +570,7 @@ class Skill {
 
 /// 保险箱条目（脱敏）：服务器永不返回明文，只有 preview。
 class SecretItem {
-  const SecretItem({required this.id, required this.kind, required this.name, this.username, required this.hosts, required this.preview});
+  const SecretItem({required this.id, required this.kind, required this.name, this.username, required this.hosts, required this.preview, this.retriedNote});
   factory SecretItem.fromJson(Map<String, dynamic> j) => SecretItem(
     id: j['id'] as String,
     kind: j['kind'] as String? ?? 'api_key',
@@ -573,8 +578,12 @@ class SecretItem {
     username: j['username'] as String?,
     hosts: [for (final h in j['hosts'] as List? ?? const []) '$h'],
     preview: j['preview'] as String? ?? '',
+    retriedNote: j['retried_note'] as String?,
   );
   final String id, kind, name, preview;
+
+  /// v2.19 只在新建的响应里有：因为这条登录而重跑的碰壁任务那句话（后端 task_wall.retry_note），没有 = null。
+  final String? retriedNote;
   final String? username;
   final List<String> hosts;
   bool get isLogin => kind == 'login';
@@ -599,16 +608,20 @@ class Connector {
 }
 
 class McpServerItem {
-  const McpServerItem({required this.id, required this.name, required this.url, required this.hasToken, this.problem});
+  const McpServerItem({required this.id, required this.name, required this.url, required this.hasToken, this.problem, this.retriedNote});
   factory McpServerItem.fromJson(Map<String, dynamic> j) => McpServerItem(
     id: j['id'] as String,
     name: j['name'] as String? ?? '',
     url: j['url'] as String? ?? '',
     hasToken: j['has_token'] as bool? ?? false,
     problem: j['problem'] as String?,
+    retriedNote: j['retried_note'] as String?,
   );
   final String id, name, url;
   final bool hasToken;
+
+  /// v2.19 只在新建的响应里有：因为连上它而重跑的碰壁任务那句话，没有 = null。
+  final String? retriedNote;
 
   /// 还没恢复的问题："auth"（令牌被拒）| "down"（连不上）| null（老服务器不给 = 没问题）。规则见后端 connectors/mcp.py。
   final String? problem;

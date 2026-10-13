@@ -198,7 +198,9 @@ export type ScheduledTask = { id: string; name: string; prompt: string; cron: st
   runbook?: string | null; note?: string | null; skipped_at?: string | null;
   /** v2.15 碰壁（后端 app/task_wall.py）：最近一次运行碰到的障碍一句话 + 经过；wall_fixable 要你处理；wall_open 去哪页（cardTargets 键）。
    *  只读服务端给的这几个，不解析 wall 字符串。没碰壁 / 老服务器 = null */
-  wall?: string | null; wall_label?: string | null; wall_reason?: string | null; wall_fixable?: boolean; wall_open?: string | null };
+  wall?: string | null; wall_label?: string | null; wall_reason?: string | null; wall_fixable?: boolean; wall_open?: string | null;
+  /** v2.19 修好就重跑：你存了对应登录 / 连好连接器（或点了重试）后，重跑已排上还没跑完 */
+  wall_retrying?: boolean };
 /** 定时任务的一次运行（GET /api/tasks/{id}/runs，新的在前）；conversation_id：报告那次的对话，面板任务或对话已删为 null。 */
 export type TaskRun = { id: string; trigger: "schedule" | "manual"; status: "running" | "ok" | "error"; error: string | null; conversation_id: string | null; started_at: string; finished_at: string | null; duration_ms: number | null;
   /** 定时脚本这次跑的后台任务（没开对话时点开看日志）；老服务器没有 */
@@ -231,6 +233,7 @@ export type OutgoingFile = Upload | FileBlock;
 export type ProjectFile = { path: string; name: string; size: number; mime: string; modified: number };
 export type Connector = { id: string; name: string; desc: string; logo: string; configured: boolean; account: string | null };
 /** problem：还没恢复的问题 "auth"（令牌被拒）| "down"（连不上）| null（规则见后端 connectors/mcp.py）。 */
-export type McpServerInfo = { id: string; name: string; url: string; has_token: boolean; problem?: string | null };
-export type VaultSecret = { id: string; kind: "api_key" | "login" | "env"; name: string; username: string | null; hosts: string[]; header_name: string; header_prefix: string; preview: string; created_at: string };
+/** retried_note（v2.19）只在新建的响应里有：因此重跑的碰壁任务那句话（后端 task_wall.retry_note） */
+export type McpServerInfo = { id: string; name: string; url: string; has_token: boolean; problem?: string | null; retried_note?: string | null };
+export type VaultSecret = { id: string; kind: "api_key" | "login" | "env"; name: string; username: string | null; hosts: string[]; header_name: string; header_prefix: string; preview: string; created_at: string; retried_note?: string | null };
 

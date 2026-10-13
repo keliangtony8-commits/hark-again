@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import command_env, vault
+from .. import command_env, task_wall, vault
 from ..auth import require_user
 from ..db import get_session
 from ..models import Secret
@@ -42,8 +42,9 @@ async def create_secret(body: SecretIn, db: AsyncSession = Depends(get_session))
     if not s.hosts:
         raise HTTPException(400, "至少填一个有效域名")
     db.add(s)
+    retried = await task_wall.retry_fixed(db, "needs_login", hosts=s.hosts)  # 卡在“要登录这个域名”的任务重跑一次
     await db.commit()
-    return vault.public(s)
+    return {**vault.public(s), "retried_note": task_wall.retry_note(retried)}
 
 
 async def _create_env(body: SecretIn, db: AsyncSession) -> dict:

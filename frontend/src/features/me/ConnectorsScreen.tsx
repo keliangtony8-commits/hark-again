@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { Connector, McpServerInfo } from "../../lib/types";
+import { withRetried } from "../../lib/taskLabels";
 import { IconAlert, IconChevron, IconPlus, IconShield, IconSpark } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
 import { connectorSummary, mcpProblemText, sortAccounts, sortServers } from "./connectorLibrary";
@@ -36,7 +37,7 @@ export default function ConnectorsScreen() {
   useEffect(() => {
     const ok = params.get("connected"), err = params.get("error");
     if (ok || err) {
-      setNotice(ok ? { ok: true, text: "连接成功" } : { ok: false, text: `连接失败：${err}` });
+      setNotice(ok ? { ok: true, text: withRetried("连接成功", params.get("retried")) } : { ok: false, text: `连接失败：${err}` });
       setParams({}, { replace: true });
     }
   }, [params, setParams]);
@@ -60,7 +61,11 @@ export default function ConnectorsScreen() {
   const addMcp = async () => {
     if (!mcpDraft) return;
     setMcpBusy(true); setMcpErr(null);
-    try { await http.post("/api/connectors/mcp", mcpDraft); await servers.reload(); setMcpDraft(null); }
+    try {
+      const added = await http.post<McpServerInfo>("/api/connectors/mcp", mcpDraft);
+      await servers.reload(); setMcpDraft(null);
+      setNotice({ ok: true, text: withRetried(`已连接 ${added.name}`, added.retried_note) });
+    }
     catch (e) { setMcpErr(e instanceof Error ? e.message : "添加失败"); }
     finally { setMcpBusy(false); }
   };

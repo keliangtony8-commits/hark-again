@@ -17,20 +17,26 @@ import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'connector_library.dart';
+import 'task_wall.dart' show withRetried;
 
 /// OAuth 回调带回来的结果（深链的查询参数）。没有结果时为 null。
 class OAuthResult {
-  const OAuthResult({this.connected, this.error});
+  const OAuthResult({this.connected, this.error, this.retried});
   final String? connected;
   final String? error;
 
-  static OAuthResult? fromQuery(Map<String, String> q) =>
-      q['connected'] != null || q['error'] != null ? OAuthResult(connected: q['connected'], error: q['error']) : null;
+  /// v2.19 连好后服务端顺手重跑的碰壁任务那句话（?retried=），没有 = null。
+  final String? retried;
+
+  static OAuthResult? fromQuery(Map<String, String> q) => q['connected'] != null || q['error'] != null
+      ? OAuthResult(connected: q['connected'], error: q['error'], retried: q['retried'])
+      : null;
 
   @override
-  bool operator ==(Object other) => other is OAuthResult && other.connected == connected && other.error == error;
+  bool operator ==(Object other) =>
+      other is OAuthResult && other.connected == connected && other.error == error && other.retried == retried;
   @override
-  int get hashCode => Object.hash(connected, error);
+  int get hashCode => Object.hash(connected, error, retried);
 }
 
 class ConnectorsScreen extends ConsumerStatefulWidget {
@@ -65,7 +71,7 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
       if (!mounted) return;
       final list = ref.read(connectorsProvider).value ?? const <Connector>[];
       final name = list.where((c) => c.id == r.connected).firstOrNull?.name ?? r.connected;
-      showToast(context, r.error == null ? '已连接 $name' : '连接没有完成：${r.error}');
+      showToast(context, r.error == null ? withRetried('已连接 $name', r.retried) : '连接没有完成：${r.error}');
       context.replace('/me/connectors');
     });
   }
@@ -143,8 +149,8 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
     ]);
     if (v == null || !mounted) return;
     try {
-      await ref.read(mcpServersProvider.notifier).create(v);
-      if (mounted) showToast(context, '已连接 ${v['name']}');
+      final added = await ref.read(mcpServersProvider.notifier).create(v);
+      if (mounted) showToast(context, withRetried('已连接 ${v['name']}', added.retriedNote));
     } on ApiError catch (e) {
       if (mounted) showToast(context, e.message);
     }

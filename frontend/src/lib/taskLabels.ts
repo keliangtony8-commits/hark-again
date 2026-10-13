@@ -69,6 +69,9 @@ export const runStateLabel = (r: TaskRun) =>
   r.status === "running" ? "正在运行" : isWalled(r) ? "碰壁" : r.status === "error" ? "失败" : isSilent(r) ? "没打扰你" : "成功";
 
 /** v2.15 碰壁条下面的小字（= App wallHint）。 */
-export const wallHint = (t: ScheduledTask) => t.wall_fixable
-  ? (t.output === "panel" ? "面板先显示上一次的内容。处理好后点“重试”。" : "处理好后点“重试”，成功了提醒会自动收起。")
-  : "不用你管，下次会自动再试。";
+export const wallHint = (t: ScheduledTask) => t.wall_retrying ? "已经在重新运行，成功后这条会自动收起。"
+  : !t.wall_fixable ? "不用你管，下次会自动再试。"
+  : t.output === "panel" ? "面板先显示上一次的内容。处理好后会自动重跑，也可以点“重试”。" : "处理好后会自动重跑，也可以点“重试”。";
+
+/** v2.19 存登录 / 连连接器之后的提示：服务端给了“已重新运行”那句就接在后面（= App withRetried）。 */
+export const withRetried = (head: string, note?: string | null) => note ? `${head}。${note}` : head;

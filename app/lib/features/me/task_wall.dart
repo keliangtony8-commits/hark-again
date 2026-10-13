@@ -2,7 +2,8 @@
 // “需要登录 jw.example.edu”“需要重新连接 github”这类要你处理的，或“被验证码挡住、之后会再试”这类它自己会好的。
 // 一处组件，两个地方用：任务详情页头卡（自动暂停说明条下面）和 Home 面板卡（标题行下面、内容上面，内容还是上一次的）。
 // 样式同 _PauseNote：小块底色 + 警示色图标，文字正文色；要你处理的带“去处理”（wallOpen → cardTargets 的页面）和“重试”。
-// 出现 / 收起用 FadeSwitcher（碰壁修好、下一次成功后服务端清掉，条子平滑收起）。文案只用服务端给的 wallLabel / wallReason。
+// 出现 / 收起用 FadeSwitcher（碰壁修好、下一次成功后服务端清掉，条子平滑收起）。
+// v2.19：你存了对应登录 / 连好连接器后服务端自动排重跑（wallRetrying）→ 图标换成同步、小字说正在重跑、不再显示“重试”，同样淡入淡出切换。文案只用服务端给的 wallLabel / wallReason。
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -13,10 +14,15 @@ import '../../ui/glass.dart';
 import '../../ui/motion.dart';
 import '../home/action_card.dart' show cardTargets;
 
-/// 碰壁条下面那句小字：要你处理的说清怎么好；不要你管的说它会自己再试。
-String wallHint(ScheduledTask t) => t.wallFixable
-    ? (t.isPanel ? '面板先显示上一次的内容。处理好后点“重试”。' : '处理好后点“重试”，成功了提醒会自动收起。')
-    : '不用你管，下次会自动再试。';
+/// 碰壁条下面那句小字：要你处理的说清怎么好；不要你管的说它会自己再试；已排上重跑的说正在跑。
+String wallHint(ScheduledTask t) {
+  if (t.wallRetrying) return '已经在重新运行，成功后这条会自动收起。';
+  if (!t.wallFixable) return '不用你管，下次会自动再试。';
+  return t.isPanel ? '面板先显示上一次的内容。处理好后会自动重跑，也可以点“重试”。' : '处理好后会自动重跑，也可以点“重试”。';
+}
+
+/// v2.19 存登录 / 连连接器之后的那条提示：服务端给了“已重新运行”那句就接在后面。
+String withRetried(String head, String? note) => note == null || note.isEmpty ? head : '$head。$note';
 
 /// 有壁时一块说明条，没壁时什么都不占；外面包了 FadeSwitcher，壁出现 / 清掉都是平滑的。
 class WallNotice extends StatelessWidget {
@@ -31,7 +37,11 @@ class WallNotice extends StatelessWidget {
   Widget build(BuildContext context) => FadeSwitcher(
         alignment: AlignmentDirectional.topStart,
         child: task.walled
-            ? Padding(key: ValueKey('wall:${task.wallLabel}'), padding: padding, child: _WallBody(task: task, onRetry: onRetry))
+            ? Padding(
+                key: ValueKey('wall:${task.wallLabel}:${task.wallRetrying}'),
+                padding: padding,
+                child: _WallBody(task: task, onRetry: task.wallRetrying ? null : onRetry),
+              )
             : const SizedBox(width: double.infinity, key: ValueKey('no-wall')),
       );
 }
@@ -57,7 +67,11 @@ class _WallBody extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           ExcludeSemantics(
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(task.wallFixable ? Icons.lock_outline_rounded : Icons.hourglass_top_rounded, size: Sp.x5, color: p.warning),
+              Icon(
+                task.wallRetrying ? Icons.sync_rounded : (task.wallFixable ? Icons.lock_outline_rounded : Icons.hourglass_top_rounded),
+                size: Sp.x5,
+                color: task.wallRetrying ? p.text2 : p.warning,
+              ),
               const SizedBox(width: Sp.x2),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

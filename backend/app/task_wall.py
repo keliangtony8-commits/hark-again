@@ -11,7 +11,12 @@
 “当前壁”（scheduled_tasks.wall / wall_reason / wall_at）一起写上并提交；运行结束 worker 调 settle()：
 这次报了壁 → 返回失败原因（照常走 task_runs 的失败提醒 / 连续失败暂停），面板保留上一次的内容；
 这次没报 → 清掉任务上的旧壁（修好了）。同一次运行报多次，以最后一次为准。
-客户端只读 wire() 给的 wall_label / wall_fixable / wall_open，不自己解释壁的字符串。"""
+客户端只读 wire() 给的 wall_label / wall_fixable / wall_open / wall_retrying，不自己解释壁的字符串。
+
+v2.19 修好就重跑（对标 Hark：“fixing it re-runs the task”）：用户在保险箱存了某域名的登录 / Key、
+连好某个连接器或加了某个 MCP 服务器 → retry_fixed() 找出壁正好是它的任务（needs_login 域名互为子域也算；
+needs_connector 比连接器 id / 名字），排一次“立即运行”（run_requested；正在跑的不动——那次跑完自己会清壁或再报），
+已因连续失败暂停的也跑（task_runs：手动试跑成功 = 恢复）。不提交，调用方提交。retry_note() 是给用户的那一句。"""
 import re
 from datetime import datetime, timezone
 
@@ -100,8 +105,53 @@ def settle(task: ScheduledTask, run: TaskRun) -> str | None:
 
 
 def wire(task: ScheduledTask) -> dict:
-    """接口给任务补的只读字段（schedule.wire 调用）：客户端只认这三个。"""
-    return {"wall_label": label(task.wall), "wall_fixable": fixable(task.wall), "wall_open": open_page(task.wall)}
+    """接口给任务补的只读字段（schedule.wire 调用）：客户端只认这四个。wall_retrying = 有壁且已排了重跑。"""
+    return {"wall_label": label(task.wall), "wall_fixable": fixable(task.wall), "wall_open": open_page(task.wall),
+            "wall_retrying": bool(task.wall and task.run_requested)}
+
+
+def _norm(name: str) -> str:
+    return "-".join((name or "").strip().lower().split())
+
+
+def _fixes(wall: str | None, kind: str, hosts: list[str], names: list[str]) -> bool:
+    try:
+        k, arg = parse(wall)
+    except ValueError:
+        return False
+    if k != kind:
+        return False
+    if kind == "needs_login":
+        return any(h and (arg == h or arg.endswith("." + h) or h.endswith("." + arg)) for h in hosts)
+    return arg in names
+
+
+async def retry_fixed(db: AsyncSession, kind: str, *, hosts: list[str] | tuple = (),
+                      names: list[str] | tuple = ()) -> list[str]:
+    """用户刚修好一类障碍：kind = needs_login（hosts = 存进保险箱的域名）| needs_connector（names = 连接器 id / 名字）。
+    壁对得上的任务排一次立即运行，返回它们的名字（不提交）。"""
+    hs = [h.strip().lower().lstrip(".") for h in hosts if h and h.strip()]
+    ns = [_norm(n) for n in names if n and n.strip()]
+    if kind not in ("needs_login", "needs_connector") or not (hs or ns):
+        return []
+    running = set((await db.scalars(select(TaskRun.task_id).where(TaskRun.status == "running"))).all())
+    out = []
+    for task in (await db.scalars(select(ScheduledTask).where(ScheduledTask.wall.is_not(None))
+                                  .order_by(ScheduledTask.created_at))).all():
+        if task.id in running or not _fixes(task.wall, kind, hs, ns):
+            continue
+        if not task.run_requested:
+            task.run_requested = True
+        out.append(task.name)
+    return out
+
+
+def retry_note(names: list[str]) -> str | None:
+    """“之前卡在这里的「A」「B」已重新运行” —— 没有就 None。"""
+    if not names:
+        return None
+    shown = "、".join(f"「{n}」" for n in names[:3]) + (f"等 {len(names)} 个任务" if len(names) > 3 else "")
+    return f"之前卡在这里的{shown}已重新运行"
 
 
 def brief(task: ScheduledTask) -> str:

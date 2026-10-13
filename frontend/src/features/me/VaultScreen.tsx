@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useResource } from "../../hooks/useResource";
 import type { VaultSecret } from "../../lib/types";
+import { withRetried } from "../../lib/taskLabels";
 import { IconEdit, IconMore, IconPlus, IconShield, IconTerminal, IconTrash, IconUser } from "../../ui/icons";
 import { Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
 import { ENV_VALUE_MIN, SECRET_KINDS, envName, envNameError, groupSecrets, secretHint, secretWhere, vaultSummary } from "./connectorLibrary";
@@ -19,6 +20,7 @@ export default function VaultScreen() {
   const [draft, setDraft] = useState<typeof EMPTY | null>(null);
   const [advanced, setAdvanced] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);  // 存好后的一句（带 v2.19 “已重新运行”）
 
   const save = async () => {
     if (!draft) return;
@@ -27,8 +29,10 @@ export default function VaultScreen() {
       if (draft.kind === "env") {
         await secrets.create({ kind: "env", name: envName(draft.name), value: draft.value } as never);
         await secrets.reload(); // 同名是覆盖：服务器已删旧条目，重拉免得列表出现两条
+        setSaved(`已加密保存「$${envName(draft.name)}」`);
       } else {
-        await secrets.create({ ...draft, hosts: draft.hosts.split(/[\s,，]+/).filter(Boolean) } as never);
+        const x = await secrets.create({ ...draft, hosts: draft.hosts.split(/[\s,，]+/).filter(Boolean) } as never);
+        setSaved(withRetried(`已加密保存「${x.name}」`, x.retried_note));
       }
       setDraft(null);
     } catch (e) { setErr(e instanceof Error ? e.message : "保存失败"); }
@@ -72,6 +76,7 @@ export default function VaultScreen() {
       <button className="icon-btn" onClick={() => start("login")} aria-label="存入"><IconPlus /></button>} />}>
       <PageIntro loading={secrets.loading} summary={vaultSummary(secrets.items)}
         line="加密存在你自己的服务器上，只用于你指定的网站或你电脑上的命令。我只知道“有这把钥匙”，回复里永远看不到内容。" />
+      {saved && <div className="notice ok" role="status" onClick={() => setSaved(null)}>{saved}</div>}
       {secrets.loading ? <Skeleton /> : (
         <>
           {secrets.items.length === 0 && (

@@ -14,6 +14,7 @@ import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'connector_library.dart';
+import 'task_wall.dart' show withRetried;
 
 class VaultScreen extends ConsumerWidget {
   const VaultScreen({super.key});
@@ -99,9 +100,9 @@ Future<void> addEnv(BuildContext context, WidgetRef ref, {String? name}) async {
 Future<void> _save(BuildContext context, WidgetRef ref, Map<String, dynamic> body, String label) async {
   try {
     final notifier = ref.read(secretsProvider.notifier);
-    await notifier.create(body);
+    final saved = await notifier.create(body);
     if (body['kind'] == 'env') await notifier.reload(); // 同名环境变量是覆盖：旧那条服务器已删，重拉一次免得列表里出现两条
-    if (context.mounted) showToast(context, '已加密保存「$label」');
+    if (context.mounted) showToast(context, withRetried('已加密保存「$label」', saved.retriedNote));
   } on ApiError catch (e) {
     if (context.mounted) showToast(context, e.message);
   }

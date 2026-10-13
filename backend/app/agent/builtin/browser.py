@@ -20,7 +20,7 @@ import re
 import time
 import uuid
 
-from ... import browser_client, browser_files, browser_sessions, system_alerts, vault, web_guard
+from ... import browser_client, browser_files, browser_sessions, system_alerts, task_wall, vault, web_guard
 from ...browser_sessions import Tab
 from ...config import settings
 from .. import approvals
@@ -245,8 +245,9 @@ async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: Fo
         if form.remember:
             try:
                 ctx.db.add(vault.create(tab.host, password, [tab.host], kind="login", username=username))
+                retried = await task_wall.retry_fixed(ctx.db, "needs_login", hosts=[tab.host])
                 await ctx.db.commit()
-                note = "已按用户的选择记到保险箱，下次自动登录。"
+                note = "已按用户的选择记到保险箱，下次自动登录。" + (f"{task_wall.retry_note(retried)}。" if retried else "")
             except Exception:  # 没配 VAULT_KEY 等：登录照常，只是记不住
                 await ctx.db.rollback()
                 note = "没能记到保险箱（服务器没配好保险箱）。"

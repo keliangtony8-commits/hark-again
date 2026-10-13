@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import vault
+from .. import task_wall, vault
 from ..config import settings
 from ..auth import require_user
 from ..connectors import mcp, oauth
@@ -81,6 +81,12 @@ async def callback(state: str, code: str = "", error: str = "", db: AsyncSession
         result, ok = {"connected": p.id}, True
     except Exception as e:
         result, ok = {"error": str(e)[:80]}, False
+    if ok:
+        try:  # 顺手重跑碰壁任务是锦上添花：它出错不能把“已连接”变成失败
+            if note := await _retry(db, p.id, p.name):
+                result["retried"] = note
+        except Exception:
+            pass
     url = _back(client, result)
     return _app_handoff(url, ok) if client == "app" else RedirectResponse(url)
 
@@ -114,8 +120,16 @@ async def add_mcp(body: McpIn, db: AsyncSession = Depends(get_session)):
     except Exception as e:
         raise HTTPException(400, f"连不上这个 MCP 服务器：{e}")
     db.add(s)
+    note = await _retry(db, s.name)
     await db.commit()
-    return {**_mcp_public(s), "tools": [t["name"] for t in tools]}
+    return {**_mcp_public(s), "tools": [t["name"] for t in tools], "retried_note": note}
+
+
+async def _retry(db: AsyncSession, *names: str) -> str | None:
+    """连好了：卡在“需要重新连接它”的任务重跑一次（规则在 task_wall.retry_fixed）并提交。"""
+    note = task_wall.retry_note(await task_wall.retry_fixed(db, "needs_connector", names=list(names)))
+    await db.commit()
+    return note
 
 
 @router.get("/mcp/{sid}/tools")
