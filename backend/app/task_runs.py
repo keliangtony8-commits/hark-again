@@ -140,6 +140,6 @@ def _wire(run: TaskRun, conversation_id: str | None) -> dict:
         a = run.started_at if run.started_at.tzinfo else run.started_at.replace(tzinfo=timezone.utc)
         b = run.finished_at if run.finished_at.tzinfo else run.finished_at.replace(tzinfo=timezone.utc)
         duration = max(int((b - a).total_seconds() * 1000), 0)
-    return {"id": run.id, "trigger": run.trigger, "status": run.status, "error": run.error, "job_id": run.job_id,
+    return {"id": run.id, "trigger": run.trigger, "status": run.status, "error": run.error, "job_id": run.job_id, "silent_reason": run.silent_reason,
             "conversation_id": conversation_id, "started_at": _iso(run.started_at),
             "finished_at": _iso(run.finished_at), "duration_ms": duration}

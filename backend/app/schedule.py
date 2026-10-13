@@ -46,7 +46,10 @@ def due_at(task: ScheduledTask) -> datetime | None:
     if not croniter.is_valid(task.cron or ""):
         return None
     tz = ZoneInfo(settings.timezone)
-    since = _aware(task.last_run_at or task.created_at or datetime.now(timezone.utc)).astimezone(tz)
+    since = _aware(task.last_run_at or task.created_at or datetime.now(timezone.utc))
+    if task.skip_at is not None:  # 跳过下一次（app/task_brief.py）：从被跳过的那一刻之后算
+        since = max(since, _aware(task.skip_at))
+    since = since.astimezone(tz)
     return croniter(task.cron, since).get_next(datetime)
 
 
@@ -58,7 +61,7 @@ def is_due(task: ScheduledTask, now: datetime) -> bool:
 
 
 def next_run_at(task: ScheduledTask, now: datetime | None = None) -> datetime | None:
-    """给界面看的“下次运行”：过期未跑的显示为现在（马上补跑）。"""
+    """给界面看的“下次运行”：过期未跑的显示为现在（马上补跑）；跳过的那次不算（已经从它之后算）。"""
     at = due_at(task)
     if at is None:
         return None
@@ -80,4 +83,5 @@ def parse_local(text: str) -> datetime:
 
 def wire(task: ScheduledTask) -> dict:
     """接口给每个任务补的只读字段。"""
-    return {"next_run_at": next_run_at(task), "done": is_done(task)}
+    from .task_brief import pending_skip  # 跳过的规则在 task_brief
+    return {"next_run_at": next_run_at(task), "done": is_done(task), "skipped_at": pending_skip(task)}

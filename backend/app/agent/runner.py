@@ -108,19 +108,20 @@ async def rewind(db: AsyncSession, conversation_id: str, message_id: str | None,
 async def run_turn(db: AsyncSession, conv: Conversation, emit: Emit = _silent,
                    approve: Approver = deny_all, stop: asyncio.Event | None = None,
                    ask: Asker = nobody, task_id: str | None = None, notice: str | None = None,
-                   inbox: steering.Inbox | None = None) -> Message | None:
-    """inbox：用户回答途中补充的话（steering.py；调用方开、关，这里只交给 loop）。
+                   inbox: steering.Inbox | None = None, brief: str | None = None) -> Message | None:
+    """brief：定时任务这次运行的“做法 + 观察 + 最近几次”（app/task_brief.py），放系统提示易变段，不落库。
+    inbox：用户回答途中补充的话（steering.py；调用方开、关，这里只交给 loop）。
     task_id：worker 跑定时任务时传入，工具从 ToolContext.task_id 知道“这是哪个任务在跑”。
     notice：没有用户发言、由系统事件触发的一轮（后台任务结束，见 jobs.follow_ups）——作为最后一条“用户”消息
     交给模型，但不落库、不显示；回复照常存为助手消息。"""
     with usage.scope(conv.id):  # 这一轮里所有模型调用（含摘要、记忆向量）都记在这个对话上
-        return await _run_turn(db, conv, emit, approve, stop, ask, task_id, notice, inbox)
+        return await _run_turn(db, conv, emit, approve, stop, ask, task_id, notice, inbox, brief)
 
 
 async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
                     approve: Approver, stop: asyncio.Event | None, ask: Asker = nobody,
                     task_id: str | None = None, notice: str | None = None,
-                    inbox: steering.Inbox | None = None) -> Message | None:
+                    inbox: steering.Inbox | None = None, brief: str | None = None) -> Message | None:
     """跑一轮并落库。被取消时不丢已生成的内容：半截回复以 status=stopped 存下，照常发 message.done；
     一个块都还没有就发 message.stopped。
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
@@ -154,6 +155,8 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         prompt.add(VOLATILE, f"这段对话更早的内容（摘要，原文已不在下面）：\n{hist.summary}")
     if not notice and (held := await jobs.take_held(db, cid)):  # 叫醒轮数到上限时压下的任务结论（jobs.follow_ups）
         prompt.add(VOLATILE, held)
+    if brief:
+        prompt.add(VOLATILE, brief)
     system = prompt.text()
     builder = loop.MessageBuilder()
     journal = turn_journal.Journal(cid, task_id)  # 进程被杀时这一轮的进度还在（turn_journal.py）

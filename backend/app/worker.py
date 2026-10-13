@@ -1,7 +1,8 @@
 """后台 worker：跑定时任务。独立进程（compose 里的 worker 服务），不占用聊天进程。
 
 每 POLL 秒检查一次：到点的或被点了“立即运行”的任务 → 新建一段对话执行 → 按 task.output 投递：
-- report：作为卡片放进 Home 收件箱（同一任务只保留最新一张），对话保留，点开可追问
+- report：作为卡片放进 Home 收件箱（同一任务只保留最新一张），对话保留，点开可追问；
+  回复以 [[SILENT]] 开头 = 这次没东西可报，不发卡，运行记录写原因（app/task_brief.py；每次开头读到做法 / 观察 / 最近几次）
 - panel：原地更新面板卡的内容，执行用的对话随即删除（面板每小时刷新，不能把聊天列表刷满）
 kind=script 的定时脚本不调模型：到点当后台任务跑命令，结束后按 notify 决定告不告诉用户（app/script_tasks.py）。
 顺带叫醒“稍后提醒”到点的 Home 卡片（app/card_snooze.py），并照看项目沙盒里的后台任务（app/jobs.py：结束了就在原对话里接着说一轮）。
@@ -20,7 +21,7 @@ from .agent.runner import run_turn
 from .agent.tools import load_builtin
 from .blocks import text_to_blocks
 from .config import settings
-from . import card_snooze, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
+from . import task_brief, card_snooze, job_memory, jobs, report_gist, script_tasks, task_runs, task_store, turn_journal
 from .db import SessionLocal
 from .models import Conversation, HomeCard, Message, ScheduledTask
 from .schedule import is_due  # 与接口的 next_run_at 共用同一套时刻计算
@@ -74,6 +75,7 @@ async def run_task(task_id: str) -> None:
         await db.flush()
         db.add(Message(conversation_id=conv.id, role="user",
                        blocks=text_to_blocks((PANEL_STYLE if panel else "") + task.prompt)))
+        brief = await task_brief.preface_for(db, task)  # 在这次提交之前查：之后的事务里只有模型这一轮（崩了回滚不殃及 task/run）
         await db.commit()
 
         errors: list[str] = []
@@ -84,17 +86,19 @@ async def run_task(task_id: str) -> None:
 
         blocks: list[dict] = []
         try:
-            reply = await run_turn(db, conv, emit=emit, task_id=task.id)
+            reply = await run_turn(db, conv, emit=emit, task_id=task.id, brief=brief)
             blocks = reply.blocks if reply else []
         except Exception as e:  # 工具/库的意外异常：记成失败原因，照常投递和收尾
             log.exception("task %s crashed", task.name)
             await db.rollback()
             errors.append(f"{type(e).__name__}: {e}")
         error = errors[-1] if errors else (None if blocks else task_runs.NO_OUTPUT)
+        quiet = None if (panel or error) else task_brief.silent(blocks)  # 没东西可报：不进收件箱（task_brief.py）
         if panel:
             await _deliver_panel(db, task, conv, blocks)
-        else:
+        elif quiet is None:
             await _deliver_report(db, task, conv, blocks)
+        run.silent_reason = quiet
         await db.commit()
         await task_runs.finish(db, task, run, error, None if panel else conv.id)
         log.info("task %s (%s) %s", task.name, task.output, "failed: " + error if error else "done")

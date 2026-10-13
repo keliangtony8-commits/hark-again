@@ -89,6 +89,8 @@ def check_patch(task: ScheduledTask, changes: dict) -> None:
 
 async def after_patch(db, task: ScheduledTask, changes: dict) -> None:
     """改完字段后的派生同步（不 commit）：面板改名 → 卡片标题跟着改；重新启用自动暂停的任务 → 归零、收起提醒。"""
+    if "cron" in changes or "run_at" in changes:  # 换了计划：之前“跳过下一次”指的那一次不一定还存在
+        task.skip_at = None
     if changes.get("active") is True and task.paused_reason:
         await task_runs.resumed(db, task)
     if "name" in changes and task.output == "panel":

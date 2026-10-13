@@ -4,12 +4,13 @@ import { useResource } from "../../hooks/useResource";
 import { useTaskRuns } from "../../hooks/useTaskRuns";
 import { http } from "../../lib/api";
 import { formatDuration, formatWhen } from "../../lib/format";
-import { autoPauseNote, isScript, nextRunLabel, scheduleLabel, taskOutputLabel } from "../../lib/taskLabels";
+import { autoPauseNote, canSkip, isScript, isSilent, nextRunLabel, runStateLabel, scheduleLabel, skipLabel, taskOutputLabel } from "../../lib/taskLabels";
+import TaskMemory from "./TaskMemory";
 import { JobLog } from "../../blocks/JobBlock";
 import type { JobInfo } from "../../lib/types";
 import { TaskIcon } from "./SchedulePicker";
 import type { ScheduledTask, TaskRun } from "../../lib/types";
-import { IconCheck, IconChevron, IconClock, IconClose, IconEdit, IconHistory, IconPause, IconPlay, IconTrash } from "../../ui/icons";
+import { IconCheck, IconChevron, IconClock, IconClose, IconSnooze, IconEdit, IconHistory, IconPause, IconPlay, IconTrash } from "../../ui/icons";
 import { Hint, Page, PageHeader, Section, Skeleton, Toggle } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "./TaskSheet";
 import { taskModelLabel } from "./TaskModelPicker";
@@ -18,6 +19,7 @@ import { confirmDialog } from "../../ui/dialog";
 
 /** 定时任务详情（/me/tasks/:id）：任务本身（时间、去向 + 非默认的模型 / 思考档、提示词、开关、立即运行、编辑、删除）+ 最近运行记录。
  *  有运行在排队或进行时每 4 秒刷新，结束就停（useTaskRuns）。报告那次可点开对话（/chat + state.open）。
+ *  v2.13：“跳过下一次 / 撤销跳过”（POST / DELETE skip）、“助手记下的”（TaskMemory）、没打扰你的运行（silent_reason）。
  *  与 App task_detail.dart 同版面同文案；Home 的“任务失败”提醒卡（target=tasks）直达这里。 */
 export default function TaskDetailScreen() {
   const { id = "" } = useParams();
@@ -45,6 +47,10 @@ export default function TaskDetailScreen() {
     await tasks.remove(task.id);
     nav("/me/tasks");
   };
+  const toggleSkip = async () => {
+    await (task.skipped_at ? http.del(`/api/tasks/${task.id}/skip`) : http.post(`/api/tasks/${task.id}/skip`, {}));
+    await refreshTasks();
+  };
   const queued = task.run_requested && !(runs ?? []).some((r) => r.status === "running");
 
   return (
@@ -59,6 +65,7 @@ export default function TaskDetailScreen() {
             <div className="row-title">{scheduleLabel(task)}</div>
             <div className="row-sub">{[taskOutputLabel(task), isScript(task) ? null : taskModelLabel(task, cat)].filter(Boolean).join(" · ")}</div>
             {nextRunLabel(task) && <div className="row-sub task-next" key={nextRunLabel(task)}>{nextRunLabel(task)}</div>}
+            {skipLabel(task) && <div className="row-sub task-skip" key={skipLabel(task)}>{skipLabel(task)}</div>}
           </div>
           <Toggle on={task.active} label={`启用「${task.name}」`} onChange={(v) => tasks.update(task.id, { active: v })} />
         </div>
@@ -67,9 +74,14 @@ export default function TaskDetailScreen() {
         )}
         <p className={`task-prompt ${isScript(task) ? "mono" : ""}`}>{task.prompt}</p>
         <div className="task-head-actions">
+          {(canSkip(task) || task.skipped_at) && (
+            <button className="btn btn-ghost btn-sm" onClick={toggleSkip}>{task.skipped_at ? "撤销跳过" : "跳过下一次"}</button>
+          )}
           <button className="btn btn-primary btn-sm" disabled={busy} onClick={runNow}><IconPlay />{busy ? "运行中…" : "立即运行"}</button>
         </div>
       </div>
+
+      <TaskMemory task={task} onClear={async (field) => { await tasks.update(task.id, { [field]: "" }); }} />
 
       <Section title="运行记录">
         {error ? (
@@ -102,20 +114,21 @@ export default function TaskDetailScreen() {
 /** 一次运行：有对话的点开对话；定时脚本没开对话的（没告诉你那次）点开它的后台任务日志。 */
 function RunRow({ run: r, index, onOpen, onLog }: { run: TaskRun; index: number; onOpen: (conversationId: string) => void; onLog: (jobId: string) => void }) {
   const running = r.status === "running", failed = r.status === "error";
-  const label = running ? "正在运行" : failed ? "失败" : "成功";
+  const label = runStateLabel(r), silent = isSilent(r);
   const when = formatWhen(r.started_at);
-  const sub = [r.trigger === "manual" ? "手动" : "定时", running ? "进行中" : r.duration_ms === null ? null : `用时 ${formatDuration(r.duration_ms)}`]
+  const sub = [r.trigger === "manual" ? "手动" : "定时", silent ? label : null, running ? "进行中" : r.duration_ms === null ? null : `用时 ${formatDuration(r.duration_ms)}`]
     .filter(Boolean).join(" · ");
   const body = <>
-    <span className={`run-status ${r.status}`} aria-hidden>{running ? <span className="run-pulse" /> : failed ? <IconClose size={14} /> : <IconCheck size={14} />}</span>
+    <span className={`run-status ${r.status}`} aria-hidden>{running ? <span className="run-pulse" /> : failed ? <IconClose size={14} /> : silent ? <IconSnooze size={14} /> : <IconCheck size={14} />}</span>
     <span className="row-body">
       <span className="row-title">{when}</span>
       <span className="row-sub">{sub}</span>
       {failed && r.error && <span className="run-error">{r.error}</span>}
+      {silent && <span className="run-quiet">{r.silent_reason}</span>}
     </span>
     {(r.conversation_id || (r.job_id && !running)) && <IconChevron />}
   </>;
-  const aria = `${label}，${when}，${sub}${failed && r.error ? `，原因：${r.error}` : ""}`;
+  const aria = `${label}，${when}，${sub}${failed && r.error ? `，原因：${r.error}` : ""}${silent ? `，${r.silent_reason}` : ""}`;
   const style = { animationDelay: `calc(var(--stagger) * ${Math.min(index, 10)})` };
   if (!r.conversation_id && r.job_id && !running)
     return <button className="row run-row" style={style} aria-label={`${aria}，看日志`} onClick={() => onLog(r.job_id!)}>{body}</button>;

@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
-from ... import schedule, script_tasks, task_store
+from ... import schedule, script_tasks, task_brief, task_runs, task_store
 from ...config import settings
 from ...models import ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
@@ -37,7 +37,26 @@ def _line(t: ScheduledTask) -> str:
         kind = f"脚本（{script_tasks.NOTIFY_LABELS.get(t.notify, t.notify)}）`{t.prompt[:80]}`"
     else:
         kind = "面板" if t.output == "panel" else "报告"
-    return f"- id={t.id}「{t.name}」{kind} · {_plan(t)}" + (f" · {state}" if state else "")
+    if (skipped := task_brief.pending_skip(t)) is not None:
+        state += f" · 跳过 {_local(skipped)} 那次"
+    memo = "、".join(w for w, v in (("做法", t.runbook), ("观察", t.note)) if v)
+    return (f"- id={t.id}「{t.name}」{kind} · {_plan(t)}" + (f" · {state}" if state else "")
+            + (f" · 已记下{memo}" if memo else ""))
+
+
+def _run(r: dict) -> str:
+    when = _local(schedule.parse_local(r["started_at"])) if r["started_at"] else "—"
+    how = "手动" if r["trigger"] == "manual" else "定时"
+    if r["status"] == "running":
+        what = "正在运行"
+    elif r["status"] == "error":
+        what = f"失败：{r['error']}"
+    elif r["silent_reason"] is not None:
+        what = f"没打扰用户：{r['silent_reason']}"
+    else:
+        what = "成功，已告诉用户"
+    took = f"，用时 {r['duration_ms'] // 1000} 秒" if r["duration_ms"] is not None else ""
+    return f"- {when}（{how}{took}）{what}"
 
 
 def _when(run_at: str | None) -> datetime | None:
@@ -52,10 +71,15 @@ def _when(run_at: str | None) -> datetime | None:
       "notify：failure 只在失败时告诉用户（默认）/ always 每次 / change 输出和上次不一样时（监控网页、价格用这个）。"
       "需要判断、总结、搜索的事才用 prompt 交给助手。"
       "action=list 看现有任务和 id；update 按 id 改 name/prompt/command/notify/cron/run_at/active（换成一次性传 run_at，换回重复传 cron）；cancel 按 id 删除。"
+      "runs 看最近几次运行（成功 / 失败原因 / 没打扰用户的原因）；run_now 立刻跑一次；skip_next 跳过下一次（unskip 撤销）。"
+      "set_runbook / note（text 整段替换，空串清空）：任务自己的做法与观察，每次运行开头都会读到；"
+      "在定时任务运行里调用时 id 可省略（就是正在跑的这个任务）。"
       "要反复看的数据（价格、比分）用 create_panel，不用这个。",
       {"type": "object", "properties": {
-          "action": {"type": "string", "enum": ["create", "list", "update", "cancel"]},
-          "id": {"type": "string", "description": "update/cancel 用，先 list 拿到"},
+          "action": {"type": "string", "enum": ["create", "list", "update", "cancel", "runs", "run_now",
+                                                 "skip_next", "unskip", "set_runbook", "note"]},
+          "id": {"type": "string", "description": "除 create/list 外都要，先 list 拿到"},
+          "text": {"type": "string", "description": "set_runbook（≤16000 字）/ note（≤4000 字）的全文"},
           "name": {"type": "string", "description": "几个字，如：交作业提醒"},
           "prompt": {"type": "string"},
           "command": {"type": "string", "description": "定时脚本的 shell 命令（在工作区根目录跑）"},
@@ -66,7 +90,8 @@ def _when(run_at: str | None) -> datetime | None:
        "required": ["action"]})
 async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, name: str | None = None,
                         prompt: str | None = None, cron: str | None = None, run_at: str | None = None,
-                        active: bool | None = None, command: str | None = None, notify: str | None = None) -> ToolResult:
+                        active: bool | None = None, command: str | None = None, notify: str | None = None,
+                        text: str | None = None) -> ToolResult:
     db = ctx.db
     try:
         when = _when(run_at)
@@ -95,9 +120,43 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
         where = "失败或按 notify 该告诉用户时结果进 Home 收件箱" if command else "到点结果会出现在 Home 收件箱"
         return ToolResult(f"已安排：{_line(t)}。{where}，用户可在“我的 → 定时任务”里改。")
 
+    id = id or (ctx.task_id if action in ("set_runbook", "note", "runs") else None)  # 任务运行里：默认就是自己
     t = await db.get(ScheduledTask, id) if id else None
     if t is None:
         return ToolResult("没找到这个任务，先用 action=list 查 id。")
+    if action in ("set_runbook", "note"):
+        if text is None:
+            return ToolResult(f"{action} 需要 text（整段全文；空串 = 清空）。")
+        if script_tasks.is_script(t):
+            return ToolResult("定时脚本不调用助手，用不上做法和观察。")
+        field = "runbook" if action == "set_runbook" else "note"
+        try:
+            setattr(t, field, task_brief.clean(field, text))
+        except ValueError as e:
+            return ToolResult(str(e))
+        await db.commit()
+        what = "做法" if field == "runbook" else "观察"
+        return ToolResult(f"已{'清空' if getattr(t, field) is None else '记下'}「{t.name}」的{what}，之后每次运行开头都会读到。")
+    if action == "runs":
+        rows = await task_runs.history(db, t.id, 10)
+        return ToolResult("\n".join(_run(r) for r in rows) if rows else f"「{t.name}」还没运行过。")
+    if action == "run_now":
+        if t.id == ctx.task_id:
+            return ToolResult("这就是正在跑的任务，不能在运行里再叫自己跑一次。")
+        t.run_requested = True
+        await db.commit()
+        return ToolResult(f"「{t.name}」已排队，几秒内开始；结果照常{'刷新面板' if t.output == 'panel' else '进 Home 收件箱'}。")
+    if action == "skip_next":
+        try:
+            at = task_brief.skip_next(t)
+        except ValueError as e:
+            return ToolResult(str(e))
+        await db.commit()
+        return ToolResult(f"已跳过 {_local(at)} 那次：{_line(t)}。")
+    if action == "unskip":
+        done = task_brief.unskip(t)
+        await db.commit()
+        return ToolResult(f"已撤销跳过：{_line(t)}。" if done else f"「{t.name}」没有待跳过的一次。")
     if action == "cancel":
         await task_store.remove(db, t)
         return ToolResult(f"已删除「{t.name}」。")

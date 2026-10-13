@@ -250,6 +250,9 @@ class ScheduledTask {
     this.kind = 'agent',
     this.notify = 'failure',
     this.projectId,
+    this.runbook,
+    this.note,
+    this.skippedAt,
   });
   factory ScheduledTask.fromJson(Map<String, dynamic> j) => ScheduledTask(
     id: j['id'] as String,
@@ -271,8 +274,17 @@ class ScheduledTask {
     kind: j['kind'] as String? ?? 'agent',
     notify: j['notify'] as String? ?? 'failure',
     projectId: j['project_id'] as String?,
+    runbook: _line(j['runbook']),
+    note: _line(j['note']),
+    skippedAt: _date(j['skipped_at']),
   );
   final String id, name, prompt, cron, output;
+
+  /// v2.13 助手自己记下的做法（第一次运行写）与观察（之后滚动改）；每次运行开头都读到（后端 app/task_brief.py）。没有 = null。
+  final String? runbook, note;
+
+  /// 被“跳过下一次”的那次计划时刻（还没到的才有）；nextRunAt 已经是它之后的那次。
+  final DateTime? skippedAt;
 
   /// 'agent' = 到点交给助手（prompt 是指令）；'script' = 定时脚本（prompt 是 shell 命令，到点直接在工作区跑，不调模型）。建好不改。
   final String kind;
@@ -310,6 +322,9 @@ class ScheduledTask {
   bool get isScript => kind == 'script';
   bool get lastFailed => lastStatus == 'error';
   bool get autoPaused => !active && pausedReason == 'failures';
+
+  /// 能跳过下一次：重复任务、开着（一次性的取消或改时间就行）。
+  bool get canSkip => !isOnce && active && nextRunAt != null;
 }
 
 /// 定时任务的一次运行（GET /api/tasks/{id}/runs，新的在前）。
@@ -324,6 +339,7 @@ class TaskRun {
     this.finishedAt,
     this.durationMs,
     this.jobId,
+    this.silentReason,
   });
   factory TaskRun.fromJson(Map<String, dynamic> j) => TaskRun(
     id: j['id'] as String,
@@ -335,7 +351,12 @@ class TaskRun {
     finishedAt: _date(j['finished_at']),
     durationMs: (j['duration_ms'] as num?)?.toInt(),
     jobId: j['job_id'] as String?,
+    silentReason: j['silent_reason'] as String?,
   );
+
+  /// 这次没东西可报、没打扰你的一句原因（不进收件箱，对话仍可点开）；说了话 = null。
+  final String? silentReason;
+  bool get silent => !failed && silentReason != null;
   final String id, trigger, status;
 
   /// 定时脚本这次跑的后台任务（没告诉你、所以没开对话时，点这一行看它的日志）。

@@ -158,6 +158,11 @@ class ScheduledTask(Base):
     project_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     notify: Mapped[str] = mapped_column(String(16), default="failure", server_default="failure")
     output_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # v2.13 任务自己的“做法 + 观察”（app/task_brief.py）：每次运行开头都读到；第一次运行写 runbook，之后滚动改 note。
+    # skip_at = 被跳过的那一次计划时刻（schedule.due_at 从它之后算起）；null = 不跳过
+    runbook: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    skip_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -172,6 +177,7 @@ class TaskRun(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     job_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # 定时脚本这次跑的后台任务（结束时 script_tasks 收尾）
+    silent_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # v2.13 这次没打扰用户（没东西可报）的一句原因；null = 说了话
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -266,7 +266,14 @@ button.day-row:hover { background: var(--tile); }
 @media (prefers-reduced-motion: reduce) { .form-field small.form-error { animation: none; } }
 .fade-swap { display: block; animation: rise var(--dur) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) { .fade-swap { animation: none; } }
-.task-head-actions { display: flex; justify-content: flex-end; }
+.task-head-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+/* v2.13 跳过下一次的那行 + 没打扰你的原因 + 助手记下的做法 / 观察（预览两行、弹层全文） */
+.task-skip { color: var(--text-3); animation: rise var(--dur) var(--ease); }
+.run-quiet { display: block; margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--text-2); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.task-memo-preview { white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.task-memo-full { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-2); line-height: 1.6; user-select: text; }
+@media (prefers-reduced-motion: reduce) { .task-skip { animation: none; } }
 .run-row { align-items: flex-start; animation: rise var(--dur) var(--ease) both; }
 button.run-row:hover { background: var(--tile); }
 .run-row > svg { color: var(--text-3); margin-top: var(--sp-1); }

@@ -52,3 +52,10 @@ String taskOutputLabel(ScheduledTask t) {
   if (!t.isScript) return '结果放进 Home 收件箱';
   return '${t.projectId == null ? '在我的文件里跑' : '在项目工作区里跑'} · ${notifyLabels[t.notify] ?? t.notify}';
 }
+
+/// 跳过下一次后，详情页“下次”下面的一行：跳过了 明天 08:00 那次。
+String? skipLabel(ScheduledTask t, {DateTime? now}) =>
+    t.skippedAt == null ? null : '跳过了 ${formatWhen(t.skippedAt, now: now)} 那次';
+
+/// 运行记录一行的状态字：正在运行 / 失败 / 没打扰你 / 成功。
+String runStateLabel(TaskRun r) => r.running ? '正在运行' : (r.failed ? '失败' : (r.silent ? '没打扰你' : '成功'));

@@ -186,11 +186,15 @@ export type ScheduledTask = { id: string; name: string; prompt: string; cron: st
   model?: string | null; reasoning?: string | null;
   /** v1.84 定时脚本：kind "script" = prompt 是 shell 命令，到点直接在工作区跑、不调模型；notify 何时告诉（failure | always | change）；
    *  project_id 在哪个项目的工作区跑（null = 我的文件）。老服务器没有 = agent / failure。 */
-  kind?: "agent" | "script"; notify?: "failure" | "always" | "change"; project_id?: string | null };
+  kind?: "agent" | "script"; notify?: "failure" | "always" | "change"; project_id?: string | null;
+  /** v2.13 助手记下的做法 / 观察（每次运行开头读到，后端 app/task_brief.py）；skipped_at 被跳过的那次（还没到的才有）。老服务器没有 */
+  runbook?: string | null; note?: string | null; skipped_at?: string | null };
 /** 定时任务的一次运行（GET /api/tasks/{id}/runs，新的在前）；conversation_id：报告那次的对话，面板任务或对话已删为 null。 */
 export type TaskRun = { id: string; trigger: "schedule" | "manual"; status: "running" | "ok" | "error"; error: string | null; conversation_id: string | null; started_at: string; finished_at: string | null; duration_ms: number | null;
   /** 定时脚本这次跑的后台任务（没开对话时点开看日志）；老服务器没有 */
-  job_id?: string | null };
+  job_id?: string | null;
+  /** v2.13 这次没东西可报、没打扰你的一句原因（不进收件箱）；说了话 = null。老服务器没有 */
+  silent_reason?: string | null };
 export type HomeCard = { id: string; kind: "action" | "panel" | "report"; conversation_id: string | null; task_id: string | null; title: string; blocks: Block[]; action_prompt: string | null; target: string | null;
   /** 主按钮上的字，空 = “去做”；origin "agent" = 助手提议的卡：点主按钮 POST /api/cards/{id}/start，
    *  之后 conversation_id 指向开出来的对话（卡变成“已交给助手 · 查看对话”），见 backend app/home_offers.py */

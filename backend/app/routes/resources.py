@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, select
 
 from ..models import Conversation, HomeCard, Job, Memory, Project, ScheduledTask
-from .. import card_snooze, project_brief, sandbox_client, schedule, script_tasks, task_store
+from .. import task_brief, card_snooze, project_brief, sandbox_client, schedule, script_tasks, task_store
 from ..storage import PROJECTS
 from .crud import crud_router
 
@@ -77,6 +77,8 @@ class TaskPatch(BaseModel):
     model: str | None = None
     reasoning: str | None = None
     notify: str | None = None  # 只对定时脚本有意义；kind / project_id 建好不改
+    runbook: str | None = None  # v2.13 用户改 / 清空（"" = 清空）助手记下的做法与观察；上限见 app/task_brief.py
+    note: str | None = None
 
     _choice = field_validator("model", "reasoning")(classmethod(_task_choice))
 
@@ -85,6 +87,9 @@ def _check_task_patch(task: ScheduledTask, changes: dict) -> None:
     """合并后的计划仍须成立（二选一、cron 合法），否则 422。"""
     try:
         task_store.check_patch(task, changes)
+        for k in ("runbook", "note"):
+            if k in changes:  # 经同一规则规整（空串 → null、超长 422）后再由 crud 写入
+                changes[k] = task_brief.clean(k, changes[k])
     except ValueError as e:
         raise HTTPException(422, str(e))
 

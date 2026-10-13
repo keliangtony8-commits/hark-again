@@ -7,6 +7,8 @@
 // autoDispose，离开页面就丢。有运行在排队（run_requested）或进行中时每 Timing.taskRunPoll 刷新两者，
 // 都结束了就停——不在后台空转。Home 上的“任务失败 / 连续失败已暂停”提醒卡（target=tasks）直达这一页；
 // 自动暂停时卡片里多一条说明（_PauseNote，文案 task_labels.dart autoPauseNote）。
+// v2.13：“跳过下一次 / 撤销跳过”（POST / DELETE /api/tasks/{id}/skip）在“立即运行”旁边；跳过后“下次”下面多一行“跳过了 X 那次”；
+// 中间一块“助手记下的”（task_memory.dart：做法 / 观察，可看全文、清空）；没打扰你的那次运行（silent_reason）静音图标 + 原因。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -30,6 +32,7 @@ import '../../ui/diff_view.dart' show monoFont;
 import '../chat/open_conversation.dart';
 import 'task_form.dart';
 import 'task_labels.dart';
+import 'task_memory.dart';
 import 'task_model_picker.dart';
 import '../chat/model_choice.dart' show modelCatalogProvider;
 
@@ -97,7 +100,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       body: PullRefresh(
         onRefresh: _refresh,
         child: PageBody(children: [
-          FadeSlideIn(child: _Header(task: task, busy: taskBusy(task, runs.value), onRun: () => _runNow(task))),
+          FadeSlideIn(
+            child: _Header(task: task, busy: taskBusy(task, runs.value), onRun: () => _runNow(task), onSkip: () => _toggleSkip(task)),
+          ),
+          TaskMemorySection(task: task),
           const SectionTitle('运行记录'),
           runs.when(
             skipLoadingOnReload: true,
@@ -131,6 +137,19 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
   }
 
+  /// 跳过下一次 / 撤销跳过：服务端算好新的“下次”，重新拉一次任务列表。
+  Future<void> _toggleSkip(ScheduledTask task) async {
+    final skipped = task.skippedAt != null;
+    try {
+      final api = ref.read(apiProvider);
+      skipped ? await api.delete('/api/tasks/${task.id}/skip') : await api.post('/api/tasks/${task.id}/skip');
+      await _refresh();
+      if (mounted) showToast(context, skipped ? '已撤销跳过' : '已跳过下一次');
+    } catch (e) {
+      if (mounted) showToast(context, '没改成：$e');
+    }
+  }
+
   /// 改名称/指令/计划（也可在重复/一次之间切换）。一次性任务改到以后 = 已完成的重新排上。
   Future<void> _edit(ScheduledTask task) async {
     final changes = await showTaskForm(context, task: task);
@@ -150,10 +169,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 }
 
 class _Header extends ConsumerWidget {
-  const _Header({required this.task, required this.busy, required this.onRun});
+  const _Header({required this.task, required this.busy, required this.onRun, required this.onSkip});
   final ScheduledTask task;
   final bool busy;
-  final VoidCallback onRun;
+  final VoidCallback onRun, onSkip;
 
   /// 选了非默认的模型 / 思考档才写（“深度 · 思考 高”），默认不占字。
   static String? _model(ScheduledTask t, WidgetRef ref) {
@@ -181,6 +200,13 @@ class _Header extends ConsumerWidget {
                 SwapSwitcher(
                   child: Text(nextRunLabel(task), key: ValueKey(nextRunLabel(task)), style: context.text.bodySmall?.copyWith(color: p.text2)),
                 ),
+              // 跳过 / 撤销时这一行平滑出现、收起
+              FadeSwitcher(
+                alignment: AlignmentDirectional.topStart,
+                child: skipLabel(task) == null
+                    ? const SizedBox(width: double.infinity, key: ValueKey('no-skip'))
+                    : Text(skipLabel(task)!, key: const ValueKey('skip'), style: context.text.bodySmall?.copyWith(color: p.text3)),
+              ),
             ]),
           ),
           Switch(
@@ -206,15 +232,22 @@ class _Header extends ConsumerWidget {
         else
           Text(task.prompt, style: context.text.bodyMedium?.copyWith(color: p.text2)),
         const SizedBox(height: Sp.x3),
-        Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton.icon(
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          if (task.canSkip || task.skippedAt != null) ...[
+            TextButton(
+              style: TextButton.styleFrom(minimumSize: const Size(0, A11y.minTap)),
+              onPressed: onSkip,
+              child: SwapSwitcher(child: Text(task.skippedAt != null ? '撤销跳过' : '跳过下一次', key: ValueKey(task.skippedAt != null))),
+            ),
+            const SizedBox(width: Sp.x2),
+          ],
+          FilledButton.icon(
             style: FilledButton.styleFrom(minimumSize: const Size(0, A11y.minTap)),
             onPressed: busy ? null : onRun,
             icon: Icon(busy ? Icons.hourglass_top_rounded : Icons.play_arrow_rounded, size: 18),
             label: SwapSwitcher(child: Text(busy ? '运行中…' : '立即运行', key: ValueKey(busy))),
           ),
-        ),
+        ]),
       ]),
     );
   }
@@ -260,15 +293,16 @@ class TaskRunRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
-    final (Widget icon, String label) = run.running
-        ? (PulseDot(color: p.accent), '正在运行')
+    final label = runStateLabel(run);
+    final Widget icon = run.running
+        ? PulseDot(color: p.accent)
         : run.failed
-            ? (Icon(Icons.error_rounded, color: p.danger, size: Sp.x5), '失败')
-            : (Icon(Icons.check_circle_outline_rounded, color: p.text2, size: Sp.x5), '成功');
+            ? Icon(Icons.error_rounded, color: p.danger, size: Sp.x5)
+            : Icon(run.silent ? Icons.notifications_off_outlined : Icons.check_circle_outline_rounded, color: p.text2, size: Sp.x5);
     final when = formatWhen(run.startedAt);
     final how = run.manual ? '手动' : '定时';
     final took = run.running ? '进行中' : (run.durationMs == null ? '' : '用时 ${formatDuration(run.durationMs!)}');
-    final subtitle = [how, if (took.isNotEmpty) took].join(' · ');
+    final subtitle = [how, if (run.silent) label, if (took.isNotEmpty) took].join(' · ');
     final conv = run.conversationId, job = run.jobId;
     // 有对话（报告 / 告诉了你的脚本）点开对话；没开对话的脚本运行点开它的日志
     final VoidCallback? open = conv != null
@@ -279,7 +313,9 @@ class TaskRunRow extends ConsumerWidget {
       title: when,
       subtitle: subtitle,
       error: run.failed ? run.error : null,
+      detail: run.silent ? run.silentReason : null,
       semantics: '$label，$when，$subtitle${run.failed && run.error != null ? '，原因：${run.error}' : ''}'
+          '${run.silent ? '，${run.silentReason}' : ''}'
           '${conv != null ? '，点按打开报告' : (open != null ? '，点按看日志' : '')}',
       onTap: open,
     );
@@ -296,10 +332,12 @@ class TaskRunRow extends ConsumerWidget {
 }
 
 class _RunLayout extends StatelessWidget {
-  const _RunLayout({required this.status, required this.title, required this.subtitle, required this.semantics, this.error, this.onTap});
+  const _RunLayout({required this.status, required this.title, required this.subtitle, required this.semantics, this.error, this.detail, this.onTap});
   final Widget status;
   final String title, subtitle, semantics;
-  final String? error;
+
+  /// error：失败原因（警示色）；detail：没打扰你的原因（次要色）。
+  final String? error, detail;
   final VoidCallback? onTap;
 
   @override
@@ -317,6 +355,10 @@ class _RunLayout extends StatelessWidget {
             if (error != null) ...[
               const SizedBox(height: Sp.x1),
               Text(error!, style: context.text.bodySmall?.copyWith(color: p.danger), maxLines: 4, overflow: TextOverflow.ellipsis),
+            ],
+            if (detail != null) ...[
+              const SizedBox(height: Sp.x1),
+              Text(detail!, style: context.text.bodySmall?.copyWith(color: p.text2), maxLines: 2, overflow: TextOverflow.ellipsis),
             ],
           ]),
         ),

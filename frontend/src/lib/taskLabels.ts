@@ -1,7 +1,7 @@
 // 定时任务的状态文案：列表行和详情页共用；与 App features/me/task_labels.dart 同规则同措辞。
 import { describeCron } from "./cron";
 import { formatWhen } from "./format";
-import type { ScheduledTask } from "./types";
+import type { ScheduledTask, TaskRun } from "./types";
 
 /** 计划本身：每天 08:00 / 工作日 09:00 / 一次 · 明天 08:00。 */
 export function scheduleLabel(t: ScheduledTask, now = new Date()): string {
@@ -55,3 +55,14 @@ export function autoPauseNote(t: ScheduledTask): string | null {
     ? `连着失败了 ${t.fail_streak ?? 0} 次，我先把它停了，免得一直白跑。改好后打开开关恢复；也可以先“立即运行”试一次，成功了会自动恢复。`
     : null;
 }
+
+/** v2.13 能跳过下一次：重复任务、开着（一次性的取消或改时间就行）。与 App ScheduledTask.canSkip 同规则。 */
+export const canSkip = (t: ScheduledTask) => !t.run_at && t.active && !!t.next_run_at;
+
+/** 跳过后“下次”下面一行：跳过了 明天 08:00 那次。 */
+export const skipLabel = (t: ScheduledTask): string | null => (t.skipped_at ? `跳过了 ${formatWhen(t.skipped_at)} 那次` : null);
+
+/** 运行记录一行的状态字（失败优先于没打扰你）。 */
+export const isSilent = (r: TaskRun) => r.status !== "error" && r.silent_reason != null;
+export const runStateLabel = (r: TaskRun) =>
+  r.status === "running" ? "正在运行" : r.status === "error" ? "失败" : isSilent(r) ? "没打扰你" : "成功";
