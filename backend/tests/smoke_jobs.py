@@ -173,7 +173,7 @@ wait_exit(j2)
 r = c.get(f"/api/jobs/{j2}").json()
 assert r["state"] == "failed" and r["exit_code"] == 3 and "缺依赖" in r["tail"], r
 
-# ---- 5. 同时运行上限 + 用户取消（整组进程都死）照常通知 ----
+# ---- 5. 同时运行上限 + 用户取消（整组进程都死）：v2.25 不叫醒助手，结论压到用户下次说话（held），记下是用户停的 ----
 j3 = run(start("sleep 30 & sleep 30; wait"))
 j4 = run(start("sleep 30"))
 try:
@@ -184,7 +184,8 @@ except jobs.JobError as e:
 time.sleep(0.3)
 pg = _pid(pid, j3)
 r = c.post(f"/api/jobs/{j3}/cancel").json()
-assert r["state"] == "cancelled" and r["followup"] == "pending", r
+assert r["state"] == "cancelled" and r["followup"] == "held" and r["stopped_by"] == "user", r
+assert jobs.USER_STOP in jobs.describe(run(job(j3)))
 time.sleep(0.2)
 try:
     os.killpg(pg, 0)
@@ -199,6 +200,7 @@ async def tool(name, **args):
         return (await REGISTRY[name].run(ToolContext(db=db, project_id=pid, conversation_id=cid), **args)).content
 out = run(tool("cancel_job", job_id=j4))
 assert out.startswith("已取消") and run(job(j4)).followup == "none", (out, run(job(j4)).followup)
+assert run(job(j4)).stopped_by == "agent" and "用户手动" not in jobs.describe(run(job(j4)))
 assert "已经结束" in run(tool("cancel_job", job_id=j4))
 assert "只能取消本工作区" in run(tool("cancel_job", job_id="jnope"))
 
@@ -221,7 +223,8 @@ assert listing.count("\n") >= 4 and "「装依赖」" in listing and "已取消"
 async def follow_count():
     async with SessionLocal() as db:
         return len((await db.scalars(select(Job).where(Job.followup == "pending"))).all())
-assert run(follow_count()) == 2  # j3（用户取消）、j5（丢失）
+assert run(follow_count()) == 1  # j5（丢失）；j3 用户取消的不叫醒
+assert run(job(j5)).stopped_by is None
 
 # ---- 9. 原对话一轮没答完：先等；太久就放弃 ----
 async def add_user(minutes_ago):
@@ -230,9 +233,15 @@ async def add_user(minutes_ago):
                        created_at=datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)))
         await db.commit()
 run(add_user(0))
-assert run(follow()) == 0 and run(follow_count()) == 2
+assert run(follow()) == 0 and run(follow_count()) == 1
 jobs.FOLLOWUP_WAIT = 0  # 等太久了（真实是 10 分钟）
-assert run(follow()) == 0 and run(job(j3)).followup == "skipped" and run(job(j5)).followup == "skipped"
+assert run(follow()) == 0 and run(job(j3)).followup == "held" and run(job(j5)).followup == "skipped"
+async def held():
+    async with SessionLocal() as db:
+        return await jobs.take_held(db, cid)
+note = run(held())  # 用户下次说话那一轮：并进系统提示，写明是用户停的、别重启
+assert note and j3 in note and jobs.USER_STOP in note and "直接修了再跑" not in note, note
+assert run(job(j3)).followup == "done" and run(held()) is None
 
 # ---- 10. 对话删了：不接着说 ----
 async def other_conv():

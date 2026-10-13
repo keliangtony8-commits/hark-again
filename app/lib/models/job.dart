@@ -13,7 +13,7 @@ const jobFinal = {'done', 'failed', 'timed_out', 'cancelled', 'lost'};
 class JobInfo {
   const JobInfo({required this.id, required this.title, required this.command, required this.state,
       this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt,
-      this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage, this.memoryMax,
+      this.stopReason, this.stoppedBy, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage, this.memoryMax,
       this.memoryPeak, this.box, this.disk, this.promoted = false, this.changes, this.credentials = const []});
 
   factory JobInfo.fromJson(Map<String, dynamic> j) => JobInfo(
@@ -28,6 +28,7 @@ class JobInfo {
       startedAt: DateTime.tryParse(j['started_at'] as String? ?? '')?.toLocal(),
       finishedAt: DateTime.tryParse(j['finished_at'] as String? ?? '')?.toLocal(),
       stopReason: j['stop_reason'] as String?,
+      stoppedBy: j['stopped_by'] as String?,
       keepAlive: j['keep_alive'] as bool? ?? false,
       restarts: (j['restarts'] as num?)?.toInt() ?? 0,
       restartAt: DateTime.tryParse(j['restart_at'] as String? ?? '')?.toLocal(),
@@ -52,6 +53,7 @@ class JobInfo {
       startedAt: b.startedAt,
       finishedAt: b.finishedAt,
       stopReason: b.stopReason,
+      stoppedBy: b.stoppedBy,
       keepAlive: b.keepAlive,
       restarts: b.restarts,
       memoryMax: b.memoryMax,
@@ -64,7 +66,8 @@ class JobInfo {
   /// 换个用时（卡片跳秒用），其余不变。
   JobInfo withElapsed(Duration d) => JobInfo(
       id: id, title: title, command: command, state: state, exitCode: exitCode, followup: followup, elapsed: d,
-      tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason, keepAlive: keepAlive,
+      tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason, stoppedBy: stoppedBy,
+      keepAlive: keepAlive,
       restarts: restarts, restartAt: restartAt, usage: usage, memoryMax: memoryMax, memoryPeak: memoryPeak, box: box,
       disk: disk, promoted: promoted, changes: changes, credentials: credentials);
 
@@ -73,6 +76,9 @@ class JobInfo {
 
   final String id, title, command, state, followup, tail;
   final String? stopReason;
+
+  /// v2.25 取消是谁做的（user | agent | guard）：卡头写“你停掉了 / 助手停掉了”。
+  final String? stoppedBy;
   final int? exitCode;
   final Duration elapsed;
   final DateTime? startedAt, finishedAt;
@@ -208,9 +214,16 @@ String jobStateLabel(JobInfo j) => switch (j.state) {
       'done' => '已完成',
       'failed' => j.exitCode == null ? '失败' : '失败 · 退出码 ${j.exitCode}',
       'timed_out' => '超时被终止',
-      'cancelled' => j.autoStopped ? '已自动停止' : '已取消',
+      'cancelled' => j.autoStopped ? '已自动停止' : jobStopperLabel(j.stoppedBy),
       'lost' => '中断了',
       _ => j.state,
+    };
+
+/// v2.25 取消的状态词：你停的 / 助手停的 / 不知道是谁（老任务）。网页版 lib/jobs.ts 同一套。
+String jobStopperLabel(String? by) => switch (by) {
+      'user' => '你停掉了',
+      'agent' => '助手停掉了',
+      _ => '已取消',
     };
 
 /// 前台命令转进后台的任务，卡片底部和“这台电脑”里都标这一句（网页版 lib/jobs.ts 同一句）。

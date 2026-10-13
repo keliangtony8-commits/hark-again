@@ -207,8 +207,9 @@ List<String> stringList(Object? v) => v is List ? v.whereType<String>().toList()
 /// 项目沙盒里的后台任务卡（后端 app/jobs.py）。块里是落库时的状态；运行中由卡片自己轮询 /api/jobs/{id}（models/job.dart）。
 class JobBlock extends Block {
   const JobBlock({required this.id, required this.title, required this.command, required this.state,
-      this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason, this.keepAlive = false, this.restarts = 0,
-      this.memoryMax, this.memoryPeak, this.disk, this.promoted = false, this.changes, this.credentials = const []});
+      this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason, this.stoppedBy, this.keepAlive = false,
+      this.restarts = 0, this.memoryMax, this.memoryPeak, this.disk, this.promoted = false, this.changes,
+      this.credentials = const []});
   factory JobBlock.fromJson(Map<String, dynamic> j) => JobBlock(
       id: j['id'] as String? ?? '',
       title: j['title'] as String? ?? '后台任务',
@@ -219,6 +220,7 @@ class JobBlock extends Block {
       exitCode: (j['exit_code'] as num?)?.toInt(),
       tail: j['tail'] as String?,
       stopReason: j['stop_reason'] as String?,
+      stoppedBy: j['stopped_by'] as String?,
       keepAlive: j['keep_alive'] as bool? ?? false,
       restarts: (j['restarts'] as num?)?.toInt() ?? 0,
       memoryMax: (j['memory_max'] as num?)?.toInt(),
@@ -234,6 +236,9 @@ class JobBlock extends Block {
 
   /// 被服务器护栏自动停掉的原因（卡住没输出 / 输出过大）；用户或助手取消的没有。
   final String? stopReason;
+
+  /// v2.25 取消是谁做的（user | agent | guard；后端 jobs.STOPPERS）。
+  final String? stoppedBy;
 
   /// v1.80 常驻任务：意外退出自动重启；restarts = 重启过几次。
   final bool keepAlive;

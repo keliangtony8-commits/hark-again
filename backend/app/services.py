@@ -81,7 +81,7 @@ async def restart(db: AsyncSession, job: Job) -> Job:
     except quota.QuotaError as e:
         raise ServiceError(str(e)) from e
     (jobs.job_dir(job) / "cancelled").unlink(missing_ok=True)
-    job.state, job.finished_at, job.stop_reason, job.exit_code = "running", None, None, None
+    job.state, job.finished_at, job.stop_reason, job.exit_code, job.stopped_by = "running", None, None, None, None
     job.crash_streak, job.followup, job.followup_at = 0, "none", None
     job.restart_at = datetime.now(timezone.utc)  # worker 下一轮（≤5 秒）跑 _relaunch：清结论文件、插分隔行、叫沙盒
     await jobs.patch_blocks(db, job)

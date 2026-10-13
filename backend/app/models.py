@@ -392,7 +392,8 @@ class Job(Base):
       memory_peak worker 采样看到的最高内存（PSS，字节；结论里给人和模型看，判断该给多大）
     v1.96 disk 结算时数的磁盘账（JSON 文本，app/job_disk.py：日志、运行期间新写或改过的文件、最大几组、同时段任务数）
     v2.04 promoted 前台 run_command 到点没跑完、转进后台接着跑的（沙盒现场登记 .jobs/<id>/，jobs.adopt 建这一行）
-    v2.18 changes 结算时它改了哪些文件（JSON 文本，app/job_changes.py：ChangesBlock 形状 + overlap/shared/undone）"""
+    v2.18 changes 结算时它改了哪些文件（JSON 文本，app/job_changes.py：ChangesBlock 形状 + overlap/shared/undone）
+    v2.25 stopped_by 取消是谁做的（user 卡片/电脑页 | agent 模型 cancel_job | guard 护栏）：用户停的不叫醒助手，卡片和通知都写明"""
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(32), index=True)
@@ -421,4 +422,5 @@ class Job(Base):
     disk: Mapped[str | None] = mapped_column(Text, nullable=True)
     changes: Mapped[str | None] = mapped_column(Text, nullable=True)
     promoted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    stopped_by: Mapped[str | None] = mapped_column(String(8), nullable=True)  # v2.25 谁停的（state=cancelled：user | agent | guard，jobs.STOPPERS）
     credentials: Mapped[str | None] = mapped_column(String(200), nullable=True)  # v2.20 借用的连接（逗号分隔的服务商 id，app/command_credentials.py）

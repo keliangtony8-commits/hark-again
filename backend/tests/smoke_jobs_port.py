@@ -230,7 +230,7 @@ async def user_turn(text):
 script.append("结果是 0.97。")
 run(user_turn("结果怎么样"))
 system = seen[-1][0]["content"]
-assert seen[-1][0]["role"] == "system" and "被压下的结论 acc=0.97" in system and "没再打扰用户" in system, system[-300:]
+assert seen[-1][0]["role"] == "system" and "被压下的结论 acc=0.97" in system and "没有当场叫醒你" in system, system[-300:]
 H = run(job(jh))
 assert H.followup == "done" and H.followup_at is None
 script.append("again")

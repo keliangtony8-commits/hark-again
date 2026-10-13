@@ -182,7 +182,7 @@ assert procs[jid].poll() is not None
 async def check():
     async with SessionLocal() as db:
         job = await db.get(Job, jid)
-        assert job.state == "cancelled" and job.stop_reason is None and job.followup == "pending", (job.state, job.followup)
+        assert job.state == "cancelled" and job.stop_reason is None and job.followup == "held" and job.stopped_by == "user", (job.state, job.followup)  # v2.25 用户重启电脑停掉的：不叫醒
 asyncio.run(check())
 print("api ok")
 print("ALL OK")

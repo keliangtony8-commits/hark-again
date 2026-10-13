@@ -77,13 +77,16 @@ export type JobTone = "running" | "ok" | "problem" | "quiet";
 export const jobTone = (s: JobState, autoStopped = false): JobTone =>
   autoStopped ? "problem" : s === "done" ? "ok" : s === "failed" || s === "timed_out" || s === "lost" ? "problem" : s === "cancelled" ? "quiet" : "running";
 
-export function jobStateLabel(j: Pick<JobInfo, "state" | "exit_code" | "stop_reason" | "keep_alive" | "restart_at">): string {
+/** v2.25 取消的状态词：你停的 / 助手停的 / 不知道是谁（老任务）。App models/job.dart 同一套。 */
+export const jobStopperLabel = (by?: string | null) => (by === "user" ? "你停掉了" : by === "agent" ? "助手停掉了" : "已取消");
+
+export function jobStateLabel(j: Pick<JobInfo, "state" | "exit_code" | "stop_reason" | "keep_alive" | "restart_at"> & { stopped_by?: string | null }): string {
   switch (j.state) {
     case "running": return j.keep_alive ? (j.restart_at ? "重启中" : "常驻 · 运行中") : "运行中";
     case "done": return "已完成";
     case "failed": return j.exit_code == null ? "失败" : `失败 · 退出码 ${j.exit_code}`;
     case "timed_out": return "超时被终止";
-    case "cancelled": return jobAutoStopped(j) ? "已自动停止" : "已取消";
+    case "cancelled": return jobAutoStopped(j) ? "已自动停止" : jobStopperLabel(j.stopped_by);
     case "lost": return "中断了";
   }
 }
@@ -162,7 +165,7 @@ export function jobFromBlock(b: JobBlock, now = Date.now()): JobInfo {
   const end = b.finished_at ? Date.parse(b.finished_at) : now;
   return { id: b.id, title: b.title, command: b.command, state: b.state, exit_code: b.exit_code ?? null, followup: "none",
     elapsed: Number.isNaN(start) ? 0 : (end - start) / 1000, tail: b.tail ?? "", started_at: b.started_at, finished_at: b.finished_at,
-    stop_reason: b.stop_reason ?? null, keep_alive: !!b.keep_alive, restarts: b.restarts ?? 0, restart_at: null,
+    stop_reason: b.stop_reason ?? null, stopped_by: b.stopped_by ?? null, keep_alive: !!b.keep_alive, restarts: b.restarts ?? 0, restart_at: null,
     memory_max: b.memory_max ?? null, memory_peak: b.memory_peak ?? null, disk: b.disk ?? null, promoted: !!b.promoted, changes: b.changes ?? null,
     credentials: jobCredentials(b) };
 }

@@ -55,6 +55,8 @@ KEEP_TAIL = 1500        # 结束时存进库/卡片的日志尾巴（字符）
 TAIL_CHARS = 4000       # 接口默认给客户端的日志尾巴
 LOST_GRACE = 20         # 启动后多少秒内不判“丢失”（沙盒可能还在拉起容器）
 FOLLOWUP_WAIT = 600     # 原对话里还有一轮没答完时，最多等多久再接着说
+STOPPERS = ("user", "agent", "guard")  # v2.25 .jobs/<id>/cancelled 里写的是谁停的；结算时记进 jobs.stopped_by
+USER_STOP = "已被用户手动停止（这是用户的决定：除非用户再要求，不要重新启动它，也不要换个方式再跑）"
 LABELS = {"running": "运行中", "done": "已完成", "failed": "失败", "timed_out": "超时被终止",
           "cancelled": "已取消", "lost": "中断了（沙盒重启或进程消失）"}
 ROTATE_KEEP = 256 * 1024  # 常驻任务日志轮转时留进 log.1 的尾巴（字节）
@@ -257,6 +259,8 @@ def block(job: Job) -> dict:
         out.update(exit_code=job.exit_code, finished_at=iso(job.finished_at), tail=job.tail)
         if job.stop_reason:
             out["stop_reason"] = job.stop_reason
+        if job.stopped_by:
+            out["stopped_by"] = job.stopped_by
         if (d := job_disk.stored(job)) is not None:
             out["disk"] = d  # v1.96 结算时数的磁盘账
         if (c := job_changes.wire(job)) is not None:
@@ -269,6 +273,7 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
             "title": job.title, "command": job.command, "state": job.state, "exit_code": job.exit_code,
             "followup": job.followup, "started_at": iso(job.created_at), "finished_at": iso(job.finished_at),
             "elapsed": elapsed(job), "log_size": log_size(job), "stop_reason": job.stop_reason,
+            "stopped_by": job.stopped_by,
             "tail": log_tail(job, chars) if job.state == "running" or log_size(job) else job.tail,
             "keep_alive": bool(job.keep_alive), "restarts": job.restarts or 0,
             "restart_at": iso(job.restart_at) if job.state == "running" else None,
@@ -280,6 +285,8 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
 def describe(job: Job) -> str:
     code = "" if job.exit_code is None or job.state in ("done", "cancelled") else f"，退出码 {job.exit_code}"
     label = f"被自动停止（{job.stop_reason}）" if job.stop_reason else LABELS.get(job.state, job.state)
+    if job.state == "cancelled" and job.stopped_by == "user":
+        label = USER_STOP
     if job.stop_reason == OOM_REASON:  # 不是我们停的，是内核：给模型一条出路
         label = f"失败：{OOM_REASON}"
     elif (job.stop_reason or "").startswith(MEMCAP_PREFIX):
@@ -477,12 +484,23 @@ async def settle(db: AsyncSession, job: Job, state: str, exit_code: int | None) 
     job.tail = log_tail(job, KEEP_TAIL)
     await job_disk.record(db, job)  # v1.96 磁盘账：结算时数一次
     await job_changes.record(db, job)  # v2.18 它改了哪些文件 + 撤销记录
-    by_agent = state == "cancelled" and _read(job_dir(job) / "cancelled") == "agent"
-    if job.followup == "none" and not by_agent and job.conversation_id and await db.get(Conversation, job.conversation_id):
-        job.followup = "pending"
+    job.stopped_by = stopper(job, state)
+    if job.followup == "none" and job.stopped_by != "agent" and job.conversation_id \
+            and await db.get(Conversation, job.conversation_id):
+        # v2.25 用户自己停的：不叫醒助手（卡片已写明，叫醒了模型常会当成失败去“修”、把服务又拉起来）；
+        # 结论压着，等用户下次说话并进那一轮（take_held），助手才知道是用户停的
+        job.followup = "held" if job.stopped_by == "user" else "pending"
     await patch_blocks(db, job)
     await db.commit()
     return True
+
+
+def stopper(job: Job, state: str) -> str | None:
+    """取消是谁做的（只认 STOPPERS；不是取消、标记没了或认不出 → None）。"""
+    if state != "cancelled":
+        return None
+    by = _read(job_dir(job) / "cancelled")
+    return by if by in STOPPERS else None
 
 
 async def refresh(db: AsyncSession, job: Job, check_alive: bool = False) -> Job:
@@ -641,7 +659,7 @@ def held_notice(group: list[Job]) -> str:
     """叫醒轮数到上限时压下的结论：用户下次说话，并进那一轮的系统提示（runner.take_held）。"""
     each = max(300, KEEP_TAIL // len(group))
     body = "\n\n".join(_brief(j, each) for j in group)
-    return ("【系统通知】用户这次发言之前，你后台启动的这些任务已结束（当时你已连着自动接话好几轮，就没再打扰用户）：\n"
+    return ("【系统通知】用户这次发言之前，你后台启动的这些任务已结束（没有当场叫醒你：用户自己停的，或你已连着自动接话好几轮）：\n"
             f"{body}\n先照用户这次说的办；和这些结果有关、或用户还不知道结论的，顺带简短交代。")
 
 
