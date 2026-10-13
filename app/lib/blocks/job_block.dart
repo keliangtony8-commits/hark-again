@@ -6,6 +6,7 @@
 // 运行中每 Timing.jobPoll 问一次 /api/jobs/{id}，用时每秒本地跳；结束后状态点换成结论图标，按钮换成“完整日志”。
 // 结束时服务器会在这段对话里接着说一轮（followup=pending）：卡片继续问到它说完，再让聊天页刷新一次（BlockActions.onJobSettled），
 // 助手的那句结论就自己出现在下面。只有在这张卡上亲眼看着它从“运行中”结束才触发刷新，翻历史不会。
+// v2.18 结束后它改了哪些文件：日志下面嵌一块 ChangesPanel（同消息里的改动卡，scope = job），撤销走 /api/jobs/{id}/changes/undo。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api.dart';
 import '../models/block.dart';
+import '../models/changes.dart';
 import '../models/job.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
@@ -22,6 +24,7 @@ import '../ui/motion.dart';
 import '../ui/sheets.dart';
 import 'block_actions.dart';
 import 'block_frame.dart';
+import 'changes_block.dart';
 
 const _mono = 'monospace';
 
@@ -103,6 +106,17 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
       if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能取消' : e.message);
     } finally {
       if (mounted) setState(() => _cancelling = false);
+    }
+  }
+
+  /// v2.18 撤销它改的文件：成功换上服务器回的任务（改动区变“已撤销”）；失败返回原因。
+  Future<String?> _undoChanges() async {
+    try {
+      final j = JobInfo.fromJson(await _api.post('/api/jobs/${widget.block.id}/changes/undo') as Map<String, dynamic>);
+      if (mounted) setState(() => _job = j);
+      return null;
+    } on ApiError catch (e) {
+      return e.isNetwork ? '连不上服务器，稍后再试' : e.message;
     }
   }
 
@@ -221,6 +235,16 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
                     ),
                   )
                 : const SizedBox.shrink(key: ValueKey('nodisk')),
+          ),
+          // v2.18 它改了哪些文件（结束了才有）：可点开看 diff、整份撤销
+          RiseSwitcher(
+            child: jobChangesShown(j.changes)
+                ? Padding(
+                    key: const ValueKey('changes'),
+                    padding: const EdgeInsets.only(top: Sp.x3),
+                    child: ChangesPanel(j.changes!, scope: ChangesScope.job, onUndo: _undoChanges),
+                  )
+                : const SizedBox.shrink(key: ValueKey('nochanges')),
           ),
           Row(children: [
             Expanded(

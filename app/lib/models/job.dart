@@ -2,6 +2,7 @@
 // 网页版 frontend/src/lib/jobs.ts 同一套规则。
 import '../ui/format.dart';
 import 'block.dart';
+import 'changes.dart';
 import 'job_disk.dart';
 
 export 'job_disk.dart';
@@ -13,7 +14,7 @@ class JobInfo {
   const JobInfo({required this.id, required this.title, required this.command, required this.state,
       this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt,
       this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage, this.memoryMax,
-      this.memoryPeak, this.box, this.disk, this.promoted = false});
+      this.memoryPeak, this.box, this.disk, this.promoted = false, this.changes});
 
   factory JobInfo.fromJson(Map<String, dynamic> j) => JobInfo(
       id: j['id'] as String? ?? '',
@@ -35,7 +36,8 @@ class JobInfo {
       memoryPeak: _bytes(j['memory_peak']),
       box: JobBox.tryParse(j['box']),
       disk: JobDisk.tryParse(j['disk']),
-      promoted: j['promoted'] as bool? ?? false);
+      promoted: j['promoted'] as bool? ?? false,
+      changes: ChangesBlock.tryParse(j['changes']));
 
   /// 还没问过服务器时，用消息里落库的块先画出来。
   factory JobInfo.fromBlock(JobBlock b) => JobInfo(
@@ -54,14 +56,18 @@ class JobInfo {
       memoryMax: b.memoryMax,
       memoryPeak: b.memoryPeak,
       disk: b.disk,
-      promoted: b.promoted);
+      promoted: b.promoted,
+      changes: b.changes);
 
   /// 换个用时（卡片跳秒用），其余不变。
   JobInfo withElapsed(Duration d) => JobInfo(
       id: id, title: title, command: command, state: state, exitCode: exitCode, followup: followup, elapsed: d,
       tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason, keepAlive: keepAlive,
       restarts: restarts, restartAt: restartAt, usage: usage, memoryMax: memoryMax, memoryPeak: memoryPeak, box: box,
-      disk: disk, promoted: promoted);
+      disk: disk, promoted: promoted, changes: changes);
+
+  /// v2.18 它改了哪些文件（结束了才有；可撤销）。规则在 models/changes.dart。
+  final ChangesBlock? changes;
 
   final String id, title, command, state, followup, tail;
   final String? stopReason;
@@ -246,4 +252,5 @@ String jobSemantics(JobInfo j) =>
     '${j.running && j.usage != null ? '，${jobUsageSemantics(j.usage!)}' : ''}'
     '${j.running && j.memoryMax != null ? '，内存上限 ${formatSize(j.memoryMax!)}' : ''}'
     '${j.boxTight ? '，${jobBoxLabel(j.box!)}' : ''}'
-    '${jobDiskShown(j.disk) ? '，${jobDiskSemantics(j.disk!)}' : ''}';
+    '${jobDiskShown(j.disk) ? '，${jobDiskSemantics(j.disk!)}' : ''}'
+    '${jobChangesShown(j.changes) ? '，${changesTitle(j.changes!, scope: ChangesScope.job)}' : ''}';

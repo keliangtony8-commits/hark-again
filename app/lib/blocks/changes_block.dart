@@ -5,6 +5,7 @@
 //   （小字：2 个大文件不能撤销 / 文件已回到这一轮之前的样子）
 // 撤销：confirmDanger 确认 → BlockActions.onUndoChanges（服务器核对“之后没再被改过”才恢复）；
 // 成功后服务器回的消息替换本条，卡片变“已撤销”（图标 PopSwitcher、标题 FadeSwitcher、文件名划掉）。
+// v2.18 内容拆成 ChangesPanel（不带外框）：后台任务卡里嵌同一块（scope = job，撤销走 /api/jobs/{id}/changes/undo）。
 import 'package:flutter/material.dart';
 
 import '../models/block.dart';
@@ -18,28 +19,45 @@ import '../ui/sheets.dart';
 import 'block_actions.dart';
 import 'block_frame.dart';
 
-class ChangesBlockView extends StatefulWidget {
+class ChangesBlockView extends StatelessWidget {
   const ChangesBlockView(this.block, {super.key});
   final ChangesBlock block;
 
   @override
-  State<ChangesBlockView> createState() => _ChangesBlockViewState();
+  Widget build(BuildContext context) {
+    if (block.files.isEmpty) return const SizedBox.shrink();
+    final undo = BlockActions.of(context)?.onUndoChanges;
+    return BlockFrame(
+      padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x2, Sp.x2, Sp.x3),
+      child: ChangesPanel(block, onUndo: undo == null ? null : () => undo(block.token)),
+    );
+  }
 }
 
-class _ChangesBlockViewState extends State<ChangesBlockView> {
+/// 改动列表本体：标题行（合计 + 撤销）、每个文件一行（点开看 diff）、卡底小字。
+/// onUndo 返回 null = 成功（调用方负责换上新数据）；否则是给用户看的原因。
+class ChangesPanel extends StatefulWidget {
+  const ChangesPanel(this.block, {super.key, this.onUndo, this.scope = ChangesScope.turn});
+  final ChangesBlock block;
+  final Future<String?> Function()? onUndo;
+  final ChangesScope scope;
+
+  @override
+  State<ChangesPanel> createState() => _ChangesPanelState();
+}
+
+class _ChangesPanelState extends State<ChangesPanel> {
   bool _busy = false;
   String? _open; // 展开 diff 的那个文件
 
   Future<void> _undo() async {
-    final undo = BlockActions.of(context)?.onUndoChanges;
+    final undo = widget.onUndo;
     if (undo == null) return;
-    final ok = await confirmDanger(context,
-        title: '撤销这一轮的文件改动？',
-        text: '${changesCount(widget.block)} 个文件会回到助手改之前的样子；这一轮新建的文件会被删掉。',
-        action: '撤销');
+    final (title, text) = changesConfirm(widget.block, scope: widget.scope);
+    final ok = await confirmDanger(context, title: title, text: text, action: '撤销');
     if (!ok || !mounted) return;
     setState(() => _busy = true);
-    final err = await undo(widget.block.token);
+    final err = await undo();
     if (!mounted) return;
     setState(() => _busy = false);
     if (err != null) showToast(context, err);
@@ -48,18 +66,17 @@ class _ChangesBlockViewState extends State<ChangesBlockView> {
   @override
   Widget build(BuildContext context) {
     final b = widget.block;
+    final scope = widget.scope;
     if (b.files.isEmpty) return const SizedBox.shrink();
     final p = context.palette;
     final small = context.text.labelSmall;
     final (added, removed) = changesTotals(b);
-    final note = changesNote(b);
-    final canUndo = changesUndoable(b) && BlockActions.of(context)?.onUndoChanges != null;
+    final note = changesNote(b, scope: scope);
+    final canUndo = changesUndoable(b) && widget.onUndo != null;
     return Semantics(
       container: true,
-      label: changesSemantics(b),
-      child: BlockFrame(
-        padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x2, Sp.x2, Sp.x3),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      label: changesSemantics(b, scope: scope),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             PopSwitcher(
               child: Icon(b.undone ? Icons.undo_rounded : Icons.difference_outlined,
@@ -69,7 +86,7 @@ class _ChangesBlockViewState extends State<ChangesBlockView> {
             Expanded(
               child: FadeSwitcher(
                 alignment: AlignmentDirectional.centerStart,
-                child: Text(changesTitle(b), key: ValueKey(b.undone), style: context.text.labelLarge),
+                child: Text(changesTitle(b, scope: scope), key: ValueKey(b.undone), style: context.text.labelLarge),
               ),
             ),
             if (!b.undone) ...[
@@ -116,7 +133,6 @@ class _ChangesBlockViewState extends State<ChangesBlockView> {
                   ),
           ),
         ]),
-      ),
     );
   }
 }

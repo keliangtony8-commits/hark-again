@@ -5,6 +5,8 @@ import type { JobBlock as T, JobInfo } from "../lib/types";
 import { Sheet } from "../ui/kit";
 import { IconAlert, IconCheck, IconChip, IconCopy, IconDisk, IconStop } from "../ui/icons";
 import { useBlockActions } from "./actions";
+import { ChangesPanel } from "./ChangesBlock";
+import { jobChangesShown } from "../lib/changes";
 
 /** 后台任务卡（App blocks/job_block.dart 同一套行为）：运行中每 2 秒问一次进度、用时每秒本地跳、可取消；
  *  结束后等服务器在这段对话里接着说完（followup=pending），再让聊天页刷新一次——只在本卡亲眼看着它结束时触发，翻历史不会。 */
@@ -51,6 +53,12 @@ export default function JobBlock({ block }: { block: T }) {
     setCancelling(false);
   };
 
+  /** v2.18 撤销它改的文件：成功换上服务器回的任务；失败返回原因。 */
+  const undoChanges = async () => {
+    try { setJob(await http.post<JobInfo>(`/api/jobs/${block.id}/changes/undo`, {})); return null; }
+    catch (e) { return e instanceof Error && e.message ? e.message : "没撤销成功，稍后再试"; }
+  };
+
   const running = jobRunning(job);
   const stopped = jobAutoStopped(job);
   const tone = jobTone(job.state, stopped);
@@ -82,6 +90,9 @@ export default function JobBlock({ block }: { block: T }) {
       )}
       {jobDiskShown(jobDisk(job.disk)) && (  /* v1.96 它占了多少磁盘：写了文件或日志够大才出现 */
         <p className="blk-job-disk" aria-hidden><IconDisk size={14} /><span key={jobDiskLabel(jobDisk(job.disk)!)}>{jobDiskLabel(jobDisk(job.disk)!)}</span></p>
+      )}
+      {!running && jobChangesShown(job.changes) && (  /* v2.18 它改了哪些文件：点开看 diff、整份撤销 */
+        <ChangesPanel block={job.changes} scope="job" onUndo={undoChanges} />
       )}
       <div className="blk-job-foot">
         <span key={label} className="blk-job-state">{label}</span>

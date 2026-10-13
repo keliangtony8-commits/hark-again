@@ -148,6 +148,7 @@ class JobBlock(BaseModel):
     memory_peak: int | None = None  # v1.92 结束时的内存峰值（字节）
     disk: dict | None = None  # v1.96 结算时的磁盘账（app/job_disk.py wire 形状）
     promoted: bool | None = None  # v2.04 前台命令到点没跑完、转进后台接着跑的（app/jobs.py adopt）
+    changes: dict | None = None  # v2.18 它改了哪些文件（app/job_changes.py：ChangesBlock 形状 + overlap/shared）；POST /api/jobs/{id}/changes/undo
 
 
 class PlanItem(BaseModel):
@@ -440,7 +441,9 @@ def blocks_to_text(blocks: list[dict]) -> str:
                     state += f"，已自动重启 {b['restarts']} 次"
             code = f"，退出码 {b['exit_code']}" if b.get("exit_code") not in (None, 0) and b.get("state") != "cancelled" else ""
             tail = f"\n最后的输出：\n{b['tail'][-600:]}" if b.get("tail") else ""
-            parts.append(f"[后台任务 {b['id']}「{b['title']}」——{state}{code}]{tail}")
+            from .job_changes import text as job_changes_text  # 规则只在 job_changes.py
+            changed = f"；{c}" if (c := job_changes_text(b.get("changes"))) else ""
+            parts.append(f"[后台任务 {b['id']}「{b['title']}」——{state}{code}{changed}]{tail}")
         elif t == "plan":
             if line := plan_text(b):
                 parts.append(line)

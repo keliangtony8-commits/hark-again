@@ -17,6 +17,9 @@ size/mtime 判断没变不重算，同 git index 的 stat 缓存），但不用 
 - 出错从不抛：记不了只是卡上少几行、少撤销。
 - v2.16 权限位也进 stat 缓存（index 每项第 4 个 = st_mode & 0o777，同 git index 记 mode）：chmod +x 不改 mtime，
   只比 size/mtime 会漏；旧的 3 项 index 当作过期重读。基线权限交给 tracker.modes，撤销时 chmod 回去。
+- v2.18 钉住（后台任务 app/job_changes.py 用）：shadow/pins/<名字>.json 记一份 seen（任务开始时的基线），
+  只要钉还在，_sync 就不清它引用的对象（一轮里的 protect 管不到几小时后才结束的任务）。
+  钉超过 PIN_MAX_S 没拔（任务行没了、后端崩在半路）当作作废，下次 _sync 顺手删。
 """
 import hashlib
 import json
@@ -35,6 +38,8 @@ FILE_MAX = turn_changes.TRACK_MAX       # 单文件超过就不存（2 MB，同 
 STORE_MAX = 32 * 1024 * 1024            # 影子库总量（算进工作区磁盘配额，4G 小机器上别太大）
 FILES_MAX = 20000                       # 同 workspace_search
 TIME_BUDGET = 3.0                       # 秒/次扫描；两次扫描 + 配额重数，命令后最多多等几秒
+PINS = "pins"                           # <工作区>/.turns/shadow/pins/<名字>.json
+PIN_MAX_S = 3 * 86400                   # 比后台任务最长时限（默认 24 小时）宽：过了就当没人要了
 
 _locks: dict[str, threading.Lock] = {}
 _locks_guard = threading.Lock()
@@ -143,11 +148,69 @@ def _sync(root: Path, s: Scan, protect: frozenset = frozenset()) -> dict[str, li
                 tmp.replace(obj)
             size = len(raw)
         keep(rel, [size, mtime, sha, mode])
+    protect = protect | _pinned(d)
     for obj in (d / "obj").iterdir():  # 没人引用的对象（旧版本、没写完的 .tmp）清掉
         if obj.name not in sizes and obj.name not in protect:
             obj.unlink(missing_ok=True)
     _save(d, index)
     return index
+
+
+def _pin_name(name: str) -> str:
+    return "".join(c for c in name if c.isalnum() or c in "-_")[:64] or "_"
+
+
+def _pinned(d: Path) -> frozenset:
+    """还钉着的对象；过期的钉删掉。"""
+    out: set[str] = set()
+    pins = d / PINS
+    if not pins.is_dir():
+        return frozenset()
+    cutoff = time.time() - PIN_MAX_S
+    for f in pins.glob("*.json"):
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink(missing_ok=True)
+                continue
+            seen = json.loads(f.read_text(encoding="utf-8")).get("seen") or {}
+            out.update(e[2] for e in seen.values() if isinstance(e, list) and len(e) == 4 and e[2])
+        except (OSError, ValueError, AttributeError):
+            continue
+    return frozenset(out)
+
+
+def pin(ws: str, name: str, tracker: turn_changes.Tracker) -> bool:
+    """把 tracker 的基线（before 之后的 seen）钉住，供之后 restore() 接着用。从不抛。"""
+    if not tracker.scanned:
+        return False
+    try:
+        d = _dir(project_dir(ws).resolve()) / PINS
+        d.mkdir(parents=True, exist_ok=True)
+        data = {"seen": {k: list(v) for k, v in tracker.seen.items()}, "capped": tracker.seen_capped}
+        tmp = d / f".{_pin_name(name)}.tmp"
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(d / f"{_pin_name(name)}.json")
+        return True
+    except Exception:
+        return False
+
+
+def restore(ws: str, name: str) -> turn_changes.Tracker | None:
+    """读回钉住的基线 → 一个可以直接交给 after() 的 tracker；没有钉（老任务、没钉上）→ None。"""
+    try:
+        root = project_dir(ws).resolve()
+        data = json.loads((_dir(root) / PINS / f"{_pin_name(name)}.json").read_text(encoding="utf-8"))
+        seen = {k: tuple(v) for k, v in (data.get("seen") or {}).items() if isinstance(v, list) and len(v) == 4}
+    except (OSError, ValueError, AttributeError):
+        return None
+    return turn_changes.Tracker(root=str(root), seen=seen, seen_capped=bool(data.get("capped")), scanned=True)
+
+
+def unpin(ws: str, name: str) -> None:
+    try:
+        (_dir(project_dir(ws).resolve()) / PINS / f"{_pin_name(name)}.json").unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def before(ws: str, tracker: turn_changes.Tracker) -> None:

@@ -43,7 +43,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_env, job_disk, job_restart, quota, sandbox_client, term_text
+from . import command_env, job_changes, job_disk, job_restart, quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -257,6 +257,8 @@ def block(job: Job) -> dict:
             out["stop_reason"] = job.stop_reason
         if (d := job_disk.stored(job)) is not None:
             out["disk"] = d  # v1.96 结算时数的磁盘账
+        if (c := job_changes.wire(job)) is not None:
+            out["changes"] = c  # v2.18 它改了哪些文件（可撤销）
     return out
 
 
@@ -269,7 +271,7 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
             "keep_alive": bool(job.keep_alive), "restarts": job.restarts or 0,
             "restart_at": iso(job.restart_at) if job.state == "running" else None,
             "memory_max": job.memory_max, "memory_peak": job.memory_peak, "disk": job_disk.stored(job),
-            "promoted": bool(job.promoted)}
+            "promoted": bool(job.promoted), "changes": job_changes.wire(job)}
 
 
 def describe(job: Job) -> str:
@@ -288,6 +290,8 @@ def describe(job: Job) -> str:
         line += f"，内存峰值约 {quota.size_text(job.memory_peak)}"
     if disk := job_disk.text(job_disk.stored(job), brief=True):
         line += f"；{disk}"
+    if changed := job_changes.text(job_changes.wire(job)):
+        line += f"；{changed}"
     if job.stop_reason == OOM_REASON:
         return f"{line}。{oom_hint()}"
     return f"{line}。{memcap_hint()}" if (job.stop_reason or "").startswith(MEMCAP_PREFIX) else line
@@ -391,6 +395,7 @@ async def adopt(db: AsyncSession, *, job_id: str, project_id: str, command: str,
               timeout=limit, idle_timeout=idle_limit(None, limit), created_at=start_at, run_started_at=start_at,
               promoted=True)
     job.read_offset = log_size(job)
+    await job_changes.begin(project_id, job_id)  # v2.18 从转后台这一刻起记它改的文件（之前的归那一轮的改动卡）
     db.add(job)
     await db.commit()
     return job
@@ -414,9 +419,11 @@ async def start(db: AsyncSession, *, project_id: str, command: str, title: str |
     d.mkdir(parents=True)
     (d / "cmd.sh").write_text(command + "\n", encoding="utf-8")
     (d / "run.sh").write_text(script(job.id, limit, keep_alive), encoding="utf-8")
+    await job_changes.begin(project_id, job.id, keep_alive)  # v2.18 启动前记基线（结算时出改动区）
     try:
         await _launch(db, project_id, job.id)
     except httpx.HTTPError as e:
+        job_changes.drop(project_id, job.id)
         for f in d.iterdir():
             f.unlink()
         d.rmdir()
@@ -457,6 +464,7 @@ async def settle(db: AsyncSession, job: Job, state: str, exit_code: int | None) 
             job.stop_reason = OOM_REASON
     job.tail = log_tail(job, KEEP_TAIL)
     await job_disk.record(db, job)  # v1.96 磁盘账：结算时数一次
+    await job_changes.record(db, job)  # v2.18 它改了哪些文件 + 撤销记录
     by_agent = state == "cancelled" and _read(job_dir(job) / "cancelled") == "agent"
     if job.followup == "none" and not by_agent and job.conversation_id and await db.get(Conversation, job.conversation_id):
         job.followup = "pending"

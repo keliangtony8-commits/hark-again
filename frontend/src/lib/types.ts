@@ -95,7 +95,9 @@ export type JobBlock = { type: "job"; id: string; title: string; command: string
   /** v1.96 结算时的磁盘账（后端 app/job_disk.py）。 */
   disk?: JobDisk | null;
   /** v2.04 前台命令到点没跑完、转进后台接着跑的（后端 jobs.adopt）。 */
-  promoted?: boolean | null };
+  promoted?: boolean | null;
+  /** v2.18 它改了哪些文件（结算时出，可撤销：POST /api/jobs/{id}/changes/undo）。 */
+  changes?: ChangesBlock | null };
 /** /api/jobs/{id} 的快照。followup=pending：结束了，服务器还要在这段对话里接着说一轮。 */
 export type JobInfo = { id: string; title: string; command: string; state: JobState; exit_code?: number | null;
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
@@ -109,7 +111,9 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   /** v1.96 磁盘账：运行中现数（服务器缓存 30 秒），结束了是结算时的；null = 没数。 */
   disk?: JobDisk | null;
   /** v2.04 前台命令转进后台的（老服务器没有这个字段）。 */
-  promoted?: boolean };
+  promoted?: boolean;
+  /** v2.18 它改了哪些文件（结束了才有）。 */
+  changes?: ChangesBlock | null };
 /** v1.96 日志 + 运行期间工作区里新写或改过的文件（按顶层条目分组，最多 3 组）；overlap = 同时段还在跑的其他任务数。 */
 export type JobDisk = { log: number; written: number; files: number; top: { path: string; size: number }[]; overlap: number; partial: boolean };
 export type JobBox = { used: number; limit: number };
@@ -129,7 +133,9 @@ export type FileChange = { path: string; added: number; removed: number; diff: s
 /** v1.71 计划模式下交给你批准的方案（后端 app/plan_mode.py）：批准 / 再改改走 approval.reply。 */
 /** workspace + path（v1.72）= 批准后方案存进工作区的位置（老卡没有）。 */
 export type PlanReviewBlock = { type: "plan_review"; id: string; title: string; plan: string; state: "pending" | "approved" | "rejected" | "expired"; workspace?: string; path?: string };
-export type ChangesBlock = { type: "changes"; token: string; files: FileChange[]; more?: number | null; undone?: boolean | null };
+export type ChangesBlock = { type: "changes"; token: string; files: FileChange[]; more?: number | null; undone?: boolean | null;
+  /** v2.18 只有后台任务那份有（后端 app/job_changes.py）：同时段还有别的后台任务 / 几个文件让给了这期间的对话回合。 */
+  overlap?: boolean | null; shared?: number | null };
 export type ActivityStep = { id: string; tool: string; title: string; detail: string; state: "running" | "done" | "error" | "denied" | "stopped"; at?: string; ms?: number; note?: string; change?: FileChange; changes?: FileChange[] };
 /** WS tool.status：step = 完整的一步（老服务器没有）。 */
 export type ToolRun = { id: string; name: string; label: string; state: ActivityStep["state"]; step?: ActivityStep };

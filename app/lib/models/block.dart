@@ -203,7 +203,7 @@ class BrowserHandoff {
 class JobBlock extends Block {
   const JobBlock({required this.id, required this.title, required this.command, required this.state,
       this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason, this.keepAlive = false, this.restarts = 0,
-      this.memoryMax, this.memoryPeak, this.disk, this.promoted = false});
+      this.memoryMax, this.memoryPeak, this.disk, this.promoted = false, this.changes});
   factory JobBlock.fromJson(Map<String, dynamic> j) => JobBlock(
       id: j['id'] as String? ?? '',
       title: j['title'] as String? ?? '后台任务',
@@ -219,7 +219,8 @@ class JobBlock extends Block {
       memoryMax: (j['memory_max'] as num?)?.toInt(),
       memoryPeak: (j['memory_peak'] as num?)?.toInt(),
       disk: JobDisk.tryParse(j['disk']),
-      promoted: j['promoted'] as bool? ?? false);
+      promoted: j['promoted'] as bool? ?? false,
+      changes: ChangesBlock.tryParse(j['changes']));
   final String id, title, command, state;
   final DateTime? startedAt, finishedAt;
   final int? exitCode;
@@ -240,6 +241,9 @@ class JobBlock extends Block {
 
   /// v2.04 前台命令到点没跑完、没被杀而是转进后台接着跑的（后端 jobs.adopt）。
   final bool promoted;
+
+  /// v2.18 它改了哪些文件（后端 app/job_changes.py，结算时出；可在任务卡上撤销）。
+  final ChangesBlock? changes;
 }
 
 /// 用户自己跑的命令（输入框 !命令，后端 ShellBlock）：一条回复里只有它一张。规则在 models/shell.dart。
@@ -459,16 +463,25 @@ class PlanItem {
 /// 这一轮改过的文件（后端 app/turn_changes.py 收尾时出，v1.68）：每个文件一份净 diff；
 /// token 非空 = 能整轮撤销；undone = 已撤销。文案规则在 models/changes.dart。
 class ChangesBlock extends Block {
-  const ChangesBlock({this.token = '', this.files = const [], this.more = 0, this.undone = false});
+  const ChangesBlock({this.token = '', this.files = const [], this.more = 0, this.undone = false, this.overlap = false, this.shared = 0});
   factory ChangesBlock.fromJson(Map<String, dynamic> j) => ChangesBlock(
       token: j['token'] as String? ?? '',
       files: [for (final f in (j['files'] as List? ?? [])) ?FileChange.fromJson(f)],
       more: (j['more'] as num?)?.toInt() ?? 0,
-      undone: j['undone'] == true);
+      undone: j['undone'] == true,
+      overlap: j['overlap'] == true,
+      shared: (j['shared'] as num?)?.toInt() ?? 0);
+
+  /// v2.18 任务卡里嵌的那份（JSON 里可能缺 / 坏）：不是对象 → null。
+  static ChangesBlock? tryParse(Object? j) => j is Map<String, dynamic> ? ChangesBlock.fromJson(j) : null;
   final String token;
   final List<FileChange> files;
   final int more; // 卡上没列出的文件数（撤销仍覆盖它们）
   final bool undone;
+
+  /// v2.18 只有后台任务的那份有：同时段还有别的后台任务（可能也算进来了）/ 几个文件这期间对话回合自己记了、让给了那一轮。
+  final bool overlap;
+  final int shared;
 }
 
 /// 子助手（后端 agent/subagent.py，delegate 产出，v1.48）：一次并行派出的几个子任务，执行中 live 原地更新。

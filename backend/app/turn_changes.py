@@ -250,6 +250,24 @@ def undo(workspace: str, token: str) -> list[str]:
     return done
 
 
+def recorded_since(workspace: str, since: float) -> set[str]:
+    """v2.18 since（Unix 秒）之后落盘的整轮撤销记录里有哪些路径（后台任务的改动卡让给这些回合，免得一次撤销两边打架）。"""
+    out: set[str] = set()
+    d = project_dir(workspace) / DIR
+    try:
+        for x in d.iterdir():
+            m = x / "manifest.json"
+            if not x.name.isalnum() or not m.is_file() or m.stat().st_mtime < since:
+                continue
+            try:
+                out.update(f["path"] for f in json.loads(m.read_text(encoding="utf-8"))["files"])
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+    except OSError:
+        pass
+    return out
+
+
 def history_text(b: dict) -> str:
     """给模型的历史：这一轮改了哪些文件；用户撤销过就说清楚文件已回到这一轮之前。"""
     def one(f: dict) -> str:

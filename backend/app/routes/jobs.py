@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from .. import job_disk, job_usage, jobs, services
+from .. import job_changes, job_disk, job_usage, jobs, services, turn_changes
 from ..auth import require_user
 from ..db import get_session
 from ..models import Job
@@ -59,4 +59,18 @@ async def restart_job(job_id: str, db=Depends(get_session)):
         await services.restart(db, job)
     except services.ServiceError as e:
         raise HTTPException(409, str(e))
+    return jobs.wire(job)
+
+
+@router.post("/{job_id}/changes/undo")
+async def undo_job_changes(job_id: str, db=Depends(get_session)):
+    """v2.18 撤销后台任务改的文件（规则在 app/job_changes.py + turn_changes.undo）：
+    之后又被改过 → 409 {conflicts}（一个都不动）；还在运行 / 没有记录 / 撤过 / 过期 → 410。返回更新后的任务。"""
+    job = await jobs.refresh(db, await _get(db, job_id))
+    try:
+        await job_changes.undo(db, job)
+    except turn_changes.Conflict as e:
+        raise HTTPException(409, {"reason": "conflict", "message": str(e), "conflicts": e.paths}) from None
+    except turn_changes.UndoError as e:
+        raise HTTPException(410, str(e)) from None
     return jobs.wire(job)

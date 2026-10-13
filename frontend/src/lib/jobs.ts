@@ -1,4 +1,5 @@
 // 后台任务卡的纯规则（App models/job.dart 同一套）：状态文案、语气、用时、日志尾巴、何时停止轮询。
+import { changesTitle } from "./changes";
 import { formatSize } from "./files";
 import type { JobBlock, JobBox, JobDisk, JobInfo, JobState, JobUsage } from "./types";
 
@@ -139,7 +140,8 @@ export const jobSemantics = (j: JobInfo, elapsed = j.elapsed) =>
   `${jobRunning(j) && jobUsage(j.usage) ? `，${jobUsageSemantics(jobUsage(j.usage)!)}` : ""}` +
   `${jobRunning(j) && jobMemoryMax(j) ? `，内存上限 ${formatSize(jobMemoryMax(j)!)}` : ""}` +
   `${jobBoxTight(j) ? `，${jobBoxLabel(jobBox(j.box)!)}` : ""}` +
-  `${jobDiskShown(jobDisk(j.disk)) ? `，${jobDiskSemantics(jobDisk(j.disk)!)}` : ""}`;
+  `${jobDiskShown(jobDisk(j.disk)) ? `，${jobDiskSemantics(jobDisk(j.disk)!)}` : ""}` +
+  `${j.changes && j.changes.files?.length && !jobRunning(j) ? `，${changesTitle(j.changes, "job")}` : ""}`;
 
 export function jobTailLines(tail: string, lines = JOB_LOG_LINES): string {
   const all = tail.replace(/\s+$/, "").split("\n");
@@ -153,5 +155,5 @@ export function jobFromBlock(b: JobBlock, now = Date.now()): JobInfo {
   return { id: b.id, title: b.title, command: b.command, state: b.state, exit_code: b.exit_code ?? null, followup: "none",
     elapsed: Number.isNaN(start) ? 0 : (end - start) / 1000, tail: b.tail ?? "", started_at: b.started_at, finished_at: b.finished_at,
     stop_reason: b.stop_reason ?? null, keep_alive: !!b.keep_alive, restarts: b.restarts ?? 0, restart_at: null,
-    memory_max: b.memory_max ?? null, memory_peak: b.memory_peak ?? null, disk: b.disk ?? null, promoted: !!b.promoted };
+    memory_max: b.memory_max ?? null, memory_peak: b.memory_peak ?? null, disk: b.disk ?? null, promoted: !!b.promoted, changes: b.changes ?? null };
 }
