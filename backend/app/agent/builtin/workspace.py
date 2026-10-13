@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, omission, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -184,7 +184,7 @@ async def save_attachment(ctx: ToolContext, attachment: str, path: str = "") -> 
 @tool("write_file", "正在写文件",
       "在工作区里创建或整篇覆盖一个文本文件（用户看不到卡片；要交给用户的用 display_file）。"
       "覆盖已存在的文件前要先在这段对话里 read_file 过它（读开头一段也行），读过之后被改过也要重读。"
-      "改已有文件的一小段用 edit_file，不要整篇重写。",
+      "改已有文件的一小段用 edit_file，不要整篇重写。内容要完整，不能用“// 其余代码不变 ...”这类省略占位代替原文。",
       {"type": "object", "properties": {"path": _PATH, "content": {"type": "string"}},
        "required": ["path", "content"]})
 async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
@@ -194,6 +194,8 @@ async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
     except file_seen.Refused as e:
         return ToolResult(str(e), failed=e.short)
     before = _old_text(p)
+    if hits := omission.introduced(before, content, path):  # “// 其余代码不变”写进去就把文件写坏（app/omission.py）
+        return ToolResult(omission.refusal(path, hits), failed=omission.SHORT)
     grow = len(content.encode()) - (p.stat().st_size if p.is_file() else 0)
     if (full := await _quota_refusal(ctx, path, grow)) is not None:
         return full
@@ -238,6 +240,8 @@ async def edit_file(ctx: ToolContext, path: str, old_string: str, new_string: st
         e = file_edit.apply(before, old_string, new_string, replace_all)
     except file_edit.EditError as err:
         return ToolResult(f"没有修改 {path}：{err}", failed=err.short)
+    if hits := omission.introduced(before, e.text, path):
+        return ToolResult(omission.refusal(path, hits, "edit_file"), failed=omission.SHORT)
     if (full := await _quota_refusal(ctx, path, len(e.text.encode()) - len(raw))) is not None:
         return full
     ctx.changes.before(project_dir(ctx.workspace), p)
@@ -296,6 +300,10 @@ async def _apply_patch(ctx: ToolContext, patch: str, sub: str = "") -> ToolResul
     changed = [e for e in plan.entries if e.changed]
     if not changed:
         return ToolResult("补丁应用后内容和原来完全一样，什么都没改。")
+    for e in changed:
+        if e.after is not None and (hits := omission.introduced(e.before_text, e.after, e.rel)):
+            return ToolResult(f"补丁没有应用，什么都没改。{omission.refusal(e.rel, hits, 'apply_patch')}",
+                              failed=omission.SHORT)
     owner = _owner(ctx)
     try:
         for e in changed:

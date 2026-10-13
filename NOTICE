@@ -117,3 +117,5 @@
   移植到 backend/app/file_read.py（v2.12）
 - google-gemini/gemini-cli packages/core/src/services/gitService.ts + utils/checkpointUtils.ts（影子仓库检查点：内容快照 + 只重算变了的文件）— Apache License 2.0, Copyright 2025 Google LLC, idea only, modified（不用 git 进程、按 size+mtime 判变、命令前后扫描、并进整轮撤销）
   参考写成 backend/app/command_changes.py（v2.14）
+- google-gemini/gemini-cli packages/core/src/tools/omissionPlaceholderDetector.ts (+ .test.ts)（省略占位行检测）— Apache License 2.0, Copyright 2025 Google LLC, modified（更多注释外壳与括号、… 省略号、扩展英文短语、中文占位、散文文件更严、只拦“新出现的”占位、三个写文件工具共用）
+  移植到 backend/app/omission.py（v2.24）
