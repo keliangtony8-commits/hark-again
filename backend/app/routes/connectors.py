@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import task_wall, vault
+from .. import connector_accounts, task_wall, vault
 from ..config import settings
 from ..auth import require_user
 from ..connectors import mcp, oauth
@@ -24,9 +24,10 @@ public = APIRouter()  # OAuth 回调由第三方跳回，没有登录头，靠�
 
 @router.get("")
 async def list_connectors(db: AsyncSession = Depends(get_session)):
-    conns = {c.provider: c for c in (await db.scalars(select(Connection))).all()}
-    return [{"id": p.id, "name": p.name, "desc": p.desc, "logo": p.logo, "configured": p.configured,
-             "account": conns[p.id].account if p.id in conns else None} for p in PROVIDERS.values()]
+    # status（v2.36）：connected / expired / available / unconfigured，判定只在 app/connector_accounts.py（助手看的同一份）
+    return [{"id": a.provider.id, "name": a.provider.name, "desc": a.provider.desc, "logo": a.provider.logo,
+             "configured": a.provider.configured, "account": a.account if a.status in ("connected", "expired") else None,
+             "status": a.status} for a in await connector_accounts.accounts(db)]
 
 
 @router.get("/{provider}/start")

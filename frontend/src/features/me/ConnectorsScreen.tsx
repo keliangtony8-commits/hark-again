@@ -9,6 +9,7 @@ import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, sta
 import { connectorSummary, mcpProblemText, sortAccounts, sortServers } from "./connectorLibrary";
 import { confirmDialog } from "../../ui/dialog";
 import { monogramOf } from "../../lib/monogram";
+import { connectorStatus, startConnect } from "../../lib/connect";
 
 const favicon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
 const EMPTY_MCP = { name: "", url: "", token: "" };
@@ -43,7 +44,7 @@ export default function ConnectorsScreen() {
   }, [params, setParams]);
 
   const connect = async (c: Connector) => {
-    try { window.location.href = (await http.get<{ url: string }>(`/api/connectors/${c.id}/start`)).url; }
+    try { await startConnect(c.id); }
     catch (e) { setNotice({ ok: false, text: e instanceof Error ? e.message : "无法开始连接" }); }
   };
   const disconnect = async (c: Connector) => {
@@ -85,10 +86,12 @@ export default function ConnectorsScreen() {
                 <span className="row-icon"><ConnectorLogo c={c} /></span>
                 <div className="row-body">
                   <div className="row-title">{c.name}</div>
-                  <div className="row-sub">{c.account ?? (c.configured ? c.desc : "服务器还没配置这个应用（见 .env.example）")}</div>
+                  <div className="row-sub">{connectorStatus(c) === "expired" && <><span className="row-problem">授权失效</span> · </>}{c.account ?? (c.configured ? c.desc : "服务器还没配置这个应用（见 .env.example）")}</div>
                 </div>
                 {c.account ? <>
-                  <span className="row-hint">已连接</span>
+                  {connectorStatus(c) === "expired"
+                    ? <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>重新连接</button>
+                    : <span className="row-hint">已连接</span>}
                   <button className="btn btn-ghost btn-sm" onClick={() => disconnect(c)}>断开</button>
                 </> : c.configured && <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>连接</button>}
               </div>

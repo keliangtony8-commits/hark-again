@@ -299,6 +299,13 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-preview-icon.is-off { color: var(--text-3); }
 .blk-preview-exp { color: var(--text-3); font-size: var(--fs-xs); }
 .blk-preview-exp.is-off { color: var(--warning); }
+.blk-connect-icon { color: var(--ink); display: grid; place-items: center; }
+.blk-connect.is-off .blk-connect-icon { color: var(--text-3); }
+.blk-connect.is-warning { border-color: color-mix(in srgb, var(--warning) 50%, transparent); }
+.blk-connect-line { display: flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); color: var(--text-2); }
+.blk-connect.is-done .blk-connect-line { color: var(--ink); }
+.blk-connect.is-warning .blk-connect-line { color: var(--warning); }
+.blk-connect-err { margin-right: auto; align-self: center; font-size: var(--fs-xs); color: var(--danger); }
 .blk-preview-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); padding: 0 var(--sp-2) var(--sp-2); }
 .blk-preview-frame { height: 420px; border-top: 1px solid var(--border); background: var(--surface); --rise: 6px; animation: rise var(--dur) var(--ease); }
 .blk-preview-frame iframe { width: 100%; height: 100%; border: 0; display: block; }

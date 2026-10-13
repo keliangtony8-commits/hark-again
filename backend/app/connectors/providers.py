@@ -17,6 +17,7 @@ class Provider:
     userinfo_url: str
     account_field: str             # userinfo 里代表账户名的字段
     extra_auth_params: dict = field(default_factory=dict)
+    aliases: tuple[str, ...] = ()  # 用户 / 模型可能用的别称（产品名、中文），connector_accounts.find 用
 
     @property
     def client_id(self) -> str:
@@ -43,6 +44,7 @@ PROVIDERS: dict[str, Provider] = {p.id: p for p in [
         api_hosts=["gmail.googleapis.com", "www.googleapis.com", "content.googleapis.com"],
         userinfo_url="https://openidconnect.googleapis.com/v1/userinfo", account_field="email",
         extra_auth_params={"access_type": "offline", "prompt": "consent"},  # 拿 refresh_token
+        aliases=("gmail", "googlecalendar", "calendar", "googledrive", "drive", "谷歌", "日历", "邮箱", "云端硬盘"),
     ),
     Provider(
         id="github", name="GitHub", desc="仓库、Issue、PR", logo="github.com",
@@ -51,5 +53,6 @@ PROVIDERS: dict[str, Provider] = {p.id: p for p in [
         scopes=["repo", "read:user"],
         api_hosts=["api.github.com"],
         userinfo_url="https://api.github.com/user", account_field="login",
+        aliases=("git", "仓库"),
     ),
 ]}

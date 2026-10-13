@@ -68,6 +68,7 @@ sealed class Block {
         'origin' => OriginBlock.fromJson(j),
         'relay' => RelayBlock.fromJson(j),
         'preview' => PreviewBlock.fromJson(j),
+        'connect' => ConnectBlock.fromJson(j),
         'plan' => PlanBlock.fromJson(j),
         'delegate' => DelegateBlock.fromJson(j),
         'changes' => ChangesBlock.fromJson(j),
@@ -282,6 +283,22 @@ class ShellBlock extends Block {
 class PageBlock extends Block {
   const PageBlock({required this.slug, required this.title, required this.url});
   final String slug, title, url;
+}
+
+/// v2.36 连接卡（后端 ConnectBlock / app/connector_accounts.py）：助手请你连一个账户。状态看连接器列表，不看卡里的快照。
+class ConnectBlock extends Block {
+  const ConnectBlock({required this.provider, required this.name, this.desc = '', this.reason, this.account, this.reconnect = false});
+  factory ConnectBlock.fromJson(Map<String, dynamic> j) => ConnectBlock(
+        provider: j['provider'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        desc: j['desc'] as String? ?? '',
+        reason: j['reason'] as String?,
+        account: j['account'] as String?,
+        reconnect: j['reconnect'] == true,
+      );
+  final String provider, name, desc;
+  final String? reason, account;
+  final bool reconnect;
 }
 
 /// 端口预览卡（后端 PreviewBlock）：工作区里跑着的网页服务，链接带期限。文案规则在 models/preview.dart。

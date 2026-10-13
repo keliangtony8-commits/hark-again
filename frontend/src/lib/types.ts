@@ -36,6 +36,8 @@ export type BrowserBlock = {
 export type PageBlock = { type: "page"; slug: string; title: string; url: string };
 /** 端口预览（v1.30，app/preview.py）：工作区里跑着的网页服务，链接带期限。 */
 export type PreviewBlock = { type: "preview"; workspace: string; port: number; url: string; title?: string | null; command?: string; expires_at?: string | null };
+/** v2.36 连接卡（= backend blocks.ConnectBlock）：助手请你连一个账户；状态看连接器列表（lib/connect.ts）。 */
+export type ConnectBlock = { type: "connect"; provider: string; name: string; desc?: string; logo?: string; reason?: string | null; account?: string | null; reconnect?: boolean };
 export type StatsBlock = { type: "stats"; items: { label: string; value: string; note?: string | null }[] };
 /** 记忆卡：本轮回复记住/改了/忘掉了什么（= backend blocks.MemoryBlock）。“已撤销”不在块里，见 lib/memory.ts memoryCardState。 */
 export type MemoryBlock = {
@@ -131,7 +133,7 @@ export type JobDisk = { log: number; written: number; files: number; top: { path
 export type JobBox = { used: number; limit: number };
 export type JobUsage = { cpu: number; cpu_seconds: number; memory: number; processes: number };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
-  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock | AgentBlock | OriginBlock | RelayBlock;
+  | DraftBlock | SummaryBlock | ImagesBlock | ProductsBlock | OrderBlock | FormBlock | JobBlock | PreviewBlock | PlanBlock | DelegateBlock | ChangesBlock | PlanReviewBlock | ShellBlock | SkillBlock | AgentBlock | OriginBlock | RelayBlock | ConnectBlock;
 export type SitePage = { id: string; slug: string; title: string; url: string; updated: number; published?: boolean; source?: string }; // published 缺省 = 已发布（老服务器）；source = "conversation:<id>" 是分享对话生成的
 /** 对话分享状态（/api/conversations/{id}/share）：没 slug = 从没分享；有 slug 但 shared=false = 停止过（再分享原链接恢复）；stale = 快照后对话有新内容。 */
 export type ConversationShare = { shared: boolean; stale?: boolean } & Partial<SitePage>;
@@ -243,7 +245,8 @@ export type Upload = { id: string; name: string; mime: string; size: number };
 /** 一条消息要带的文件：刚上传的（Upload）或引用的项目文件（source=project 的 FileBlock）。 */
 export type OutgoingFile = Upload | FileBlock;
 export type ProjectFile = { path: string; name: string; size: number; mime: string; modified: number };
-export type Connector = { id: string; name: string; desc: string; logo: string; configured: boolean; account: string | null };
+/** status（v2.36，后端 app/connector_accounts.py）：connected / expired / available / unconfigured；老服务器没有（看 lib/connect.ts connectorStatus）。 */
+export type Connector = { id: string; name: string; desc: string; logo: string; configured: boolean; account: string | null; status?: string };
 /** problem：还没恢复的问题 "auth"（令牌被拒）| "down"（连不上）| null（规则见后端 connectors/mcp.py）。 */
 /** retried_note（v2.19）只在新建的响应里有：因此重跑的碰壁任务那句话（后端 task_wall.retry_note） */
 export type McpServerInfo = { id: string; name: string; url: string; has_token: boolean; problem?: string | null; retried_note?: string | null };

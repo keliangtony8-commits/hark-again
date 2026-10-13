@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api.dart';
+import '../../core/connect.dart';
 import '../../core/links.dart';
 import '../../core/resource.dart';
 import '../../models/resources.dart';
@@ -173,9 +174,12 @@ class _AccountRow extends ConsumerWidget {
           icon: _icons[c.id] ?? Icons.link_rounded,
           title: c.name,
           subtitle: c.connected ? c.account : (c.configured ? c.desc : '服务器还没配置这个应用（见 .env.example）'),
+          problem: c.expired ? '授权失效' : null, // v2.36：失效的账户在这一行就说，点一下重新连接
           // 状态是小字，动作才是按钮：已连接 = 安静的说明；能连 = 墨色小胶囊“连接”
           trailing: SwapSwitcher(
-            child: c.connected
+            child: c.expired
+                ? PillButton(key: const ValueKey('expired'), label: '重新连接', primary: true, dense: true, onTap: () => _connect(context, ref))
+                : c.connected
                 ? const RowHint('已连接', key: ValueKey('on'))
                 : (usable
                     ? PillButton(key: const ValueKey('off'), label: '连接', primary: true, dense: true, onTap: () => _connect(context, ref))
@@ -189,14 +193,7 @@ class _AccountRow extends ConsumerWidget {
 
   static const _icons = {'google': Icons.mail_outline_rounded, 'github': Icons.code_rounded};
 
-  Future<void> _connect(BuildContext context, WidgetRef ref) async {
-    try {
-      final j = await ref.read(apiProvider).get('/api/connectors/${c.id}/start?client=app') as Map<String, dynamic>;
-      await openUrl(j['url'] as String);
-    } on ApiError catch (e) {
-      if (context.mounted) showToast(context, e.message);
-    }
-  }
+  Future<void> _connect(BuildContext context, WidgetRef ref) => startConnect(context, ref, c.id);
 
   void _manage(BuildContext context, WidgetRef ref) => showActionSheet<void>(context, title: '${c.name} · ${c.account}', actions: [
         SheetAction(Icons.refresh_rounded, '重新授权', onTap: () => _connect(context, ref)),

@@ -596,18 +596,27 @@ class SecretItem {
 
 /// OAuth 连接器（Google、GitHub…）。id 就是 provider。
 class Connector {
-  const Connector({required this.id, required this.name, required this.desc, required this.configured, this.account});
+  const Connector({required this.id, required this.name, required this.desc, required this.configured, this.account, this.serverStatus});
   factory Connector.fromJson(Map<String, dynamic> j) => Connector(
     id: j['id'] as String,
     name: j['name'] as String? ?? '',
     desc: j['desc'] as String? ?? '',
     configured: j['configured'] as bool? ?? false,
     account: j['account'] as String?,
+    serverStatus: j['status'] as String?,
   );
   final String id, name, desc;
   final bool configured;
   final String? account;
+  /// 服务器给的状态原文；老服务器没有 = null（看 [status]）。
+  final String? serverStatus;
+
+  /// v2.36 connected | expired | available | unconfigured（判定在后端 app/connector_accounts.py）；老服务器不给 → 按账户 / 配置推。
+  String get status => serverStatus ?? (account != null ? 'connected' : (configured ? 'available' : 'unconfigured'));
+
+  /// 有账户（含授权失效的）。
   bool get connected => account != null;
+  bool get expired => status == 'expired';
 }
 
 class McpServerItem {

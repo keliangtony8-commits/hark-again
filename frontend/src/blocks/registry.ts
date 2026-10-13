@@ -23,6 +23,7 @@ import ChangesBlock from "./ChangesBlock";
 import PlanReviewBlock from "./PlanReviewBlock";
 import ShellBlock from "./ShellBlock";
 import { OriginChip, RelayBlock } from "./RelayBlock";
+import ConnectBlock from "./ConnectBlock";
 
 // 新增一种卡片：写组件 → 在这里登记。渲染器和聊天流程不用改。
 export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Block, { type: K }> }> } = {
@@ -53,6 +54,7 @@ export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Bl
   shell: ShellBlock,
   origin: OriginChip,
   relay: RelayBlock,
+  connect: ConnectBlock,
 };
 
 /** 卡片类块（v0.84，和 App models/block.dart standsAlone 同一份名单）：要扫一眼或要点的，单独成卡、占满聊天区，不套在回复卡里。 */

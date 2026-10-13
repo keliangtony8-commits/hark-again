@@ -6,6 +6,7 @@ import 'basic_blocks.dart';
 import 'browser_block.dart';
 import 'changes_block.dart';
 import 'commerce_blocks.dart';
+import 'connect_block.dart';
 import 'content_blocks.dart';
 import 'delegate_block.dart';
 import 'form_block.dart';
@@ -51,6 +52,7 @@ class BlockView extends StatelessWidget {
         JobBlock b => JobBlockView(b),
         ShellBlock b => ShellBlockView(b),
         PreviewBlock b => PreviewBlockView(b),
+        ConnectBlock b => ConnectBlockView(b),
         PlanBlock b => PlanBlockView(b),
         DelegateBlock b => DelegateBlockView(b),
         UnknownBlock _ => const SizedBox.shrink(), // 新版服务器的新卡片：旧 App 安静忽略

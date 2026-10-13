@@ -240,6 +240,19 @@ class PreviewBlock(BaseModel):
     expires_at: str | None = None
 
 
+class ConnectBlock(BaseModel):
+    """v2.36 连接卡（connector_accounts action=connect，规则在 app/connector_accounts.py）：点“连接 X”去服务商授权页，
+    授权本人来、token 不经助手。客户端按连接器列表实时显示“已连接 · 账户”，不靠这张卡里的快照。"""
+    type: Literal["connect"] = "connect"
+    provider: str
+    name: str
+    desc: str = ""
+    logo: str = ""  # 取 favicon 的域名
+    reason: str | None = None  # 连上要做什么（助手写的一句话）
+    account: str | None = None  # 发卡那一刻已连的账户（重新授权 / 换号时）
+    reconnect: bool = False  # 发卡时已连着或失效：按钮写“重新连接”
+
+
 class StatItem(BaseModel):
     label: str  # 小字标签：“今日最高”“日落”“本月花费”
     value: str  # 大字数值，原样显示（带单位）：“26°C”“18:42”“¥12.30”
@@ -403,7 +416,8 @@ class RelayBlock(BaseModel):
 Block = Annotated[Union[TextBlock, LinksBlock, TableBlock, CodeBlock, FileBlock, ApprovalBlock, BrowserBlock,
                         PageBlock, StatsBlock, MemoryBlock, DraftBlock, SummaryBlock, ImagesBlock, ProductsBlock,
                         OrderBlock, FormBlock, JobBlock, PreviewBlock, PlanBlock, DelegateBlock, ChangesBlock,
-                        PlanReviewBlock, ShellBlock, SkillBlock, AgentBlock, OriginBlock, RelayBlock],
+                        PlanReviewBlock, ShellBlock, SkillBlock, AgentBlock, OriginBlock, RelayBlock,
+                        ConnectBlock],
                   Field(discriminator="type")]
 
 
@@ -438,6 +452,8 @@ def blocks_to_text(blocks: list[dict]) -> str:
             parts.append(f"[网页「{b['title']}」{b['url']}，slug: {b['slug']}]")
         elif t == "preview":
             parts.append(f"[网页预览「{b.get('title') or ''}」端口 {b['port']}：{b['url']}（{b.get('expires_at') or ''} 前有效）]")
+        elif t == "connect":  # 历史里只说发过卡；连没连上看系统提示 / connector_accounts list
+            parts.append(f"[连接卡：{b.get('name')}（{b.get('provider')}）]")
         elif t == "approval":
             parts.append(f"[审批：{b['title']}——{b['state']}]")
         elif t == "form":

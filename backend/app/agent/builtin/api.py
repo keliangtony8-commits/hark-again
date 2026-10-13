@@ -4,7 +4,7 @@ OAuth 连接失效（刷新被拒 / 对方 401）→ 主页提醒用户重连（
 import json
 
 
-from ... import credentials, web_guard
+from ... import connector_accounts, credentials, web_guard
 from ...connectors import oauth
 from ..tools import ToolContext, ToolResult, tool
 
@@ -50,4 +50,5 @@ async def api_request(ctx: ToolContext, url: str, method: str = "GET", body: dic
         text = r.text
     text = credentials.scrub(text, cred.scrub)  # 万一对方回显了密钥，也不让它进上下文
     used = f"（使用了{cred.source}）" if cred.source else "（未使用凭证）"
-    return ToolResult(f"HTTP {r.status_code}{used}\n{text[:MAX_BODY]}")
+    hint = "" if cred.source else await connector_accounts.missing_hint(ctx.db, url)  # v2.36：该发连接卡就说
+    return ToolResult(f"HTTP {r.status_code}{used}\n{text[:MAX_BODY]}{hint}")
