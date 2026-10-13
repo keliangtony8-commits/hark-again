@@ -97,7 +97,7 @@ async def cancel_job(ctx: ToolContext, job_id: str) -> ToolResult:
 @tool("restart_service", "正在重启常驻服务",
       "重启本工作区一个常驻服务（run_command keep_alive=true 起的）：改了它的代码或配置要生效时用（整组杀掉马上重起，"
       "日志接着写），或者它连续崩溃、已停止自动重启，你修好原因后用它重新拉起。普通后台任务不能重启。",
-      {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]})
+      {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]}, deferred=True)
 async def restart_service(ctx: ToolContext, job_id: str) -> ToolResult:
     job = await _own(ctx, job_id)
     if job is None:

@@ -300,7 +300,7 @@ def handoff_reason(reason: str) -> str:
       "保险箱里没有登录且不适合弹登录卡。会在当前会话的实时画面卡上请用户接管，用户在画面里弄完点“交还”你就接着做，"
       "结果里带交还后的新快照。reason 用一句话告诉用户要做什么，如“拖动滑块完成验证”“用淘宝 App 扫码登录”。"
       "短信/邮箱验证码用 browser_code，账号密码用 browser_login，不要用它。",
-      {"type": "object", "properties": {"reason": {"type": "string"}}, "required": ["reason"]})
+      {"type": "object", "properties": {"reason": {"type": "string"}}, "required": ["reason"]}, deferred=True)
 async def browser_handoff(ctx: ToolContext, reason: str) -> ToolResult:
     tab = _tab(ctx)
     if not tab.session:
@@ -335,7 +335,7 @@ async def browser_handoff(ctx: ToolContext, reason: str) -> ToolResult:
       "只是放进框里，之后照常点提交/上传按钮。网页下载的文件会自动存进工作区 downloads/，不用这个。",
       {"type": "object", "properties": {"ref": {"type": "string"},
                                         "paths": {"type": "array", "items": {"type": "string"}}},
-       "required": ["ref", "paths"]})
+       "required": ["ref", "paths"]}, deferred=True)
 async def browser_upload(ctx: ToolContext, ref: str, paths: list[str]) -> ToolResult:
     tab = _tab(ctx)
     if not tab.session:

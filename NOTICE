@@ -109,3 +109,5 @@
   移植到 backend/app/video_sources.py、backend/app/video_transcript.py（v2.03）
 - deepseek-ai/deepseek-harness packages/shell/tool-bash（promoteOnTimeout：前台调用就是一个被等着的任务，到点不杀而是转后台、结果带到目前的输出并消费式读一次、收不下时退回到点杀、renderPromoted 的话术）— MIT License, Copyright (c) 2026 DeepSeek, modified
   移植到 sandbox/runner.py（_run promote / _promote / _promoted_exit）、backend/app/jobs.py（admission / promote_slot / adopt）、backend/app/agent/builtin/workspace.py（v2.04）
+- openai/codex codex-rs/core/src/tools/handlers/tool_search.rs + tool_search_spec.rs（按需工具：不预先给模型、由一个工具去发现）— Apache License 2.0, Copyright 2025 OpenAI, idea only, modified（不把搜到的工具加进请求，改为目录 + describe + call）
+  参考写成 backend/app/agent/deferred.py（v2.05）

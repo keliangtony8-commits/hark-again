@@ -40,7 +40,7 @@ async def _form(ctx: ToolContext, args: dict) -> dict | None:
       {"type": "object", "properties": {
           "name": {"type": "string", "description": "环境变量名，大写字母 / 数字 / 下划线，如 TELEGRAM_BOT_TOKEN"},
           "reason": {"type": "string", "description": "一句话：拿它做什么、去哪儿弄（如：在 @BotFather 创建机器人后给的 Token）"}},
-       "required": ["name", "reason"]}, form=_form)
+       "required": ["name", "reason"]}, form=_form, deferred=True)
 async def request_env(ctx: ToolContext, name: str = "", reason: str = "", form: FormReply | None = None) -> ToolResult:
     try:
         var = command_env.check_name(name)

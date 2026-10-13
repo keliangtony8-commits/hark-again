@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, command_env, llm_retry, plan, plan_mode, spill, steering, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, compact, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
+from . import approvals, compact, deferred, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -371,7 +371,10 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
              "function": {"name": c.name, "arguments": tool_args.wire(parsed[c.id]) or c.arguments}}
             for c in turn.tool_calls]})
         images, browser_only, hit = [], True, 0
-        calls = turn.tool_calls
+        calls = list(turn.tool_calls)
+        for i, c in enumerate(calls):  # deferred_tool(call) 拆成对目标工具的普通调用：历史里仍是模型写的那条（agent/deferred.py）
+            if real := deferred.unwrap(c, parsed[c.id], ctx):
+                calls[i], parsed[c.id] = real
         # 连续的只读调用一组同时跑，其余一个一组按顺序（agent/parallel.py）；结果一律按模型顺序放回
         for group in parallel.groups([parallel.eligible(c.name, parsed[c.id], ctx) for c in calls]):
             if hit or streak.stopped:  # 已判定打转 / 连续写错：后面的调用不再执行（每个调用仍要有一条结果）
@@ -453,6 +456,11 @@ def _args(raw: str) -> object:
         return raw
 
 
+def _hint(t, streak_hint: str) -> str:
+    """参数写错时的提醒：按需工具模型多半没看过参数，第一次就附完整签名（deferred.signature）。"""
+    return streak_hint or (deferred.signature(t) if deferred.deferred(t) else "")
+
+
 async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: tool_args.Parsed | None = None,
                      streak: tool_args.Streak | None = None):
     """执行一次工具调用：查表 → 参数解析与校验（agent/tool_args.py）→ (需要时)审批 → 执行 → 产出事件，
@@ -466,7 +474,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
     streak = streak or tool_args.Streak()
     parsed = parsed or tool_args.parse(call.arguments)
     if parsed.args is None:
-        yield ToolResult(parsed.error + streak.fail(call.name, t.parameters))
+        yield ToolResult(parsed.error + _hint(t, streak.fail(call.name, t.parameters)))
         return
     args = dict(parsed.args)
     args.pop("grant", None)  # 批准范围只能来自用户在卡上的选择，不能来自模型
@@ -474,7 +482,7 @@ async def _call_tool(call, ctx: ToolContext, builder: MessageBuilder, parsed: to
         args.pop("form", None)  # 表单值只能来自用户，不能来自模型
     checked = tool_args.check(t.parameters, args, t.accepts)
     if checked.error:
-        yield ToolResult(checked.error + streak.fail(call.name, t.parameters))
+        yield ToolResult(checked.error + _hint(t, streak.fail(call.name, t.parameters)))
         return
     streak.ok(call.name)
     args = checked.args

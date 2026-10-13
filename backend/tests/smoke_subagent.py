@@ -142,7 +142,7 @@ async def main():
     msgs, tools = calls["写报告"][0]
     assert msgs[1]["content"].startswith("任务：写报告\n\n写一份报告") and len(msgs) == 2
     assert "帮我调研" not in json.dumps(msgs, ensure_ascii=False)  # 看不到主对话
-    assert set(tools) <= subagent.CHILD_TOOLS and "write_file" in tools
+    assert set(tools) - {"deferred_tool"} <= subagent.CHILD_TOOLS and "write_file" in tools  # v2.05：按需工具的目录
     assert not {"delegate", "browser_open", "ask_user", "update_plan", "show_table", "remember"} & set(tools)
     assert "没有可用的工具 delegate" in tool_msg("查价格")[0]["content"]  # 深度 1
     # 交回主助手

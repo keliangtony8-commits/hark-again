@@ -39,7 +39,8 @@ async def fake_create(model, messages, stream=False, stream_options=None, tools=
     if messages and messages[-1]["role"] == "tool":
         tool_results.append(messages[-1]["content"])
     if tools is not None:
-        assert any(t["function"]["name"] == "offer_on_home" for t in tools)
+        assert any(t["function"]["name"] == "offer_on_home" or "- offer_on_home：" in t["function"]["description"]
+                   for t in tools)  # v2.05 起是按需工具：在 deferred_tool 的目录里
     step = script.pop(0)
     async def gen():
         if isinstance(step, tuple):

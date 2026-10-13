@@ -18,7 +18,7 @@ def _fail(e: vt.VideoError) -> ToolResult:
       "找某句话在几分几秒。短视频直接给带时间点的全文；长视频给分段摘录和编号，细节再用 search_transcript 查。"
       "同一段对话里读过的视频不会重新联网。没有字幕的视频读不了（会给你视频描述）。",
       {"type": "object", "properties": {"url": {"type": "string", "description": "视频页链接"}, "languages": _LANGS},
-       "required": ["url"]}, parallel=True)
+       "required": ["url"]}, parallel=True, deferred=True)
 async def analyze_video(ctx: ToolContext, url: str, languages: list[str] | None = None) -> ToolResult:
     video = vt.parse(url)
     if video is None:
@@ -47,7 +47,7 @@ async def analyze_video(ctx: ToolContext, url: str, languages: list[str] | None 
           "query": {"type": "string", "description": "关键词；整句用引号括起来"},
           "start": {"type": "string", "description": "从哪个时间点读，如 12:30"},
           "end": {"type": "string", "description": "读到哪个时间点（不含），如 15:00"}},
-       "required": ["video"]}, parallel=True)
+       "required": ["video"]}, parallel=True, deferred=True)
 async def search_transcript(ctx: ToolContext, video: str, query: str = "", start: str = "",
                             end: str = "") -> ToolResult:
     async with SessionLocal() as db:

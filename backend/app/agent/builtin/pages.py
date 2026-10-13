@@ -11,7 +11,7 @@ GUIDE = ("完整的单文件 HTML：内联 CSS，移动端优先（viewport meta
       {"type": "object", "properties": {
           "title": {"type": "string"}, "html": {"type": "string"},
           "slug": {"type": "string", "description": "更新已有网页时填"}},
-       "required": ["title", "html"]})
+       "required": ["title", "html"]}, deferred=True)
 async def publish_page(ctx: ToolContext, title: str, html: str, slug: str | None = None) -> ToolResult:
     meta = pages_store.save(title, html, slug)
     url = pages_store.url_of(meta["slug"])
@@ -38,7 +38,7 @@ def _page_block(state: dict) -> list[dict]:
       {"type": "object", "properties": {
           "action": {"type": "string", "enum": ["share", "unshare", "status"]}},
        "required": ["action"]},
-      scope="conversation")
+      scope="conversation", deferred=True)
 async def share_conversation(ctx: ToolContext, action: str) -> ToolResult:
     c = await conversation_share.load(ctx.db, ctx.conversation_id) if ctx.conversation_id else None
     if c is None:

@@ -46,7 +46,7 @@ async def create_panel(ctx: ToolContext, title: str, prompt: str, cron: str) -> 
           "open": {"type": "string", "description": "可选：卡上加一颗直达 App 某一页的按钮。" + " / ".join(card_targets.PAGES)
                    + "，或 task:<任务 id>（那个任务的详情）、project:<项目 id>（打开项目，点“去做”开的对话也放进这个项目）。"
                    "只有用户本人能做的事（重新连接账号、存密码）给 open 不给 prompt"}},
-       "required": ["title"]})
+       "required": ["title"]}, deferred=True)
 async def offer_on_home(ctx: ToolContext, title: str, prompt: str = "", reason: str = "", label: str | None = None,
                         image: str | None = None, url: str | None = None, open: str | None = None) -> ToolResult:
     note = ""
@@ -111,7 +111,7 @@ def _line(card: HomeCard, task: ScheduledTask | None) -> str:
           "prompt": {"type": "string"},
           "cron": {"type": "string"},
           "until": {"type": "string", "description": "snooze 用：用户时区的 YYYY-MM-DD HH:MM，最多 30 天内"}},
-       "required": ["action"]})
+       "required": ["action"]}, deferred=True)
 async def manage_home(ctx: ToolContext, action: str, id: str | None = None, title: str | None = None,
                       prompt: str | None = None, cron: str | None = None, until: str | None = None) -> ToolResult:
     db = ctx.db

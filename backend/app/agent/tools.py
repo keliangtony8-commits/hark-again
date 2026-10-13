@@ -118,6 +118,8 @@ class Tool:
     # 前提：不改共享状态、不碰 ctx.db（共用的 AsyncSession 不能并发）、不要审批/表单。
     parallel: "bool | Callable[[dict], bool]" = False
     quiet: bool = False  # 控制类工具（update_plan）：不进活动时间线、不亮“正在…”，用户看它自己的卡片就够了（Codex 的 builtin control tool）
+    # 按需加载（agent/deferred.py）：不进每次请求的工具列表，只在 deferred_tool 的目录里占一行；模型 describe 看参数、call 来用
+    deferred: bool = False
 
     @property
     def accepts(self) -> set[str] | None:
@@ -128,6 +130,8 @@ class Tool:
         return {n for n in ps if n != "ctx"}
 
     def available(self, ctx: ToolContext) -> bool:
+        if self.name == DEFERRED_META:  # 目录工具：有可用的按需工具才出现（子助手白名单里不必写它）
+            return any(t.deferred and t.available(ctx) for t in REGISTRY.values())
         if ctx.allow is not None and self.name not in ctx.allow:
             return False
         if self.scope == "project":
@@ -140,28 +144,34 @@ class Tool:
 
 
 REGISTRY: dict[str, Tool] = {}
+DEFERRED_META = "deferred_tool"  # 按需工具的目录 / 说明 / 调用入口（agent/deferred.py）
 
 
 def tool(name: str, label: str, description: str, parameters: dict, scope: str = "always",
          risk: "Callable[[dict, ToolContext], str | None] | None" = None, card: Callable[[dict], dict] | None = None,
          form: Callable[[ToolContext, dict], Awaitable[dict | None]] | None = None, quiet: bool = False,
-         grants: bool = False, parallel: "bool | Callable[[dict], bool]" = False):
+         grants: bool = False, parallel: "bool | Callable[[dict], bool]" = False, deferred: bool = False):
     def deco(fn):
-        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form, grants, parallel, quiet)
+        REGISTRY[name] = Tool(name, label, description, parameters, fn, scope, risk, card, form, grants, parallel, quiet,
+                              deferred)
         return fn
     return deco
 
 
 def schemas(ctx: ToolContext) -> list[dict]:
-    """只把当前上下文可用的工具交给模型：少给一个工具就少一段 token。"""
-    return [
-        {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.parameters}}
-        for t in REGISTRY.values() if t.available(ctx)
-    ]
+    """只把当前上下文可用的工具交给模型：少给一个工具就少一段 token。按需工具只进 deferred_tool 的目录（agent/deferred.py）。"""
+    from . import deferred
+    out = []
+    for t in REGISTRY.values():
+        if not deferred.listed(t, ctx):
+            continue
+        desc = deferred.description(ctx) if t.name == DEFERRED_META else t.description
+        out.append({"type": "function", "function": {"name": t.name, "description": desc, "parameters": t.parameters}})
+    return out
 
 
 def load_builtin() -> None:
-    from . import builtin
+    from . import builtin, deferred  # noqa: F401  deferred 注册目录工具 deferred_tool
     # 按模块名排序导入：工具定义的顺序固定（目录列举顺序不保证），每次请求的 tools 段逐字相同才能命中提示缓存
     for m in sorted(pkgutil.iter_modules(builtin.__path__), key=lambda m: m.name):
         importlib.import_module(f"{builtin.__name__}.{m.name}")

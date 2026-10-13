@@ -21,7 +21,7 @@ async def use_skill(ctx: ToolContext, id: str) -> ToolResult:
           "name": {"type": "string"}, "description": {"type": "string", "description": "一句话：什么时候用"},
           "body": {"type": "string", "description": "分步骤的做法"},
           "id": {"type": "string", "description": "要修改的已有技能 id；新建时不传"}},
-       "required": ["name", "description", "body"]})
+       "required": ["name", "description", "body"]}, deferred=True)
 async def save_skill(ctx: ToolContext, name: str, description: str, body: str, id: str | None = None) -> ToolResult:
     if id:
         cur = skills_store.get_skill(id)

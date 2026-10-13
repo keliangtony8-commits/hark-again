@@ -153,6 +153,9 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_ttl_hours: int = 24 * 30
 
+    # 不常用的工具（tools 里 deferred=True）不进每次请求的工具列表，经 deferred_tool 查看 / 调用（agent/deferred.py）；False = 全给
+    defer_tools: bool = True
+
     system_prompt: str = (
         "你是用户的私人助手。先给答案，再给理由；简洁、具体、不说套话。\n"
         "需要最新或可核实的信息时先 web_search，再按需 web_fetch，不要编造；要配图先 image_search，图片地址只用搜到的。\n"

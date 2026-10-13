@@ -34,7 +34,9 @@ def chunk(text=None, tool=None, u=None):
     return NS(choices=[NS(delta=NS(content=text, tool_calls=tool))], usage=u)
 
 async def fake_create(model, messages, stream=False, stream_options=None, tools=None, **kw):
-    seen_tools.append([t["function"]["name"] for t in (tools or [])])
+    seen_tools.append([t["function"]["name"] for t in (tools or [])]
+                      + [n for t in (tools or []) if t["function"]["name"] == "deferred_tool"   # v2.05：按需工具在目录里
+                         for n in ("share_conversation",) if f"- {n}：" in t["function"]["description"]])
     step = script.pop(0)
     async def gen():
         if isinstance(step, dict):
@@ -106,7 +108,9 @@ assert "没有可分享的对话" in asyncio.run(call("share", "nope")).content
 # 没有当前对话的上下文不提供这个工具
 async def names(ctx_cid):
     async with SessionLocal() as db:
-        return [s["function"]["name"] for s in schemas(ToolContext(db=db, conversation_id=ctx_cid))]
+        ss = schemas(ToolContext(db=db, conversation_id=ctx_cid))
+        return [s["function"]["name"] for s in ss] + [n for s in ss if s["function"]["name"] == "deferred_tool"
+                                                      for n in ("share_conversation",) if f"- {n}：" in s["function"]["description"]]
 assert "share_conversation" not in asyncio.run(names(None))
 assert "share_conversation" in asyncio.run(names("c1"))
 print("ok: share_conversation tool")
