@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, omission, quota, read_many, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, file_edit, file_read, file_seen, foreground, job_memory, job_startup, jobs, memory_view, omission, quota, read_many, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -530,14 +530,20 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
                                    keep_alive=bool(keep_alive), memory_max=cap, credentials=borrowed)
         except jobs.JobError as e:
             return ToolResult(f"没有启动：{e}", failed=f"没有启动：{e}")
+        # v2.35 先看它 ~2 秒（规则在 job_startup.py）：一启动就退出的直接回结论，别让模型以为它在跑
+        seen = await job_startup.watch(ctx.db, job)
+        if seen.exited:
+            return ToolResult(job_startup.text(job, seen) + (f"\n{cred_note}" if cred_note else ""), [jobs.block(job)],
+                              failed="" if job.state == "done" else "刚启动就退出了")
         capped = f"内存上限 {quota.size_text(cap)}；" if cap else ""
         if job.keep_alive:
             return ToolResult(f"已在后台启动常驻任务 {job.id}「{job.title}」：{capped}不限时，意外退出或电脑重启后会自动拉起。"
                               "它监听端口的话可用 preview_port 给用户预览链接；用 job_status 看日志，改了代码用 restart_service 重启，cancel_job 停。"
-                              f"现在简短告诉用户它在跑什么。{cred_note}", [jobs.block(job)])
+                              f"现在简短告诉用户它在跑什么。{cred_note}{job_startup.alive_note(seen)}", [jobs.block(job)])
         idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
         return ToolResult(f"已在后台启动任务 {job.id}「{job.title}」（{capped}最长 {jobs.duration_text(job.timeout)}{idle}）。"
-                          f"用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。{cred_note}",
+                          f"用户能在聊天里看到实时日志并取消；结束时你会收到通知，现在先简短告诉用户在跑什么、大概要多久。{cred_note}"
+                          f"{job_startup.alive_note(seen)}",
                           [jobs.block(job)])
     if memory_limit:
         return ToolResult("memory_limit 只对后台任务有效：要限内存就加 background=true 放到后台跑。", failed="参数有误")

@@ -121,6 +121,9 @@ line = blocks_to_text([{"type": "job", "id": "j1", "title": "装依赖", "comman
 assert "后台任务 j1「装依赖」——失败，退出码 3" in line and "No module" in line, line
 assert jobs.duration_text(5) == "5 秒" and jobs.duration_text(125) == "2 分 5 秒" and jobs.duration_text(3720) == "1 小时 2 分"
 
+from app import job_startup
+job_startup.WATCH_S = 0  # v2.35 本冒烟测“事后通知 / 重启”路径；启动观察另有 smoke_job_startup.py
+
 # ---- 1. 模型启动后台任务 → 卡片 ----
 CMD = "echo 开始; printf '10%%\\r50%%\\r100%%\\n'; sleep 1; echo 训练完成 acc=0.93"
 script.extend([("run_command", {"command": CMD, "background": True, "title": "训练模型"}), "在后台训练了，大约 1 秒。"])

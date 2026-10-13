@@ -158,6 +158,9 @@ assert job_restart.MAX_S == 300 and all(d("failed", 0, k).delay <= 300 for k in 
 sh = jobs.script("jabc", 0)
 assert "timeout -k 5 0 bash -l" in sh and '>> "$J/log"' in sh, sh
 
+from app import job_startup
+job_startup.WATCH_S = 0  # v2.35 本冒烟测“事后通知 / 重启”路径；启动观察另有 smoke_job_startup.py
+
 # ---- 2. 模型用 keep_alive=true 起常驻服务（不必再写 background）→ 卡片 ----
 CMD = "echo 第$(cat runs.txt 2>/dev/null | wc -l)次; echo x >> runs.txt; exit 1"
 r = run(tool("run_command", command=CMD, keep_alive=True, title="机器人"))
