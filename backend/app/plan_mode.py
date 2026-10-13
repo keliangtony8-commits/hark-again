@@ -42,6 +42,7 @@ READ_TOOLS = frozenset({
     "use_skill", "ask_user", "day_overview", "delegate",
     "deferred_tool",  # 只看目录 / 说明；call 在 loop 里先拆成对目标工具的调用，再按目标工具判
     "get_current_time", "convert_time", "resolve_relative_date", "analyze_video", "search_transcript", "search_history", "search_memory",
+    "billing_status",  # v2.39 只读查花费 / 额度
     "browser_open", "browser_read", "browser_look", "browser_scroll",  # 看网页；点、填、登录、上传都不行
     "show_table", "show_links", "show_stats", "show_draft", "show_summary", "show_images", "show_products",
     TOOL,

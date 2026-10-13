@@ -85,22 +85,30 @@ async def record(model: str, kind: str, prompt: int, completion: int, cached: in
         log.exception("budget check failed")
 
 
-def _money(v: float) -> str:
+def money(v: float) -> str:
+    """金额的唯一写法（预算卡、billing_status 共用）：¥1.23 / $1.23 / 1.23 XYZ。"""
     sign = {"CNY": "¥", "USD": "$", "EUR": "€"}.get(settings.currency)
     return f"{sign}{v:.2f}" if sign else f"{v:.2f} {settings.currency}"
+
+
+def month_projection(cost: float, now: datetime) -> float:
+    """照本月至今的速度，月底大约花多少（用户时区；不足一天按一天算，月初不会估出天价）。"""
+    local = now.astimezone(ZoneInfo(settings.timezone))
+    days = calendar.monthrange(local.year, local.month)[1]
+    start = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elapsed = max((local - start).total_seconds() / 86400, 1)
+    return cost / elapsed * days
 
 
 def _budget_alert(level: float, cost: float, budget: float, local: datetime) -> tuple[str, str]:
     pct = round(cost / budget * 100)
     if level >= 1:
         title = "本月模型花费已超出预算"
-        text = (f"本月已用 **{_money(cost)}**，预算 {_money(budget)}（{pct}%）。\n\n"
+        text = (f"本月已用 **{money(cost)}**，预算 {money(budget)}（{pct}%）。\n\n"
                 "调用不会被拦截。想省一点，可以把常用对话切回快速模型，或少用浏览器类工具。")
     else:
-        days = calendar.monthrange(local.year, local.month)[1]
-        elapsed = max((local - local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 86400, 1)
-        text = (f"本月已用 **{_money(cost)}**，预算 {_money(budget)}（{pct}%）。\n\n"
-                f"照这个速度，月底大约 {_money(cost / elapsed * days)}。")
+        text = (f"本月已用 **{money(cost)}**，预算 {money(budget)}（{pct}%）。\n\n"
+                f"照这个速度，月底大约 {money(month_projection(cost, local))}。")
         title = f"本月模型花费已到预算的 {round(level * 100)}%"
     return title, text
 
