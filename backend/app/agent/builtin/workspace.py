@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, command_env, command_guard, computer, deliver, documents, file_edit, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_env, command_guard, computer, deliver, documents, file_edit, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -145,6 +145,23 @@ async def _read_attachment(uid: str, offset: int, limit: int, pages: str) -> Too
     if not looks_text(p):
         return ToolResult(f"附件 {p.name} 不是文本文件（{p.stat().st_size} B），读不了内容。")
     return ToolResult(page(p.read_text(encoding="utf-8", errors="replace"), offset, limit))
+
+
+@tool("save_attachment", "正在把附件存进工作区",
+      "把用户在聊天里发的附件（压缩包、视频、表格、图片…）复制进工作区，之后就能用 run_command 处理（解压、转码、跑脚本）。"
+      "attachment 是消息里“附件编号”给的编号；path 可省（默认 uploads/<原名>），以 / 结尾表示放进那个目录。"
+      "从不覆盖已有文件：重名会自动换成“名字 (2)”。只是读内容用 read_file attachment，不用存。",
+      {"type": "object", "properties": {
+          "attachment": {"type": "string", "description": "附件编号"},
+          "path": {"type": "string", "default": "", "description": "存到工作区哪里（相对路径；空 = uploads/<原名>）"}},
+       "required": ["attachment"]}, deferred=True)
+async def save_attachment(ctx: ToolContext, attachment: str, path: str = "") -> ToolResult:
+    try:
+        s = await asyncio.to_thread(attachment_save.save, ctx.workspace, attachment, path, ctx.changes, _owner(ctx))
+    except attachment_save.SaveError as e:
+        return ToolResult(str(e), failed="没存成")
+    c = None if s.reused else file_edit.change(s.rel, None, "")
+    return ToolResult(attachment_save.for_model(s), change=c, detail=attachment_save.detail(s))
 
 
 def page(text: str, offset: int = 0, limit: int = MAX_READ) -> str:

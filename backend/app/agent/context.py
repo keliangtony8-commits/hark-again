@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, clock, command_env, documents, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, attachment_save, clock, command_env, documents, init_command, llm, memory_store, project_brief, prompt_cache, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -98,7 +98,9 @@ def _render(blocks: list[dict], current: bool = False) -> str:
             header, body, rest = documents.preview(path, doc_text_path(b["id"]), ATTACH_CHARS)
             text += f"\n\n[附件 {b['name']}] {header}" + (f"\n{body}" if body else "") + (more if rest else "")
         else:
-            text += f"\n\n[附件 {b['name']}（{b.get('mime')}，{b.get('size', 0)} B，暂不能读取内容）]"
+            text += f"\n\n[附件 {b['name']}（{b.get('mime')}，{b.get('size', 0)} B，读不了内容）]"
+    if note := attachment_save.hint(blocks):  # 附件编号 + 存进工作区的用法（规则在 app/attachment_save.py）
+        text += "\n" + note
     return text
 
 
