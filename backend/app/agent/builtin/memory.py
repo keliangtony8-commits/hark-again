@@ -1,9 +1,10 @@
-"""长期记忆工具：remember 记 / update_memory 改 / forget 删。
+"""长期记忆工具：remember 记 / update_memory 改 / forget 删 / search_memory 查（v2.11）。
 写入逻辑全在 memory_store（查重覆盖、按短引用定位）；这里只做参数整理和给模型的回话，
 每次真改了记忆就附一张记忆卡（blocks.MemoryBlock），用户在聊天里看得见、能撤销。"""
 from sqlalchemy import select
 
 from ... import memory_store
+from ...db import SessionLocal
 from ...models import Memory
 from ..tools import ToolContext, ToolResult, tool
 
@@ -67,3 +68,28 @@ async def forget(ctx: ToolContext, refs: list[str] | None = None, keyword: str |
     await ctx.db.commit()
     tail = f"（这些引用没找到：{'、'.join(bad)}）" if bad else ""
     return ToolResult(f"删除了 {len(rows)} 条：" + "；".join(i["content"] for i in block["items"]) + tail, [block])
+
+
+@tool("search_memory", "正在翻记忆",
+      "在用户的全部长期记忆里查（上下文只放了最相关的一部分时用）：按字面和意思找，返回每条的 # 引用。"
+      "要用到用户的偏好或事实而上面没列出来、或要改/删一条看不到的记忆时先查。query 空 + category = 列出这一类。",
+      {"type": "object", "properties": {
+          "query": {"type": "string", "description": "要找什么，如：过敏 / 喜欢的咖啡；整句用引号"},
+          "category": {"type": "string", "enum": CATEGORIES},
+          "limit": {"type": "integer", "description": f"最多返回几条，默认 {memory_store.SEARCH_LIMIT}，上限 {memory_store.LIMIT_MAX}"}}},
+      parallel=True)
+async def search_memory(ctx: ToolContext, query: str = "", category: str | None = None,
+                        limit: int = memory_store.SEARCH_LIMIT) -> ToolResult:
+    cat = _cat(category)
+    if not query.strip() and not cat:
+        return ToolResult("要给 query（找什么），或给 category 列出一类。", failed="没给要找什么")
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = memory_store.SEARCH_LIMIT
+    # 可并行 → 不碰 ctx.db（共用会话不能并发）；补向量会写库，在自己的短会话里提交
+    async with SessionLocal() as db:
+        hits, total, vectors = await memory_store.search(db, query, cat, limit)
+        text = memory_store.search_text(query, cat, hits, total, vectors)
+    what = query.strip() or cat
+    return ToolResult(text, detail=f"{what} · {len(hits)} 条")

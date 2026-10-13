@@ -64,7 +64,8 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     mems = await memory_store.relevant(db, query)
     if mems:
         p.add(VOLATILE, "关于用户你已知道（# 后是引用，改/删时传给 update_memory / forget）：\n"
-              + "\n".join(memory_store.context_line(m) for m in mems))
+              + "\n".join(memory_store.context_line(m) for m in mems)
+              + (("\n" + note) if (note := memory_store.overflow_note(await memory_store.count(db), len(mems))) else ""))
     return p
 
 
