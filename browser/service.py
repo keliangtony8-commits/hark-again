@@ -4,7 +4,8 @@
   登录状态持久化到 /state/<name>.json，下次同名会话自动带上；GET /sessions 列出、DELETE ?forget=1 = 退出登录
 - 快照：可交互元素编上号（ref），外加页面可见文字（截断），给模型用
 - 截图 + 鼠标/键盘：给你“实时画面 + 接管”用
-- 安全：只允许 http(s)，内网/回环地址的请求一律拦截（防 SSRF 打到你的数据库）
+- 安全：只允许 http(s)；Chromium 的每个连接都走本进程里的出网关卡 egress.py（v2.02：页面里的跳转、重定向、
+  WebSocket、Service Worker 都算，连的是查过的 IP），内网/回环地址一律拦截并在快照里报给模型（blocked）
 - 空闲 15 分钟自动关闭会话
 - 登录状态标记（v1.36）：/state/<name>.meta.json 记 {signed_in, expired}（unix 秒）——后端看到“登录成功”/“登录页又出来了”
   就 PUT /login-state 记一笔；goto 回报给后端（之前登录过的会话现在是登录页 = 登录过期），GET /sessions 列出给“我的电脑”
@@ -20,7 +21,6 @@ import ipaddress
 import json
 import os
 import re
-import socket
 import time
 from urllib.parse import urlparse
 
@@ -28,6 +28,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, Response
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from pydantic import BaseModel
+
+import egress
 
 TOKEN = os.environ["BROWSER_TOKEN"]
 STATE = "/state"
@@ -48,6 +50,7 @@ _used: dict[str, float] = {}
 _downloads: dict[str, list[dict]] = {}  # 会话 → [{id, name, size, state downloading|done|failed, error}]
 _restored: set[str] = set()  # 这次是从存好的登录状态恢复出来的会话（goto 回报给后端，模型知道“沿用了登录”）
 _lock = asyncio.Lock()
+_egress = egress.Egress(egress.ALLOW_HOSTS)
 
 
 def auth(authorization: str = Header("")) -> None:
@@ -55,27 +58,12 @@ def auth(authorization: str = Header("")) -> None:
         raise HTTPException(401)
 
 
-_host_ok: dict[str, bool] = {}  # DNS 结果缓存，避免每个请求都解析
-
-
-def _public_host(host: str) -> bool:
-    if host in _host_ok:
-        return _host_ok[host]
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return False
-    _host_ok[host] = all(ipaddress.ip_address(i[4][0]).is_global for i in infos)
-    return _host_ok[host]
-
-
 async def _guard(route):
+    """只管协议（file:、chrome: 之类直接拒）；地址由出网关卡 egress 在连接时查，那里每一跳都过。"""
     u = urlparse(route.request.url)
-    if u.scheme in ("data", "blob", "about"):
+    if u.scheme in ("data", "blob", "about", "http", "https"):
         return await route.continue_()
-    if u.scheme not in ("http", "https") or not await asyncio.to_thread(_public_host, u.hostname or ""):
-        return await route.abort("blockedbyclient")
-    await route.continue_()
+    await route.abort("blockedbyclient")
 
 
 def _check_name(name: str) -> str:
@@ -88,15 +76,21 @@ async def _session(name: str) -> Page:
     global _pw, _browser
     async with _lock:
         if not _browser:
+            if not _egress.port:
+                await _egress.start()
             _pw = await async_playwright().start()
-            _browser = await _pw.chromium.launch(args=["--disable-dev-shm-usage"])
+            # proxy per-context：先给浏览器一个占位代理，每个会话再用自己的代理账号（被拦记到对的会话上）；
+            # WebRTC 只许走代理（不然 UDP 能绕过关卡直连内网）
+            _browser = await _pw.chromium.launch(proxy={"server": "http://per-context"}, args=[
+                "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
         if name not in _sessions:
             while len(_sessions) >= MAX_SESSIONS:
                 await _evict(min(_sessions, key=lambda n: _used.get(n, 0)))
             path = _state_path(name)
             saved = os.path.exists(path)
             ctx = await _browser.new_context(viewport=VIEW, locale="zh-CN", timezone_id="Asia/Shanghai",
-                                             storage_state=path if saved else None, accept_downloads=True)
+                                             storage_state=path if saved else None, accept_downloads=True,
+                                             proxy=_egress.proxy_for(name), service_workers="block")
             if saved:
                 _restored.add(name)
             else:
@@ -120,6 +114,7 @@ async def _evict(name: str) -> None:
     _used.pop(name, None)
     await ctx.close()
     _drop_downloads(name)
+    _egress.forget(name)
 
 
 # ---- 下载中转 ----
@@ -251,6 +246,14 @@ async def _snapshot(page: Page) -> dict:
     return snap
 
 
+def _with_blocked(name: str, snap: dict) -> dict:
+    """附上这个会话上次以来被出网关卡拦下的请求（[{host, reason}]，没有就不带）。"""
+    blocked = _egress.take_blocked(name)
+    if blocked:
+        snap["blocked"] = blocked
+    return snap
+
+
 class GotoIn(BaseModel):
     url: str
 
@@ -305,10 +308,14 @@ async def goto(name: str, body: GotoIn):
         await page.goto(body.url, timeout=30000, wait_until="domcontentloaded")
     except Exception as e:
         if "Download is starting" not in str(e):  # 网址直接是个文件：不是打不开，是下载了（后端随后取走）
+            blocked = _egress.take_blocked(name)
+            if blocked:  # 打开的地址（或它的重定向）进了内网：说清楚是被拦，不是网站坏了
+                raise HTTPException(403, "被拦下：" + "；".join(b["reason"] for b in blocked[:3])
+                                    + "。助手的浏览器不能访问内网 / 本机地址。")
             raise HTTPException(502, f"打不开：{e}")
         await page.wait_for_timeout(1500)
     await _save(name)
-    snap = await _snapshot(page)
+    snap = _with_blocked(name, await _snapshot(page))
     snap["restored"] = name in _restored
     snap["login"] = _meta(name)
     return snap
@@ -324,7 +331,7 @@ async def login_state(name: str, body: LoginStateIn):
 
 @app.get("/sessions/{name}/snapshot", dependencies=[Depends(auth)])
 async def snapshot(name: str):
-    return await _snapshot(await _session(_check_name(name)))
+    return _with_blocked(name, await _snapshot(await _session(_check_name(name))))
 
 
 @app.post("/sessions/{name}/act", dependencies=[Depends(auth)])
@@ -353,7 +360,7 @@ async def act(name: str, body: ActIn):
     except Exception as e:
         raise HTTPException(400, f"操作失败：{str(e)[:200]}")
     await _save(name)
-    return await _snapshot(page)
+    return _with_blocked(name, await _snapshot(page))
 
 
 @app.post("/sessions/{name}/login", dependencies=[Depends(auth)])
@@ -374,7 +381,7 @@ async def login(name: str, body: LoginIn):
     except Exception as e:
         raise HTTPException(400, f"代填失败：{str(e)[:200]}")
     await _save(name)
-    return await _snapshot(page)
+    return _with_blocked(name, await _snapshot(page))
 
 
 @app.post("/sessions/{name}/upload", dependencies=[Depends(auth)])
@@ -410,7 +417,7 @@ async def upload(name: str, body: UploadIn):
     except Exception as e:
         raise HTTPException(400, f"上传失败（{str(e)[:160]}）：ref 要是文件框或点了会弹出选文件的按钮")
     await _save(name)
-    return await _snapshot(page)
+    return _with_blocked(name, await _snapshot(page))
 
 
 @app.get("/sessions/{name}/downloads", dependencies=[Depends(auth)])
@@ -491,6 +498,7 @@ async def close(name: str, forget: bool = False):
                 _used.pop(name, None)
                 await ctx.close()
                 _drop_downloads(name)
+                _egress.forget(name)
             else:
                 await _evict(name)
         _restored.discard(name)

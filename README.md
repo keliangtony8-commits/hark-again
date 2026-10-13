@@ -36,7 +36,7 @@ cd /opt/assistant && sudo bash deploy/install.sh
 - 装 Docker、生成 `.env`（随机 JWT/数据库密码/沙盒与浏览器 token/VAULT_KEY，已有值绝不覆盖，可重复运行）、建数据目录、构建沙盒镜像、启动、等后端健康后打印地址和密码。
 - 档位开关全是 `.env` 变量（`COMPOSE_PROFILES`、`BROWSER_MAX_SESSIONS`、`BROWSER_MEM`、`SANDBOX_MEM`、`PG_SHARED_BUFFERS`…），`docker-compose.yml` 只有一份。
 - 更新：`sudo bash deploy/update.sh`；备份数据库和 .env：`sudo bash deploy/backup.sh`（可放 crontab）。
-- 无人值守：`ASSUME_YES=1 DOMAIN=a.com STEP_API_KEY=... sudo -E bash deploy/install.sh`。脚本离线测试：`bash deploy/tests/test_install.sh`；浏览器会话上限：`python browser/test_sessions.py`。
+- 无人值守：`ASSUME_YES=1 DOMAIN=a.com STEP_API_KEY=... sudo -E bash deploy/install.sh`。脚本离线测试：`bash deploy/tests/test_install.sh`；浏览器会话上限：`python browser/test_sessions.py`；出网关卡：`python browser/test_egress.py`。
 
 ## 手动部署
 1. `cp .env.example .env`，填 STEP_API_KEY、OWNER_PASSWORD、JWT_SECRET、DOMAIN（`COMPOSE_PROFILES=gateway` 才启动 LiteLLM）
@@ -124,7 +124,8 @@ docker compose --profile build-only build sandbox-image                      # �
 - usage.py       用量与花费：llm.py 每次调用后 record() 一行（自己的短会话，失败吞掉）；runner 用 scope(对话id) 归属；report() 出今天/本月（用户时区）+ 本月逐日 daily + 本月最花钱的对话 conversations（_top_conversations：外连接一次查标题，前 TOP_CONVERSATIONS=5，删了的对话 title=null）供 GET /api/usage，conversation_report() 出单个对话累计供 GET /api/conversations/{id}/usage（两者共用 _aggregate 形状）；check_budget() 记账后检查本月花费是否跨过 MONTHLY_BUDGET×BUDGET_ALERTS 的某档 → Home action 卡（target=usage），去重表 alerts_sent（key=budget:年月:档:预算），新档收起旧预算卡
 
 云浏览器服务 browser/
-- service.py     唯一运行 Chromium 的服务：快照、点击、输入、截图、人工接管；拦截内网地址
+- service.py     唯一运行 Chromium 的服务：快照、点击、输入、截图、人工接管
+- egress.py      浏览器出网关卡（v2.02）：Chromium 每个连接都走它（127.0.0.1 上的小代理，每会话一个代理账号），只放行公网、连查过的 IP；地址规则与后端 web_guard 一致（tests/smoke_browser_egress.py 对表）；测试 browser/test_egress.py、真 Chromium browser/test_egress_chromium.py
 
 沙盒服务 sandbox/
 - runner.py      唯一接触 Docker 的服务（前台 /exec；后台 /jobs/start|cancel|alive：setsid 脱离启动、整组杀；空闲回收跳过有任务在跑的容器；镜像重建后旧容器下次用到时自动换新镜像）
@@ -262,3 +263,4 @@ postgres ~200M、litellm ~300M、searxng ~150M、backend+worker ~300M、browser 
 - 钟表工具（v1.99，大脑 ao）：get_current_time / convert_time / resolve_relative_date——“明天”“下周三”“10 天后”先换成准确日期和星期（明天、N 天后、下周X、N 个月后这些常见说法工具自己再算一遍，模型数错一天时以说法为准并提醒它），别的时区的钟点按那一天的夏令时换算（跳过的钟点报错、重复的注明），系统提示的“现在”带中文星期。规则 app/clock.py，冒烟 tests/smoke_clock.py（无迁移）。
 - 内存去哪了·给助手（v2.00，核心 23）：整台内存用到 90% 以上、或刚有命令/后台任务被系统因内存杀掉时，job_status、run_command 结果和任务结束通知里带一句“占得最多的：后台任务 j…「训练」约 1.5 GB；零散程序 pid 812「nohup python leak.py」约 900 MB…”，并按种类给出路（cancel_job / 先 ps 确认再 kill / 常驻服务先问用户）。规则 app/memory_view.py current + note（电脑页那张表同一口径），冒烟 tests/smoke_memory_note.py（无迁移，客户端不变）。
 - 出网安全 + 读网页 + 搜图片（v2.01，大脑 ap，移植 Gemini CLI）：助手按模型给的地址出网（web_fetch、配图探测、api_request、浏览器打开）不能去内网 / 本机 / 云元数据地址（解析出的任一地址是私网就拒，每跳重定向、配代理时都查；确需读自家内网机器就设 `OUTBOUND_ALLOW_HOSTS`）。web_fetch 读 PDF（带页码）、JSON / 纯文本原样，github blob 自动换 raw，同一地址 15 分钟内用缓存（max_age_seconds=0 现读），超 5MB 只读前面，同站每分钟最多 10 次；web_search 可限一天/周/月/年并显示发布日期；新 image_search 返回图片、缩略图和所在网页。规则 app/web_guard.py + app/web_page.py，冒烟 tests/smoke_web_access.py（无迁移，新依赖 pypdf）。
+- 浏览器出网关卡（v2.02，核心 24）：云浏览器打开网页之后，页面里的图片、脚本、fetch、302 重定向、WebSocket、Service Worker 也不能碰内网 / 本机（以前只查打开的那个地址）——Chromium 的所有连接都过 browser/egress.py，连的是查过的 IP（DNS 换成内网也没用），WebRTC 只许走代理；被拦的请求在快照最前面告诉助手“是被拦、不是网站坏了，别绕”；打开的地址自己跳进内网 → 直接报“被拦下”。允许名单与后端同一个 `OUTBOUND_ALLOW_HOSTS`。冒烟 tests/smoke_browser_egress.py（无迁移，客户端不变）。

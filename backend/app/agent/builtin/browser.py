@@ -44,8 +44,22 @@ def _render(snap: dict, tab: Tab) -> str:
         tab.names[e["ref"]] = e["name"]
         kind = e["tag"] + (f":{e['type']}" if e["type"] and e["tag"] == "input" else "")
         lines.append(f"[{e['ref']}] {kind} {e['name']}")
-    return (f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines)
+    return (blocked_note(snap) + f"页面：{snap.get('title', '')}\n{snap.get('url', '')}\n\n可操作元素：\n" + "\n".join(lines)
             + f"\n\n页面文字：\n{snap.get('text', '')}")
+
+
+BLOCKED_SHOW = 3
+
+
+def blocked_note(snap: dict) -> str:
+    """浏览器出网关卡（browser/egress.py）拦下的页面内请求：告诉模型是被拦、不是网站坏了，别换法子硬闯。"""
+    items = [b for b in snap.get("blocked") or [] if isinstance(b, dict) and b.get("host")]
+    if not items:
+        return ""
+    shown = "；".join(str(b.get("reason") or b["host"])[:80] for b in items[:BLOCKED_SHOW])
+    more = f"等 {len(items)} 个地址" if len(items) > BLOCKED_SHOW else ""
+    return (f"⚠ 页面里有请求被拦下（{shown}{more}）：助手的浏览器不能访问内网 / 本机地址。"
+            "页面缺的部分多半就是它，别换地址或换工具去绕；用户确实要读自己内网的机器，请他把主机加进 OUTBOUND_ALLOW_HOSTS。\n")
 
 
 def _card(tab: Tab, live: bool = False, files: list[dict] | None = None, ws: str | None = None) -> dict:
@@ -139,7 +153,7 @@ def _click_risk(args: dict, ctx: ToolContext | None = None) -> str | None:
                                         "session": {"type": "string", "description": "会话名，可省略（按网站自动起名）"}},
        "required": ["url"]})
 async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolResult:
-    try:  # 浏览器容器和后端同在内网：模型给的地址先过出网检查（之后页面里的跳转由部署隔离兜底）
+    try:  # 浏览器容器和后端同在内网：模型给的地址先过出网检查（之后页面里的每个连接由浏览器的出网关卡 egress.py 再查）
         await web_guard.check(url, unresolved_ok=True)
     except web_guard.Blocked as e:
         return ToolResult(str(e), failed=str(e))

@@ -62,6 +62,8 @@ services:
     environment:
       BROWSER_TOKEN: ${BROWSER_TOKEN}
       BROWSER_MAX_SESSIONS: ${BROWSER_MAX_SESSIONS:-3}
+      # 浏览器出网关卡的允许名单（与后端 OUTBOUND_ALLOW_HOSTS 同一份：用户自己的 NAS 之类）
+      BROWSER_ALLOW_HOSTS: ${OUTBOUND_ALLOW_HOSTS:-}
     volumes:
       - ${HOST_DATA_DIR}/browser:/state
     shm_size: ${BROWSER_SHM:-1gb}
