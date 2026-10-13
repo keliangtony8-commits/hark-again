@@ -5,7 +5,7 @@
 - 边读边数字节，超过 MAX_BYTES 就停（Gemini MAX_EXPERIMENTAL_FETCH_SIZE 10MB；小 VPS 取 5MB），按已读部分处理并注明；
 - 按类型变成正文：HTML → trafilatura 提正文（带标题）；JSON → 原样缩进；text/* 与 XML → 原样；
   PDF → pypdf 逐页抽文字，带“第 N 页”标记，没文字的页注明（多半是扫描件）；图片 / 压缩包等 → 说明类型与大小，不塞进上下文；
-- 正文给模型最多 MAX_CHARS 字，超出注明已截断；
+- 正文给模型最多 MAX_CHARS 字，超出注明已截断（调用方可用 limit 要更长的正文，如 extract 结构化提取最多 extract.SOURCE_MAX）；
 - 缓存：同一规范化地址 CACHE_TTL 秒内再读直接用（max_age 可以更短，0 = 必须现读）；最多 CACHE_MAX 条（LRU）。"""
 import io
 import json
@@ -79,16 +79,18 @@ def normalize(url: str) -> str:
 _cache: "OrderedDict[str, Page]" = OrderedDict()
 
 
-def _cached(key: str, max_age: int | None) -> Page | None:
+def _cached(key: str, max_age: int | None, chars: int = MAX_CHARS) -> Page | None:
     page = _cache.get(key)
     if page is None:
+        return None
+    if page.truncated and len(page.text) < chars:  # 缓存里存的是更短的截断版，满足不了这次要的长度 → 现读
         return None
     age = time.time() - page.fetched_at
     limit = CACHE_TTL if max_age is None else min(CACHE_TTL, max(0, max_age))
     if age > limit:
         return None
     _cache.move_to_end(key)
-    return replace(page, cached=True)
+    return replace(page, cached=True, text=page.text[:chars], truncated=page.truncated or len(page.text) > chars)
 
 
 def _store(key: str, page: Page) -> None:
@@ -198,14 +200,16 @@ async def _download(url: str, transport: httpx.AsyncBaseTransport | None) -> tup
             return bytes(buf), r.headers.get("content-type", ""), str(r.url), r.status_code, partial
 
 
-async def fetch(url: str, max_age: int | None = None, transport: httpx.AsyncBaseTransport | None = None) -> Page:
+async def fetch(url: str, max_age: int | None = None, transport: httpx.AsyncBaseTransport | None = None,
+                limit: int = MAX_CHARS) -> Page:
+    """limit = 正文最多多少字（默认 MAX_CHARS 给模型直接看；结构化提取要整篇时给更大值）。"""
     url = (url or "").strip()
     try:
         url = await web_guard.check(web_guard.github_raw(url if "://" in url else "https://" + url))
     except web_guard.Blocked as e:
         raise FetchError(str(e)) from e
     key = normalize(url)
-    hit = _cached(key, max_age)
+    hit = _cached(key, max_age, limit)
     if hit is not None:
         return hit
     wait = web_guard.rate_wait(url)
@@ -222,7 +226,7 @@ async def fetch(url: str, max_age: int | None = None, transport: httpx.AsyncBase
     except httpx.HTTPError as e:
         raise FetchError(f"连不上这个网站（{e.__class__.__name__}）。") from e
     kind, text, title = to_text(body, ctype, final)
-    page = Page(url=final, kind=kind, text=text[:MAX_CHARS], title=title, truncated=len(text) > MAX_CHARS,
+    page = Page(url=final, kind=kind, text=text[:limit], title=title, truncated=len(text) > limit,
                 partial=partial, status=status, fetched_at=time.time())
     if status < 400:
         _store(key, page)

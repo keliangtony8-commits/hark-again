@@ -111,3 +111,5 @@
   移植到 sandbox/runner.py（_run promote / _promote / _promoted_exit；v2.06 _WRAP_PROMOTE 输出直写文件）、backend/app/jobs.py（admission / promote_slot / adopt）、backend/app/agent/builtin/workspace.py（v2.04）
 - openai/codex codex-rs/core/src/tools/handlers/tool_search.rs + tool_search_spec.rs（按需工具：不预先给模型、由一个工具去发现）— Apache License 2.0, Copyright 2025 OpenAI, idea only, modified（不把搜到的工具加进请求，改为目录 + describe + call）
   参考写成 backend/app/agent/deferred.py（v2.05）
+- google-gemini/gemini-cli packages/core/src/core/baseLlmClient.ts generateJson/cleanJsonResponse + utils/schemaValidator.ts（JSON 输出去围栏、不合法重试、完整 schema 校验且忽略未知关键字、按 $schema 选草案）— Apache License 2.0, Copyright 2025 Google LLC, idea only, modified（加了校验错误回喂修正、切块合并）
+  参考写成 backend/app/extract.py（v2.07）

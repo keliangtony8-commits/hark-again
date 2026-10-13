@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # 没选或选的别名后来被删了就用 default_model。定时任务、摘要不受影响
     chat_models: dict[str, str] = {"fast": "快速", "smart": "深度"}
     summary_model: str = "fast"     # 滚动摘要用的便宜模型别名
+    extract_model: str = ""         # extract_data 结构化提取用的模型别名（空 = summary_model；app/extract.py，每段原文约一次小调用）
     # 自动选模型（app/model_router.py）：对话 / 任务可以选“自动”（auto），每轮开头决定用简单档还是复杂档。
     # model_router = auto（本地规则 + 拿不准时问一次 router_model，约 500 输入 token）/ rules（只用规则，拿不准用复杂档，零调用）/ off（不提供“自动”）。
     # router_default = 没选过模型的对话默认就是“自动”；router_model 空 = summary_model
