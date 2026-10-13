@@ -10,10 +10,14 @@ STDIN_MAX = 64 * 1024  # 与 sandbox/runner.py 相同
 
 
 async def stream(project_id: str, command: str, timeout: int = 60, stdin: str | None = None,
-                 env: dict[str, str] | None = None) -> AsyncIterator[dict]:
+                 env: dict[str, str] | None = None, promote: tuple[str, int] | None = None) -> AsyncIterator[dict]:
     """前台执行，边跑边产出：{"type":"out","data"} …，最后 {"type":"exit", exit_code, timed_out, output, …}
-    或 {"type":"error"}。调用方中途不再读（这一轮被停止）→ 连接关闭 → 沙盒整组杀掉命令。"""
+    或 {"type":"error"}。调用方中途不再读（这一轮被停止）→ 连接关闭 → 沙盒整组杀掉命令。
+    promote=(任务 id, 最长秒数)（v2.04）：到 timeout 还没跑完不杀，沙盒把它登记成工作区 .jobs/<id>/ 接着跑，
+    exit 行带 promoted=<id>、exit_code null。"""
     body = {"project_id": project_id, "command": command, "timeout": timeout}
+    if promote is not None:
+        body.update(promote_job=promote[0], promote_max=promote[1])
     if stdin is not None:
         body["stdin"] = stdin
     if env:  # 用户的命令环境变量（app/command_env.py）

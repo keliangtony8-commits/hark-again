@@ -93,7 +93,9 @@ export type JobBlock = { type: "job"; id: string; title: string; command: string
   /** v1.92 给它单独定的内存上限 / 结束时的内存峰值（字节，后端 app/job_memory.py）。 */
   memory_max?: number | null; memory_peak?: number | null;
   /** v1.96 结算时的磁盘账（后端 app/job_disk.py）。 */
-  disk?: JobDisk | null };
+  disk?: JobDisk | null;
+  /** v2.04 前台命令到点没跑完、转进后台接着跑的（后端 jobs.adopt）。 */
+  promoted?: boolean | null };
 /** /api/jobs/{id} 的快照。followup=pending：结束了，服务器还要在这段对话里接着说一轮。 */
 export type JobInfo = { id: string; title: string; command: string; state: JobState; exit_code?: number | null;
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
@@ -105,7 +107,9 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   /** v1.92 内存上限 / 峰值（字节）；box = 整台沙盒此刻的内存（在跑才有），快满了卡片提醒。 */
   memory_max?: number | null; memory_peak?: number | null; box?: JobBox | null;
   /** v1.96 磁盘账：运行中现数（服务器缓存 30 秒），结束了是结算时的；null = 没数。 */
-  disk?: JobDisk | null };
+  disk?: JobDisk | null;
+  /** v2.04 前台命令转进后台的（老服务器没有这个字段）。 */
+  promoted?: boolean };
 /** v1.96 日志 + 运行期间工作区里新写或改过的文件（按顶层条目分组，最多 3 组）；overlap = 同时段还在跑的其他任务数。 */
 export type JobDisk = { log: number; written: number; files: number; top: { path: string; size: number }[]; overlap: number; partial: boolean };
 export type JobBox = { used: number; limit: number };

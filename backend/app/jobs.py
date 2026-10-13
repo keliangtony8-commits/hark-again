@@ -25,6 +25,9 @@ v1.39 移植自 deepseek-harness tool-jobs（MIT）：job_status 只给上次看
 用户下次说话时并进那一轮（take_held）。
 v1.92 内存：普通后台任务 run.sh 把自己的 oom_score_adj 调高 OOM_ADJ（子进程继承），整台沙盒内存打满时内核先杀它们、
 保住常驻服务；单任务上限与“快满了”的提醒见 app/job_memory.py。
+v2.04 前台转后台（移植 deepseek-harness tool-bash promoteOnTimeout 的语义，MIT）：run_command 前台命令先问 admission，
+能收就带 promote_slot() 给沙盒；到点没跑完沙盒不杀，现场登记 .jobs/<id>/（同上约定，没有 run.sh），adopt() 建行接着监护。
+收不下（满了 / 磁盘满）就照旧到点杀掉。
 v1.80 常驻任务（keep_alive，对标 Manus Cloud Computer 的“常开进程 / 24 小时 bot”）：不限时（timeout 0）、不判卡住；
 进程意外退出（非零 / OOM / 容器重启进程没了）→ job_restart.decide 给出等待秒数，restart_at 到点由 worker 的 tick 重新叫沙盒
 跑同一个 run.sh（日志追加，中间插一行“第 N 次重启”）；正常退出（0）照普通任务结算；连续很快就崩到上限 → 结算为失败并通知助手。
@@ -244,6 +247,8 @@ def block(job: Job) -> dict:
         out.update(keep_alive=True, restarts=job.restarts)
     if job.memory_max:
         out["memory_max"] = job.memory_max
+    if job.promoted:
+        out["promoted"] = True
     if job.state != "running":
         if job.memory_peak:
             out["memory_peak"] = job.memory_peak
@@ -263,7 +268,8 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
             "tail": log_tail(job, chars) if job.state == "running" or log_size(job) else job.tail,
             "keep_alive": bool(job.keep_alive), "restarts": job.restarts or 0,
             "restart_at": iso(job.restart_at) if job.state == "running" else None,
-            "memory_max": job.memory_max, "memory_peak": job.memory_peak, "disk": job_disk.stored(job)}
+            "memory_max": job.memory_max, "memory_peak": job.memory_peak, "disk": job_disk.stored(job),
+            "promoted": bool(job.promoted)}
 
 
 def describe(job: Job) -> str:
@@ -277,7 +283,7 @@ def describe(job: Job) -> str:
         label = "常驻，进程刚退出、等待自动重启" if job.restart_at else "常驻，运行中"
     if job.keep_alive and job.restarts:
         label += f"（已自动重启 {job.restarts} 次）"
-    line = f"{job.id}「{job.title}」：{label}{code}，用时 {duration_text(elapsed(job))}"
+    line = f"{job.id}「{job.title}」{'（前台命令转入后台）' if job.promoted else ''}：{label}{code}，用时 {duration_text(elapsed(job))}"
     if job.memory_peak and job.state != "running":
         line += f"，内存峰值约 {quota.size_text(job.memory_peak)}"
     if disk := job_disk.text(job_disk.stored(job), brief=True):
@@ -356,18 +362,48 @@ def idle_limit(idle_timeout: int | None, timeout: int) -> int:
     return 0 if idle_timeout <= 0 or idle_timeout >= timeout else max(60, int(idle_timeout))
 
 
+async def admission(db: AsyncSession, project_id: str) -> str | None:
+    """还能不能在这个工作区再跑一个后台任务；不能就给原因。start 和前台转后台（adopt 之前问）共用这一条。"""
+    if (n := await running_count(db, project_id)) >= settings.job_max_running:
+        return f"这个工作区已有 {n} 个后台任务在跑（上限 {settings.job_max_running}），等它们结束或先取消一个"
+    try:
+        await asyncio.to_thread(quota.check, project_id)
+    except quota.QuotaError as e:
+        return str(e)
+    return None
+
+
+def promote_slot() -> tuple[str, int]:
+    """前台命令带给沙盒的转后台参数：(预先定好的任务 id, 转后台后最长跑多久)。"""
+    return new_id(), settings.job_max_seconds
+
+
+async def adopt(db: AsyncSession, *, job_id: str, project_id: str, command: str, seconds: float,
+                conversation_id: str | None = None, task_id: str | None = None) -> Job:
+    """v2.04 前台命令到点没跑完、沙盒已把它登记成 .jobs/<job_id>/（cmd.sh、pid、log，结束时写 exit）：建这一行，
+    从此和 start() 起的普通后台任务一样被监护（护栏、查活、取消、结束通知）。开始时间往前推 seconds（它已经跑了这么久），
+    读游标放在现在的日志末尾：到目前的输出已经在这次的工具结果里给过模型，job_status 只给之后的
+    （deepseek-harness promoteOnTimeout 的“一次消费读”）。到点那一刻刚好结束的，下一次 refresh 照常结算。"""
+    limit = settings.job_max_seconds
+    start_at = datetime.now(timezone.utc) - timedelta(seconds=max(0.0, seconds))
+    job = Job(id=job_id, project_id=project_id, conversation_id=conversation_id, task_id=task_id,
+              title=(command.strip().splitlines() or [""])[0].strip()[:60] or "后台任务", command=command.strip(),
+              timeout=limit, idle_timeout=idle_limit(None, limit), created_at=start_at, run_started_at=start_at,
+              promoted=True)
+    job.read_offset = log_size(job)
+    db.add(job)
+    await db.commit()
+    return job
+
+
 async def start(db: AsyncSession, *, project_id: str, command: str, title: str | None = None,
                 timeout: int | None = None, idle_timeout: int | None = None, conversation_id: str | None = None,
                 task_id: str | None = None, keep_alive: bool = False, memory_max: int | None = None) -> Job:
     command = command.strip()
     if not command:
         raise JobError("命令是空的")
-    if (n := await running_count(db, project_id)) >= settings.job_max_running:
-        raise JobError(f"这个工作区已有 {n} 个后台任务在跑（上限 {settings.job_max_running}），等它们结束或先取消一个")
-    try:
-        await asyncio.to_thread(quota.check, project_id)
-    except quota.QuotaError as e:
-        raise JobError(str(e)) from e
+    if refusal := await admission(db, project_id):
+        raise JobError(refusal)
     limit = 0 if keep_alive else max(10, min(int(timeout or settings.job_max_seconds), settings.job_max_seconds))
     now = datetime.now(timezone.utc)
     job = Job(id=new_id(), project_id=project_id, conversation_id=conversation_id, task_id=task_id,

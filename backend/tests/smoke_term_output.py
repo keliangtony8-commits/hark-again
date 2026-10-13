@@ -162,7 +162,7 @@ assert jobs.read_new(j) == ("", 5004, 0)
 # ---- 5. run_command ----
 load_builtin()
 fake = {}
-async def fake_stream(project_id, command, timeout=60, stdin=None):
+async def fake_stream(project_id, command, timeout=60, stdin=None, **kw):
     yield {"type": "out", "data": f"{E}[33mwarn{E}[0m\n"}
     yield {"type": "exit", "exit_code": 0, "timed_out": False, **fake}
 sandbox_client.stream = fake_stream

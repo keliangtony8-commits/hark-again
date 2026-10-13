@@ -13,7 +13,7 @@ class JobInfo {
   const JobInfo({required this.id, required this.title, required this.command, required this.state,
       this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt,
       this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage, this.memoryMax,
-      this.memoryPeak, this.box, this.disk});
+      this.memoryPeak, this.box, this.disk, this.promoted = false});
 
   factory JobInfo.fromJson(Map<String, dynamic> j) => JobInfo(
       id: j['id'] as String? ?? '',
@@ -34,7 +34,8 @@ class JobInfo {
       memoryMax: _bytes(j['memory_max']),
       memoryPeak: _bytes(j['memory_peak']),
       box: JobBox.tryParse(j['box']),
-      disk: JobDisk.tryParse(j['disk']));
+      disk: JobDisk.tryParse(j['disk']),
+      promoted: j['promoted'] as bool? ?? false);
 
   /// 还没问过服务器时，用消息里落库的块先画出来。
   factory JobInfo.fromBlock(JobBlock b) => JobInfo(
@@ -52,14 +53,15 @@ class JobInfo {
       restarts: b.restarts,
       memoryMax: b.memoryMax,
       memoryPeak: b.memoryPeak,
-      disk: b.disk);
+      disk: b.disk,
+      promoted: b.promoted);
 
   /// 换个用时（卡片跳秒用），其余不变。
   JobInfo withElapsed(Duration d) => JobInfo(
       id: id, title: title, command: command, state: state, exitCode: exitCode, followup: followup, elapsed: d,
       tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason, keepAlive: keepAlive,
       restarts: restarts, restartAt: restartAt, usage: usage, memoryMax: memoryMax, memoryPeak: memoryPeak, box: box,
-      disk: disk);
+      disk: disk, promoted: promoted);
 
   final String id, title, command, state, followup, tail;
   final String? stopReason;
@@ -83,6 +85,9 @@ class JobInfo {
 
   /// v1.96 磁盘账（后端 app/job_disk.py）：运行中现数，结束了是结算时的；null = 没数（老任务 / 工作区没了）。
   final JobDisk? disk;
+
+  /// v2.04 前台命令到点没跑完、转进后台接着跑的（后端 jobs.adopt）：卡上标 [jobPromotedLabel]。
+  final bool promoted;
 
   bool get running => !jobFinal.contains(state);
 
@@ -197,9 +202,13 @@ String jobStateLabel(JobInfo j) => switch (j.state) {
       _ => j.state,
     };
 
-/// 卡片底部那行：状态词 · 已自动重启 N 次（常驻）· 助手在看结果（等它接着说）。
+/// 前台命令转进后台的任务，卡片底部和“这台电脑”里都标这一句（网页版 lib/jobs.ts 同一句）。
+const jobPromotedLabel = '从前台转入';
+
+/// 卡片底部那行：状态词 · 从前台转入 · 已自动重启 N 次（常驻）· 助手在看结果（等它接着说）。
 String jobFootLabel(JobInfo j) => [
       jobStateLabel(j),
+      if (j.promoted) jobPromotedLabel,
       if (j.keepAlive && j.restarts > 0) '已自动重启 ${j.restarts} 次',
       if (!j.running && j.memoryPeak != null) '内存峰值 ${formatSize(j.memoryPeak!)}',
       if (j.awaitingReply) '助手在看结果',
@@ -209,6 +218,7 @@ String jobFootLabel(JobInfo j) => [
 String jobRowSubtitle(JobInfo j) => [
       if (j.keepAlive) j.restartAt != null ? '重启中' : '常驻',
       if (j.keepAlive && j.restarts > 0) '已重启 ${j.restarts} 次',
+      if (j.promoted) jobPromotedLabel,
       '运行 ${jobDuration(j.elapsed)}',
       if (j.usage != null) jobUsageLabel(j.usage!),
       '\$ ${j.command.split('\n').first}',
@@ -231,7 +241,7 @@ String jobTailLines(String tail, int lines) {
 
 /// 读屏：一句话说清这张卡。
 String jobSemantics(JobInfo j) =>
-    '${j.keepAlive ? '常驻任务' : '后台任务'} ${j.title}，${jobStateLabel(j)}${j.showsReason ? '：${j.stopReason}' : ''}'
+    '${j.keepAlive ? '常驻任务' : '后台任务'} ${j.title}${j.promoted ? '（$jobPromotedLabel）' : ''}，${jobStateLabel(j)}${j.showsReason ? '：${j.stopReason}' : ''}'
     '${j.keepAlive && j.restarts > 0 ? '，已自动重启 ${j.restarts} 次' : ''}，用时 ${jobDuration(j.elapsed)}'
     '${j.running && j.usage != null ? '，${jobUsageSemantics(j.usage!)}' : ''}'
     '${j.running && j.memoryMax != null ? '，内存上限 ${formatSize(j.memoryMax!)}' : ''}'

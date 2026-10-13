@@ -52,7 +52,7 @@ assert blocks_to_text([b]).startswith("[用户自己运行：$ ls——退出码
 calls, closed = [], []
 plan = {"m": "ok"}
 
-async def fake_stream(project_id, command, timeout=60, stdin=None):
+async def fake_stream(project_id, command, timeout=60, stdin=None, **kw):
     calls.append((project_id, command, timeout))
     try:
         m = plan["m"]

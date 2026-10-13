@@ -274,7 +274,7 @@ assert computer.sandbox_wire({"state": "stopped"})["stopped_at"] is None
 assert computer.wake_note(None) == "" and computer.wake_note("x") == ""
 assert "腾内存" in computer.wake_note("room") and "空闲" in computer.wake_note("idle")
 reply = {}
-async def stream(pid, command, timeout=60, stdin=None):
+async def stream(pid, command, timeout=60, stdin=None, **kw):
     yield {"type": "exit", **reply}
 sandbox_client.stream = stream
 async def run_cmd(cmd):

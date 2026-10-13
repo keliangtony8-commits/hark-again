@@ -27,6 +27,7 @@ class Outcome:
     shown: str = ""          # 给人看：中间省略处一句“省略 N 字符”
     woke: object = None      # 这条命令把休眠的电脑开起来了：原因（computer.wake_note 用）
     seconds: float = 0.0
+    promoted: str = ""       # v2.04 到点没跑完、沙盒已把它转成这个后台任务（out/shown = 到目前的输出），调用方 jobs.adopt
 
     @property
     def ok(self) -> bool:
@@ -34,15 +35,17 @@ class Outcome:
 
 
 async def run(workspace: str, command: str, timeout: int, stdin: str | None = None,
-              live: Callable[[str], None] | None = None, env: dict[str, str] | None = None) -> Outcome:
+              live: Callable[[str], None] | None = None, env: dict[str, str] | None = None,
+              promote: tuple[str, int] | None = None) -> Outcome:
     """timeout 秒（夹到 1..MAX_SECONDS）。live(tail)：每来一段输出给一次最近的终端尾巴（运行中的卡片）。
     env：用户的命令环境变量（command_env.load）；输出里的值一律打码（live 尾巴、out、shown 都过 command_env.scrub）。
-    调用方被取消（用户停止）→ 连接关闭 → 沙盒整组杀掉命令；CancelledError 原样抛出。"""
+    调用方被取消（用户停止）→ 连接关闭 → 沙盒整组杀掉命令；CancelledError 原样抛出。
+    promote=jobs.promote_slot()：到 timeout 还没跑完就不杀、转成后台任务（Outcome.promoted；转之前用户停止照样整组杀）。"""
     started = time.monotonic()
     tail, r = "", None
     try:
         async for ev in sandbox_client.stream(workspace, command, max(1, min(timeout, MAX_SECONDS)), stdin,
-                                              **({"env": env} if env else {})):
+                                              **({"env": env} if env else {}), **({"promote": promote} if promote else {})):
             if ev["type"] == "out":
                 tail = term_text.tail(tail + ev["data"])
                 if live is not None:
@@ -59,6 +62,8 @@ async def run(workspace: str, command: str, timeout: int, stdin: str | None = No
         return Outcome("沙盒连接中断", "沙盒连接中断，命令的结果不确定。", seconds=seconds)
     timed_out = bool(r.get("timed_out"))
     status = "超时被终止" if timed_out else f"退出码 {r['exit_code']}"
+    if r.get("promoted"):
+        status = "还在运行，已转入后台"
     if r.get("oom"):  # 沙盒比过 cgroup 的 OOM 计数：确实是内存超上限被内核杀的
         status = f"{jobs.OOM_REASON}（退出码 {r['exit_code']}）"
     # 终端文本统一洗一遍（颜色转义、\r 进度帧）；二进制输出沙盒已换成一句说明
@@ -74,4 +79,4 @@ async def run(workspace: str, command: str, timeout: int, stdin: str | None = No
         shown = shown.replace(spill.MARK, f"\n…（中间省略 {omitted} 字符）…\n")
     return Outcome(exit_code=r.get("exit_code"), timed_out=timed_out, oom=bool(r.get("oom")),
                    memory_limit=r.get("memory_limit"), status=status, out=out, shown=shown,
-                   woke=r.get("woke"), seconds=seconds)
+                   woke=r.get("woke"), seconds=seconds, promoted=str(r.get("promoted") or ""))

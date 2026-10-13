@@ -323,9 +323,23 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
     return ToolResult("\n".join(notes), blocks)
 
 
+async def _promoted(ctx: ToolContext, command: str, r: foreground.Outcome) -> ToolResult:
+    """前台命令到点没跑完，沙盒已把它转成后台任务：建任务行，告诉模型它还在跑、去哪看后续（同 deepseek-harness renderPromoted）。"""
+    job = await jobs.adopt(ctx.db, job_id=r.promoted, project_id=ctx.workspace, command=command, seconds=r.seconds,
+                           conversation_id=ctx.conversation_id, task_id=ctx.task_id)
+    idle = f"，{jobs.duration_text(job.idle_timeout)}无输出算卡住" if job.idle_timeout else ""
+    so_far = r.out.strip() or "（还没有输出）"
+    return ToolResult(f"命令跑了 {jobs.duration_text(int(r.seconds))} 还没结束，没有被杀，已转成后台任务 {job.id} 接着跑"
+                      f"（最长 {jobs.duration_text(job.timeout)}{idle}）。到目前的输出：\n{so_far}\n"
+                      "它结束时你会收到通知并在这段对话里接着说，期间别反复用 job_status 轮询（它只给这之后的新输出），"
+                      "要停就 cancel_job。现在简短告诉用户这条命令转到后台在跑。" + computer.wake_note(r.woke),
+                      [jobs.block(job)])
+
+
 @tool("run_command", "正在运行命令",
       "在工作区的隔离 Linux 沙盒里执行 shell 命令（工作目录就是工作区根目录，非 root，有 python3、node、git）。"
-      "用于运行代码、测试、安装依赖、git 操作；pip install / npm i -g 装的东西留在工作区，下次不用重装。前台单次最长 120 秒。"
+      "用于运行代码、测试、安装依赖、git 操作；pip install / npm i -g 装的东西留在工作区，下次不用重装。"
+      "前台最多等 timeout 秒（上限 120）：到点还没跑完不会被杀，而是自动转成后台任务接着跑（结果里给任务 id），结束时你会收到通知。"
       "预计超过一分钟的活（装大依赖、训练、批量下载/爬取、大构建、长时间脚本）用 background=true 放到后台："
       "立即返回任务 id，用户在聊天里看到实时日志、可以取消；结束时你会收到通知并在这段对话里接着说，"
       "期间不要反复用 job_status 轮询。后台任务连续 idle_timeout 秒没有任何输出会被判定卡住自动停掉。"
@@ -338,7 +352,7 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
       {"type": "object", "properties": {
           "command": {"type": "string"},
           "timeout": {"type": "integer", "default": 60,
-                      "description": "秒。前台最多 120；后台最多 3600（默认 3600）"},
+                      "description": "秒。前台：最多等这么久（≤120），到点没跑完就转入后台接着跑；后台：最长跑这么久（≤3600，默认 3600）"},
           "background": {"type": "boolean", "default": False, "description": "放到后台跑"},
           "memory_limit": {"type": "string",
                            "description": "仅后台：这个任务最多用多少内存，如 \"512m\"、\"2g\"；超了就结束它（常驻服务会自动重启）。"
@@ -389,13 +403,21 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     if stdin is not None and len(stdin.encode()) > sandbox_client.STDIN_MAX:
         return ToolResult(f"stdin 太长（上限 {sandbox_client.STDIN_MAX // 1024} KB）：先写进工作区文件，命令里用 < 文件 读。")
     title = f"$ {command[:80]}"
+    # v2.04 到点没跑完就转后台（deepseek-harness promoteOnTimeout）：先问收不收得下，收不下照旧到点杀掉
+    refusal = await jobs.admission(ctx.db, ctx.workspace)
+    slot = None if refusal else jobs.promote_slot()
     r = await foreground.run(ctx.workspace, command, timeout or 60, stdin,
                              lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}),
-                             await command_env.load(ctx.db))
+                             await command_env.load(ctx.db), slot)
     if r.failed:
         return ToolResult(r.message, failed=r.failed)
+    if r.promoted:
+        return await _promoted(ctx, command, r)
     timed_out, status, out, shown = r.timed_out, r.status, r.out, r.shown
-    hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
+    hint = ""
+    if timed_out:
+        why = f"没能转入后台（{refusal}）" if refusal else "被终止"
+        hint = f"\n（前台最多 120 秒，到点{why}；这种长活用 background=true 放到后台重跑）"
     if r.oom:
         hint = f"\n（{jobs.oom_hint(r.memory_limit)}）"
         if left := memory_view.note(await memory_view.current(ctx.db, ctx.workspace), after_oom=True):

@@ -107,7 +107,7 @@ assert "- 天气：api.weather.com" in sp and "- OPENAI" not in sp and "- TELEGR
 
 # ---- 4. run_command（模拟模型 + 假沙盒）----
 streams, starts = [], []
-async def fake_stream(project_id, command, timeout=60, stdin=None, env=None):
+async def fake_stream(project_id, command, timeout=60, stdin=None, env=None, **kw):
     streams.append(env)
     yield {"type": "out", "data": f"connecting with {TOKEN}\n"}
     yield {"type": "exit", "exit_code": 0, "timed_out": False, "output": f"connecting with {TOKEN}\nkey={KEY2}\ndone\n"}
@@ -158,7 +158,7 @@ o = run(foreground.run("p1", "x", 10, None, tails.append, {"TELEGRAM_BOT_TOKEN":
 assert tails and all(TOKEN not in t for t in tails) and "[$TELEGRAM_BOT_TOKEN]" in tails[0], tails
 assert TOKEN not in o.out and TOKEN not in o.shown
 # 没有变量：不传 env（老的假沙盒签名不受影响）
-async def old_stream(project_id, command, timeout=60, stdin=None):
+async def old_stream(project_id, command, timeout=60, stdin=None, **kw):
     yield {"type": "exit", "exit_code": 0, "timed_out": False, "output": "ok"}
 sandbox_client.stream = old_stream
 assert run(foreground.run("p1", "x", 10, None, None, {})).out == "ok"
@@ -225,7 +225,7 @@ async def shell():
         await user_shell.run(db, conv.id, None, "echo $TELEGRAM_BOT_TOKEN", emit, None)
     return events
 # 假沙盒把注入的值原样打印出来：卡片和落库都只剩 [$NAME]
-async def fake_stream_new(project_id, command, timeout=60, stdin=None, env=None):
+async def fake_stream_new(project_id, command, timeout=60, stdin=None, env=None, **kw):
     streams.append(env)
     yield {"type": "exit", "exit_code": 0, "timed_out": False, "output": f"{env['TELEGRAM_BOT_TOKEN']}\n"}
 sandbox_client.stream = fake_stream_new

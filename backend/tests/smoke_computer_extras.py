@@ -156,7 +156,7 @@ print("job oom ok")
 
 # ---- 4. 前台 run_command ----
 reply = {}
-async def stream(pid, command, timeout=60, stdin=None):
+async def stream(pid, command, timeout=60, stdin=None, **kw):
     yield {"type": "exit", **reply}
 sandbox_client.stream = stream
 async def run(cmd):

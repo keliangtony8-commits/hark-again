@@ -2,7 +2,7 @@
 
 - 每个项目一个长驻容器 sbx-<project_id>，工作目录挂载 data/projects/<id>
 - 资源限制：内存、CPU、进程数；去掉所有 Linux capability；禁止提权
-- 单条命令超时即杀；/exec/stream 边跑边把新输出推给后端（NDJSON，每 FLUSH_S 秒一批，聊天里实时看），
+- 单条命令超时即杀（v2.04：后端带 promote_job 时到点不杀，转成工作区后台任务接着跑，见 _promote）；/exec/stream 边跑边把新输出推给后端（NDJSON，每 FLUSH_S 秒一批，聊天里实时看），
   后端断开（用户点停止）就整组杀掉；可带 stdin（≤ STDIN_MAX，不带则标准输入为空，交互提示不会卡住）；输出太长时给后端开头 + 结尾，完整输出写进工作区 .spill/（约定见 backend/app/spill.py）
 - 容器里的家目录在工作区 .home（镜像 /etc/profile.d/workspace.sh）：pip/npm 用户级安装都落在工作区，
   所以容器可以随时删掉重建——镜像更新后（预装清单变了），旧容器在下次用到时自动换成新镜像（有后台任务在跑的不换）
@@ -95,6 +95,8 @@ class ExecIn(BaseModel):
     timeout: int = 60
     stdin: str | None = None
     env: dict[str, str] | None = None  # 用户的命令环境变量（后端 app/command_env.py 给），check_env 把关
+    promote_job: str | None = None  # v2.04 只有 /exec/stream 用：到 timeout 还没跑完就转成这个后台任务（不杀）
+    promote_max: int = 0            # 转后台后最长跑多久（秒，后端给 job_max_seconds）
 
 
 # 命令环境变量：名字/个数/长度与后端 app/command_env.py 同一套；系统变量不许覆盖
@@ -527,45 +529,68 @@ _WRAP = ('echo $$ > /tmp/.exec-{tok}; '
 
 
 def _exec(pid: str, command: str, timeout: int, stdin: str | None = None, tok: str | None = None,
-          sink: Sink | None = None, env: dict[str, str] | None = None) -> dict:
+          sink: Sink | None = None, env: dict[str, str] | None = None, promote: tuple[str, int] | None = None) -> dict:
     with _Using(pid):
-        return _run(pid, command, timeout, stdin, tok, sink, env)
+        return _run(pid, command, timeout, stdin, tok, sink, env, promote)
+
+
+# v2.04 前台超时转后台（Ported from deepseek-ai/deepseek-harness packages/shell/tool-bash promoteOnTimeout (MIT), modified）：
+# 带 promote=(job_id, 最长秒数) 时，包装脚本的 timeout 换成后台任务的上限，timeout 秒只是“前台最多等多久”。
+# 等到点还没跑完：不杀，现场把它登记成工作区 .jobs/<id>/（cmd.sh、pid=进程组组长、log=到目前为止的全部输出），
+# 之后的输出由排水线程接着追加进 log，结束时照 run.sh 的约定原子写 exit（内存超上限再 touch oom）——
+# 后端从此按普通后台任务看它（observe / 查活 / 整组杀 / 结束通知）。到点前就结束的照常返回，什么文件都不留。
+# 已知边界：转后台之后本服务重启，排水线程没了，后面的输出收不到、exit 也写不了：进程结束后后端判“中断了”。
+PROMOTE_MAX_S = 24 * 3600
+PROMOTE_OOM_ADJ = 500  # 同 backend/app/jobs.py OOM_ADJ：转成普通后台任务后内存打满时先杀它，保住常驻服务
 
 
 def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | None, sink: Sink | None,
-         env_vars: dict[str, str] | None = None) -> dict:
+         env_vars: dict[str, str] | None = None, promote: tuple[str, int] | None = None) -> dict:
     c = _container(pid)
     last_used[pid] = time.time()
     was = _take_woke(pid)
     if pid not in oom_seen:  # 服务刚重启：先记下现有计数，别把以前的 OOM 算到这条命令头上
         oom_seen[pid] = _oom_count(c) or 0
+    oom_before = oom_seen.get(pid, 0)
     tok = tok or os.urandom(6).hex()
     env = dict(env_vars or {})  # 用户变量先放，STDIN_B64 后写（Codex exec_env：运行时注入的最后写、赢）
     if stdin is not None:
         env["STDIN_B64"] = base64.b64encode(stdin.encode()).decode()
     env = env or None
-    ex = client.api.exec_create(c.id, ["bash", "-c", _WRAP.format(tok=tok, timeout=timeout), "_", command],
+    limit = promote[1] if promote else timeout
+    ex = client.api.exec_create(c.id, ["bash", "-c", _WRAP.format(tok=tok, timeout=limit), "_", command],
                                 workdir="/workspace", environment=env)
     dec, clean, buf = codecs.getincrementaldecoder("utf-8")("replace"), Cleaner(), HeadTail(MAX_OUTPUT)
     spill, sniff, binary_bytes = None, b"", None  # spill：超过 MAX_OUTPUT 才开的落盘文件 _SpillFile
+    lock = threading.Lock()
+    moved = {"log": None, "finished": False}  # 转后台后：log = 打开的 .jobs/<id>/log，之后的输出只往里写
 
     def take(text: str) -> None:
         nonlocal spill
         if not text:
             return
-        if spill is None and buf.total() + len(text) > MAX_OUTPUT:  # 头一次超长：到目前为止的全文还都在 buf 里
-            try:
-                spill = _SpillFile(pid)
-                spill.write(buf.text())
-            except OSError:
-                spill = False
-        if spill:
-            spill.write(text)
-        buf.push(text)
-        if sink is not None:
-            sink.put(text)
+        with lock:
+            if moved["log"] is not None:
+                try:
+                    moved["log"].write(text)
+                    moved["log"].flush()  # 后端看 mtime 判卡住、看尾巴给卡片
+                except OSError:
+                    pass
+                return
+            if spill is None and buf.total() + len(text) > MAX_OUTPUT:  # 头一次超长：到目前为止的全文还都在 buf 里
+                try:
+                    spill = _SpillFile(pid)
+                    spill.write(buf.text())
+                except OSError:
+                    spill = False
+            if spill:
+                spill.write(text)
+            buf.push(text)
+            if sink is not None:
+                sink.put(text)
 
-    try:
+    def drain() -> None:
+        nonlocal sniff, binary_bytes
         for chunk in client.api.exec_start(ex["Id"], stream=True):
             if binary_bytes is not None:
                 binary_bytes += len(chunk)
@@ -578,9 +603,42 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
             take(clean.feed(dec.decode(chunk)))
         if binary_bytes is None:
             take(clean.feed(dec.decode(b"", final=True), final=True))
-    finally:
+
+    if promote is None:
+        try:
+            drain()
+        finally:
+            if spill:
+                spill.close()
+    else:
+        done, errors = threading.Event(), []
+
+        def pump() -> None:
+            try:
+                drain()
+            except Exception as e:  # noqa: BLE001 — docker 流断了：前台照常报错；已转后台就让后端按“中断了”处理
+                errors.append(e)
+            with lock:
+                moved["finished"] = True
+                log = moved["log"]
+            done.set()
+            if log is not None:
+                _promoted_exit(pid, promote[0], ex["Id"], tok, log, oom_before, not errors)
+
+        threading.Thread(target=pump, daemon=True, name=f"exec-{tok}").start()
+        if not done.wait(timeout):
+            with lock:
+                if not moved["finished"]:
+                    result = _promote(c, pid, promote[0], command, tok, buf, spill, binary_bytes, timeout)
+                    moved["log"] = result.pop("_log")
+                    if was:
+                        result["woke"] = was
+                    return result
+            done.wait()  # 正好在到点那一刻结束：照前台结果给
         if spill:
             spill.close()
+        if errors:
+            raise errors[0]
     code = client.api.exec_inspect(ex["Id"]).get("ExitCode")
     c.exec_run(["rm", "-f", f"/tmp/.exec-{tok}"], detach=True)
     last_used[pid] = time.time()
@@ -607,6 +665,86 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
             if spill.truncated:
                 result["spill_truncated"] = True
     return result
+
+
+def _own(path: str) -> None:
+    try:
+        os.chown(path, 1000, 1000)  # 同 _SpillFile：容器里的用户（后端、命令）都能读写
+    except OSError:
+        pass
+
+
+def _promote(c, pid: str, jid: str, command: str, tok: str, buf: HeadTail, spill, binary_bytes, waited: int) -> dict:
+    """到点还在跑：登记成 .jobs/<jid>/，返回给后端的结果（带 promoted；_log = 之后接着写的日志文件）。
+    调用方持着输出锁：这期间排水线程的新输出等着，登记完直接进 log，一个字都不丢、不重复。"""
+    d = f"{PROJECTS_ROOT}/{pid}/.jobs/{jid}"
+    os.makedirs(d)
+    rel = f".jobs/{jid}/log"
+    with open(f"{d}/cmd.sh", "w", encoding="utf-8") as f:
+        f.write(command + "\n")
+    log = open(f"{d}/log", "a", encoding="utf-8")
+    if binary_bytes is not None:
+        log.write(f"（二进制输出，到目前 {binary_bytes} 字节，不保存）\n")
+    elif spill:  # 超长：完整的在 spill 文件里（buf 只有头尾）
+        spill.close()
+        try:
+            with open(spill.path, encoding="utf-8") as f:
+                while part := f.read(1 << 20):
+                    log.write(part)
+        except OSError:
+            log.write(buf.text())
+        spill.discard()
+    else:
+        log.write(buf.text())
+    log.flush()
+    group = (c.exec_run(["cat", f"/tmp/.exec-{tok}"]).output or b"").decode().strip()
+    with open(f"{d}/pid", "w") as f:
+        f.write(group + "\n")
+    if group.isdigit():  # 前台命令没调过 oom_score_adj：转成普通后台任务就和 run.sh 一样调高（只能调高，不需要特权）
+        c.exec_run(["bash", "-c", f"for p in $(pgrep -g {group}); do echo {PROMOTE_OOM_ADJ} > /proc/$p/oom_score_adj; "
+                    "done 2>/dev/null; exit 0"], detach=True)
+    for path in (f"{PROJECTS_ROOT}/{pid}/.jobs", d, f"{d}/cmd.sh", f"{d}/log", f"{d}/pid"):
+        _own(path)
+    out = {"exit_code": None, "timed_out": False, "promoted": jid, "waited": waited, "_log": log}
+    if binary_bytes is not None:
+        out.update(output="", binary=binary_bytes)
+    elif buf.omitted:
+        head, tail = buf.parts()
+        out.update(output=head + SPILL_MARK + tail, omitted=buf.omitted, total=buf.total(), spill=rel)
+    else:
+        out["output"] = buf.text()
+    return out
+
+
+def _promoted_exit(pid: str, jid: str, eid: str, tok: str, log, oom_before: int, clean_end: bool) -> None:
+    """转后台的命令结束了：照 run.sh 的约定写结论（exit 原子落盘；内存超上限 touch oom），收拾 pid 文件。
+    流是断掉的（不是命令结束）就什么都不写：后端查活发现进程没了、又没有 exit，按“中断了”结算。"""
+    try:
+        log.close()
+    except OSError:
+        pass
+    if not clean_end:
+        return
+    d = f"{PROJECTS_ROOT}/{pid}/.jobs/{jid}"
+    try:
+        code = client.api.exec_inspect(eid).get("ExitCode")
+        c = _existing(pid)
+        if c is not None:
+            if code == 137:
+                n = _oom_count(c)
+                if n is not None and n > oom_before:
+                    open(f"{d}/oom", "w").close()
+                    _own(f"{d}/oom")
+                if n is not None:
+                    oom_seen[pid] = n
+            c.exec_run(["rm", "-f", f"/tmp/.exec-{tok}"], detach=True)
+        with open(f"{d}/exit.tmp", "w") as f:
+            f.write(f"{-1 if code is None else code}\n")
+        _own(f"{d}/exit.tmp")
+        os.replace(f"{d}/exit.tmp", f"{d}/exit")
+        last_used[pid] = time.time()
+    except Exception:  # noqa: BLE001 — 写不了结论：后端查活兜底
+        logging.exception("promoted job %s: writing exit failed", jid)
 
 
 def _kill_exec(pid: str, tok: str) -> None:
@@ -710,15 +848,20 @@ async def exec_(body: ExecIn):
 
 @app.post("/exec/stream", dependencies=[Depends(auth)])
 async def exec_stream(body: ExecIn):
-    """NDJSON：若干 {"type":"out","data":新输出} → 最后一行 {"type":"exit", 同 /exec 的结果} 或 {"type":"error"}。"""
+    """NDJSON：若干 {"type":"out","data":新输出} → 最后一行 {"type":"exit", 同 /exec 的结果} 或 {"type":"error"}。
+    带 promote_job：到 timeout 还没结束 → exit 行 exit_code null、promoted=<job id>、output 为到目前的输出（v2.04，见 _run）。"""
     _check_stdin(body)
     env = check_env(body.env)
     _container(body.project_id)  # 项目 id 不合法在开流之前就 400
     tok, sink = os.urandom(6).hex(), Sink()
     timeout = max(1, min(body.timeout, 120))
+    promote = None
+    if body.promote_job is not None:
+        promote = (_check_job(body.promote_job), max(timeout + 1, min(int(body.promote_max or 0), PROMOTE_MAX_S)))
 
     async def gen():
-        task = asyncio.create_task(asyncio.to_thread(_exec, body.project_id, body.command, timeout, body.stdin, tok, sink, env))
+        task = asyncio.create_task(asyncio.to_thread(_exec, body.project_id, body.command, timeout, body.stdin, tok, sink,
+                                                     env, promote))
         try:
             while not task.done():
                 await asyncio.wait({task}, timeout=FLUSH_S)

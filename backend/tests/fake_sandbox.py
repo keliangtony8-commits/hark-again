@@ -2,6 +2,6 @@
 
 
 def streamed(run):
-    async def stream(project_id, command, timeout=60, stdin=None):
+    async def stream(project_id, command, timeout=60, stdin=None, **kw):
         yield {"type": "exit", **await run(project_id, command, timeout)}
     return stream

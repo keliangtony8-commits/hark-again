@@ -107,3 +107,5 @@
   移植到 backend/app/web_guard.py、backend/app/web_page.py（v2.01）
 - jdepoix/youtube-transcript-api youtube_transcript_api/_transcripts.py + _settings.py（watch 页 → INNERTUBE_API_KEY → player 接口取 captionTracks、consent cookie、playability 失败分类、选字幕顺序、timedtext XML 解析）— MIT License, Copyright (c) 2018 Jonas Depoix, modified
   移植到 backend/app/video_sources.py、backend/app/video_transcript.py（v2.03）
+- deepseek-ai/deepseek-harness packages/shell/tool-bash（promoteOnTimeout：前台调用就是一个被等着的任务，到点不杀而是转后台、结果带到目前的输出并消费式读一次、收不下时退回到点杀、renderPromoted 的话术）— MIT License, Copyright (c) 2026 DeepSeek, modified
+  移植到 sandbox/runner.py（_run promote / _promote / _promoted_exit）、backend/app/jobs.py（admission / promote_slot / adopt）、backend/app/agent/builtin/workspace.py（v2.04）

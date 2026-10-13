@@ -46,7 +46,7 @@ async def fake_create(model, messages, stream=False, stream_options=None, tools=
 llm.client.chat.completions.create = fake_create
 load_builtin()
 
-async def fake_stream(project_id, command, timeout=60, stdin=None):
+async def fake_stream(project_id, command, timeout=60, stdin=None, **kw):
     if command == "hang":
         yield {"type": "out", "data": "…\n"}
         await asyncio.sleep(3600)

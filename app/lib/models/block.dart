@@ -203,7 +203,7 @@ class BrowserHandoff {
 class JobBlock extends Block {
   const JobBlock({required this.id, required this.title, required this.command, required this.state,
       this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason, this.keepAlive = false, this.restarts = 0,
-      this.memoryMax, this.memoryPeak, this.disk});
+      this.memoryMax, this.memoryPeak, this.disk, this.promoted = false});
   factory JobBlock.fromJson(Map<String, dynamic> j) => JobBlock(
       id: j['id'] as String? ?? '',
       title: j['title'] as String? ?? '后台任务',
@@ -218,7 +218,8 @@ class JobBlock extends Block {
       restarts: (j['restarts'] as num?)?.toInt() ?? 0,
       memoryMax: (j['memory_max'] as num?)?.toInt(),
       memoryPeak: (j['memory_peak'] as num?)?.toInt(),
-      disk: JobDisk.tryParse(j['disk']));
+      disk: JobDisk.tryParse(j['disk']),
+      promoted: j['promoted'] as bool? ?? false);
   final String id, title, command, state;
   final DateTime? startedAt, finishedAt;
   final int? exitCode;
@@ -236,6 +237,9 @@ class JobBlock extends Block {
 
   /// v1.96 结算时的磁盘账（后端 app/job_disk.py）。
   final JobDisk? disk;
+
+  /// v2.04 前台命令到点没跑完、没被杀而是转进后台接着跑的（后端 jobs.adopt）。
+  final bool promoted;
 }
 
 /// 用户自己跑的命令（输入框 !命令，后端 ShellBlock）：一条回复里只有它一张。规则在 models/shell.dart。

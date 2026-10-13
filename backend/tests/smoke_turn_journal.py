@@ -55,7 +55,7 @@ llm.client.chat.completions.create = fake_create
 load_builtin()
 
 seen_mid: dict = {}
-async def fake_stream(project_id, command, timeout=60, stdin=None):
+async def fake_stream(project_id, command, timeout=60, stdin=None, **kw):
     yield {"type": "out", "data": "装到一半…\n"}
     if command.startswith("pip"):
         await asyncio.sleep(0.4)  # 心跳间隔调到 0.1 s：这段时间里至少跳两次

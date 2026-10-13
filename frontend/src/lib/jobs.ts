@@ -87,8 +87,12 @@ export function jobStateLabel(j: Pick<JobInfo, "state" | "exit_code" | "stop_rea
   }
 }
 
-/** 卡片底部那行：状态词 · 已自动重启 N 次（常驻）· 助手在看结果（等它接着说）。 */
+/** 前台命令转进后台的任务，卡片底部和“电脑”一节都标这一句（App models/job.dart 同一句）。 */
+export const JOB_PROMOTED_LABEL = "从前台转入";
+
+/** 卡片底部那行：状态词 · 从前台转入 · 已自动重启 N 次（常驻）· 助手在看结果（等它接着说）。 */
 export const jobFootLabel = (j: JobInfo) => [jobStateLabel(j),
+  ...(j.promoted ? [JOB_PROMOTED_LABEL] : []),
   ...(j.keep_alive && j.restarts ? [`已自动重启 ${j.restarts} 次`] : []),
   ...(!jobRunning(j) && jobMemoryPeak(j) ? [`内存峰值 ${formatSize(jobMemoryPeak(j)!)}`] : []),
   ...(jobAwaitingReply(j) ? ["助手在看结果"] : [])].join(" · ");
@@ -116,6 +120,7 @@ export const jobRowSubtitle = (j: JobInfo) => {
   return [
     ...(j.keep_alive ? [j.restart_at ? "重启中" : "常驻"] : []),
     ...(j.keep_alive && j.restarts ? [`已重启 ${j.restarts} 次`] : []),
+    ...(j.promoted ? [JOB_PROMOTED_LABEL] : []),
     `运行 ${jobDuration(j.elapsed)}`, ...(u ? [jobUsageLabel(u)] : []), `$ ${j.command.split("\n")[0]}`].join(" · ");
 };
 
@@ -129,7 +134,7 @@ export function jobDuration(seconds: number): string {
 
 /** 读屏：一句话说清这张卡。 */
 export const jobSemantics = (j: JobInfo, elapsed = j.elapsed) =>
-  `${j.keep_alive ? "常驻任务" : "后台任务"} ${j.title}，${jobStateLabel(j)}${jobShowsReason(j) ? `：${j.stop_reason}` : ""}` +
+  `${j.keep_alive ? "常驻任务" : "后台任务"} ${j.title}${j.promoted ? `（${JOB_PROMOTED_LABEL}）` : ""}，${jobStateLabel(j)}${jobShowsReason(j) ? `：${j.stop_reason}` : ""}` +
   `${j.keep_alive && j.restarts ? `，已自动重启 ${j.restarts} 次` : ""}，用时 ${jobDuration(elapsed)}` +
   `${jobRunning(j) && jobUsage(j.usage) ? `，${jobUsageSemantics(jobUsage(j.usage)!)}` : ""}` +
   `${jobRunning(j) && jobMemoryMax(j) ? `，内存上限 ${formatSize(jobMemoryMax(j)!)}` : ""}` +
@@ -148,5 +153,5 @@ export function jobFromBlock(b: JobBlock, now = Date.now()): JobInfo {
   return { id: b.id, title: b.title, command: b.command, state: b.state, exit_code: b.exit_code ?? null, followup: "none",
     elapsed: Number.isNaN(start) ? 0 : (end - start) / 1000, tail: b.tail ?? "", started_at: b.started_at, finished_at: b.finished_at,
     stop_reason: b.stop_reason ?? null, keep_alive: !!b.keep_alive, restarts: b.restarts ?? 0, restart_at: null,
-    memory_max: b.memory_max ?? null, memory_peak: b.memory_peak ?? null, disk: b.disk ?? null };
+    memory_max: b.memory_max ?? null, memory_peak: b.memory_peak ?? null, disk: b.disk ?? null, promoted: !!b.promoted };
 }

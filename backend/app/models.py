@@ -363,7 +363,8 @@ class Job(Base):
       restart_at 不为空 = 进程已退出、正在等这个时刻重启；run_started_at 这一次进程的启动时刻（判丢失宽限、算这次跑了多久）
     v1.92 memory_max 给这个任务单独定的内存上限（字节，NULL = 只受整台沙盒上限约束；超了由 app/job_memory.py 结束它）；
       memory_peak worker 采样看到的最高内存（PSS，字节；结论里给人和模型看，判断该给多大）
-    v1.96 disk 结算时数的磁盘账（JSON 文本，app/job_disk.py：日志、运行期间新写或改过的文件、最大几组、同时段任务数）"""
+    v1.96 disk 结算时数的磁盘账（JSON 文本，app/job_disk.py：日志、运行期间新写或改过的文件、最大几组、同时段任务数）
+    v2.04 promoted 前台 run_command 到点没跑完、转进后台接着跑的（沙盒现场登记 .jobs/<id>/，jobs.adopt 建这一行）"""
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(32), index=True)
@@ -390,3 +391,4 @@ class Job(Base):
     memory_max: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     memory_peak: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     disk: Mapped[str | None] = mapped_column(Text, nullable=True)
+    promoted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

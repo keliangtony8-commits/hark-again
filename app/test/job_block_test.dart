@@ -202,4 +202,18 @@ void main() {
     expect(gaveUp.keepAlive, isTrue);
     expect(jobFootLabel(gaveUp), '失败 · 退出码 1 · 已自动重启 5 次');
   });
+
+  test('前台转入后台（v2.04）：底部行、副标题、读屏，块 → 快照带过去', () {
+    final run = JobInfo.fromJson({..._wire('running'), 'promoted': true});
+    expect(run.promoted, isTrue);
+    expect(jobFootLabel(run), '运行中 · 从前台转入');
+    expect(jobRowSubtitle(run), '从前台转入 · 运行 5 秒 · \$ python train.py');
+    expect(jobSemantics(run), contains('后台任务 训练模型（从前台转入），运行中'));
+    expect(run.withElapsed(const Duration(seconds: 9)).promoted, isTrue);
+    final done = JobInfo.fromBlock(JobBlock.fromJson({'type': 'job', 'id': 'j1', 'title': 'pip install torch',
+        'command': 'pip install torch', 'state': 'done', 'exit_code': 0, 'promoted': true}));
+    expect(done.promoted, isTrue);
+    expect(jobFootLabel(done), '已完成 · 从前台转入');
+    expect(JobInfo.fromJson(_wire('running')).promoted, isFalse);
+  });
 }

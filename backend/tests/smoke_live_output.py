@@ -56,7 +56,7 @@ pid, cid = asyncio.run(seed())
 
 # ---- 假沙盒流：分几批吐输出 ----
 calls, closed = [], []
-async def fake_stream(project_id, command, timeout=60, stdin=None):
+async def fake_stream(project_id, command, timeout=60, stdin=None, **kw):
     calls.append((project_id, command, timeout, stdin))
     try:
         if command == "hang":
