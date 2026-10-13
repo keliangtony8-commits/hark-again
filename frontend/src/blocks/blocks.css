@@ -273,9 +273,14 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
 .blk-job-tight { display: flex; align-items: flex-start; gap: var(--sp-1); margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--warning);
   animation: rise var(--dur) var(--ease); }
 .blk-job-tight > svg { flex: none; margin-top: 1px; }
+.blk-job-disk { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text-3);
+  font-variant-numeric: tabular-nums; animation: rise var(--dur) var(--ease); }
+.blk-job-disk > svg { flex: none; }
+.blk-job-disk > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; animation: fade var(--dur) var(--ease); }
 .blk-job-foot { display: flex; align-items: center; justify-content: space-between; min-height: 40px; }
 .blk-job-state { font-size: var(--fs-xs); color: var(--text-2); animation: fade var(--dur) var(--ease); }
 .blk-job.tone-problem .blk-job-state { color: var(--warning); font-weight: var(--fw-title); }
+.blk-job-sheet-disk { margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); font-size: var(--fs-xs); color: var(--text-3); animation: fade var(--dur) var(--ease); }
 .blk-job-sheet-meta { margin: 0 0 var(--sp-3); font-size: var(--fs-xs); color: var(--text-3); }
 .blk-job-full { margin: 0; max-height: 60vh; overflow: auto; font: var(--fs-xs)/1.5 var(--font-mono); color: var(--text-2); white-space: pre-wrap; word-break: break-all; }
 /* 用户自己跑的命令卡（v1.77）：沿用 blk-job，命令本身当标题（等宽，最多 3 行） */
@@ -284,7 +289,7 @@ a.blk-product-row:hover .blk-product-go { transform: translate(2px, -2px); }
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .blk-shell-time { animation: fade var(--dur) var(--ease); }
 .blk-shell-actions { display: inline-flex; align-items: center; gap: var(--sp-1); animation: fade var(--dur) var(--ease); }
-@media (prefers-reduced-motion: reduce) { .job-dot, .blk-job-mark, .blk-job-state, .blk-job-reason, .blk-job-usage, .blk-job-tight, .blk-job-meter > span, .blk-shell-time, .blk-shell-actions { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .job-dot, .blk-job-mark, .blk-job-state, .blk-job-reason, .blk-job-usage, .blk-job-tight, .blk-job-disk, .blk-job-disk > span, .blk-job-sheet-disk, .blk-job-meter > span, .blk-shell-time, .blk-shell-actions { animation: none; } }
 /* 端口预览卡（v1.30）：复用网页卡的标题栏；展开后卡里嵌实时页面 */
 .blk-preview { max-width: 560px; }
 .blk-preview-icon { color: var(--ink); display: grid; place-items: center; }

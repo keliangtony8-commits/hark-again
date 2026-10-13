@@ -2,6 +2,9 @@
 // 网页版 frontend/src/lib/jobs.ts 同一套规则。
 import '../ui/format.dart';
 import 'block.dart';
+import 'job_disk.dart';
+
+export 'job_disk.dart';
 
 const jobFinal = {'done', 'failed', 'timed_out', 'cancelled', 'lost'};
 
@@ -10,7 +13,7 @@ class JobInfo {
   const JobInfo({required this.id, required this.title, required this.command, required this.state,
       this.exitCode, this.followup = 'none', required this.elapsed, this.tail = '', this.startedAt, this.finishedAt,
       this.stopReason, this.keepAlive = false, this.restarts = 0, this.restartAt, this.usage, this.memoryMax,
-      this.memoryPeak, this.box});
+      this.memoryPeak, this.box, this.disk});
 
   factory JobInfo.fromJson(Map<String, dynamic> j) => JobInfo(
       id: j['id'] as String? ?? '',
@@ -30,7 +33,8 @@ class JobInfo {
       usage: JobUsage.tryParse(j['usage']),
       memoryMax: _bytes(j['memory_max']),
       memoryPeak: _bytes(j['memory_peak']),
-      box: JobBox.tryParse(j['box']));
+      box: JobBox.tryParse(j['box']),
+      disk: JobDisk.tryParse(j['disk']));
 
   /// 还没问过服务器时，用消息里落库的块先画出来。
   factory JobInfo.fromBlock(JobBlock b) => JobInfo(
@@ -47,13 +51,15 @@ class JobInfo {
       keepAlive: b.keepAlive,
       restarts: b.restarts,
       memoryMax: b.memoryMax,
-      memoryPeak: b.memoryPeak);
+      memoryPeak: b.memoryPeak,
+      disk: b.disk);
 
   /// 换个用时（卡片跳秒用），其余不变。
   JobInfo withElapsed(Duration d) => JobInfo(
       id: id, title: title, command: command, state: state, exitCode: exitCode, followup: followup, elapsed: d,
       tail: tail, startedAt: startedAt, finishedAt: finishedAt, stopReason: stopReason, keepAlive: keepAlive,
-      restarts: restarts, restartAt: restartAt, usage: usage, memoryMax: memoryMax, memoryPeak: memoryPeak, box: box);
+      restarts: restarts, restartAt: restartAt, usage: usage, memoryMax: memoryMax, memoryPeak: memoryPeak, box: box,
+      disk: disk);
 
   final String id, title, command, state, followup, tail;
   final String? stopReason;
@@ -74,6 +80,9 @@ class JobInfo {
   /// box = 整台沙盒此刻的内存（只有在跑时才有），快满了卡片提醒。
   final int? memoryMax, memoryPeak;
   final JobBox? box;
+
+  /// v1.96 磁盘账（后端 app/job_disk.py）：运行中现数，结束了是结算时的；null = 没数（老任务 / 工作区没了）。
+  final JobDisk? disk;
 
   bool get running => !jobFinal.contains(state);
 
@@ -226,4 +235,5 @@ String jobSemantics(JobInfo j) =>
     '${j.keepAlive && j.restarts > 0 ? '，已自动重启 ${j.restarts} 次' : ''}，用时 ${jobDuration(j.elapsed)}'
     '${j.running && j.usage != null ? '，${jobUsageSemantics(j.usage!)}' : ''}'
     '${j.running && j.memoryMax != null ? '，内存上限 ${formatSize(j.memoryMax!)}' : ''}'
-    '${j.boxTight ? '，${jobBoxLabel(j.box!)}' : ''}';
+    '${j.boxTight ? '，${jobBoxLabel(j.box!)}' : ''}'
+    '${jobDiskShown(j.disk) ? '，${jobDiskSemantics(j.disk!)}' : ''}';

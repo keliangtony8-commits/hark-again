@@ -40,7 +40,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import command_env, job_restart, quota, sandbox_client, term_text
+from . import command_env, job_disk, job_restart, quota, sandbox_client, term_text
 from .config import settings
 from .models import Conversation, Job, Message
 from .storage import project_dir
@@ -250,6 +250,8 @@ def block(job: Job) -> dict:
         out.update(exit_code=job.exit_code, finished_at=iso(job.finished_at), tail=job.tail)
         if job.stop_reason:
             out["stop_reason"] = job.stop_reason
+        if (d := job_disk.stored(job)) is not None:
+            out["disk"] = d  # v1.96 结算时数的磁盘账
     return out
 
 
@@ -261,7 +263,7 @@ def wire(job: Job, chars: int = TAIL_CHARS) -> dict:
             "tail": log_tail(job, chars) if job.state == "running" or log_size(job) else job.tail,
             "keep_alive": bool(job.keep_alive), "restarts": job.restarts or 0,
             "restart_at": iso(job.restart_at) if job.state == "running" else None,
-            "memory_max": job.memory_max, "memory_peak": job.memory_peak}
+            "memory_max": job.memory_max, "memory_peak": job.memory_peak, "disk": job_disk.stored(job)}
 
 
 def describe(job: Job) -> str:
@@ -278,6 +280,8 @@ def describe(job: Job) -> str:
     line = f"{job.id}「{job.title}」：{label}{code}，用时 {duration_text(elapsed(job))}"
     if job.memory_peak and job.state != "running":
         line += f"，内存峰值约 {quota.size_text(job.memory_peak)}"
+    if disk := job_disk.text(job_disk.stored(job), brief=True):
+        line += f"；{disk}"
     if job.stop_reason == OOM_REASON:
         return f"{line}。{oom_hint()}"
     return f"{line}。{memcap_hint()}" if (job.stop_reason or "").startswith(MEMCAP_PREFIX) else line
@@ -407,6 +411,7 @@ async def settle(db: AsyncSession, job: Job, state: str, exit_code: int | None) 
         elif (job_dir(job) / "oom").exists():
             job.stop_reason = OOM_REASON
     job.tail = log_tail(job, KEEP_TAIL)
+    await job_disk.record(db, job)  # v1.96 磁盘账：结算时数一次
     by_agent = state == "cancelled" and _read(job_dir(job) / "cancelled") == "agent"
     if job.followup == "none" and not by_agent and job.conversation_id and await db.get(Conversation, job.conversation_id):
         job.followup = "pending"

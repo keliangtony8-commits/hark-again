@@ -140,6 +140,9 @@ class JobBlock(BaseModel):
     stop_reason: str | None = None  # 被护栏自动停掉的原因（卡住 / 输出过大），state=cancelled
     keep_alive: bool | None = None  # v1.80 常驻任务：意外退出自动重启（app/job_restart.py）
     restarts: int | None = None  # 常驻任务自动重启过几次
+    memory_max: int | None = None  # v1.92 单独定的内存上限（字节）
+    memory_peak: int | None = None  # v1.92 结束时的内存峰值（字节）
+    disk: dict | None = None  # v1.96 结算时的磁盘账（app/job_disk.py wire 形状）
 
 
 class PlanItem(BaseModel):

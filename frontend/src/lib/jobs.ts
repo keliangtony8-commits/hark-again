@@ -1,6 +1,6 @@
 // 后台任务卡的纯规则（App models/job.dart 同一套）：状态文案、语气、用时、日志尾巴、何时停止轮询。
 import { formatSize } from "./files";
-import type { JobBlock, JobBox, JobInfo, JobState, JobUsage } from "./types";
+import type { JobBlock, JobBox, JobDisk, JobInfo, JobState, JobUsage } from "./types";
 
 export const JOB_FINAL: ReadonlySet<JobState> = new Set(["done", "failed", "timed_out", "cancelled", "lost"]);
 export const JOB_POLL_MS = 2000;     // 运行中多久问一次进度
@@ -38,6 +38,39 @@ export const jobBoxTight = (j: JobInfo) => {
 };
 export const jobBoxLabel = (b: JobBox) =>
   `这台电脑内存已用 ${Math.round((b.used * 100) / b.limit)}%（${formatSize(b.used)} / ${formatSize(b.limit)}），再涨系统会强制结束进程`;
+
+/** v1.96 磁盘账（后端 app/job_disk.py；App models/job_disk.dart 同一套）。坏数据 → null。 */
+export const JOB_DISK_LOG_SHOWN = 1 << 20;
+const count = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+export function jobDisk(raw: unknown): JobDisk | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const log = count(r.log), written = count(r.written), files = count(r.files), overlap = r.overlap == null ? 0 : count(r.overlap);
+  if (log == null || written == null || files == null || overlap == null) return null;
+  const top = (Array.isArray(r.top) ? r.top : [])
+    .filter((t): t is { path: string; size: number } => !!t && typeof t === "object" && typeof (t as { path?: unknown }).path === "string"
+      && !!(t as { path: string }).path && typeof (t as { size?: unknown }).size === "number" && (t as { size: number }).size > 0)
+    .slice(0, 3).map((t) => ({ path: t.path, size: t.size }));
+  return { log, written, files, top, overlap, partial: r.partial === true };
+}
+export const jobDiskShown = (d: JobDisk | null): d is JobDisk => d != null && (d.files > 0 || d.log >= JOB_DISK_LOG_SHOWN);
+export const jobDiskGroupName = (path: string) => (path === ".home/" ? "装的软件" : path);
+export const jobDiskLabel = (d: JobDisk) => [
+  ...(d.files > 0
+    ? [`写入 ${formatSize(d.written)}${d.partial ? "+" : ""}`, `${d.files}${d.partial ? "+" : ""} 个文件`,
+      ...(d.top.length ? [`最多 ${jobDiskGroupName(d.top[0].path)}`] : [])]
+    : ["没写新文件"]),
+  `日志 ${formatSize(d.log)}`,
+  ...(d.overlap > 0 && d.files > 0 ? ["含同时段任务"] : []),
+].join(" · ");
+export function jobDiskDetail(d: JobDisk): string {
+  const groups = d.top.map((t) => `${jobDiskGroupName(t.path)} ${formatSize(t.size)}`).join("、");
+  const notes = [...(d.partial ? ["文件太多只数了一部分"] : []), ...(d.overlap > 0 ? [`同时段还有 ${d.overlap} 个任务在跑，可能含它们写的`] : [])];
+  const head = d.files > 0 ? `运行期间新写或改过 ${d.files} 个文件，共 ${formatSize(d.written)}${groups ? `：${groups}` : ""}` : "运行期间没有新写文件";
+  return `${head}；日志 ${formatSize(d.log)}${notes.length ? `（${notes.join("；")}）` : ""}`;
+}
+export const jobDiskSemantics = (d: JobDisk) =>
+  d.files > 0 ? `写入 ${formatSize(d.written)}，${d.files} 个文件，日志 ${formatSize(d.log)}` : `没写新文件，日志 ${formatSize(d.log)}`;
 
 export type JobTone = "running" | "ok" | "problem" | "quiet";
 export const jobTone = (s: JobState, autoStopped = false): JobTone =>
@@ -100,7 +133,8 @@ export const jobSemantics = (j: JobInfo, elapsed = j.elapsed) =>
   `${j.keep_alive && j.restarts ? `，已自动重启 ${j.restarts} 次` : ""}，用时 ${jobDuration(elapsed)}` +
   `${jobRunning(j) && jobUsage(j.usage) ? `，${jobUsageSemantics(jobUsage(j.usage)!)}` : ""}` +
   `${jobRunning(j) && jobMemoryMax(j) ? `，内存上限 ${formatSize(jobMemoryMax(j)!)}` : ""}` +
-  `${jobBoxTight(j) ? `，${jobBoxLabel(jobBox(j.box)!)}` : ""}`;
+  `${jobBoxTight(j) ? `，${jobBoxLabel(jobBox(j.box)!)}` : ""}` +
+  `${jobDiskShown(jobDisk(j.disk)) ? `，${jobDiskSemantics(jobDisk(j.disk)!)}` : ""}`;
 
 export function jobTailLines(tail: string, lines = JOB_LOG_LINES): string {
   const all = tail.replace(/\s+$/, "").split("\n");
@@ -114,5 +148,5 @@ export function jobFromBlock(b: JobBlock, now = Date.now()): JobInfo {
   return { id: b.id, title: b.title, command: b.command, state: b.state, exit_code: b.exit_code ?? null, followup: "none",
     elapsed: Number.isNaN(start) ? 0 : (end - start) / 1000, tail: b.tail ?? "", started_at: b.started_at, finished_at: b.finished_at,
     stop_reason: b.stop_reason ?? null, keep_alive: !!b.keep_alive, restarts: b.restarts ?? 0, restart_at: null,
-    memory_max: b.memory_max ?? null, memory_peak: b.memory_peak ?? null };
+    memory_max: b.memory_max ?? null, memory_peak: b.memory_peak ?? null, disk: b.disk ?? null };
 }

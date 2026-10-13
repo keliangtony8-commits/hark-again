@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from .. import job_usage, jobs, services
+from .. import job_disk, job_usage, jobs, services
 from ..auth import require_user
 from ..db import get_session
 from ..models import Job
@@ -37,7 +37,8 @@ async def get_job(job_id: str, tail: int = jobs.TAIL_CHARS, db=Depends(get_sessi
     usage = await job_usage.of(job)
     # v1.92 整台沙盒内存（同一次采样拿到的）：快满时任务卡提醒
     return {**jobs.wire(job, chars=max(200, min(tail, 20000))), "usage": usage,
-            "box": job_usage.box(job.project_id) if usage else None}
+            "box": job_usage.box(job.project_id) if usage else None,
+            "disk": await job_disk.of(db, job)}  # v1.96 运行中现数（有缓存），结束了是结算时的账
 
 
 @router.post("/{job_id}/cancel")

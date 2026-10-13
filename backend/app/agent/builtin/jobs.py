@@ -4,7 +4,7 @@ import time
 
 from sqlalchemy import select
 
-from ... import job_memory, job_usage, jobs, services
+from ... import job_disk, job_memory, job_usage, jobs, services
 from ...models import Job
 from ..tools import ToolContext, ToolResult, tool
 
@@ -66,6 +66,8 @@ async def job_status(ctx: ToolContext, job_id: str = "", chars: int = 3000, wait
                 "用 read_file 按 offset 分段读）")
     use = await job_usage.of(job) if job.state == "running" else None
     tight = job_memory.box_note(job_usage.box(ctx.workspace)) if use else ""
+    if job.state == "running" and (disk := job_disk.text(await job_disk.of(ctx.db, job))):
+        tight = f"磁盘：{disk}" + (f"\n{tight}" if tight else "")  # v1.96 结束了的已在 describe 里（够大才提）
     return ToolResult(f"{_line(job, use)}\n命令：{job.command[:300]}\n{label}：\n{body}{more}" + (f"\n{tight}" if tight else ""))
 
 

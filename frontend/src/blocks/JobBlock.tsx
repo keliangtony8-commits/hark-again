@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "../lib/api";
-import { JOB_CPU_HOT, JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobBox, jobBoxLabel, jobBoxTight, jobCpuLabel, jobMemoryLabel, jobMemoryMax, jobMemoryNear, jobShowsReason, jobUsage, jobAwaitingReply, jobDuration, jobFootLabel, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
+import { JOB_CPU_HOT, JOB_POLL_MS, JOB_REPLY_WAIT_MS, jobAutoStopped, jobBox, jobBoxLabel, jobDisk, jobDiskDetail, jobDiskLabel, jobDiskShown, jobBoxTight, jobCpuLabel, jobMemoryLabel, jobMemoryMax, jobMemoryNear, jobShowsReason, jobUsage, jobAwaitingReply, jobDuration, jobFootLabel, jobFromBlock, jobRunning, jobSemantics, jobStateLabel, jobTailLines, jobTone } from "../lib/jobs";
 import type { JobBlock as T, JobInfo } from "../lib/types";
 import { Sheet } from "../ui/kit";
-import { IconAlert, IconCheck, IconChip, IconCopy, IconStop } from "../ui/icons";
+import { IconAlert, IconCheck, IconChip, IconCopy, IconDisk, IconStop } from "../ui/icons";
 import { useBlockActions } from "./actions";
 
 /** 后台任务卡（App blocks/job_block.dart 同一套行为）：运行中每 2 秒问一次进度、用时每秒本地跳、可取消；
@@ -80,6 +80,9 @@ export default function JobBlock({ block }: { block: T }) {
       {jobBoxTight(job) && (  /* v1.92 整台沙盒内存快满了：系统会先结束普通后台任务 */
         <p className="blk-job-tight" aria-hidden><IconChip size={14} />{jobBoxLabel(jobBox(job.box)!)}</p>
       )}
+      {jobDiskShown(jobDisk(job.disk)) && (  /* v1.96 它占了多少磁盘：写了文件或日志够大才出现 */
+        <p className="blk-job-disk" aria-hidden><IconDisk size={14} /><span key={jobDiskLabel(jobDisk(job.disk)!)}>{jobDiskLabel(jobDisk(job.disk)!)}</span></p>
+      )}
       <div className="blk-job-foot">
         <span key={label} className="blk-job-state">{label}</span>
         {running
@@ -94,9 +97,10 @@ export default function JobBlock({ block }: { block: T }) {
 /** 完整日志（最后 2 万字）：任务卡和“电脑”一节的任务行共用。 */
 export function JobLog({ job, onClose }: { job: JobInfo; onClose: () => void }) {
   const [text, setText] = useState(job.tail);
+  const [disk, setDisk] = useState(() => jobDisk(job.disk));  // v1.96 拉到的最新一份优先（电脑页的任务行没带 disk）
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    http.get<JobInfo>(`/api/jobs/${job.id}?tail=20000`).then((j) => setText(j.tail)).catch(() => {});
+    http.get<JobInfo>(`/api/jobs/${job.id}?tail=20000`).then((j) => { setText(j.tail); const d = jobDisk(j.disk); if (d) setDisk(d); }).catch(() => {});
   }, [job.id]);
   const copy = async () => {
     await navigator.clipboard.writeText(text);
@@ -107,6 +111,7 @@ export function JobLog({ job, onClose }: { job: JobInfo; onClose: () => void }) 
     <Sheet title={job.title} onClose={onClose}
       actions={<button className="btn btn-ghost" onClick={copy}>{copied ? <IconCheck size={16} /> : <IconCopy />}{copied ? "已复制" : "复制日志"}</button>}>
       <p className="blk-job-sheet-meta">{jobStateLabel(job)} · {jobDuration(job.elapsed)}</p>
+      {disk && <p className="blk-job-sheet-disk">{jobDiskDetail(disk)}</p>}
       <pre className="blk-job-full">{text.trim() ? text.replace(/\s+$/, "") : "（没有输出）"}</pre>
     </Sheet>
   );

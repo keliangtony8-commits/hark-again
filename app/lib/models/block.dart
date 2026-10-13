@@ -1,6 +1,7 @@
 // 消息块：与后端 backend/app/blocks.py、docs/protocol.md 一一对应。
 // 新增块类型 = 这里加一个类 + blocks/ 里加一个组件 + registry 登记。认不出的类型变成 UnknownBlock，不崩。
 import 'activity.dart';
+import 'job_disk.dart';
 
 sealed class Block {
   const Block();
@@ -201,7 +202,7 @@ class BrowserHandoff {
 class JobBlock extends Block {
   const JobBlock({required this.id, required this.title, required this.command, required this.state,
       this.startedAt, this.finishedAt, this.exitCode, this.tail, this.stopReason, this.keepAlive = false, this.restarts = 0,
-      this.memoryMax, this.memoryPeak});
+      this.memoryMax, this.memoryPeak, this.disk});
   factory JobBlock.fromJson(Map<String, dynamic> j) => JobBlock(
       id: j['id'] as String? ?? '',
       title: j['title'] as String? ?? '后台任务',
@@ -215,7 +216,8 @@ class JobBlock extends Block {
       keepAlive: j['keep_alive'] as bool? ?? false,
       restarts: (j['restarts'] as num?)?.toInt() ?? 0,
       memoryMax: (j['memory_max'] as num?)?.toInt(),
-      memoryPeak: (j['memory_peak'] as num?)?.toInt());
+      memoryPeak: (j['memory_peak'] as num?)?.toInt(),
+      disk: JobDisk.tryParse(j['disk']));
   final String id, title, command, state;
   final DateTime? startedAt, finishedAt;
   final int? exitCode;
@@ -230,6 +232,9 @@ class JobBlock extends Block {
 
   /// v1.92 给它单独定的内存上限 / 结束时记下的内存峰值（字节，后端 app/job_memory.py）。
   final int? memoryMax, memoryPeak;
+
+  /// v1.96 结算时的磁盘账（后端 app/job_disk.py）。
+  final JobDisk? disk;
 }
 
 /// 用户自己跑的命令（输入框 !命令，后端 ShellBlock）：一条回复里只有它一张。规则在 models/shell.dart。

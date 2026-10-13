@@ -198,6 +198,30 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
                   )
                 : const SizedBox.shrink(key: ValueKey('roomy')),
           ),
+          // v1.96 它占了多少磁盘：写了多少文件、最多的是哪一组、日志多大（写了东西或日志够大才出现）
+          RiseSwitcher(
+            child: jobDiskShown(j.disk)
+                ? Padding(
+                    key: const ValueKey('disk'),
+                    padding: const EdgeInsets.only(top: Sp.x2, right: Sp.x2),
+                    child: ExcludeSemantics(
+                      child: Row(children: [
+                        Icon(Icons.save_outlined, size: Fs.sm, color: p.text3),
+                        const SizedBox(width: Sp.x1),
+                        Expanded(
+                          child: SwapSwitcher(
+                            child: Text(jobDiskLabel(j.disk!),
+                                key: ValueKey(jobDiskLabel(j.disk!)),
+                                style: small?.copyWith(color: p.text3, fontFeatures: const [FontFeature.tabularFigures()]),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  )
+                : const SizedBox.shrink(key: ValueKey('nodisk')),
+          ),
           Row(children: [
             Expanded(
               child: Align(
@@ -289,6 +313,22 @@ Future<void> showJobLog(BuildContext context, WidgetRef ref, JobInfo j) {
                 Text('${jobStateLabel(j)} · ${jobDuration(j.elapsed)}', style: ctx.text.labelSmall),
                 const SizedBox(height: Sp.x1),
                 Text(j.title, style: ctx.text.titleLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
+                // v1.96 磁盘明细：拉到的最新一份优先（电脑页的任务行没带 disk），没有就用卡上的
+                FutureBuilder(
+                  future: full,
+                  builder: (_, snap) {
+                    final d = (snap.hasData ? JobDisk.tryParse((snap.data as Map)['disk']) : null) ?? j.disk;
+                    return RiseSwitcher(
+                      child: d == null
+                          ? const SizedBox.shrink(key: ValueKey('nodisk'))
+                          : Padding(
+                              key: const ValueKey('disk'),
+                              padding: const EdgeInsets.only(top: Sp.x1),
+                              child: Text(jobDiskDetail(d), style: ctx.text.labelSmall?.copyWith(color: p.text3)),
+                            ),
+                    );
+                  },
+                ),
               ]),
             ),
             FutureBuilder(

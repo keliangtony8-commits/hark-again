@@ -90,7 +90,9 @@ export type JobBlock = { type: "job"; id: string; title: string; command: string
   /** v1.80 常驻任务（后端 app/job_restart.py）：意外退出自动重启；restarts = 重启过几次。 */
   keep_alive?: boolean | null; restarts?: number | null;
   /** v1.92 给它单独定的内存上限 / 结束时的内存峰值（字节，后端 app/job_memory.py）。 */
-  memory_max?: number | null; memory_peak?: number | null };
+  memory_max?: number | null; memory_peak?: number | null;
+  /** v1.96 结算时的磁盘账（后端 app/job_disk.py）。 */
+  disk?: JobDisk | null };
 /** /api/jobs/{id} 的快照。followup=pending：结束了，服务器还要在这段对话里接着说一轮。 */
 export type JobInfo = { id: string; title: string; command: string; state: JobState; exit_code?: number | null;
   followup: "none" | "pending" | "done" | "seen" | "skipped"; elapsed: number; tail: string;
@@ -100,7 +102,11 @@ export type JobInfo = { id: string; title: string; command: string; state: JobSt
   /** v1.90 现在占多少（后端 app/job_usage.py）：进程确实在跑、问得到沙盒才有；null/缺 = 不知道（不是 0）。cpu = 占配额 %。 */
   usage?: JobUsage | null;
   /** v1.92 内存上限 / 峰值（字节）；box = 整台沙盒此刻的内存（在跑才有），快满了卡片提醒。 */
-  memory_max?: number | null; memory_peak?: number | null; box?: JobBox | null };
+  memory_max?: number | null; memory_peak?: number | null; box?: JobBox | null;
+  /** v1.96 磁盘账：运行中现数（服务器缓存 30 秒），结束了是结算时的；null = 没数。 */
+  disk?: JobDisk | null };
+/** v1.96 日志 + 运行期间工作区里新写或改过的文件（按顶层条目分组，最多 3 组）；overlap = 同时段还在跑的其他任务数。 */
+export type JobDisk = { log: number; written: number; files: number; top: { path: string; size: number }[]; overlap: number; partial: boolean };
 export type JobBox = { used: number; limit: number };
 export type JobUsage = { cpu: number; cpu_seconds: number; memory: number; processes: number };
 export type Block = TextBlock | LinksBlock | TableBlock | CodeBlock | FileBlock | ApprovalBlock | BrowserBlock | PageBlock | StatsBlock | MemoryBlock
