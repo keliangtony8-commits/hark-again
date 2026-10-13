@@ -58,6 +58,18 @@ void main() {
     expect((Block.fromJson({'type': 'changes'}) as ChangesBlock).files, isEmpty);
   });
 
+  test('v2.14 命令改的文件：解析 + 小字', () {
+    final c = _card(files: [
+      {'path': 'a.txt', 'added': 1, 'command': true},
+      {'path': 'made.txt', 'added': 1, 'created': true, 'command': true},
+      {'path': 'big.bin', 'added': 3, 'big': true, 'command': true},
+    ]);
+    expect(c.files[0].command, isTrue);
+    expect(changesNote(c), '1 个大文件不能撤销 · 其中 3 个是命令改的');
+    expect(changesNote(_card(files: [{'path': 'a.txt', 'added': 1, 'command': true}])), '其中 1 个是命令改的');
+    expect(_card().files[0].command, isFalse);
+  });
+
   testWidgets('点文件展开 diff；撤销先确认，失败 toast 原因', (t) async {
     final calls = <String>[];
     await _show(t, _card(), undo: (tok) async {

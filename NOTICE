@@ -115,3 +115,5 @@
   参考写成 backend/app/extract.py（v2.07）
 - deepseek-ai/deepseek-harness packages/fs/tool-fs/src/read-render.ts buildWindow + read.ts（有界行窗口：行号、单行截断、字节上限、数准总行数、超范围报错）— MIT License, Copyright (c) 2026 DeepSeek, modified（按字节扫行、倒数 N 行、按字节读、中文提示）
   移植到 backend/app/file_read.py（v2.12）
+- google-gemini/gemini-cli packages/core/src/services/gitService.ts + utils/checkpointUtils.ts（影子仓库检查点：内容快照 + 只重算变了的文件）— Apache License 2.0, Copyright 2025 Google LLC, idea only, modified（不用 git 进程、按 size+mtime 判变、命令前后扫描、并进整轮撤销）
+  参考写成 backend/app/command_changes.py（v2.14）

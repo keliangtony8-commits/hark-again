@@ -15,13 +15,14 @@ String changesTitle(ChangesBlock b) => b.undone ? '已撤销 ${changesCount(b)} 
 
 bool changesUndoable(ChangesBlock b) => b.token.isNotEmpty && !b.undone;
 
-/// 卡底的小字：太大的文件不能撤销；命令改的文件不在这里。
+/// 卡底的小字：太大的文件不能撤销；v2.14 其中几个是命令改的（撤销同样覆盖）。
 String? changesNote(ChangesBlock b) {
   final big = b.files.where((f) => f.big).length;
+  final cmd = b.files.where((f) => f.command).length;
   if (b.undone) return '文件已回到这一轮之前的样子';
   if (b.token.isEmpty) return '文件太大，没有留撤销记录';
-  if (big > 0) return '$big 个大文件不能撤销';
-  return null;
+  final parts = [if (big > 0) '$big 个大文件不能撤销', if (cmd > 0) '其中 $cmd 个是命令改的'];
+  return parts.isEmpty ? null : parts.join(' · ');
 }
 
 /// 每行右侧状态：“新建”“已删除”“大文件”或空（显示 +N −M）。

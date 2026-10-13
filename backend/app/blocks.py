@@ -191,6 +191,7 @@ class ChangedFile(BaseModel):
     hidden: bool | None = None   # 像密钥的文件：不给 diff
     big: bool | None = None      # 太大没记基线：列出来，不能撤销
     deleted: bool | None = None  # 这一轮之后已经不在了（命令删的）
+    command: bool | None = None  # v2.14 命令改的（app/command_changes.py），不是 write_file / edit_file
 
 
 class ChangesBlock(BaseModel):

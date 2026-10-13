@@ -13,10 +13,11 @@ export const changesUndoable = (b: ChangesBlock) => !!b.token && !b.undone;
 
 export function changesNote(b: ChangesBlock): string | null {
   const big = b.files.filter((f) => f.big).length;
+  const cmd = b.files.filter((f) => f.command).length; // v2.14 命令改的（后端 app/command_changes.py）
   if (b.undone) return "文件已回到这一轮之前的样子";
   if (!b.token) return "文件太大，没有留撤销记录";
-  if (big > 0) return `${big} 个大文件不能撤销`;
-  return null;
+  const parts = [big > 0 ? `${big} 个大文件不能撤销` : "", cmd > 0 ? `其中 ${cmd} 个是命令改的` : ""].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
 }
 
 export const changeTag = (f: FileChange) => (f.deleted ? "已不在" : f.big ? "大文件" : null);

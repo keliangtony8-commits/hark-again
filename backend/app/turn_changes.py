@@ -13,7 +13,8 @@
   可撤销的文件把基线写进 <工作区>/.turns/<token>/（隐藏目录），manifest 记每个文件收尾时的 sha256。
 - undo(workspace, token)：先全部核对（Gemini restore 不核对，我们更保守）：现状 sha 和收尾时不同 = 之后又被改过
   → Conflict(路径)，一个都不动；全对上才恢复：基线 None → 删掉（这一轮新建的），否则写回原字节；然后删记录。
-- 只管 write_file / edit_file；run_command 改的文件不在卡上（卡片和给模型的历史里都这么说）。
+- write_file / edit_file / apply_patch 写之前记；v2.14 起会改东西的前台 run_command 前后各扫一遍，命令改的文件也进来
+  （规则在 command_changes.py，标 command）；后台任务之后改的不算。
 - 记录保留 KEEP_DAYS 天，每次 finish 顺手清理过期的。
 """
 import hashlib
@@ -51,6 +52,11 @@ class Tracker:
     rel: dict[str, str] = field(default_factory=dict)       # 绝对路径 → 相对工作区的显示路径
     root: str | None = None
     size: int = 0
+    # v2.14 命令改的文件（app/command_changes.py 填）：这一轮第一次扫到的状态 相对路径 → (size, mtime_ns, sha|None)
+    seen: dict[str, tuple] = field(default_factory=dict)
+    seen_capped: bool = False
+    scanned: bool = False
+    command: set[str] = field(default_factory=set)  # 基线是命令前扫到的那些绝对路径（卡上标“命令”）
 
     def before(self, root: Path, p: Path) -> None:
         """写 p 之前调：第一次碰这个路径时记下基线。从不抛异常（记不了就当 BIG）。"""
@@ -119,7 +125,9 @@ def finish(tracker: Tracker | None, workspace: str) -> dict | None:
         now = _read(Path(key))
         if base is not BIG and base == now:
             continue  # 改了又改回去：没有净改动（Codex left == right → None）
-        if base is BIG:
+        if base is BIG and now is None:
+            c = {"path": rel, "added": 0, "removed": 0, "diff": "", "big": True, "deleted": True}
+        elif base is BIG:
             c = file_edit.change(rel, "", _text(now) or "")
             c = {"path": rel, "added": c["added"], "removed": 0, "diff": "", "big": True}
         elif now is None:
@@ -127,6 +135,8 @@ def finish(tracker: Tracker | None, workspace: str) -> dict | None:
             c = {"path": rel, "added": 0, "removed": len(old.splitlines()), "diff": "", "deleted": True}
         else:
             c = file_edit.change(rel, _text(base), _text(now) or "")
+        if key in tracker.command:
+            c["command"] = True
         files.append(c)
         if base is not BIG:
             saved.append((rel, base, _sha(now)))
@@ -202,10 +212,10 @@ def history_text(b: dict) -> str:
             return f"{f['path']}（大文件）"
         if f.get("deleted"):
             return f"{f['path']}（已不在）"
-        return f"{f['path']}（{'新建 ' if f.get('created') else ''}{file_edit.stat(f)}）"
+        return f"{f['path']}（{'命令 ' if f.get('command') else ''}{'新建 ' if f.get('created') else ''}{file_edit.stat(f)}）"
     names = "、".join(one(f) for f in b.get("files") or [])
     more = f" 等 {len(b['files']) + b['more']} 个文件" if b.get("more") else ""
-    line = f"[这一轮用 write_file / edit_file / apply_patch 改了文件：{names}{more}"
+    line = f"[这一轮改了文件（write_file / edit_file / apply_patch / 命令）：{names}{more}"
     if b.get("undone"):
         line += "——用户已撤销这些改动，文件已回到这一轮之前的样子；之前读到的内容已过期，要改先重读"
     return line + "]"

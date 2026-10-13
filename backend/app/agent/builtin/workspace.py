@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_env, command_guard, computer, deliver, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_changes, command_env, command_guard, computer, deliver, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -476,9 +476,17 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     # v2.04 到点没跑完就转后台（deepseek-harness promoteOnTimeout）：先问收不收得下，收不下照旧到点杀掉
     refusal = await jobs.admission(ctx.db, ctx.workspace)
     slot = None if refusal else jobs.promote_slot()
-    r = await foreground.run(ctx.workspace, command, timeout or 60, stdin,
-                             lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}),
-                             await command_env.load(ctx.db), slot)
+    # v2.14 命令改的文件也进这一轮的改动卡 / 整轮撤销：前后各扫一遍工作区（只读命令不扫；规则在 command_changes.py）
+    watch = command_changes.tracks(command)
+    if watch:
+        await asyncio.to_thread(command_changes.before, ctx.workspace, ctx.changes)
+    try:
+        r = await foreground.run(ctx.workspace, command, timeout or 60, stdin,
+                                 lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}),
+                                 await command_env.load(ctx.db), slot)
+    finally:
+        if watch:
+            await asyncio.to_thread(command_changes.after, ctx.workspace, ctx.changes)
     if r.failed:
         return ToolResult(r.message, failed=r.failed)
     if r.promoted:
