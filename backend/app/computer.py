@@ -137,12 +137,7 @@ def sandbox_wire(raw: dict | None) -> dict:
             "processes": [p for p in (raw.get("processes") or []) if isinstance(p, dict)][:PROCESS_MAX]}
 
 
-async def running_jobs(db: AsyncSession, ws: str) -> list[Job]:
-    rows = (await db.scalars(select(Job).where(Job.project_id == ws, Job.state == "running")
-                             .order_by(Job.created_at.desc()))).all()
-    for job in rows:
-        await jobs.refresh(db, job)  # 只看磁盘：刚结束的别还挂着
-    return [j for j in rows if j.state == "running"]
+running_jobs = jobs.running  # v2.00 搬到 jobs.running（memory_view 也要用，避免 import 环）
 
 
 async def status(db: AsyncSession, ws: str) -> dict:

@@ -335,6 +335,15 @@ def run_seconds(job: Job, now: datetime | None = None) -> float:
     return max(0.0, ((now or datetime.now(timezone.utc)) - start).total_seconds())
 
 
+async def running(db: AsyncSession, ws: str) -> list[Job]:
+    """这个工作区还在跑的任务（新的在前）；先看一眼磁盘，刚结束的别还挂着（电脑页 / memory_view 共用）。"""
+    rows = (await db.scalars(select(Job).where(Job.project_id == ws, Job.state == "running")
+                             .order_by(Job.created_at.desc()))).all()
+    for job in rows:
+        await refresh(db, job)
+    return [j for j in rows if j.state == "running"]
+
+
 async def running_count(db: AsyncSession, project_id: str) -> int:
     return await db.scalar(select(func.count()).select_from(Job)
                            .where(Job.project_id == project_id, Job.state == "running")) or 0
@@ -559,14 +568,14 @@ def _brief(job: Job, tail_chars: int) -> str:
     return f"{describe(job)}\n命令：\n```bash\n{job.command[:500]}\n```\n最后的输出：\n```\n{tail}\n```"
 
 
-def notice(group: Job | list[Job]) -> str:
+def notice(group: Job | list[Job], extra: str = "") -> str:
     """接着说那一轮里，模型看到的“系统通知”（不落库，不是用户说的话）。同一对话里一起结束的任务并成一条，
     一轮说完（deepseek-harness：一起结束的任务只花一步）。总长有界：每个任务的输出尾巴按个数分 KEEP_TAIL。"""
     group = [group] if isinstance(group, Job) else group
     each = max(300, KEEP_TAIL // len(group))
     head = ("你之前在后台启动的任务已结束：" if len(group) == 1
             else f"你之前在后台启动的 {len(group)} 个任务都已结束：\n")
-    body = "\n\n".join(_brief(j, each) for j in group)
+    body = "\n\n".join(_brief(j, each) for j in group) + (f"\n{extra}" if extra else "")
     return (f"【系统通知，不是用户说的】{head}{body}\n"
             "根据结果接着把事办完：成功就简短告诉用户结论和产物在哪（要交给他的图表/文件/目录用 display_file 交付）；"
             "失败就说清原因和下一步（能自己修好就直接修了再跑）。用户此刻不一定在看，不要寒暄、不要问“还需要什么”。")
@@ -605,6 +614,15 @@ async def take_held(db: AsyncSession, cid: str) -> str | None:
         job.read_offset = max(job.read_offset or 0, log_size(job))
     await db.commit()
     return held_notice(list(held))
+
+
+async def _oom_note(db: AsyncSession, group: list[Job]) -> str:
+    """v2.00 有任务是被系统因内存杀掉的：通知里带上现在谁在占（memory_view.note；避免 import 环，现用现导）。"""
+    oomed = next((j for j in group if j.stop_reason == OOM_REASON), None)
+    if oomed is None:
+        return ""
+    from . import memory_view
+    return memory_view.note(await memory_view.current(db, oomed.project_id), after_oom=True)
 
 
 async def follow_ups(db: AsyncSession) -> int:
@@ -647,6 +665,7 @@ async def follow_ups(db: AsyncSession) -> int:
             await patch_blocks(db, job)  # 任务比那一轮先结束时，卡片是那一轮结束才落库的
             _done(job, now)
         await db.commit()
-        await run_turn(db, conv, notice=notice(group), task_id=next((j.task_id for j in group if j.task_id), None))
+        extra = await _oom_note(db, group)
+        await run_turn(db, conv, notice=notice(group, extra), task_id=next((j.task_id for j in group if j.task_id), None))
         n += 1
     return n

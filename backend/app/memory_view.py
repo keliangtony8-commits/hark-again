@@ -12,14 +12,28 @@ build(raw, running, usage) → {used, limit, rows, other} 或 None（电脑没�
     share 照算（客户端把条封顶到 1）。
 “快满了”的门槛归客户端（和状态块的内存条同一个 computerMemoryTight），这里只给事实。
 
+v2.00（CORE 23）给模型的那一份：
+  - current(db, ws) → 同一张表（一次沙盒 status + 一次进程组采样）；电脑没开 / 连不上 → None。
+  - note(view, after_oom=False) → 给模型的一句，是“内存快满 / 刚被系统杀了进程”时唯一的说法：
+      平时只有整台用到 job_memory.TIGHT 以上才说；after_oom（前台命令 / 后台任务刚被内核因内存杀掉）不论多少都说——
+      杀完内存多半已降下来，但模型得知道剩下谁在占，才不会原样重跑又被杀。
+      列前 NOTE_ROWS 个：后台任务 / 常驻服务带编号（cancel_job / restart_service 用），零散程序带 pid 和命令（kill 用），
+      再给出路：普通任务能停先停、零散程序先确认是什么再 kill、常驻服务别随手停（先问用户）。
+
 参考：deepseek-harness / Codex / Gemini CLI 都在本机跑命令，没有“按归属汇总内存”的视图，无代码可搬；
 口径借 smem（PSS 按进程组汇总）+ systemd-cgtop / Docker Desktop（按服务排、余下归“其它”）。
 """
-from . import job_usage
+import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from . import job_memory, job_usage, jobs, quota, sandbox_client
 from .models import Job
 
 ROWS_MAX = 6
 MIN_ROW = 1 << 20  # 1 MB 以下的不单列
+NOTE_ROWS = 3      # 给模型的那句列几个
+CMD_SHOWN = 60     # 零散程序的命令给模型看多长
+KIND_TEXT = {"job": "后台任务", "service": "常驻服务", "process": "零散程序"}
 
 
 def _int(v) -> int | None:
@@ -59,3 +73,51 @@ def build(raw: dict | None, running: list[Job], usage: dict[str, dict]) -> dict 
         r["share"] = round(r["memory"] / used, 3) if used else 0.0
     other = used - counted
     return {"used": used, "limit": limit, "rows": rows, "other": other if other >= MIN_ROW else 0}
+
+
+async def current(db: AsyncSession, ws: str) -> dict | None:
+    """现在这台电脑的内存表（给模型用）；电脑没开 / 连不上 → None。"""
+    try:
+        raw = await sandbox_client.status(ws)
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(raw, dict) or raw.get("state") != "running":
+        return None
+    running = await jobs.running(db, ws)
+    return build(raw, running, await job_usage.for_jobs(running))
+
+
+def _who(r: dict) -> str:
+    size = quota.size_text(r["memory"])
+    if r["kind"] == "process":
+        cmd = r["title"] if len(r["title"]) <= CMD_SHOWN else r["title"][:CMD_SHOWN] + "…"
+        return f"零散程序 pid {r['pid']}「{cmd}」约 {size}"
+    return f"{KIND_TEXT[r['kind']]} {r['id']}「{r['title']}」约 {size}"
+
+
+def note(view: dict | None, after_oom: bool = False) -> str:
+    """给模型的一句；不紧张（且不是刚被杀）或拿不到表 → 空。"""
+    if not view:
+        return ""
+    used, limit = view["used"], view["limit"]
+    box = {"used": used, "limit": limit} if limit else None
+    tight = job_memory.tight(box)
+    if not tight and not after_oom:
+        return ""
+    amount = (f"{round(used * 100 / limit)}%（{quota.size_text(used)} / {quota.size_text(limit)}）" if limit
+              else f"约 {quota.size_text(used)}")
+    rows = view["rows"][:NOTE_ROWS]
+    who = "；".join(_who(r) for r in rows)
+    who = f"占得最多的：{who}" if who else "没有哪个程序特别大（多半是系统和零碎小程序）"
+    kinds = {r["kind"] for r in rows}
+    ways = []
+    if "job" in kinds:
+        ways.append("用不着的后台任务用 cancel_job 停掉")
+    if "process" in kinds:
+        ways.append("零散程序先用 ps -p <pid> -o args= 确认是什么，确定没用再 kill <pid>")
+    if "service" in kinds:
+        ways.append("常驻服务别随手停，要停先问用户")
+    ways.append("大任务改成分批处理，或给它设 memory_limit")
+    head = "注意：这台电脑内存已用" if tight else "这台电脑现在内存已用"
+    tail = "再涨系统会强制结束进程（先结束普通后台任务，尽量保住常驻服务）。" if tight else ""
+    return f"{head} {amount}，{who}。{tail}要腾内存：{'；'.join(ways)}。"

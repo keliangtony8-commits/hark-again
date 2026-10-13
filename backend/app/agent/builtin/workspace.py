@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, command_env, command_guard, computer, deliver, file_edit, file_seen, foreground, job_memory, jobs, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, command_env, command_guard, computer, deliver, file_edit, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -398,6 +398,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     hint = "\n（前台最多 120 秒；这种长活用 background=true 放到后台重跑）" if timed_out else ""
     if r.oom:
         hint = f"\n（{jobs.oom_hint(r.memory_limit)}）"
+        if left := memory_view.note(await memory_view.current(ctx.db, ctx.workspace), after_oom=True):
+            hint += f"\n{left}"  # v2.00 刚被杀：剩下谁在占（不然原样重跑又被杀）
     hint += computer.wake_note(r.woke)
     # 命令可能刚写了大东西：重数一遍（线程里跑，最多数 20 万项），满了 / 快满了才有一句
     hint += await asyncio.to_thread(quota.model_note, ctx.workspace, True)

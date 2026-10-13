@@ -1,5 +1,5 @@
 # 冒烟：v1.92 后台任务内存（app/job_memory.py；jobs.script 的 oom_score_adj、memcap 标记；sandbox GROUPS_PY 的 box）。
-# 1) parse / reason / note / box_note / box_usage 规则；2) run.sh 普通任务调高 oom_score_adj，常驻不调；
+# 1) parse / reason / note / tight / box_usage（给模型那句在 smoke_memory_note） 规则；2) run.sh 普通任务调高 oom_score_adj，常驻不调；
 # 3) 真任务吃 200 MB、上限 100 MB → worker tick 结束它：失败 + 原因 + 峰值 + 通知；小任务只记峰值；
 # 4) 采样节奏；5) 沙盒连不上 → 撤回标记下轮再来；6) 常驻服务超限 → 排队重启、重启日志写明原因；
 # 7) 模拟模型 run_command memory_limit（好 / 坏 / 前台拒绝）、job_status 上限与“整台快满了”、GET /api/jobs/{id} box；8) 迁移。
@@ -68,9 +68,6 @@ assert job_memory.note(j0, {"memory": 10 * M}) == "（上限 100 MB）"
 assert job_memory.note(Job(id="jy", project_id="w", title="t", command="x"), {"memory": 1}) == ""
 assert job_memory.over(j0, {"memory": 101 * M}) and not job_memory.over(j0, {"memory": 100 * M}) and not job_memory.over(j0, None)
 assert not job_memory.tight(None) and not job_memory.tight({"used": 89, "limit": 100}) and job_memory.tight({"used": 90, "limit": 100})
-n = job_memory.box_note({"used": 3800 * M, "limit": 4 * G}, (j0, {"memory": 2 * G}))
-assert "93%" in n and "jx「大任务」约 2 GB" in n and "memory_limit" in n, n
-assert job_memory.box_note({"used": 1, "limit": 4 * G}) == ""
 # 沙盒侧 box 解析
 bu = runner.box_usage
 assert bu(json.dumps({"box": {"used": 5, "limit": 10}})) == {"used": 5, "limit": 10}
@@ -129,8 +126,9 @@ async def job_alive(pid, jid):
         os.kill(p, 0); return True
     except ProcessLookupError:
         return False
-async def status(ws):
-    return {"state": "running"}
+async def status(ws):  # v2.00 memory_view.current 用：整台用量跟着 gmode["box"]
+    b = gmode["box"] or {}
+    return {"state": "running", "memory_used": b.get("used"), "memory_limit": b.get("limit"), "memory_top": []}
 async def listening(ws):
     return {"ports": []}
 sandbox_client.start_job, sandbox_client.cancel_job, sandbox_client.job_alive = start_job, cancel_job, job_alive
@@ -308,7 +306,7 @@ job_usage.forget()
 script[:] = [("job_status", {}), "好。"]
 asyncio.run(turn())
 t = last_tool()
-assert "这台电脑内存已用 95%" in t and "最大的是后台任务" in t, t
+assert "这台电脑内存已用 95%" in t and "没有哪个程序特别大" in t and "memory_limit" in t, t  # 任务都不到 1 MB
 job_usage.forget()
 r = c.get(f"/api/jobs/{tj.id}").json()
 assert r["memory_max"] == 128 * M and r["box"] == {"used": 3900 * M, "limit": 4 * G} and r["usage"], r

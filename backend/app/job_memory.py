@@ -7,7 +7,7 @@
      结论“失败：内存超过给它定的上限 …”（普通任务）；常驻服务照崩溃处理，按 job_restart 退避重启（同 systemd Restart=on-failure）。
      沙盒连不上 → 撤回标记，下一轮再来。
   3. 提前提醒：采样顺带记 memory_peak（峰值，结论里写给人和模型）；任务到自己上限 NEAR 以上、或整台沙盒用到 TIGHT 以上，
-     job_status 的文字和任务卡上会提示（不另外叫醒模型——省 token）。
+     job_status 的文字和任务卡上会提示（不另外叫醒模型——省 token）；给模型的那句（谁在占、怎么腾）在 memory_view.note。
 
 parse(v) 接受 "512m" / "2g" / "1.5GB" / "800MiB" / 纯数字（按 MB），夹在 MIN–MAX 之间，不合法抛 ValueError（中文原因）。
 采样节奏：工作区里有设了上限的任务 → 每轮都采；否则每 PEAK_EVERY_S 秒采一次（只为记峰值）。
@@ -84,24 +84,6 @@ def note(job: Job, usage: dict | None) -> str:
         pct = round(usage["memory"] * 100 / job.memory_max)
         return f"（上限 {quota.size_text(job.memory_max)}，已到 {pct}%，再涨会被结束）"
     return f"（上限 {quota.size_text(job.memory_max)}）"
-
-
-def box_note(box: dict | None, biggest: tuple[Job, dict] | None = None) -> str:
-    """整台沙盒快满时给模型的一句；不紧张返回空。"""
-    if not tight(box):
-        return ""
-    pct = round(box["used"] * 100 / box["limit"])
-    who = ""
-    if biggest:
-        j, u = biggest
-        who = f"，最大的是后台任务 {j.id}「{j.title}」约 {quota.size_text(u['memory'])}"
-    return (f"注意：这台电脑内存已用 {pct}%（{quota.size_text(box['used'])} / {quota.size_text(box['limit'])}）{who}。"
-            "再涨系统会强制结束进程（先结束普通后台任务，尽量保住常驻服务）；能停的先停，或给大任务设 memory_limit。")
-
-
-def biggest(rows: list[Job], usage: dict[str, dict]) -> tuple[Job, dict] | None:
-    best = max((j for j in rows if j.id in usage), key=lambda j: usage[j.id]["memory"], default=None)
-    return (best, usage[best.id]) if best else None
 
 
 def _due(rows: list[Job], now: float) -> list[Job]:

@@ -4,7 +4,7 @@ import time
 
 from sqlalchemy import select
 
-from ... import job_disk, job_memory, job_usage, jobs, services
+from ... import job_disk, job_memory, job_usage, jobs, memory_view, services
 from ...models import Job
 from ..tools import ToolContext, ToolResult, tool
 
@@ -35,8 +35,8 @@ async def job_status(ctx: ToolContext, job_id: str = "", chars: int = 3000, wait
             await jobs.refresh(ctx.db, job)
         usage = await job_usage.for_jobs(list(rows))  # v1.90 在跑的顺带说占多少，好判断哪个在吃资源
         lines = [_line(j, usage.get(j.id)) for j in rows]
-        if tight := job_memory.box_note(job_usage.box(ctx.workspace), job_memory.biggest(list(rows), usage)):
-            lines.append(tight)  # v1.92 整台快满了：说清是谁在吃
+        if tight := memory_view.note(await memory_view.current(ctx.db, ctx.workspace)):
+            lines.append(tight)  # v2.00 整台快满了：按归属说清谁在吃（含不属于任务的零散程序）
         return ToolResult("\n".join(lines) or "这个工作区还没有后台任务。")
     job = await _own(ctx, job_id)
     if job is None:
@@ -65,7 +65,10 @@ async def job_status(ctx: ToolContext, job_id: str = "", chars: int = 3000, wait
         more = (f"\n（前面还有约 {dropped} 字节没显示。完整日志：{jobs.log_path(job)}，"
                 "用 read_file 按 offset 分段读）")
     use = await job_usage.of(job) if job.state == "running" else None
-    tight = job_memory.box_note(job_usage.box(ctx.workspace)) if use else ""
+    tight = ""
+    oomed = job.stop_reason == jobs.OOM_REASON
+    if oomed or (use and job_memory.tight(job_usage.box(ctx.workspace))):  # 采样缓存说快满了才多问一次沙盒
+        tight = memory_view.note(await memory_view.current(ctx.db, ctx.workspace), after_oom=oomed)
     if job.state == "running" and (disk := job_disk.text(await job_disk.of(ctx.db, job))):
         tight = f"磁盘：{disk}" + (f"\n{tight}" if tight else "")  # v1.96 结束了的已在 describe 里（够大才提）
     return ToolResult(f"{_line(job, use)}\n命令：{job.command[:300]}\n{label}：\n{body}{more}" + (f"\n{tight}" if tight else ""))
