@@ -1,4 +1,4 @@
-// 用量与花费（本月一次调用都没有 → 统计格下面一张说明卡，不画全零的图）：本月花了多少（对比预算、对比上月同期）、今天、本月每天（usage_chart.dart，选一天看它按模型拆分：usage_day.dart）、最花钱的对话（点开跳进去）、按模型拆分。数据只读，来自 GET /api/usage。
+// 用量与花费（本月一次调用都没有 → 统计格下面一张说明卡，不画全零的图）：本月花了多少（对比预算、对比上月同期）、今天、本月每天（usage_chart.dart，选一天看它按模型拆分：usage_day.dart）、最花钱的对话（点开跳进去）、按模型拆分、自动选模型的账（usage_router.dart，没用过“自动”不显示）。数据只读，来自 GET /api/usage。
 // 右上角导出：本月报表 → CSV（models/usage_csv.dart）→ 系统分享面板，不多发请求。
 // 我的页那一行也读同一个 provider，显示“本月 ¥x / ¥预算”。
 import 'package:flutter/material.dart';
@@ -17,6 +17,7 @@ import '../../ui/motion.dart';
 import '../chat/open_conversation.dart';
 import 'usage_chart.dart';
 import 'usage_day.dart';
+import 'usage_router.dart';
 
 final usageProvider = FutureProvider.autoDispose<UsageReport>(
     (ref) async => UsageReport.fromJson((await ref.read(apiProvider).get('/api/usage') as Map).cast<String, dynamic>()));
@@ -152,6 +153,10 @@ class _Report extends StatelessWidget {
           delay: Motion.stagger(4),
           child: ModelUsageList(models: r.month.models, priced: r.priced, currency: r.currency),
         ),
+      ],
+      if (r.router case final router?) ...[
+        const SectionTitle('自动选模型'),
+        FadeSlideIn(delay: Motion.stagger(5), child: RouterUsageCard(usage: router, currency: r.currency, money: money)),
       ],
       if (!money || r.hasUnpriced)
         Padding(

@@ -87,7 +87,7 @@ c = TestClient(app)
 r = c.get(f"/api/conversations/{A}/usage")
 assert r.status_code == 200 and set(r.json()) == {"currency", "priced", "total"} and r.json()["total"]["calls"] == 3, r.text
 assert c.get("/api/conversations/nope/usage").status_code == 404
-assert set(c.get("/api/usage").json()) == {"currency", "budget", "priced", "today", "month", "daily", "conversations", "last_month"}
+assert set(c.get("/api/usage").json()) == {"currency", "budget", "priced", "today", "month", "daily", "conversations", "last_month", "router"}
 month_before = c.get("/api/usage").json()["month"]["calls"]
 assert c.delete(f"/api/conversations/{A}").json() == {"ok": True}
 assert c.get(f"/api/conversations/{A}/usage").status_code == 404

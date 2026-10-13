@@ -16,9 +16,13 @@ export type UsageConversation = { id: string; title: string | null; calls: numbe
 /** 上个月：全月合计 + to_date 同期（上月 1 号到上月同一天同一时刻，服务器按 TIMEZONE 对齐日历）。 */
 export type UsageSum = { calls: number; tokens: number; cost: number };
 export type LastMonthUsage = UsageSum & { to_date: UsageSum };
-/** daily：本月 1 号到今天每天一项；conversations：本月最花钱的几个对话；last_month：上月对比。老服务器都没有。 */
+/** 本月“自动选模型”的账（后端 app/router_stats.py 是唯一规则；= App RouterUsage）。saved / net 为 null = 复杂档没定价，不估。 */
+export type RouterUsage = { turns: number; simple: number; complex: number; free: number;
+  classifier: { turns: number; cost: number; ms: number }; simple_cost: number; saved: number | null; net: number | null;
+  simple_model: string; complex_model: string };
+/** daily：本月 1 号到今天每天一项；conversations：本月最花钱的几个对话；last_month：上月对比；router：自动选模型的账（没用过“自动” → null）。老服务器都没有。 */
 export type UsageReport = { currency: string; budget: number | null; priced: string[]; today: UsagePeriod; month: UsagePeriod;
-  daily?: UsageDay[]; conversations?: UsageConversation[]; last_month?: LastMonthUsage };
+  daily?: UsageDay[]; conversations?: UsageConversation[]; last_month?: LastMonthUsage; router?: RouterUsage | null };
 export type BudgetLevel = "ok" | "near" | "over";
 
 const NEAR_AT = 0.8;
@@ -111,4 +115,31 @@ export function shareOf(r: UsageReport, c: UsageConversation): number {
   const total = money ? r.month.cost : r.month.tokens;
   if (total <= 0) return 0;
   return Math.min(Math.max((money ? c.cost : c.tokens) / total, 0), 1);
+}
+
+// —— 自动选模型的账（与 App models/usage.dart 的 routerHeadline / routerSplitLine / routerCostLine / routerNote 同一套文案）——
+export const routerSimpleShare = (u: RouterUsage) => (u.turns <= 0 ? 0 : Math.min(1, Math.max(0, u.simple / u.turns)));
+export const routerLosing = (u: RouterUsage) => (u.net ?? 0) < 0;
+const simpleName = (u: RouterUsage) => u.simple_model || "简单档";
+const complexName = (u: RouterUsage) => u.complex_model || "复杂档";
+
+export function routerHeadline(u: RouterUsage, currency: string): string {
+  if (u.net === null || u.net === undefined) return `${u.turns} 轮`;
+  return u.net < 0 ? `多花 ${formatMoney(-u.net, currency)}` : `约省 ${formatMoney(u.net, currency)}`;
+}
+
+export const routerSplitLine = (u: RouterUsage) =>
+  `本月 ${u.turns} 轮 · ${simpleName(u)} ${u.simple} 轮 · ${complexName(u)} ${u.complex} 轮`;
+
+export function routerCostLine(u: RouterUsage, currency: string, money: boolean): string {
+  const parts: string[] = u.free > 0 ? [`${u.free} 轮按规则直接定（不花钱）`] : [];
+  const c = u.classifier;
+  if (c.turns > 0) parts.push(`${c.turns} 轮问了分类器${money ? `，花 ${formatMoney(c.cost, currency)}` : ""}${c.ms > 0 ? `，平均 ${c.ms} 毫秒` : ""}`);
+  return parts.length ? parts.join(" · ") : "都用了默认档";
+}
+
+export function routerNote(u: RouterUsage): string {
+  if (u.net === null || u.net === undefined) return "复杂档没配单价，算不出省了多少。在服务器 .env 的 MODEL_PRICES 补上两档单价即可。";
+  if (routerLosing(u)) return "分类器花的比省下的还多。可以在服务器 .env 把 MODEL_ROUTER 改成 rules（只用规则、零调用）。";
+  return "按“同样的 token 换成复杂档要花多少”估算，减去分类器的花费。";
 }

@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, plan_mode, llm_retry, model_router, reasoning, steering, turn_changes, turn_journal, usage, vision
+from .. import host_mode, jobs, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -133,7 +133,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         history = [*history, {"role": "user", "content": notice}]
     last_user = next((m for m in reversed(history) if m["role"] == "user"), None)
     query = vision.text_of(last_user["content"]) if last_user else ""
-    model = await _route(db, cid, choice, query, history, previous, last_user, bool(notice), emit)
+    model, tier = await _route(db, cid, choice, query, history, previous, last_user, bool(notice), emit)
     if choice == model_router.AUTO:
         effort = None  # 自动：思考强度跟着路由到的模型走默认档（客户端在“自动”下也不显示强度选择）
     prompt = await build_system_prompt(db, project_id, query)  # 稳定段在前、易变段在后（app/prompt_cache.py）
@@ -158,26 +158,29 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     journal = turn_journal.Journal(cid, task_id)  # 进程被杀时这一轮的进度还在（turn_journal.py）
     await journal.open()
     try:
-        return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model, effort,
-                            plan_mode.State(active=mode == plan_mode.PLAN), inbox)
+        with usage.routing(tier):  # 自动轮的调用打上档位（router_stats 算省了多少）
+            return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model,
+                                effort, plan_mode.State(active=mode == plan_mode.PLAN), inbox)
     finally:
         await journal.close()  # 走到这里结果已由 _drive 落库（或出错/没内容）；只有进程死掉才会留下检查点
 
 
 async def _route(db: AsyncSession, cid: str, choice: str, query: str, history: list[dict], previous: str | None,
-                 last_user: dict | None, notice: bool, emit: Emit) -> str:
+                 last_user: dict | None, notice: bool, emit: Emit) -> tuple[str, str | None]:
     """这一轮用哪个别名（model_router.route；不是 auto 原样返回、零开销）。选了 auto：记到对话上（下一轮接话沿用、
-    客户端显示“自动 · 快速”）并推 turn.model。一轮只定一次（Gemini currentSequenceModel）；备用模型切换仍归 loop。"""
+    客户端显示“自动 · 快速”）并推 turn.model，再记一行路由账（router_stats）。返回 (别名, 档位 | None)。
+    一轮只定一次（Gemini currentSequenceModel）；备用模型切换仍归 loop。"""
     if choice != model_router.AUTO:
-        return choice
+        return choice, None
     content = last_user["content"] if last_user else ""
     images = isinstance(content, list) and any(isinstance(p, dict) and p.get("type") == "image_url" for p in content)
     d = await model_router.route(choice, query, history, previous, images, notice)
     await db.execute(update(Conversation).where(Conversation.id == cid)
                      .values(routed_model=d.model, updated_at=Conversation.updated_at))
+    await router_stats.record(db, cid, d)
     await db.commit()  # 下一次模型调用前提交（SQLite：没提交的写会让 usage.record 撞锁）
     await _try_emit(emit, model_router.wire(d))
-    return d.model
+    return d.model, d.complexity or None
 
 
 async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str, history: list[dict], builder: loop.MessageBuilder,

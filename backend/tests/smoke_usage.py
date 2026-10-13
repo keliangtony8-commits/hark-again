@@ -112,5 +112,5 @@ async def main():
 app = asyncio.run(main())
 from fastapi.testclient import TestClient
 res = TestClient(app).get("/api/usage")
-assert res.status_code == 200 and set(res.json()) == {"currency", "budget", "priced", "today", "month", "daily", "conversations", "last_month"}, res.text
+assert res.status_code == 200 and set(res.json()) == {"currency", "budget", "priced", "today", "month", "daily", "conversations", "last_month", "router"}, res.text
 print("usage smoke OK")

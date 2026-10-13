@@ -5,7 +5,8 @@
 归属：runner 用 scope(conversation_id) 把当前对话放进 contextvar，深处的 llm 调用（滚动摘要、
 记忆向量）自动带上，不用一路传参。worker 也走 run_turn，所以定时任务同样记在它的对话上。
 读：report() 按用户时区出“今天 / 本月”的汇总、本月逐日序列（daily，1 号到今天，没用量的天补 0）
-和本月最花钱的对话（conversations，前 TOP_CONVERSATIONS 个，带标题；对话已删 title=null），
+和本月最花钱的对话（conversations，前 TOP_CONVERSATIONS 个，带标题；对话已删 title=null）、
+本月自动选模型的账（router，规则在 router_stats.py），
 供 GET /api/usage；conversation_report() 出单个对话的
 累计，供 GET /api/conversations/{id}/usage（聊天页顶栏的“本对话用量”）；day_report() 出某一天（用户时区）
 的按模型拆分，供 GET /api/usage/days/{date}（用量图上点某天）。三者同一个 _aggregate 形状。
@@ -23,7 +24,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import prompt_cache, system_alerts
+from . import prompt_cache, router_stats, system_alerts
 from .config import settings
 from .db import SessionLocal
 from .models import Conversation, HomeCard, UsageRecord
@@ -31,6 +32,7 @@ from .models import Conversation, HomeCard, UsageRecord
 log = logging.getLogger(__name__)
 BUDGET_PROMPT = "看看我这个月的模型花费主要花在哪些模型和对话上，给我三条具体的省钱建议。"
 _conversation: ContextVar[str | None] = ContextVar("usage_conversation", default=None)
+_route: ContextVar[str | None] = ContextVar("usage_route", default=None)
 
 
 @contextlib.contextmanager
@@ -40,6 +42,16 @@ def scope(conversation_id: str | None):
         yield
     finally:
         _conversation.reset(token)
+
+
+@contextlib.contextmanager
+def routing(complexity: str | None):
+    """自动轮里的模型调用都打上这一轮的档位（usage.route，router_stats 算“省了多少”）；非自动轮传 None。"""
+    token = _route.set(complexity or None)
+    try:
+        yield
+    finally:
+        _route.reset(token)
 
 
 def current() -> str | None:
@@ -61,7 +73,7 @@ async def record(model: str, kind: str, prompt: int, completion: int, cached: in
         async with SessionLocal() as db:
             db.add(UsageRecord(model=model, kind=kind, conversation_id=_conversation.get(),
                                prompt_tokens=prompt, completion_tokens=completion, cached_tokens=cached,
-                               cost=cost_of(model, prompt, completion, cached)))
+                               cost=cost_of(model, prompt, completion, cached), route=_route.get()))
             await db.commit()
     except Exception:  # 记账永远不能打断正事
         log.exception("usage record failed")
@@ -226,6 +238,7 @@ async def report(db: AsyncSession, now: datetime | None = None) -> dict:
     out["daily"] = await _daily(db, periods["month"], now)
     out["conversations"] = await _top_conversations(db, periods["month"])
     out["last_month"] = await _last_month(db, now)
+    out["router"] = await router_stats.month(db, periods["month"])  # 本月自动选模型的账；没用过“自动” → null
     return out
 
 

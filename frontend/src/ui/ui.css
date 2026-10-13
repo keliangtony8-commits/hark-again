@@ -232,6 +232,12 @@ button.day-row:hover { background: var(--tile); }
 .day-row .meter { flex-basis: 100%; height: 4px; }
 .day-retry { justify-self: start; font-size: var(--fs-xs); color: var(--text-2); padding: var(--sp-2) 0; }
 .day-retry:hover { color: var(--text); }
+/* v1.95 自动选模型的账：同月卡排版；两档占比条 = 墨色（强调色克制）；分类器比省下的还贵 → 大数字与说明换警示色 */
+.router-usage { padding: var(--sp-4); display: grid; gap: var(--sp-2); }
+.router-usage .meter > span { background: var(--ink); }
+.router-legend { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.router-note { margin: 0; font-size: var(--fs-xs); color: var(--text-3); }
+.usage-big.is-losing, .router-note.is-losing { color: var(--warning); }
 .usage-hint { font-size: var(--fs-sm); color: var(--text-2); margin: 0 var(--sp-1); }
 
 /* 定时任务：列表行（整行可点 + 右侧开关）、失败红点、详情页头卡、运行记录 */

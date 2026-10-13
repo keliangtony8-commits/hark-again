@@ -10,9 +10,10 @@ import DailyChart from "./DailyChart";
 import DayBreakdown from "./DayBreakdown";
 import ModelUsageList from "./ModelUsageList";
 import MonthCompare from "./MonthCompare";
+import RouterUsageCard from "./RouterUsageCard";
 import TopConversations from "./TopConversations";
 
-/** 设置页“用量与花费”：本月（对比预算、对比上月同期 MonthCompare）、今天、本月每天（DailyChart，选一天看按模型拆分 DayBreakdown）、最花钱的对话（TopConversations，点开跳进去）、按模型拆分；右上角下载本月 CSV（lib/usageCsv.ts）。只读；记账在后端 app/usage.py。 */
+/** 设置页“用量与花费”：本月（对比预算、对比上月同期 MonthCompare）、今天、本月每天（DailyChart，选一天看按模型拆分 DayBreakdown）、最花钱的对话（TopConversations，点开跳进去）、按模型拆分、自动选模型的账（RouterUsageCard，没用过“自动”不显示）；右上角下载本月 CSV（lib/usageCsv.ts）。只读；记账在后端 app/usage.py。 */
 export default function UsageCard() {
   const [r, setR] = useState<UsageReport | null>(null);
   const [error, setError] = useState("");
@@ -58,6 +59,7 @@ export default function UsageCard() {
       {!isIdle(r) && r.daily && r.daily.length > 0 && <div className="enter" style={stagger(1)}><DailyChart report={r} detail={(day, today) => <DayBreakdown report={r} day={day} today={today} />} /></div>}
       {r.conversations && r.conversations.length > 0 && <div className="enter" style={stagger(2)}><TopConversations report={r} /></div>}
       {r.month.models.length > 0 && <div className="enter" style={stagger(3)}><ModelUsageList models={r.month.models} priced={r.priced} currency={r.currency} /></div>}
+      {r.router && <div className="enter" style={stagger(4)}><RouterUsageCard usage={r.router} currency={r.currency} money={money} /></div>}
       {(!money || hasUnpriced(r)) && (
         <p className="usage-hint">
           {money ? "“未定价”的模型只统计 token。在服务器 .env 的 MODEL_PRICES 里补上单价即可算钱。"

@@ -1,4 +1,5 @@
 // 用量与花费（GET /api/usage）。只读报表：记账在后端 app/usage.py，客户端不算钱。
+import '../ui/format.dart';
 
 /// 提示缓存命中（后端 app/prompt_cache.py）：输入里有多少是供应商缓存命中的（按便宜很多的价格计）。
 /// 没有命中（供应商不报 / 老服务器 / 真没命中）→ null，界面上不显示这一项。
@@ -80,11 +81,78 @@ class LastMonthUsage {
   final UsagePeriod total, toDate; // 只有 calls/tokens/cost，没有按模型拆分
 }
 
+/// 本月“自动选模型”的账（报表的 router；后端 app/router_stats.py 是唯一规则，客户端只排版）。
+/// 老服务器 / 本月一轮“自动”都没有 → null，用量页不显示这一节。
+class RouterUsage {
+  const RouterUsage({required this.turns, this.simple = 0, this.complex = 0, this.free = 0, this.classifierTurns = 0,
+      this.classifierCost = 0, this.classifierMs = 0, this.simpleCost = 0, this.saved, this.net, this.simpleModel = '', this.complexModel = ''});
+  factory RouterUsage.fromJson(Map<String, dynamic> j) {
+    final c = (j['classifier'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return RouterUsage(
+        turns: (j['turns'] as num?)?.toInt() ?? 0,
+        simple: (j['simple'] as num?)?.toInt() ?? 0,
+        complex: (j['complex'] as num?)?.toInt() ?? 0,
+        free: (j['free'] as num?)?.toInt() ?? 0,
+        classifierTurns: (c['turns'] as num?)?.toInt() ?? 0,
+        classifierCost: (c['cost'] as num?)?.toDouble() ?? 0,
+        classifierMs: (c['ms'] as num?)?.toInt() ?? 0,
+        simpleCost: (j['simple_cost'] as num?)?.toDouble() ?? 0,
+        saved: (j['saved'] as num?)?.toDouble(),
+        net: (j['net'] as num?)?.toDouble(),
+        simpleModel: j['simple_model'] as String? ?? '',
+        complexModel: j['complex_model'] as String? ?? '');
+  }
+  final int turns, simple, complex; // 轮数：自动轮合计、走简单档、走复杂档
+  final int free; // 零调用（本地规则 / 接话沿用）就定下的轮
+  final int classifierTurns, classifierMs; // 问了分类器的轮、分类器平均耗时
+  final double classifierCost, simpleCost;
+  final double? saved, net; // 复杂档没定价 → null（不估）
+  final String simpleModel, complexModel; // 两档的显示名
+
+  /// 简单档占自动轮的比例（0..1）。
+  double get simpleShare => turns <= 0 ? 0 : (simple / turns).clamp(0.0, 1.0);
+
+  /// 分类器花的钱超过了省下的（净省为负）：提示可以换成只用规则。
+  bool get losing => (net ?? 0) < 0;
+}
+
+/// “自动选模型”卡的大数字：有估算 → 净省（亏了写“多花”）；没定价 → 轮数。
+String routerHeadline(RouterUsage u, String currency) {
+  final n = u.net;
+  if (n == null) return '${u.turns} 轮';
+  return n < 0 ? '多花 ${formatMoney(-n, currency)}' : '约省 ${formatMoney(n, currency)}';
+}
+
+/// 大数字下面一句：多少轮、两档各多少。
+String routerSplitLine(RouterUsage u) {
+  final simple = u.simpleModel.isEmpty ? '简单档' : u.simpleModel;
+  final complex = u.complexModel.isEmpty ? '复杂档' : u.complexModel;
+  return '本月 ${u.turns} 轮 · $simple ${u.simple} 轮 · $complex ${u.complex} 轮';
+}
+
+/// 分类器花了多少、零调用判掉几轮。
+String routerCostLine(RouterUsage u, String currency, {required bool money}) {
+  final parts = <String>[if (u.free > 0) '${u.free} 轮按规则直接定（不花钱）'];
+  if (u.classifierTurns > 0) {
+    final cost = money ? '，花 ${formatMoney(u.classifierCost, currency)}' : '';
+    final ms = u.classifierMs > 0 ? '，平均 ${u.classifierMs} 毫秒' : '';
+    parts.add('${u.classifierTurns} 轮问了分类器$cost$ms');
+  }
+  return parts.isEmpty ? '都用了默认档' : parts.join(' · ');
+}
+
+/// 卡片底部的说明：怎么算的 / 亏了怎么办 / 没定价。
+String routerNote(RouterUsage u) {
+  if (u.net == null) return '复杂档没配单价，算不出省了多少。在服务器 .env 的 MODEL_PRICES 补上两档单价即可。';
+  if (u.losing) return '分类器花的比省下的还多。可以在服务器 .env 把 MODEL_ROUTER 改成 rules（只用规则、零调用）。';
+  return '按“同样的 token 换成复杂档要花多少”估算，减去分类器的花费。';
+}
+
 /// 预算提醒的三档：只提醒，后端不拦截调用。
 enum BudgetLevel { ok, near, over }
 
 class UsageReport {
-  const UsageReport({required this.currency, this.budget, this.priced = const [], required this.today, required this.month, this.daily = const [], this.conversations = const [], this.lastMonth});
+  const UsageReport({required this.currency, this.budget, this.priced = const [], required this.today, required this.month, this.daily = const [], this.conversations = const [], this.lastMonth, this.router});
   factory UsageReport.fromJson(Map<String, dynamic> j) => UsageReport(
       currency: j['currency'] as String? ?? 'CNY',
       budget: (j['budget'] as num?)?.toDouble(),
@@ -95,7 +163,8 @@ class UsageReport {
       conversations: [
         for (final c in (j['conversations'] as List? ?? const [])) UsageConversation.fromJson((c as Map).cast<String, dynamic>())
       ],
-      lastMonth: j['last_month'] is Map ? LastMonthUsage.fromJson((j['last_month'] as Map).cast<String, dynamic>()) : null);
+      lastMonth: j['last_month'] is Map ? LastMonthUsage.fromJson((j['last_month'] as Map).cast<String, dynamic>()) : null,
+      router: j['router'] is Map ? RouterUsage.fromJson((j['router'] as Map).cast<String, dynamic>()) : null);
   final String currency;
   final double? budget; // null = 没设
   final List<String> priced; // 配了单价的别名；为空时只有 token，没有钱
@@ -103,6 +172,7 @@ class UsageReport {
   final List<UsageDay> daily; // 本月 1 号到今天，每天一项（老服务器没有这个字段 → 空）
   final List<UsageConversation> conversations; // 本月最花钱的几个对话（老服务器 → 空）
   final LastMonthUsage? lastMonth; // 上月全月 + 同期（老服务器 → null，不显示对比）
+  final RouterUsage? router; // 本月自动选模型的账（老服务器 / 没用过“自动” → null）
 
   /// 比较口径：有定价按钱，否则按 token（和月卡大数字同一口径）。
   bool get comparesMoney => priced.isNotEmpty;

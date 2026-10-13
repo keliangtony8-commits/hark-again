@@ -85,6 +85,7 @@
   移植到 backend/app/apply_patch.py（v1.69）；端到端场景 fixtures 原样复制在 backend/tests/fixtures/apply_patch/（Apache License 2.0）
 - google-gemini/gemini-cli packages/core/src/routing/{modelRouterService.ts, routingStrategy.ts, strategies/compositeStrategy.ts, strategies/overrideStrategy.ts, strategies/classifierStrategy.ts, strategies/defaultStrategy.ts}（责任链、override、二选一分类器 rubric 与例子、上文挑选、失败让给默认）— Apache License 2.0, modified
   移植到 backend/app/model_router.py（v1.70）
+  路由事件形状移植自 packages/core/src/telemetry/types.ts ModelRoutingEvent 与 metrics.ts recordModelRoutingMetrics（Apache-2.0, modified）→ backend/app/router_stats.py（v1.95）
 - google-gemini/gemini-cli packages/core/src/sandbox/utils/commandSafety.ts（isKnownSafeCommand / isSafeToCallWithExec / git 与 sed 规则）— Apache License 2.0, modified
   移植到 backend/app/readonly_command.py（v1.71）
 - google-gemini/gemini-cli packages/core/src/tools/exit-plan-mode.ts、policy/policies/plan.toml、prompts/snippets.ts 计划模式段；openai/codex codex-rs/collaboration-mode-templates/templates/plan.md — Apache License 2.0, modified；deepseek-ai/deepseek-harness packages/plan/plan-mode/src/index.ts — MIT

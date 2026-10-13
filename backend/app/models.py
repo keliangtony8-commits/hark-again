@@ -257,6 +257,20 @@ class UsageRecord(Base):
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
     cached_tokens: Mapped[int] = mapped_column(Integer, default=0)  # prompt_tokens 里命中提示缓存的部分（prompt_cache.cached_of）
     cost: Mapped[float] = mapped_column(Float, default=0.0)        # settings.currency
+    route: Mapped[str | None] = mapped_column(String(16), nullable=True)  # 这一轮自动路由到的档位 simple|complex（usage.routing；非自动轮 NULL）
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class Routing(Base):
+    """自动选模型的一次决定（每个 auto 轮一行；Gemini ModelRoutingEvent 的形状，app/router_stats.py）。
+    conversation_id 不设外键：对话删了账还在，和 usage 一样。"""
+    __tablename__ = "routings"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    model: Mapped[str] = mapped_column(String(64))
+    complexity: Mapped[str] = mapped_column(String(16), default="")   # simple | complex | ""
+    source: Mapped[str] = mapped_column(String(32))                  # rules | sticky | classifier | default（去掉链名前缀）
+    ms: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
