@@ -49,8 +49,15 @@ String vaultSummary(List<SecretItem> list) {
 /// 一行里的脱敏说明：登录 → 用户名；Key / 环境变量 → ••••末四位（短值不露）。永远不含明文。
 String secretHint(SecretItem s) => s.isLogin ? (s.username ?? '') : (s.preview.isEmpty ? '' : '••••${s.preview}');
 
-/// 一行的副标题：登录 / Key 是用在哪些域名；环境变量是程序里怎么读它。
-String secretWhere(SecretItem s) => s.isEnv ? '电脑上的命令里读 \$${s.name}' : s.hosts.join('、');
+/// 一行的副标题：登录 / Key 是用在哪些域名（Key 不走默认 Authorization 时再说带法）；环境变量是程序里怎么读它。
+String secretWhere(SecretItem s) {
+  if (s.isEnv) return '电脑上的命令里读 \$${s.name}';
+  final hosts = s.hosts.join('、');
+  if (s.isLogin) return hosts;
+  final q = s.queryParam;
+  if (q != null && q.isNotEmpty) return '$hosts · 网址参数 $q';
+  return s.headerName.toLowerCase() == 'authorization' ? hosts : '$hosts · 请求头 ${s.headerName}';
+}
 
 /// 环境变量名的本地预检（与后端 command_env.check_name 同规则，后端仍会再查一次）：返回错误句，合格返回 null。
 String? envNameError(String raw) {

@@ -41,8 +41,14 @@ export function vaultSummary(list: VaultSecret[]): string {
 /** 脱敏说明：登录 → 用户名；Key / 环境变量 → ••••末四位（短值不露）。 */
 export const secretHint = (s: VaultSecret) => (s.kind === "login" ? s.username ?? "" : s.preview ? `••••${s.preview}` : "");
 
-/** 行副标题：登录 / Key 用在哪些域名；环境变量是程序里怎么读它。 */
-export const secretWhere = (s: VaultSecret) => (s.kind === "env" ? `电脑上的命令里读 $${s.name}` : s.hosts.join("、"));
+/** 行副标题：登录 / Key 用在哪些域名（Key 不走默认 Authorization 时再说带法，v2.52 后端 app/api_keys.py）；环境变量是程序里怎么读它。 */
+export const secretWhere = (s: VaultSecret) => {
+  if (s.kind === "env") return `电脑上的命令里读 $${s.name}`;
+  const hosts = s.hosts.join("、");
+  if (s.kind === "login") return hosts;
+  if (s.query_param) return `${hosts} · 网址参数 ${s.query_param}`;
+  return (s.header_name || "Authorization").toLowerCase() === "authorization" ? hosts : `${hosts} · 请求头 ${s.header_name}`;
+};
 
 export const RESERVED_ENV = new Set(["PATH", "HOME", "LANG", "SHELL", "TMPDIR", "USER", "LOGNAME", "TERM", "COLORTERM", "PWD",
   "OLDPWD", "HOSTNAME", "SHLVL", "IFS", "BASH_ENV", "ENV", "PS1", "LD_PRELOAD", "LD_LIBRARY_PATH", "STDIN_B64"]);

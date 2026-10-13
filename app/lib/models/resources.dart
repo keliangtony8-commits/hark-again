@@ -573,7 +573,7 @@ class Skill {
 
 /// 保险箱条目（脱敏）：服务器永不返回明文，只有 preview。
 class SecretItem {
-  const SecretItem({required this.id, required this.kind, required this.name, this.username, required this.hosts, required this.preview, this.retriedNote});
+  const SecretItem({required this.id, required this.kind, required this.name, this.username, required this.hosts, required this.preview, this.retriedNote, this.queryParam, this.headerName = 'Authorization'});
   factory SecretItem.fromJson(Map<String, dynamic> j) => SecretItem(
     id: j['id'] as String,
     kind: j['kind'] as String? ?? 'api_key',
@@ -582,8 +582,14 @@ class SecretItem {
     hosts: [for (final h in j['hosts'] as List? ?? const []) '$h'],
     preview: j['preview'] as String? ?? '',
     retriedNote: j['retried_note'] as String?,
+    queryParam: j['query_param'] as String?,
+    headerName: j['header_name'] as String? ?? 'Authorization',
   );
   final String id, kind, name, preview;
+
+  /// v2.52 API Key 怎么带上：给了 = 放网址参数 ?queryParam=；否则放请求头 [headerName]（后端 app/api_keys.py）。
+  final String? queryParam;
+  final String headerName;
 
   /// v2.19 只在新建的响应里有：因为这条登录而重跑的碰壁任务那句话（后端 task_wall.retry_note），没有 = null。
   final String? retriedNote;

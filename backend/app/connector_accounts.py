@@ -82,7 +82,7 @@ async def listing(db: AsyncSession) -> str:
             pr = await mcp.problem(db, s)
             parts.append(f"{s.name}（{'令牌被拒' if pr == 'auth' else '连不上' if pr == 'down' else '正常'}）")
         lines.append("MCP 服务器：" + "、".join(parts))
-    lines.append("MCP 服务器和别的 API Key 只能用户自己在「我的 → 连接器 / 保险箱」里加。")
+    lines.append("MCP 服务器用 mcp_servers 添加；别的服务要用户自己的 API Key 用 connect_api_key（卡上填，你看不到）。")
     return "\n".join(lines)
 
 

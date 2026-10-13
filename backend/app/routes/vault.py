@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import command_env, task_wall, vault
+from .. import api_keys, command_env, task_wall, vault
 from ..auth import require_user
 from ..db import get_session
 from ..models import Secret
@@ -20,6 +20,7 @@ class SecretIn(BaseModel):
     hosts: list[str] = Field(default_factory=list)
     header_name: str = "Authorization"
     header_prefix: str = "Bearer "
+    query_param: str | None = None  # v2.52 api_key：Key 放网址参数（?appid=）而不是请求头
 
 
 @router.get("")
@@ -31,7 +32,9 @@ async def list_secrets(db: AsyncSession = Depends(get_session)):
 async def create_secret(body: SecretIn, db: AsyncSession = Depends(get_session)):
     if body.kind == command_env.KIND:
         return await _create_env(body, db)
-    if body.kind not in ("api_key", "login"):
+    if body.kind == "api_key":
+        return await _create_key(body, db)
+    if body.kind != "login":
         raise HTTPException(400, "不认识的类型")
     try:
         s = vault.create(body.name, body.value, body.hosts, body.kind, body.username, body.header_name, body.header_prefix)
@@ -45,6 +48,18 @@ async def create_secret(body: SecretIn, db: AsyncSession = Depends(get_session))
     retried = await task_wall.retry_fixed(db, "needs_login", hosts=s.hosts)  # 卡在“要登录这个域名”的任务重跑一次
     await db.commit()
     return {**vault.public(s), "retried_note": task_wall.retry_note(retried)}
+
+
+async def _create_key(body: SecretIn, db: AsyncSession) -> dict:
+    """API Key：规则全在 api_keys.connect（聊天里的 connect_api_key 卡也走它；同服务再存 = 原地换）。"""
+    try:
+        c = await api_keys.connect(db, body.name, body.value, body.hosts, header_name=body.header_name,
+                                   header_prefix=body.header_prefix, query_param=body.query_param or "", by="user")
+    except api_keys.ConnectError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {**vault.public(c.secret), "replaced": c.replaced, "retried_note": c.retried}
 
 
 async def _create_env(body: SecretIn, db: AsyncSession) -> dict:

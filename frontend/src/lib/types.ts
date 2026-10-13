@@ -253,7 +253,7 @@ export type Connector = { id: string; name: string; desc: string; logo: string; 
 /** problem：还没恢复的问题 "auth"（令牌被拒）| "down"（连不上）| null（规则见后端 connectors/mcp.py）。 */
 /** retried_note（v2.19）只在新建的响应里有：因此重跑的碰壁任务那句话（后端 task_wall.retry_note） */
 export type McpServerInfo = { id: string; name: string; url: string; has_token: boolean; problem?: string | null; retried_note?: string | null };
-export type VaultSecret = { id: string; kind: "api_key" | "login" | "env"; name: string; username: string | null; hosts: string[]; header_name: string; header_prefix: string; preview: string; created_at: string; retried_note?: string | null };
+export type VaultSecret = { id: string; kind: "api_key" | "login" | "env"; name: string; username: string | null; hosts: string[]; header_name: string; header_prefix: string; query_param?: string | null; preview: string; created_at: string; retried_note?: string | null };
 
 /** 记忆笔记（v2.21，服务器 app/memory_notes.py）：一个主题一篇 Markdown。 */
 export type MemoryNote = { id: string; path: string; title: string; kind: string; body: string; created_at?: string; updated_at?: string };

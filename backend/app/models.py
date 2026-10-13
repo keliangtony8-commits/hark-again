@@ -246,6 +246,7 @@ class Secret(Base):
     hosts: Mapped[list] = mapped_column(JSON, default=list)            # 只注入到这些域名（含子域名）
     header_name: Mapped[str] = mapped_column(String(64), default="Authorization")
     header_prefix: Mapped[str] = mapped_column(String(32), default="Bearer ")
+    query_param: Mapped[str | None] = mapped_column(String(40), nullable=True)  # v2.52 给了 = Key 放网址参数（?appid=）而不是请求头
     ciphertext: Mapped[str] = mapped_column(String)
     preview: Mapped[str] = mapped_column(String(16))                   # 末 4 位，供界面辨认
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

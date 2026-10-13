@@ -33,7 +33,7 @@ def decrypt(token: str) -> str:
 
 
 def create(name: str, value: str, hosts: list[str], kind: str = "api_key", username: str | None = None,
-           header_name: str = "Authorization", header_prefix: str = "Bearer ") -> Secret:
+           header_name: str = "Authorization", header_prefix: str = "Bearer ", query_param: str | None = None) -> Secret:
     """kind：api_key（按域名进请求头）| login（浏览器代填）| env（命令环境变量，名字规则在 command_env.py，不绑域名）。"""
     if kind == "env":
         return Secret(name=name, kind="env", username=None, hosts=[], header_name="", header_prefix="",
@@ -42,6 +42,7 @@ def create(name: str, value: str, hosts: list[str], kind: str = "api_key", usern
     return Secret(name=name, kind="login" if login else "api_key", username=username if login else None,
                   hosts=[x for x in (normalize_host(h) for h in hosts) if x],
                   header_name=header_name or "Authorization", header_prefix=header_prefix,
+                  query_param=None if login else (query_param or None),
                   ciphertext=encrypt(value), preview="" if login else value[-4:])  # 密码连末位都不露
 
 
@@ -70,4 +71,4 @@ def reveal(secret: Secret) -> str:
 def public(s: Secret) -> dict:
     return {"id": s.id, "kind": s.kind, "name": s.name, "username": s.username, "hosts": s.hosts,
             "header_name": s.header_name,
-            "header_prefix": s.header_prefix, "preview": s.preview, "created_at": iso(s.created_at)}
+            "header_prefix": s.header_prefix, "query_param": s.query_param, "preview": s.preview, "created_at": iso(s.created_at)}

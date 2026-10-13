@@ -205,7 +205,7 @@ async def call_api():
     from app import credentials
     real = credentials.resolve
     async def no_cred(db, url):
-        return NS(headers={}, connection=None, scrub=[], source="")
+        return NS(headers={}, params={}, connection=None, scrub=[], source="")
     credentials.resolve = no_cred
     try:
         return await api_tool.api_request(ctx, url="https://rebind.example/admin")

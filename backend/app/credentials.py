@@ -3,7 +3,7 @@
 返回 scrub 列表，调用方用它把响应里回显的密钥抹掉。
 连接失效时 access_token 抛 oauth.ReconnectNeeded（已在主页提醒用户），调用方把它的说明交给模型。"""
 from dataclasses import dataclass, field
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ class Resolved:
     source: str | None = None          # 给模型看的来源名，如 “GitHub 连接”
     scrub: list[str] = field(default_factory=list)
     connection: Connection | None = None  # 用的是哪个 OAuth 连接（对方回 401 → 判它失效）
+    params: dict[str, str] = field(default_factory=dict)  # v2.52 Key 放网址参数的服务（api_keys.Scheme.query_param）
 
 
 async def resolve(db: AsyncSession, url: str) -> Resolved:
@@ -31,6 +32,8 @@ async def resolve(db: AsyncSession, url: str) -> Resolved:
             return Resolved({"Authorization": f"Bearer {tok}"}, f"{p.name} 连接（{conn.account}）", [tok], conn)
     if secret := await vault.find_for_url(db, url):
         value = vault.reveal(secret)
+        if secret.query_param:
+            return Resolved({}, f"保险箱「{secret.name}」", [value, quote(value, safe="")], params={secret.query_param: value})
         return Resolved({secret.header_name: f"{secret.header_prefix}{value}"}, f"保险箱「{secret.name}」", [value])
     return Resolved()
 

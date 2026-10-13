@@ -65,6 +65,12 @@ void main() {
     expect(secretHint(env), '');
     expect(secretWhere(env), r'电脑上的命令里读 $TG_TOKEN');
     expect(secretWhere(sec('k')), 'a.com');
+    // v2.52：Key 不走默认 Authorization 时副标题说带法
+    expect(secretWhere(SecretItem.fromJson({'id': 'q', 'kind': 'api_key', 'name': 'w', 'hosts': ['api.w.com'], 'preview': '1234', 'query_param': 'appid'})),
+        'api.w.com · 网址参数 appid');
+    expect(secretWhere(SecretItem.fromJson({'id': 'h', 'kind': 'api_key', 'name': 'n', 'hosts': ['api.n.com'], 'preview': '1234', 'header_name': 'x-api-key'})),
+        'api.n.com · 请求头 x-api-key');
+    expect(secretWhere(SecretItem.fromJson({'id': 'l', 'kind': 'login', 'name': 'l', 'hosts': ['t.com'], 'preview': '', 'header_name': 'x'})), 't.com');
     expect(envName(r' $tg_token '), 'TG_TOKEN');
     expect(envNameError('tg_token'), isNull);
     expect(envNameError('PATH'), contains('系统变量'));
