@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, command_env, llm_retry, plan, plan_mode, spill, steering, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, compact, deferred, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
+from . import approvals, claimed_action, compact, deferred, distill, loop_guard, next_speaker, parallel, supersede, tool_args, tool_mask, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -257,6 +257,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     max_steps, spent, step = max(1, limits.max_steps), 0, 0
     ended = "done"
     nudges, used_tools = next_speaker.limit(), False  # 话说一半就停：替用户补“继续”的剩余次数（next_speaker.py）
+    claims_left, acted = claimed_action.ONCE, set()  # 嘴上做完、手上没做：拦的剩余次数 + 这一轮成功完成的工具（claimed_action.py）
     while True:
         if inbox is not None and inbox.pending():  # 用户在途中补了话：作为新的用户消息接在后面（Codex pending input）
             builder.break_text()
@@ -353,6 +354,14 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                 if said.strip():
                     messages.append({"role": "assistant", "content": said})
                 continue
+            if not turn.tool_calls and not over and claims_left > 0 and step < max_steps - 1 \
+                    and (claim := claimed_action.claims(said, acted)):
+                claims_left -= 1  # 宣称“已经删掉了”却没调对应工具：这段不交付，撤回后让它真做或改口
+                for ev in builder.rollback(mark):
+                    yield ev
+                messages += [{"role": "assistant", "content": said},
+                             {"role": "user", "content": claimed_action.nudge(*claim)}]
+                continue
             if not turn.tool_calls and not over and nudges > 0 and step < max_steps - 1 \
                     and await next_speaker.decide(said, turn.cut, used_tools, messages):
                 nudges -= 1  # 说了要做却没做 / 被截断 / 用完工具一句没说：补一句“继续”再来一圈（Gemini client.ts）
@@ -389,6 +398,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                     if isinstance(ev, ToolResult):
                         results[group[0]] = ev
                     else:
+                        _note_done(ev, acted)
                         yield ev
             else:
                 def start(k: int, group=group):
@@ -399,6 +409,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                         if isinstance(ev, parallel.Settled):
                             results[group[ev.index]] = ev.result
                         else:
+                            _note_done(ev, acted)
                             yield ev
             for i in group:  # 同一组的都已经真跑过：全部按顺序提交；打转判定只看到第一次命中为止
                 call, result = calls[i], results[i]
@@ -431,6 +442,12 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         ended = "wrapped"
     yield Done(builder.blocks, ended)
 
+
+
+def _note_done(ev, acted: set[str]) -> None:
+    """工具这一步成功完成（时间线 done）：记下名字，供 claimed_action 判断“说做完了”有没有对应的工具。"""
+    if isinstance(ev, ToolStatus) and ev.state == "done":
+        acted.add(ev.name)
 
 
 async def _compact(squeeze: compact.Compactor, messages: list[dict], seen: supersede.Tracker,
