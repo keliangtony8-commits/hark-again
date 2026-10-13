@@ -20,7 +20,10 @@ import re
 import time
 import uuid
 
-from ... import browser_client, browser_files, browser_sessions, system_alerts, task_wall, vault, web_guard
+import asyncio
+
+from ... import browser_client, browser_files, browser_sessions, browser_shot, deliver, file_edit, file_seen, system_alerts, task_wall, vault, web_guard
+from ...storage import project_dir
 from ...browser_sessions import Tab
 from ...config import settings
 from .. import approvals
@@ -212,8 +215,8 @@ async def browser_read(ctx: ToolContext) -> ToolResult:
 
 
 @tool("browser_look", "正在看页面",
-      "截一张云浏览器当前画面给你看。快照文字说不清时再用（图表、图片内容、布局、按钮在哪、页面是否正常显示），"
-      "比快照费 token，别每步都截。",
+      "截一张云浏览器当前画面给你看（只给你看，不存文件、不交给用户；用户要截图用 browser_screenshot）。"
+      "快照文字说不清时再用（图表、图片内容、布局、按钮在哪、页面是否正常显示），比快照费 token，别每步都截。",
       {"type": "object", "properties": {}})
 async def browser_look(ctx: ToolContext) -> ToolResult:
     tab = _tab(ctx)
@@ -228,6 +231,50 @@ async def browser_look(ctx: ToolContext) -> ToolResult:
     if r.status_code >= 400:
         raise RuntimeError(f"截图失败（{r.status_code}）")
     return ToolResult("当前页面截图：", [_card(tab)], images=[ToolImage("页面截图.jpg", r.content)])
+
+
+@tool("browser_screenshot", "正在截图",
+      "把云浏览器当前页面截图存成工作区里的图片文件，默认直接作为文件卡交给用户。用户说“截个图给我 / 保存这个页面的样子”时用这个；"
+      "不要用 image_search 去网上找截图冒充。full_page=true 截整页长图。不会覆盖已有文件（重名自动编号）。",
+      {"type": "object", "properties": {
+          "path": {"type": "string", "default": "", "description": f"存到哪（.png / .jpg，相对工作区）；空 = {browser_shot.DIR}/<网站>.png"},
+          "full_page": {"type": "boolean", "default": False, "description": "整页长图（默认只截当前可见画面）"},
+          "show": {"type": "boolean", "default": True, "description": "存好直接交给用户"}}})
+async def browser_screenshot(ctx: ToolContext, path: str = "", full_page: bool = False, show: bool = True) -> ToolResult:
+    tab = _tab(ctx)
+    if not tab.session:
+        return ToolResult(NOT_OPEN)
+    root = project_dir(ctx.workspace)
+    try:
+        first, fmt = browser_shot.target(root, browser_sessions.site_of(tab.url) or tab.session, path)
+        p = browser_shot.free(first)
+    except browser_shot.ShotError as e:
+        return ToolResult(f"没截成：{e}", failed="没截成")
+    q = f"/screen?format={fmt}&full={'true' if full_page else 'false'}"
+    if fmt == "jpeg":
+        q += f"&quality={browser_shot.JPEG_QUALITY}"
+    try:
+        r = await browser_client.call(tab.session, "GET", q)
+    except browser_client.BrowserDown as e:
+        return _down(tab, e)
+    if r.status_code == 404:
+        return ToolResult("这个会话的浏览器已经关了（空闲太久会自动关），先用 browser_open 重新打开。")
+    if r.status_code >= 400:
+        raise RuntimeError(f"截图失败（{r.status_code}）")
+    owner = file_seen.owner_of(ctx.conversation_id, ctx.task_id)
+    try:
+        shot = await asyncio.to_thread(browser_shot.save, ctx.workspace, p, r.content, fmt, full_page,
+                                       r.headers.get("x-shot-cut") == "1", ctx.changes, owner, first)
+    except browser_shot.ShotError as e:
+        return ToolResult(f"没截成：{e}", failed="没截成")
+    blocks, note = [], ""
+    if show:
+        try:
+            blocks.append((await asyncio.to_thread(deliver.deliver, ctx.workspace, shot.rel)).block)
+        except deliver.DeliverError as e:
+            show, note = False, f"\n没交付：{e}"
+    res = await _after(ctx, tab, browser_shot.for_model(shot, show) + note)
+    return ToolResult(res.content, blocks + res.blocks, change=file_edit.change(shot.rel, None, ""), detail=browser_shot.detail(shot))
 
 
 async def _login_form(ctx: ToolContext, args: dict) -> dict | None:

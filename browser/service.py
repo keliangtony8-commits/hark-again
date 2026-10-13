@@ -575,14 +575,35 @@ def png_height(data: bytes) -> int:
 
 
 # ---- 实时画面与人工接管 ----
+SHOT_FORMATS = ("jpeg", "png")
+SHOT_HEIGHT_JS = "Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)"
+
+
 @app.get("/sessions/{name}/screen", dependencies=[Depends(auth)])
-async def screen(name: str):
+async def screen(name: str, format: str = "jpeg", full: bool = False, quality: int = 60):
+    """当前画面。默认 = 实时画面卡用的 JPEG q60 视口；存文件（backend browser_shot）用 png / full=整页。
+    整页高过 RENDER_PNG_MAX_H 只截最上面那一段，X-Shot-Cut: 1。"""
+    if format not in SHOT_FORMATS:
+        raise HTTPException(400, "format 只能是 jpeg 或 png")
     if _browser and not _browser.is_connected():
         _forget_browser()
     if name not in _sessions:
         raise HTTPException(404)
     page = _sessions[name][1]
-    return Response(await page.screenshot(type="jpeg", quality=60), media_type="image/jpeg")
+    kw: dict = {"type": format}
+    if format == "jpeg":
+        kw["quality"] = max(30, min(95, quality))
+    cut = False
+    if full:
+        kw["full_page"] = True
+        try:
+            height = int(await page.evaluate(SHOT_HEIGHT_JS))
+        except Exception:
+            height = 0
+        if height > RENDER_PNG_MAX_H:
+            kw["clip"] = {"x": 0, "y": 0, "width": (page.viewport_size or {}).get("width", 1280), "height": RENDER_PNG_MAX_H}
+            cut = True
+    return Response(await page.screenshot(**kw), media_type=f"image/{format}", headers={"X-Shot-Cut": "1" if cut else "0"})
 
 
 @app.post("/sessions/{name}/mouse", dependencies=[Depends(auth)])

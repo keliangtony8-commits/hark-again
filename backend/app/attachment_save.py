@@ -45,7 +45,7 @@ def _sha(p: Path) -> str:
     return h.hexdigest()
 
 
-def _numbered(p: Path, n: int) -> Path:
+def numbered(p: Path, n: int) -> Path:
     return p.with_name(f"{p.stem} ({n}){p.suffix}")
 
 
@@ -90,7 +90,7 @@ def save(workspace: str, uid: str, path: str = "", tracker=None, owner: str | No
     digest = None
     for n in range(2, NAME_MAX + 2):
         if p.is_dir():
-            p = _numbered(first, n)
+            p = numbered(first, n)
             continue
         if not p.exists():
             break
@@ -98,7 +98,7 @@ def save(workspace: str, uid: str, path: str = "", tracker=None, owner: str | No
             digest = digest or _sha(src)
             if _sha(p) == digest:
                 return Saved(src.name, p.relative_to(root).as_posix(), size, True, p != first)
-        p = _numbered(first, n)
+        p = numbered(first, n)
     else:
         raise SaveError(f"{first.relative_to(root).as_posix()} 重名的太多了，换个名字或目录。")
     try:

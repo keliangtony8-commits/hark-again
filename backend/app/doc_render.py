@@ -20,12 +20,11 @@ import io
 import html as html_lib
 import os
 import re
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote
 
-from . import browser_client, file_seen, quota
+from . import browser_client, quota, workspace_write
 from .storage import hidden, looks_text, mime_of, project_dir, safe_join
 
 FORMATS = ("pdf", "png")
@@ -224,26 +223,11 @@ def inline_assets(doc: str, root: Path, base: Path) -> tuple[str, list[str]]:
 
 
 def _write(workspace: str, p: Path, data: bytes, tracker, owner: str | None) -> bool:
-    """原子写入；返回是否覆盖了已有文件。配额不够 → RenderError。"""
-    existed = p.is_file()
-    grow = len(data) - (p.stat().st_size if existed else 0)
+    """原子写入（workspace_write.put）；返回是否覆盖了已有文件。配额不够 → RenderError。"""
     try:
-        quota.check(workspace, max(grow, 0))
+        return workspace_write.put(workspace, p, data, tracker, owner)
     except quota.QuotaError as e:
         raise RenderError(f"没有存：{e}") from None
-    root = project_dir(workspace)
-    if tracker is not None:
-        tracker.before(root, p)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(f".{p.name}.{uuid.uuid4().hex[:8]}.part")
-    try:
-        tmp.write_bytes(data)
-        os.replace(tmp, p)
-    finally:
-        tmp.unlink(missing_ok=True)
-    file_seen.observe(owner, p)
-    quota.forget(workspace)
-    return existed
 
 
 def pdf_pages(data: bytes) -> int | None:

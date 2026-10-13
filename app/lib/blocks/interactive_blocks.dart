@@ -33,7 +33,7 @@ class FileBlockView extends ConsumerWidget {
           borderRadius: BorderRadius.circular(Radii.md),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 320),
-            child: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => _chip(context, url)),
+            child: Image.network(url, fit: BoxFit.cover, alignment: Alignment.topCenter, errorBuilder: (_, _, _) => _chip(context, url)),  // 整页长截图：露出页面顶部
           ),
         ),
       );

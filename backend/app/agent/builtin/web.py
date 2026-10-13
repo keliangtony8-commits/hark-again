@@ -51,7 +51,8 @@ async def web_search(ctx: ToolContext, query: str, recent: str = "") -> ToolResu
 
 @tool("image_search", "正在搜图片",
       "搜网络图片，返回图片地址、缩略图、所在网页和来源。用户想看某样东西长什么样、商品卡 / Home 卡需要配图时用；"
-      "拿到的图片地址再交给 show_images / show_products。图片要配它所在网页的来源，不要拿别的网站的图冒充。",
+      "拿到的图片地址再交给 show_images / show_products。图片要配它所在网页的来源，不要拿别的网站的图冒充。"
+      "要给用户看某个网页现在的样子 → 用 browser_screenshot 截图，不是来这里搜。",
       {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}, parallel=True)
 async def image_search(ctx: ToolContext, query: str) -> ToolResult:
     seen, rows = set(), []
