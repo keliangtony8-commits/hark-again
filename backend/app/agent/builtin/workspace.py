@@ -2,13 +2,11 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_env, command_guard, computer, deliver, documents, file_edit, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, command_env, command_guard, computer, deliver, documents, file_edit, file_read, file_seen, foreground, job_memory, jobs, memory_view, quota, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
 
-MAX_READ = 12000
-MAX_READ_LIMIT = 20000
 
 
 def _command_risk(args: dict, ctx=None) -> str | None:
@@ -73,26 +71,46 @@ async def grep(ctx: ToolContext, pattern: str, path: str = "", include: str = ""
 
 @tool("read_file", "正在读文件",
       "读取工作区里的文本文件；图片文件（jpg/png/webp/gif）会直接给你看；PDF / Word(.docx) / Excel(.xlsx) / "
-      "PowerPoint(.pptx) 抽成文字（每页有“第 N 页”标记，pages 选页，一次最多 50 页）。长文件用 offset / limit 分段读"
-      "（也能读被省略的长输出 .spill/… 和后台任务完整日志 .jobs/<id>/log）。用户发的附件内容不全时，用 attachment 读全文。",
+      "PowerPoint(.pptx) 抽成文字（每页有“第 N 页”标记，pages 选页，一次最多 50 页）。"
+      "长文件分段读（也能读被省略的长输出 .spill/… 和后台任务完整日志 .jobs/<id>/log）："
+      "mode=chars（默认）offset/limit 按字符；mode=lines 按行号（offset 从 1 起，和 grep 的行号一致；负数 = 最后 N 行，看日志尾巴用 offset=-100），"
+      "每行带“行号: ”前缀（edit_file 时别带上）；mode=bytes 按字节（负数 offset = 从结尾倒数，一次最多 24000）。"
+      "多大的文件都能读，不会整篇读进内存。用户发的附件内容不全时，用 attachment 读全文。",
       {"type": "object", "properties": {
           "path": _PATH,
           "attachment": {"type": "string", "description": "代替 path：读用户在聊天里发的附件（附件说明里给的编号）"},
           "pages": {"type": "string", "description": "只对 PDF / PowerPoint / Excel：要哪些页（幻灯片 / 工作表），如 \"1-5,9\"；不给 = 从第 1 页起 50 页"},
-          "offset": {"type": "integer", "default": 0, "description": "从第几个字符开始（负数 = 从结尾倒数）"},
-          "limit": {"type": "integer", "default": MAX_READ, "maximum": MAX_READ_LIMIT, "description": "最多读多少字符"}}},
+          "mode": {"type": "string", "enum": list(file_read.MODES), "default": "chars",
+                   "description": "chars 按字符 / lines 按行 / bytes 按字节"},
+          "offset": {"type": "integer", "default": 0,
+                     "description": "chars：第几个字符；lines：第几行（从 1 起）；bytes：第几个字节。负数 = 从结尾倒数"},
+          "limit": {"type": "integer", "default": 0,
+                    "description": f"读多少（0 = 默认）：chars 默认 {file_read.CHARS_DEFAULT} 最多 {file_read.CHARS_MAX} 字；"
+                                   f"lines 默认最多 {file_read.LINES_MAX} 行；bytes 最多 {file_read.BYTES_MAX} 字节"}}},
       parallel=True)
-async def read_file(ctx: ToolContext, path: str = "", offset: int = 0, limit: int = MAX_READ, pages: str = "",
-                    attachment: str = "") -> ToolResult:
+async def read_file(ctx: ToolContext, path: str = "", offset: int = 0, limit: int = 0, pages: str = "",
+                    attachment: str = "", mode: str = "chars") -> ToolResult:
     if bool(path.strip()) == bool(attachment.strip()):
         return ToolResult("path 和 attachment 给一个：工作区文件用 path，用户发的附件用 attachment。", failed="参数不对")
+    if (mode or "chars").strip().lower() not in file_read.MODES:
+        return ToolResult(f"mode 只能是 {' / '.join(file_read.MODES)}。", failed="参数不对")
     if attachment.strip():
-        return await _read_attachment(attachment.strip(), offset, limit, pages)
+        return await _read_attachment(attachment.strip(), offset, limit, pages, mode)
     p = safe_join(project_dir(ctx.workspace), path)
-    return _with_rules(ctx, p, await _read_file(ctx, p, path, offset, limit, pages))
+    return _with_rules(ctx, p, await _read_file(ctx, p, path, offset, limit, pages, mode))
 
 
-async def _read_file(ctx: ToolContext, p, path: str, offset: int, limit: int, pages: str = "") -> ToolResult:
+async def _text(src, mode: str, offset: int, limit: int, head: str = "") -> ToolResult:
+    """读文字的唯一出口：规则在 app/file_read.py（流式、不整篇进内存）；放到线程里读，不卡住别的对话。"""
+    try:
+        text, detail = await asyncio.to_thread(file_read.read, src, mode, offset, limit)
+    except file_read.ReadError as e:
+        return ToolResult(str(e), failed="超出范围")
+    return ToolResult(f"{head}{text}", detail=detail)
+
+
+async def _read_file(ctx: ToolContext, p, path: str, offset: int, limit: int, pages: str = "",
+                     mode: str = "chars") -> ToolResult:
     file_seen.observe(_owner(ctx), p)  # 看过（哪怕只读一段 / 不存在）：之后 write_file 才许覆盖，规则在 file_seen.py
     if not p.is_file():
         return ToolResult("文件不存在。")
@@ -101,15 +119,14 @@ async def _read_file(ctx: ToolContext, p, path: str, offset: int, limit: int, pa
         if size > vision.TOOL_IMAGE_MAX_BYTES:
             return ToolResult(f"{path} 是图片，但太大（{size} B），先用 run_command 缩小再看。")
         return ToolResult(f"{path} 是图片（{size} B）。", images=[ToolImage(p.name, p.read_bytes())])
-    if doc := await _document(p, path, offset, limit, pages):
+    if doc := await _document(p, path, offset, limit, pages, mode):
         return doc
     if not looks_text(p):
         return ToolResult(f"{path} 不是文本文件（{p.stat().st_size} B），可以用 run_command 处理。")
-    text = p.read_text(encoding="utf-8", errors="replace")
-    return ToolResult(page(text, offset, limit))
+    return await _text(p, mode, offset, limit)
 
 
-async def _document(p, label: str, offset: int, limit: int, pages: str) -> ToolResult | None:
+async def _document(p, label: str, offset: int, limit: int, pages: str, mode: str = "chars") -> ToolResult | None:
     """PDF / docx / xlsx / pptx（规则在 app/documents.py）；不是文档 = None（照文本 / 二进制处理）。"""
     with p.open("rb") as f:
         head = f.read(8)
@@ -124,10 +141,10 @@ async def _document(p, label: str, offset: int, limit: int, pages: str) -> ToolR
     except documents.DocError as e:
         return ToolResult(str(e), failed="读不了")
     head_line = doc.header(label)
-    return ToolResult(f"{head_line}\n\n{page(doc.text, offset, limit)}" if doc.text else head_line)
+    return await _text(doc.text, mode, offset, limit, f"{head_line}\n\n") if doc.text else ToolResult(head_line)
 
 
-async def _read_attachment(uid: str, offset: int, limit: int, pages: str) -> ToolResult:
+async def _read_attachment(uid: str, offset: int, limit: int, pages: str, mode: str = "chars") -> ToolResult:
     """用户在聊天里发的附件（uploads/<id>/文件名）：和工作区文件同样的读法；只读，不进 file_seen。"""
     try:
         p = upload_path(uid)
@@ -140,11 +157,11 @@ async def _read_attachment(uid: str, offset: int, limit: int, pages: str) -> Too
         if size > vision.TOOL_IMAGE_MAX_BYTES:
             return ToolResult(f"附件 {p.name} 是图片，但太大（{size} B）。")
         return ToolResult(f"附件 {p.name} 是图片（{size} B）。", images=[ToolImage(p.name, p.read_bytes())])
-    if doc := await _document(p, f"附件 {p.name}", offset, limit, pages):
+    if doc := await _document(p, f"附件 {p.name}", offset, limit, pages, mode):
         return doc
     if not looks_text(p):
         return ToolResult(f"附件 {p.name} 不是文本文件（{p.stat().st_size} B），读不了内容。")
-    return ToolResult(page(p.read_text(encoding="utf-8", errors="replace"), offset, limit))
+    return await _text(p, mode, offset, limit)
 
 
 @tool("save_attachment", "正在把附件存进工作区",
@@ -162,18 +179,6 @@ async def save_attachment(ctx: ToolContext, attachment: str, path: str = "") -> 
         return ToolResult(str(e), failed="没存成")
     c = None if s.reused else file_edit.change(s.rel, None, "")
     return ToolResult(attachment_save.for_model(s), change=c, detail=attachment_save.detail(s))
-
-
-def page(text: str, offset: int = 0, limit: int = MAX_READ) -> str:
-    """按字符分页：全文放得下原样返回；否则给这一段并说明位置和下一段从哪开始。"""
-    total = len(text)
-    limit = max(200, min(int(limit or MAX_READ), MAX_READ_LIMIT))
-    start = max(0, total + offset if offset < 0 else min(offset, total))
-    if start == 0 and total <= limit:
-        return text
-    end = min(total, start + limit)
-    more = f"下一段用 offset={end}" if end < total else "已到结尾"
-    return f"{text[start:end]}\n…（第 {start}–{end} 字符，共 {total} 字符；{more}）"
 
 
 @tool("write_file", "正在写文件",
@@ -206,7 +211,7 @@ async def write_file(ctx: ToolContext, path: str, content: str) -> ToolResult:
       "精确修改工作区里已有的文本文件：把 old_string 换成 new_string，其余内容原样不动。"
       "old_string 要和文件里一字不差（含缩进），并且只出现一处——不唯一时多带几行上下文；"
       "要把所有出现都换掉设 replace_all=true。删一段就让 new_string 为空。新建文件或整篇重写用 write_file。"
-      "改之前先 read_file 看准原文。",
+      "改之前先 read_file 看准原文（old_string 别带 mode=lines 的“行号: ”前缀）。",
       {"type": "object", "properties": {
           "path": _PATH,
           "old_string": {"type": "string", "description": "要替换的原文，一字不差"},

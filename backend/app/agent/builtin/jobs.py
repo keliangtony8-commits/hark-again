@@ -63,7 +63,7 @@ async def job_status(ctx: ToolContext, job_id: str = "", chars: int = 3000, wait
     more = ""
     if dropped:  # render.ts：被丢掉的部分要说清完整输出在哪
         more = (f"\n（前面还有约 {dropped} 字节没显示。完整日志：{jobs.log_path(job)}，"
-                "用 read_file 按 offset 分段读）")
+                "用 read_file mode=lines 按行读（offset=-200 看最后 200 行））")
     use = await job_usage.of(job) if job.state == "running" else None
     tight = ""
     oomed = job.stop_reason == jobs.OOM_REASON

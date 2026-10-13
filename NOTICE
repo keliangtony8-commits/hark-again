@@ -113,3 +113,5 @@
   参考写成 backend/app/agent/deferred.py（v2.05）
 - google-gemini/gemini-cli packages/core/src/core/baseLlmClient.ts generateJson/cleanJsonResponse + utils/schemaValidator.ts（JSON 输出去围栏、不合法重试、完整 schema 校验且忽略未知关键字、按 $schema 选草案）— Apache License 2.0, Copyright 2025 Google LLC, idea only, modified（加了校验错误回喂修正、切块合并）
   参考写成 backend/app/extract.py（v2.07）
+- deepseek-ai/deepseek-harness packages/fs/tool-fs/src/read-render.ts buildWindow + read.ts（有界行窗口：行号、单行截断、字节上限、数准总行数、超范围报错）— MIT License, Copyright (c) 2026 DeepSeek, modified（按字节扫行、倒数 N 行、按字节读、中文提示）
+  移植到 backend/app/file_read.py（v2.12）
