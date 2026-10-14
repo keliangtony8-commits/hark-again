@@ -14,7 +14,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import documents, file_read, vision, workspace_search
+from . import archives, documents, file_read, vision, workspace_search
 from .storage import hidden, looks_text, mime_of, project_dir, safe_join
 
 FILES_MAX = 20
@@ -87,6 +87,8 @@ def _kind(p: Path) -> str | None:
         head = f.read(8)
     if documents.kind_of(p.name, head) is not None or documents.is_old(p.name):
         return "是文档（PDF/Office），用 read_file 读（可以选页）"
+    if archives.kind_of(p.name):
+        return "是压缩包，用 read_file 看里面有什么（member 读其中一个，不用解压）"
     if not looks_text(p):
         return "不是文本文件"
     return None

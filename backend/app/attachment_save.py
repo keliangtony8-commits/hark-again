@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import file_seen, quota
+from . import archives, file_seen, quota
 from .storage import hidden, project_dir, safe_join, sandbox_rel, upload_path
 
 DIR = "uploads"     # 默认放进工作区的哪个目录
@@ -140,4 +140,6 @@ def hint(blocks: list[dict]) -> str:
     if not ups:
         return ""
     ids = "、".join(f"{b.get('name') or '附件'} = {b['id']}" for b in ups)
-    return f"（附件编号：{ids}。要在命令里处理（解压、转码、跑脚本…）先用 {TOOL} 存进工作区。）"
+    peek = "；压缩包只是看里面有什么 / 读其中一个，用 read_file attachment（member 选文件），不用存也不用解压" \
+        if any(archives.kind_of(b.get("name") or "") for b in ups) else ""
+    return f"（附件编号：{ids}。要在命令里处理（解压、转码、跑脚本…）先用 {TOOL} 存进工作区{peek}。）"

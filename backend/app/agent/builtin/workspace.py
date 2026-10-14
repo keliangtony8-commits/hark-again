@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, duplicates, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, job_usage, jobs, memory_view, missing_env, omission, quota, read_many, runaway, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, archives, attachment_save, duplicates, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, job_usage, jobs, memory_view, missing_env, omission, quota, read_many, runaway, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -95,10 +95,13 @@ async def find_duplicates(ctx: ToolContext, path: str = "", include: str = "") -
       "长文件分段读（也能读被省略的长输出 .spill/… 和后台任务完整日志 .jobs/<id>/log）："
       "mode=chars（默认）offset/limit 按字符；mode=lines 按行号（offset 从 1 起，和 grep 的行号一致；负数 = 最后 N 行，看日志尾巴用 offset=-100），"
       "每行带“行号: ”前缀（edit_file 时别带上）；mode=bytes 按字节（负数 offset = 从结尾倒数，一次最多 24000）。"
-      "多大的文件都能读，不会整篇读进内存。用户发的附件内容不全时，用 attachment 读全文。",
+      "多大的文件都能读，不会整篇读进内存。用户发的附件内容不全时，用 attachment 读全文。"
+      "压缩包（.zip/.tar/.tar.gz/.tgz/.gz）直接列出里面有什么（大小、最大的几个、加密的）；member=\"包里的路径\" 读其中一个"
+      "（文字、图片、PDF/Office 都行），不用解压到工作区。只是看看就别解压，用户要把文件拿出来用才 run_command 解压。",
       {"type": "object", "properties": {
           "path": _PATH,
           "attachment": {"type": "string", "description": "代替 path：读用户在聊天里发的附件（附件说明里给的编号）"},
+          "member": {"type": "string", "description": "只对压缩包：读包里的哪个文件（路径，如 资料/答案.txt；给文件夹 = 只列那个文件夹）"},
           "pages": {"type": "string", "description": "只对 PDF / PowerPoint / Excel：要哪些页（幻灯片 / 工作表），如 \"1-5,9\"；不给 = 从第 1 页起 50 页"},
           "mode": {"type": "string", "enum": list(file_read.MODES), "default": "chars",
                    "description": "chars 按字符 / lines 按行 / bytes 按字节"},
@@ -109,15 +112,15 @@ async def find_duplicates(ctx: ToolContext, path: str = "", include: str = "") -
                                    f"lines 默认最多 {file_read.LINES_MAX} 行；bytes 最多 {file_read.BYTES_MAX} 字节"}}},
       parallel=True)
 async def read_file(ctx: ToolContext, path: str = "", offset: int = 0, limit: int = 0, pages: str = "",
-                    attachment: str = "", mode: str = "chars") -> ToolResult:
+                    attachment: str = "", mode: str = "chars", member: str = "") -> ToolResult:
     if bool(path.strip()) == bool(attachment.strip()):
         return ToolResult("path 和 attachment 给一个：工作区文件用 path，用户发的附件用 attachment。", failed="参数不对")
     if (mode or "chars").strip().lower() not in file_read.MODES:
         return ToolResult(f"mode 只能是 {' / '.join(file_read.MODES)}。", failed="参数不对")
     if attachment.strip():
-        return await _read_attachment(attachment.strip(), offset, limit, pages, mode)
+        return await _read_attachment(attachment.strip(), offset, limit, pages, mode, member)
     p = safe_join(project_dir(ctx.workspace), path)
-    return _with_rules(ctx, p, await _read_file(ctx, p, path, offset, limit, pages, mode))
+    return _with_rules(ctx, p, await _read_file(ctx, p, path, offset, limit, pages, mode, member))
 
 
 @tool("read_many_files", "正在读几个文件",
@@ -146,10 +149,12 @@ async def _text(src, mode: str, offset: int, limit: int, head: str = "") -> Tool
 
 
 async def _read_file(ctx: ToolContext, p, path: str, offset: int, limit: int, pages: str = "",
-                     mode: str = "chars") -> ToolResult:
+                     mode: str = "chars", member: str = "") -> ToolResult:
     file_seen.observe(_owner(ctx), p)  # 看过（哪怕只读一段 / 不存在）：之后 write_file 才许覆盖，规则在 file_seen.py
     if not p.is_file():
         return ToolResult("文件不存在。")
+    if r := await _archive(p, path, member, offset, limit, pages, mode):
+        return r
     if mime_of(p.name) in vision.IMAGE_MIMES:
         size = p.stat().st_size
         if size > vision.TOOL_IMAGE_MAX_BYTES:
@@ -180,7 +185,63 @@ async def _document(p, label: str, offset: int, limit: int, pages: str, mode: st
     return await _text(doc.text, mode, offset, limit, f"{head_line}\n\n") if doc.text else ToolResult(head_line)
 
 
-async def _read_attachment(uid: str, offset: int, limit: int, pages: str, mode: str = "chars") -> ToolResult:
+async def _archive(p, label: str, member: str, offset: int, limit: int, pages: str, mode: str) -> ToolResult | None:
+    """压缩包（规则在 app/archives.py）：不给 member 列目录，给了在内存里读那一个；不是压缩包 = None。
+    member 给了却不是压缩包 → 明说（不默默忽略）。"""
+    if archives.is_other(p.name):
+        return ToolResult(f"{label} 是 7z/rar，不解压看不了：用 run_command（`7z l` 列目录 / `7z x` 解压），"
+                          "只是看看的话解到临时目录、看完删掉。") if not member else ToolResult(
+            f"{label} 是 7z/rar，member 读不了：用 run_command `7z x` 解出那一个。", failed="读不了")
+    if archives.kind_of(p.name) is None or documents.kind_of(p.name) is not None:
+        return ToolResult(f"{label} 不是压缩包，member 只对 .zip/.tar/.tgz/.gz 有用。", failed="参数不对") \
+            if member.strip() else None
+    return await _archive_body(p, label, member, offset, limit, pages, mode)
+
+
+async def _archive_body(src, label: str, member: str, offset: int, limit: int, pages: str, mode: str,
+                        depth: int = 0) -> ToolResult:
+    name = getattr(src, "name", "") if not isinstance(src, (bytes, bytearray)) else label
+    try:
+        lst = await asyncio.to_thread(archives.entries, src, name)
+        if not member.strip():
+            return ToolResult(archives.render(label, lst), detail=f"{sum(not e.is_dir for e in lst.entries)} 个文件")
+        hit = archives.find(lst, member)
+        if isinstance(hit, str):
+            return ToolResult(archives.render(label, lst, hit))
+        body = await asyncio.to_thread(archives.read_member, src, name, lst, hit)
+    except archives.ArchiveError as e:
+        return ToolResult(str(e), failed="读不了")
+    r = await _member(body, f"{label} 里的 {hit.name}", hit.name, offset, limit, pages, mode, depth)
+    r.detail = r.detail or hit.name  # 时间线：读的是包里哪个
+    return r
+
+
+async def _member(body: bytes, label: str, name: str, offset: int, limit: int, pages: str, mode: str,
+                  depth: int) -> ToolResult:
+    """包里一个文件的内容：图片给看、文档抽文字、套着的压缩包列目录（只套一层）、文字分段读、二进制说明。"""
+    if mime_of(name) in vision.IMAGE_MIMES:
+        if len(body) > vision.TOOL_IMAGE_MAX_BYTES:
+            return ToolResult(f"{label} 是图片，但太大（{quota.size_text(len(body))}），要看就解压出来缩小。")
+        return ToolResult(f"{label} 是图片（{quota.size_text(len(body))}）。",
+                          images=[ToolImage(name.rsplit("/", 1)[-1], body)])
+    if documents.kind_of(name, body[:8]) is not None:
+        try:
+            doc = await asyncio.to_thread(documents.read, body, name, pages)
+        except documents.DocError as e:
+            return ToolResult(str(e), failed="读不了")
+        head = doc.header(label)
+        return await _text(doc.text, mode, offset, limit, f"{head}\n\n") if doc.text else ToolResult(head)
+    if archives.kind_of(name) and depth == 0:
+        return await _archive_body(body, label, "", offset, limit, pages, mode, depth + 1)
+    got = archives.decode_text(body)
+    if got is None:
+        return ToolResult(f"{label} 不是文本文件（{quota.size_text(len(body))}），要处理就 run_command 解压出来。")
+    text, note = got
+    return await _text(text, mode, offset, limit, f"（{label}{'，' + note if note else ''}）\n" )
+
+
+async def _read_attachment(uid: str, offset: int, limit: int, pages: str, mode: str = "chars",
+                           member: str = "") -> ToolResult:
     """用户在聊天里发的附件（uploads/<id>/文件名）：和工作区文件同样的读法；只读，不进 file_seen。"""
     try:
         p = upload_path(uid)
@@ -188,6 +249,8 @@ async def _read_attachment(uid: str, offset: int, limit: int, pages: str, mode: 
         p = None
     if p is None:
         return ToolResult("没有这个附件（编号不对，或已经删了）。", failed="没有这个附件")
+    if r := await _archive(p, f"附件 {p.name}", member, offset, limit, pages, mode):
+        return r
     if mime_of(p.name) in vision.IMAGE_MIMES:
         size = p.stat().st_size
         if size > vision.TOOL_IMAGE_MAX_BYTES:
@@ -492,6 +555,7 @@ async def _promoted(ctx: ToolContext, command: str, r: foreground.Outcome, borro
 @tool("run_command", "正在运行命令",
       "在工作区的隔离 Linux 沙盒里执行 shell 命令（工作目录就是工作区根目录，非 root，有 python3、node、git）。"
       "用于运行代码、测试、安装依赖、git 操作；pip install / npm i -g 装的东西留在工作区，下次不用重装。"
+      "只是看压缩包里有什么、读其中某个文件，用 read_file（member），别 unzip/tar 解到工作区。"
       "前台最多等 timeout 秒（上限 120）：到点还没跑完不会被杀，而是自动转成后台任务接着跑（结果里给任务 id），结束时你会收到通知。"
       "预计超过一分钟的活（装大依赖、训练、批量下载/爬取、大构建、长时间脚本）用 background=true 放到后台："
       "立即返回任务 id，用户在聊天里看到实时日志、可以取消；结束时你会收到通知并在这段对话里接着说，"
@@ -588,8 +652,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
                                  lambda tail: ctx.live({"type": "code", "language": "bash", "title": title, "source": tail, "live": True}),
                                  (env := {**await command_env.load(ctx.db), **grant.env}), slot)
     finally:
-        if watch:
-            await asyncio.to_thread(command_changes.after, ctx.workspace, ctx.changes)
+        touched = await asyncio.to_thread(command_changes.after, ctx.workspace, ctx.changes) if watch else []
+    created = [t for t in touched if ctx.changes.base.get(str(project_dir(ctx.workspace).resolve() / t), "") is None]
     if r.failed:
         return ToolResult(r.message, failed=r.failed)
     if r.promoted:
@@ -611,6 +675,8 @@ async def run_command(ctx: ToolContext, command: str, timeout: int | None = None
     # 命令可能刚写了大东西：重数一遍（线程里跑，最多数 20 万项），满了 / 快满了才有一句
     hint += await asyncio.to_thread(quota.model_note, ctx.workspace, True)
     hint += f"\n{cred_note}" if cred_note else ""
+    if peek := archives.extract_note(command, created):  # v2.76 只为看看就解压了：提醒答完删掉（规则在 archives.py）
+        hint += f"\n{peek}"
     return ToolResult(f"{status}\n{out}{hint}", [
         {"type": "code", "language": "bash", "title": title, "source": f"{shown.strip() or '（无输出）'}\n# {status}"}],
         failed="" if r.ok else status)
