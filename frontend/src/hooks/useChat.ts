@@ -4,7 +4,7 @@ import { memoryStore } from "../lib/memoryStore";
 import { OUTBOX_GIVE_UP_MS, outbox } from "../lib/outbox";
 import { STEER_STATUS, beforePending, isSteer } from "../lib/steer";
 import { ChatSocket, type LinkStatus } from "../lib/socket";
-import type { Block, FileBlock, Message, OutgoingFile, ServerEvent, TextBlock } from "../lib/types";
+import type { Block, FileBlock, Message, MessageQuote, OutgoingFile, ServerEvent, TextBlock } from "../lib/types";
 import { mergeStep, stepFromStatus } from "../lib/activity";
 import { mergeRetry, RETRY_CLEARS_ON, retryNotice } from "../lib/retry";
 import { asFileBlock } from "../lib/files";
@@ -316,6 +316,7 @@ export function useChat(projectId?: string) {
       attachments: fileIds(m.blocks, "upload"),
       project_files: fileIds(m.blocks, "project"),
       ...followField(m.blocks),
+      ...(m.quote ? { reply_to: m.quote.id } : {}),
       client_id: m.id,
       ...modelField(),
     });
@@ -427,7 +428,8 @@ export function useChat(projectId?: string) {
   /** 生成中能不能补一句给这一轮（服务器 steering；新对话的第一轮还没有 id 时不行）。 */
   const canSteer = streaming && !stopping && !!thread.id;
 
-  const send = useCallback((text: string, files: OutgoingFile[] = []) => {
+  /** quote = 引用回复（§J）：随消息带 reply_to；生成中发出的引用回复服务器排成下一轮（不插进这一轮）。 */
+  const send = useCallback((text: string, files: OutgoingFile[] = [], quote?: MessageQuote) => {
     if (!text.trim() && files.length === 0) return;
     if (busy) {
       if (!canSteer) return;
@@ -437,9 +439,10 @@ export function useChat(projectId?: string) {
       const ok = link === "open" && !!socket.current?.send({
         type: "user.message", conversation_id: thread.id, project_id: projectId, text: text.trim(),
         attachments: fileIds(blocks, "upload"), project_files: fileIds(blocks, "project"), steer: true, client_id: id,
+        ...(quote ? { reply_to: quote.id } : {}),
       });
       setError(null);
-      const m: Message = { id, role: "user", blocks, created_at: new Date().toISOString(),
+      const m: Message = { id, role: "user", blocks, created_at: new Date().toISOString(), ...(quote ? { quote } : {}),
         ...(ok ? { status: STEER_STATUS } : { outbox: "failed" as const }) };
       setMessages((ms) => beforePending(ms, m));
       return;
@@ -449,7 +452,7 @@ export function useChat(projectId?: string) {
       ...(text.trim() ? [{ type: "text" as const, text: text.trim() }] : []),
       ...files.map(asFileBlock),
     ];
-    setMessages((m) => [...m, { id: `local-${uuid()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
+    setMessages((m) => [...m, { id: `local-${uuid()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString(), ...(quote ? { quote } : {}) }]);
   }, [busy, canSteer, link, thread.id, projectId]);
 
   /** 接着问某个子助手（v1.97，子任务卡上的“追问”）：气泡带“追问 · 标题”；正在回答时排队等这一轮结束（不插进这一轮）。 */

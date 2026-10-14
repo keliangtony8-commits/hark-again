@@ -256,7 +256,8 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
   border: none; border-radius: var(--r-full); background: var(--tile); color: var(--text-2); font-size: var(--fs-xs); font-weight: var(--fw-title);
   cursor: pointer; flex-shrink: 0; align-self: center; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
 .model-chip:hover { color: var(--text); }
-.model-chip.strong, .model-chip.menu-trigger[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 0 0 1px var(--glass-border); } /* v2.86：非默认档不再白底胶囊，只亮一档 */
+.model-chip { white-space: nowrap; }
+.model-chip.strong, .model-chip.menu-trigger[aria-expanded="true"] { color: var(--text); } /* v2.86.2：非默认档只把字提亮，不加白底、不加描边圈 */
 .model-chip-label { display: inline-flex; align-items: center; gap: var(--sp-1); animation: rise var(--dur) var(--ease); }
 .effort-chip { animation: rise var(--dur) var(--ease); } /* 换到能调的模型时浮入 */
 
@@ -365,3 +366,16 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .mention-sub { flex: 1; min-width: 0; color: var(--text-3); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mention-empty { min-height: 28px; }
 @media (prefers-reduced-motion: reduce) { .mention-item { animation: none; transition: none; } }
+
+/* 引用回复（§J）：气泡顶上一行引用（点一下回到原消息）+ 输入框顶上的引用条 */
+.msg-quote { display: inline-flex; align-items: center; gap: var(--sp-1); max-width: 100%; padding: 0 var(--sp-3); margin-bottom: calc(-1 * var(--sp-1));
+  font-size: var(--fs-xs); color: var(--text-3); background: none; border: 0; cursor: pointer; text-align: left; }
+.msg-quote span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-quote svg { flex: none; }
+.msg-quote:hover { color: var(--text-2); }
+.msg-quote.missing { cursor: default; font-style: italic; }
+.msg.user .msg-quote { align-self: flex-end; }
+.quote-bar span:not(.quote-rule) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.quote-rule { flex: none; width: 2px; height: var(--fs-md); border-radius: var(--r-full); background: var(--text-3); }
+.ai-body { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); align-self: stretch; min-width: 0; }
+.focus-lift > .ai-body { align-self: auto; }

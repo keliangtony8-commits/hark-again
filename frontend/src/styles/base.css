@@ -50,6 +50,8 @@ a { color: var(--accent); text-decoration: none; }
 @keyframes drop { from { opacity: 0; transform: translate(-50%, -16px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes flash { 0%, 40% { opacity: 1; } to { opacity: 0; } }
+@keyframes focus-lift { 50% { transform: scale(1.02); } }  /* 长按聚焦：被按的那条放大 2% 再落回（= App Motion.focusLift） */
+@keyframes focus-in { from { opacity: 0; transform: scale(.96); } }  /* 聚焦菜单卡（= App Motion.menuFrom） */
 @keyframes meter-grow { from { transform: scaleX(0); } }
 @keyframes bar-grow { from { transform: scaleY(0); } }
 @keyframes float-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }  /* 顶栏回来 */

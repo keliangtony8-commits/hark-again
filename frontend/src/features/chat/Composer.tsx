@@ -3,7 +3,8 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { workspaceFilesTitle } from "../../lib/workspace";
 import { http } from "../../lib/api";
 import { asFileBlock, attachSub, extOf, MAX_MESSAGE_FILES } from "../../lib/files";
-import type { FileBlock, OutgoingFile, Upload } from "../../lib/types";
+import type { FileBlock, MessageQuote, OutgoingFile, Upload } from "../../lib/types";
+import { quoteLine } from "../../lib/quote";
 import ProjectFilePicker from "../projects/ProjectFilePicker";
 import { useRecorder } from "../../hooks/useRecorder";
 import { IconBrain, IconCheck, IconClip, IconClose, IconCopy, IconDoc, IconGauge, IconMap, IconPlus, IconEdit, IconSwap, IconFile, IconFolder, IconMic, IconSend, IconSpark, IconSplit, IconStop, IconTerminal } from "../../ui/icons";
@@ -43,6 +44,8 @@ type Props = {
   /** 生成中可以补一句给正在进行的这一轮（useChat.canSteer）：有字时停止钮换成“补充”钮。 */
   canSteer?: boolean;
   editing?: EditDraft | null; onCancelEdit?: () => void; onEditLast?: () => void;
+  /** 引用回复（§J）：顶部引用条（竖线 + 原文一行 + ✕），和编辑条同一个槽位；出现时输入框获得焦点。 */
+  quoting?: MessageQuote | null; onCancelQuote?: () => void;
   /** 主按钮左边的插槽（聊天页放模型钮，Composer 不认识它）。 */
   accessory?: ReactNode;
   /** 胶囊左边、胶囊外的圆钮位（一级页面聚焦时的“收起”）。 */
@@ -54,7 +57,7 @@ type Props = {
   /** 本机斜杠命令的执行者（返回一句提示）；不给 = 不接本机命令（打了当普通文字发）。 */
   onSlash?: (c: SlashCall, files: OutgoingFile[]) => Promise<string | undefined> | void;
 };
-export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = `给 ${appName} 发消息`, workspace, onSlash }: Props) {
+export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, quoting = null, onCancelQuote, accessory, leading, placeholder = `给 ${appName} 发消息`, workspace, onSlash }: Props) {
   const [text, setText] = useState("");
   const stash = useRef<string | null>(null);   // 进入编辑前的草稿
   const editId = editing?.id ?? null;
@@ -71,6 +74,8 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
   }, [editId]);
   const [files, setFiles] = useState<Pending[]>([]);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const quoteId = quoting?.id ?? null;
+  useEffect(() => { if (quoteId) ref.current?.focus(); }, [quoteId]); // 点了“回复”：直接打字
   const picker = useRef<HTMLInputElement>(null);
   const mic = useRecorder();
   const [voiceBusy, setVoiceBusy] = useState(false);
@@ -228,6 +233,13 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
             <button className="icon-btn sm" onClick={onCancelEdit} aria-label="取消编辑" title="取消编辑（Esc）"><IconClose size={14} /></button>
           </div>
         )}
+        {!mention && !editing && quoting && (
+          <div className="edit-bar quote-bar" key={`quote-${quoting.id}`}>
+            <span className="quote-rule" aria-hidden />
+            <span>{quoteLine(quoting)}</span>
+            <button className="icon-btn sm" onClick={onCancelQuote} aria-label="不回复这条" title="不回复这条（Esc）"><IconClose size={14} /></button>
+          </div>
+        )}
         {!mention && shell && (
           <div className="edit-bar shell-bar">
             <IconTerminal size={14} />
@@ -274,6 +286,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
                 }
                 if (e.key === "Escape" && streaming) { e.preventDefault(); onStop?.(); }
                 else if (e.key === "Escape" && editing) { e.preventDefault(); onCancelEdit?.(); }
+                else if (e.key === "Escape" && quoting) { e.preventDefault(); onCancelQuote?.(); }
                 if (e.key === "ArrowUp" && !text && !editing && onEditLast) { e.preventDefault(); onEditLast(); }
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
               }} />

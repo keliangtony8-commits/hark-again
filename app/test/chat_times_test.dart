@@ -94,11 +94,14 @@ void main() {
     expect(find.text('09:05'), findsOneWidget);
   });
 
-  testWidgets('长按回复：一份动作菜单，常驻行的动作都在，同序', (tester) async {
+  testWidgets('长按回复：聚焦菜单，常用三项在前，其余收进“更多”，同序', (tester) async {
     await _chat(tester);
     await tester.longPress(find.text('八点半出发最稳'));
     await tester.pumpAndSettle();
-    final labels = ['复制', '选择文字', '朗读', '重新生成', saveReplyLabel, '有用', '不好'];
+    expect(find.text('重新生成'), findsNothing); // 超过 5 项：前 4 项 + 更多
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+    final labels = ['复制', '选择文字', '回复', '朗读', '重新生成', saveReplyLabel, '有用', '不好'];
     for (final l in labels) {
       expect(find.text(l), findsOneWidget, reason: l);
     }
@@ -112,11 +115,12 @@ void main() {
     expect(find.byType(SelectableText), findsWidgets); // 弹层里可以选字
   });
 
-  testWidgets('长按自己的消息：复制 / 编辑', (tester) async {
+  testWidgets('长按自己的消息：复制 / 回复 / 编辑', (tester) async {
     await _chat(tester);
     await tester.longPress(find.text('明天几点出发'));
     await tester.pumpAndSettle();
     expect(find.text('复制'), findsOneWidget);
+    expect(find.text('回复'), findsOneWidget);
     expect(find.text('编辑'), findsOneWidget);
   });
 

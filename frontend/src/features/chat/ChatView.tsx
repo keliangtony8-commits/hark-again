@@ -2,7 +2,8 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 import { workspaceOf } from "../../lib/workspace";
 import type { LinkStatus } from "../../lib/socket";
 import { formatDay, startsNewDay } from "../../lib/format";
-import type { Message, OutgoingFile } from "../../lib/types";
+import type { Message, MessageQuote, OutgoingFile } from "../../lib/types";
+import { quotable, quoteOf } from "../../lib/quote";
 import { FloatingFooter } from "../../ui/kit";
 import { IconArrowDown } from "../../ui/icons";
 import { useStickToBottom } from "./useStickToBottom";
@@ -25,7 +26,7 @@ type Props = OutboxActions & {
   focus: string | null; onFocused: () => void;
   /** 输入框主按钮左边的插槽（模型钮）。 */
   accessory?: ReactNode;
-  onSend: (t: string, files?: OutgoingFile[]) => void; projectId?: string; onReconnect: () => void; greeting?: string;
+  onSend: (t: string, files?: OutgoingFile[], quote?: MessageQuote) => void; projectId?: string; onReconnect: () => void; greeting?: string;
   /** 本机斜杠命令（/new /compact /plan /copy /status，features/chat/slashActions.ts）；返回输入框下方的一句提示。 */
   onSlash?: (c: SlashCall, files: OutgoingFile[]) => Promise<string | undefined>;
   /** 没有消息时画什么（项目首屏）；空 = 通用问候 EmptyState。 */
@@ -51,9 +52,12 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
   const last = messages[messages.length - 1];
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const editing = draft && draft.id === editableId ? draft : null;
+  // 引用回复（§J，= App ChatView._quoting）：菜单“回复”设上，发出 / ✕ / 换对话 / 进入编辑时清掉；编辑态优先
+  const [quoting, setQuoting] = useState<MessageQuote | null>(null);
   const startEdit = () => {
     const m = messages.find((x) => x.id === editableId);
     if (!m) return;
+    setQuoting(null);
     setDraft({
       id: m.id, text: m.blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim(),
       hasFiles: m.blocks.some((b) => b.type === "file"),
@@ -66,19 +70,21 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
   const thread = stick.ref;
   // 换对话（第一条变了）或自己刚发了一条（最后一条是新的用户消息）= 回到底部；别的变化（每个 token）不动滚动位置
   const seen = useRef<{ first?: string; last?: string }>({});
+  // 滚到某条中间闪一下（.flash 动画，结束自己摘掉，重复定位能再闪），不再被贴底拉走：搜索定位、点引用行都走这里
+  const reveal = (id: string) => {
+    const el = thread.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`);
+    if (!el) return false;
+    stick.release();
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+    el.classList.remove("flash");
+    void el.offsetWidth;   // 重新触发动画
+    el.classList.add("flash");
+    el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
+    return true;
+  };
   useEffect(() => {
-    const el = focus ? thread.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(focus)}"]`) : null;
-    if (el) { // 搜索定位：滚到那条中间闪一下（.flash 动画，结束自己摘掉，重复定位能再闪），不再被贴底拉走
-      stick.release();
-      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-      el.classList.remove("flash");
-      void el.offsetWidth;   // 重新触发动画
-      el.classList.add("flash");
-      el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
-      onFocused();
-      return;
-    }
+    if (focus && reveal(focus)) { onFocused(); return; }
     const first = messages[0]?.id, lastId = last?.id, prev = seen.current;
     if (first !== prev.first || (lastId !== prev.last && last?.role === "user")) stick.pin();
     seen.current = { first, last: lastId };
@@ -89,7 +95,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
   // 选了文字、点在按钮 / 链接 / 输入框 / 菜单上不算（电脑上点一下常常是在选字或操作卡片）。
   const [timesShown, setTimesShown] = useState<ReadonlySet<string>>(new Set());
   const firstId = messages[0]?.id;
-  useEffect(() => setTimesShown(new Set()), [firstId]);
+  useEffect(() => { setTimesShown(new Set()); setQuoting(null); }, [firstId]);
   const toggleTime = (id: string) => (e: React.MouseEvent) => {
     const t = e.target as HTMLElement;
     if (!t.closest(".bubble, .ai-card, .ai-block, .msg-files")) return; // 点气泡 / 回复本身才算，不算两旁空白
@@ -112,7 +118,8 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
                 <MessageView message={m} showTime={timesShown.has(m.id)} onResend={onResend} onDiscard={onDiscard}
                   onRegenerate={m === last && m.role === "assistant" && canRegenerate ? onRegenerate : undefined}
                   onContinue={m === last && m.role === "assistant" && canRegenerate && continuable(m) ? () => onSend(CONTINUE_TEXT) : undefined}
-                  onEdit={m.id === editableId ? startEdit : undefined} editing={m.id === editing?.id} projectId={projectId} />
+                  onEdit={m.id === editableId ? startEdit : undefined} editing={m.id === editing?.id} projectId={projectId}
+                  onQuote={quotable(m) ? () => { setDraft(null); setQuoting(quoteOf(m)); } : undefined} onJumpQuote={reveal} />
               </div>
             ))}
             {error && (
@@ -132,7 +139,8 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
         {link === "down" && <LinkBar onRetry={onReconnect} streaming={!!streaming} />}
         <Composer disabled={busy} streaming={streaming} canSteer={canSteer} onStop={onStop} accessory={accessory} workspace={workspaceOf(projectId)}
           onSlash={onSlash} editing={editing} onCancelEdit={() => setDraft(null)} onEditLast={editableId ? startEdit : undefined}
-          onSend={(t, files) => { if (editing) { onEdit(t); setDraft(null); } else onSend(t, files); }} />
+          quoting={editing ? null : quoting} onCancelQuote={() => setQuoting(null)}
+          onSend={(t, files) => { if (editing) { onEdit(t); setDraft(null); } else { onSend(t, files, quoting ?? undefined); setQuoting(null); } }} />
       </FloatingFooter>
     </>
   );

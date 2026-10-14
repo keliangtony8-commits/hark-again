@@ -193,6 +193,8 @@ void main() {
 
     await tester.longPress(find.text('回答二'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('更多')); // §J：前 4 项之后收进“更多”
+    await tester.pumpAndSettle();
     await tester.tap(find.text('重新生成'));
     await tester.pumpAndSettle();
     expect(socket.sent.last['message_id'], 'a2');

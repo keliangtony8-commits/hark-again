@@ -50,6 +50,9 @@ export const IconGlobe = (p: P) => <S {...p} d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0
 export const IconHand = (p: P) => <S size={16} {...p} d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1V4.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15.5a1.5 1.5 0 0 1 2.5-1.7L8 16" />;
 export const IconLayout = (p: P) => <S {...p} d="M4 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9h16M10 9v11" />;
 export const IconCopy = (p: P) => <S size={16} {...p} d="M9 9h10v10H9zM5 15V5h10" />;
+export const IconReply = (p: P) => <S size={16} {...p} d="M10 8 5 12l5 4M5 12h9a5 5 0 0 1 5 5v1" />;
+export const IconText = (p: P) => <S size={16} {...p} d="M5 6h14M12 6v12M9 18h6" />;
+export const IconQuoteArrow = (p: P) => <S size={12} {...p} d="M6 5v6a3 3 0 0 0 3 3h9M15 11l3 3-3 3" />;
 export const IconExternal = (p: P) => <S size={16} {...p} d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />;
 export const IconMic = (p: P) => <S {...p} d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3" />;
 export const IconCheck = (p: P) => <S {...p} d="M5 12.5l4.5 4.5L19 7.5" />;

@@ -4,7 +4,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import chat_search, conversation_share, conversation_title, model_router, plan_mode, quota, reasoning, run_conversations, turn_changes, turn_journal, usage, workspaces
+from .. import chat_search, conversation_share, conversation_title, model_router, plan_mode, quota, reasoning, reply_quote, run_conversations, turn_changes, turn_journal, usage, workspaces
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -94,7 +94,7 @@ async def get_conversation(cid: str, db: AsyncSession = Depends(get_session)):
         "reasoning": c.reasoning,
         "routed_model": c.routed_model,
         "mode": c.mode or "default",
-        "messages": [m.to_wire() for m in c.messages],
+        "messages": reply_quote.wire_all(list(c.messages)),
     }
 
 

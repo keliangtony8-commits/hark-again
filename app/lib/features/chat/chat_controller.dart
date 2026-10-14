@@ -491,6 +491,7 @@ class ChatController extends Notifier<ChatState> {
       'text': plainText(m.blocks),
       ..._wireFiles(m.blocks),
       ..._wireFollow(m.blocks),
+      if (m.quote != null) 'reply_to': m.quote!.id,
       'client_id': m.id,
       ..._modelField(),
     });
@@ -605,14 +606,16 @@ class ChatController extends Notifier<ChatState> {
     } catch (_) {}
   }
 
-  void send(String text, {List<FileBlock> files = const []}) {
+  /// [quote] = 引用回复（§J）：随消息带 reply_to，气泡顶上画引用行；生成中发出的引用回复服务器排成下一轮（不插进这一轮）。
+  void send(String text, {List<FileBlock> files = const [], MessageQuote? quote}) {
     if (text.trim().isEmpty && files.isEmpty) return;
     if (state.busy) {
-      if (state.canSteer) _steer(text.trim(), files);
+      if (state.canSteer) _steer(text.trim(), files, quote);
       return;
     }
     final blocks = <Block>[if (text.trim().isNotEmpty) TextBlock(text.trim()), ...files];
-    final m = Message(id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: blocks, outbox: Outbox.queued, createdAt: DateTime.now());
+    final m = Message(
+        id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: blocks, outbox: Outbox.queued, createdAt: DateTime.now(), quote: quote);
     state = state.copyWith(error: () => null, messages: [...state.messages, m]);
     _flush();
   }
@@ -649,15 +652,17 @@ class ChatController extends Notifier<ChatState> {
 
   /// 生成中补一句（文字和 / 或附件，v1.93 服务器 steering 也收附件）：立刻插在生成中那条前面；
   /// 线不通就标失败（“重发”= 挪到末尾排成下一轮）。附件和普通发送同一个线格式（_wireFiles）。
-  void _steer(String text, List<FileBlock> files) {
+  void _steer(String text, List<FileBlock> files, [MessageQuote? quote]) {
     final blocks = <Block>[if (text.isNotEmpty) TextBlock(text), ...files];
-    final m = Message(id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: blocks, steer: true, createdAt: DateTime.now());
+    final m = Message(
+        id: '$localPrefix${DateTime.now().microsecondsSinceEpoch}', role: 'user', blocks: blocks, steer: true, createdAt: DateTime.now(), quote: quote);
     final ok = _socket.send({
       'type': 'user.message',
       'conversation_id': state.activeId,
       if (projectId.isNotEmpty) 'project_id': projectId,
       'text': text,
       ..._wireFiles(blocks),
+      if (quote != null) 'reply_to': quote.id,
       'steer': true,
       'client_id': m.id,
     });

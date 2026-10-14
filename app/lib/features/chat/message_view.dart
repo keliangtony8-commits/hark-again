@@ -1,8 +1,10 @@
 // 设计 v2：用户 = 右侧墨色气泡；助手 = 左侧回复卡，两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
 // §I（v2.84，对标 Hark）：气泡下面没有常驻按钮。
 // - 点哪条显示哪条的时间（ChatView._timesShown，每条各自开关），这里只按 showTime 在自己那侧画一行灰色时间。
-// - 长按 = 动作菜单：用户气泡（复制，最后一条另有“编辑”）；回复（复制、选择文字、朗读、重新生成、存成文件、有用 / 不好）。
+// - 长按 = 原地聚焦菜单（§J，ui/focus_menu.dart）：用户气泡（复制、回复，最后一条另有“编辑”）；
+//   回复（复制、选择文字、回复，再往后 朗读、重新生成、存成文件、有用 / 不好——超过 5 项收进“更多”）。
 //   回复正文不原地可选（ProseScope），选字走菜单里的“选择文字”。
+// - 引用回复：用户气泡顶上一行 QuoteLine（quote_line.dart），点一下回到原消息（onJumpQuote）。
 // - 照常显示的状态行：待发送 / 发送失败、补充给这一轮、没正常说完（ReplyEnd.label）、“继续”、正在朗读（点了停止）。
 import 'dart:math' as math;
 
@@ -24,15 +26,28 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/markdown.dart';
 import '../../ui/motion.dart';
+import '../../ui/focus_menu.dart';
 import '../../ui/sheets.dart';
 import '../projects/save_reply.dart';
 import 'activity_view.dart';
+import 'quote_line.dart';
 import 'reply_rating.dart';
 import 'retry_line.dart';
 import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
-  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onContinue, this.onEdit, this.onSave, this.onRate, this.showTime = false});
+  const MessageView(this.message,
+      {super.key,
+      this.onResend,
+      this.onDiscard,
+      this.onRegenerate,
+      this.onContinue,
+      this.onEdit,
+      this.onSave,
+      this.onRate,
+      this.onQuote,
+      this.onJumpQuote,
+      this.showTime = false});
   final Message message;
 
   /// 这条的时间开着（ChatView._timesShown 唯一状态）：在气泡同侧画一行时间（formatClock）；没有时间（还没落库）就不画。
@@ -51,6 +66,12 @@ class MessageView extends StatelessWidget {
 
   /// 👍 / 👎（features/chat/reply_rating.dart）；ChatView 只给已落库的回复。
   final RateReply? onRate;
+
+  /// 菜单里的“回复”（§J 引用回复）；ChatView 只给已落库、生成完的消息。
+  final VoidCallback? onQuote;
+
+  /// 点气泡顶上的引用行：回到被引用的那条（ChatView._reveal）。
+  final void Function(String id)? onJumpQuote;
 
   @override
   Widget build(BuildContext context) => FadeSlideIn(
@@ -95,21 +116,11 @@ class MessageView extends StatelessWidget {
           ),
         ),
     ]);
-    // 长按菜单代替文字选择（两者手势冲突）：复制整条最常用；没发出的消息走状态行上的菜单
-    final pressable = message.unsent
-        ? bubble
-        : Semantics(
-            onLongPressHint: '更多操作',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onLongPress: () {
-                HapticFeedback.selectionClick();
-                _userMenu(context, text);
-              },
-              child: bubble,
-            ),
-          );
+    // 长按 = 聚焦菜单（代替文字选择，两者手势冲突）；没发出的消息走状态行上的菜单
+    final pressable = FocusPressable(enabled: !message.unsent, alignEnd: true, actions: () => _userActions(context, text), child: bubble);
+    final quote = message.quote;
     return Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      if (quote != null) QuoteLine(quote, alignEnd: true, onTap: onJumpQuote == null ? null : () => onJumpQuote!(quote.id)),
       // 待发送时气泡变淡，发出后渐变回实色
       AnimatedOpacity(
         opacity: message.outbox == Outbox.queued ? 0.6 : 1,
@@ -156,20 +167,16 @@ class MessageView extends StatelessWidget {
     );
   }
 
-  /// 长按回复：一份动作菜单（原来常驻的操作行全部并进这里，同序：复制 · 朗读 · 重新生成 · 存成文件 · 评价）。
-  void _replyMenu(BuildContext context) {
+  /// 长按回复的菜单项（§J 排序：最常用的复制 / 选择文字 / 回复在前；其余跟后，多了由 FocusMenu 收进“更多”）。
+  List<SheetAction<void>> _replyActions(BuildContext context) {
     final text = copyText(message.blocks);
     final spoken = speakableText(message.blocks);
     final speech = ProviderScope.containerOf(context, listen: false);
     final speaking = speech.read(speechProvider).phaseOf(message.id) != SpeechPhase.idle;
-    HapticFeedback.selectionClick();
-    showActionSheet<void>(context, actions: [
-      if (text.isNotEmpty)
-        SheetAction(Icons.content_copy_rounded, '复制', onTap: () {
-          Clipboard.setData(ClipboardData(text: text));
-          showToast(context, '已复制');
-        }),
+    return [
+      if (text.isNotEmpty) _copy(context, text),
       if (text.isNotEmpty) SheetAction(Icons.text_fields_rounded, '选择文字', onTap: () => _selectText(context, text)),
+      if (onQuote != null) SheetAction(Icons.reply_rounded, '回复', onTap: onQuote),
       if (spoken.isNotEmpty)
         SheetAction(speaking ? Icons.stop_rounded : Icons.volume_up_rounded, speaking ? '停止朗读' : '朗读', onTap: () async {
           final err = await speech.read(speechProvider.notifier).toggle(message.id, spoken);
@@ -178,8 +185,13 @@ class MessageView extends StatelessWidget {
       if (onRegenerate != null) SheetAction(Icons.refresh_rounded, '重新生成', onTap: onRegenerate),
       if (text.isNotEmpty && onSave != null) SheetAction(Icons.drive_folder_upload_outlined, saveReplyLabel, onTap: onSave),
       if (onRate != null) ...ratingActions(context, onRate!, message.feedback),
-    ]);
+    ];
   }
+
+  SheetAction<void> _copy(BuildContext context, String text) => SheetAction(Icons.content_copy_rounded, '复制', onTap: () {
+        Clipboard.setData(ClipboardData(text: text));
+        showToast(context, '已复制');
+      });
 
   /// “选择文字”：整条回复放进一张可选中的弹层（聊天里原地选字会抢点按和长按）。
   void _selectText(BuildContext context, String text) => showAppScrollSheet<void>(
@@ -193,14 +205,11 @@ class MessageView extends StatelessWidget {
         ]),
       );
 
-  void _userMenu(BuildContext context, String text) => showActionSheet<void>(context, actions: [
-        if (text.isNotEmpty)
-          SheetAction(Icons.content_copy_rounded, '复制', onTap: () {
-            Clipboard.setData(ClipboardData(text: text));
-            showToast(context, '已复制');
-          }),
+  List<SheetAction<void>> _userActions(BuildContext context, String text) => [
+        if (text.isNotEmpty) _copy(context, text),
+        if (onQuote != null) SheetAction(Icons.reply_rounded, '回复', onTap: onQuote),
         if (onEdit != null) SheetAction(Icons.edit_outlined, '编辑', onTap: onEdit),
-      ]);
+      ];
 
   void _failedMenu(BuildContext context) => showActionSheet<void>(context, title: '这条消息没发出去', actions: [
         SheetAction(Icons.refresh_rounded, '重发', onTap: () => onResend?.call(message.id)),
@@ -298,15 +307,9 @@ class MessageView extends StatelessWidget {
     ]);
   }
 
-  /// 回复卡：正文不原地可选（ProseScope）；生成完的回复长按出动作菜单。卡片里自己的按钮/链接照旧优先。
-  Widget _pressable(BuildContext context, Widget child) {
-    final scoped = ProseScope(isSelectable: false, child: child);
-    if (message.pending) return scoped;
-    return Semantics(
-      onLongPressHint: '更多操作',
-      child: GestureDetector(onLongPress: () => _replyMenu(context), child: scoped),
-    );
-  }
+  /// 回复卡：正文不原地可选（ProseScope）；生成完的回复长按出聚焦菜单。卡片里自己的按钮/链接照旧优先。
+  Widget _pressable(BuildContext context, Widget child) =>
+      FocusPressable(enabled: !message.pending, actions: () => _replyActions(context), child: ProseScope(isSelectable: false, child: child));
 }
 
 /// 跨天时消息上方的日期：居中小灰字（今天 / 昨天 / 10月9日 星期五）。读屏当作标题，方便按天跳。

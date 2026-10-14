@@ -1,6 +1,7 @@
 // 输入框：圆角胶囊 + 附件托盘 + 录音态。
 // 三种形态平滑切换：空 → 显示麦克风；有字/附件 → 发送键；录音中 → 红点计时 + 完成/取消。
 // 生成中右侧圆钮换成“停止”（onStop 为 null = 已请求停止，置灰等服务器收尾）；输入框照常可打字，说完再发。
+// 引用回复（quoting 不为 null，§J）：顶部引用条（竖线 + 原文一行 + ✕），和编辑条同一个槽位；编辑态优先。
 // 编辑态（editing 不为 null）：顶部“编辑消息”条 + 原文字填进输入框；原来的附件随消息保留，
 //   这里的附件托盘和草稿先收起，退出编辑（发出或取消）后原样回来。
 // accessory：右侧圆钮左边的插槽（聊天页放模型钮，Composer 不认识它）。
@@ -38,6 +39,7 @@ import '../../core/resource.dart';
 import '../projects/project_files_sheet.dart';
 import 'attachment_tray.dart';
 import 'mentions.dart';
+import 'quote_line.dart';
 import '../../brand.dart';
 
 /// 正在编辑的那条用户消息。hasFiles：带附件的消息文字清空也能发（只剩附件）。
@@ -62,6 +64,8 @@ class Composer extends ConsumerStatefulWidget {
       this.onStop,
       this.editing,
       this.onCancelEdit,
+      this.quoting,
+      this.onCancelQuote,
       this.accessory,
       this.hint = '给 $appName 发消息',
       this.leading,
@@ -77,6 +81,10 @@ class Composer extends ConsumerStatefulWidget {
   final VoidCallback? onStop;
   final EditDraft? editing;
   final VoidCallback? onCancelEdit;
+
+  /// 正在引用回复的那条（§J，ChatView 持有）：顶部出引用条、输入框获得焦点；发出后由 ChatView 清掉。编辑态优先。
+  final MessageQuote? quoting;
+  final VoidCallback? onCancelQuote;
 
   /// 右侧圆钮左边的小部件（模型钮）；录音态不显示。
   final Widget? accessory;
@@ -175,6 +183,7 @@ class _ComposerState extends ConsumerState<Composer> {
   @override
   void didUpdateWidget(Composer old) {
     super.didUpdateWidget(old);
+    if (widget.quoting != null && widget.quoting!.id != old.quoting?.id) _focus.requestFocus(); // 点了“回复”：直接打字
     final e = widget.editing;
     if (e?.id == old.editing?.id) return;
     if (old.editing == null) _stash = _c.text; // 进入编辑：收起草稿
@@ -380,6 +389,8 @@ class _ComposerState extends ConsumerState<Composer> {
                 ? _mentionList()
                 : _editing
                 ? _EditBar(onCancel: widget.onCancelEdit)
+                : widget.quoting != null
+                ? QuoteBar(widget.quoting!, key: ValueKey('quote-${widget.quoting!.id}'), onCancel: widget.onCancelQuote)
                 : _shell
                 ? const _HintBar(key: ValueKey('shell'), icon: Icons.terminal_rounded, text: '直接在电脑上运行 · 不经过助手，结果它下次能看到')
                 : _command != null

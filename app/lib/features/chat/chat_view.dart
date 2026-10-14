@@ -1,5 +1,6 @@
 // 可复用的聊天区：消息列表 + 输入框。主聊天页和项目页都用它（projectId 区分）。
 // 点一条消息 = 这条的时间开关（_timesShown，§I）；长按一条消息 = 它的动作菜单（MessageView）。
+// 引用回复（§J）：长按 → “回复” → _quoting，输入框顶上出引用条，发出时随消息带 reply_to；气泡顶上的引用行点一下 = _reveal 回到原消息并闪一下。
 // 编辑最后一条用户消息：长按气泡 → “编辑” → 输入框进入编辑态（顶部“编辑消息”条，返回键/叉号取消），
 //   发送时走 ChatController.edit。编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。
 // 定位（搜索命中）：ChatState.focus 指向的消息一进列表就取走 → 先回到底部，再一屏一屏往上找，直到它被建出来
@@ -43,6 +44,9 @@ class ChatView extends ConsumerStatefulWidget {
 class _ChatViewState extends ConsumerState<ChatView> {
   final _scroll = ScrollController();
   EditDraft? _editing;
+
+  /// 引用回复（§J）：长按菜单“回复”设上，发出 / ✕ / 换对话 / 进入编辑时清掉。界面状态，和编辑态同级。
+  MessageQuote? _quoting;
   final _anchor = GlobalKey(); // 挂在要定位的那条消息上
   String? _target;
 
@@ -128,7 +132,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final ctl = ref.read(chatProvider(widget.projectId).notifier);
     ref.listen(chatProvider(widget.projectId).select((s) => s.activeId), (_, _) {
       _speech.stop(); // 换对话 = 停读
-      if (_timesShown.isNotEmpty) setState(_timesShown.clear);
+      if (_timesShown.isNotEmpty || _quoting != null) {
+        setState(() {
+          _timesShown.clear();
+          _quoting = null;
+        });
+      }
       // 换对话 = 回到最新一条：不然上一个对话往回翻的位置会带过来，新对话的卡片按钮压在输入胶囊下面
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scroll.hasClients && _scroll.offset != 0) _scroll.jumpTo(0);
@@ -150,6 +159,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
         onStop: chat.canStop ? ctl.stop : null,
         editing: editing,
         onCancelEdit: () => setState(() => _editing = null),
+        quoting: editing == null ? _quoting : null,
+        onCancelQuote: () => setState(() => _quoting = null),
         accessory: ModelChoice(scope: widget.projectId),
         workspace: workspaceOf(widget.projectId),
         onSlash: (call, files) => runSlash(context, ref, widget.projectId, call, files),
@@ -158,7 +169,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
             ctl.edit(text);
             setState(() => _editing = null);
           } else {
-            ctl.send(text, files: files);
+            ctl.send(text, files: files, quote: _quoting);
+            if (_quoting != null) setState(() => _quoting = null);
           }
           _toLatest(); // 自己发的消息一定看得见
         },
@@ -217,7 +229,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   onSave: m.isUser || m.pending ? null : () => saveReplyToProject(context, ref, messageId: m.id, projectId: widget.projectId),
                                   onRate: m.isUser || m.pending ? null : (kind, {note}) => ctl.rate(m.id, kind, note: note),
                                   showTime: _timesShown.contains(m.id),
-                                  onEdit: m.id == chat.editableId ? () => setState(() => _editing = EditDraft.of(m)) : null),
+                                  // 回复这条：已落库（有服务器 id）、生成完的消息才能引用
+                                  onQuote: m.pending || m.unsent || m.id.startsWith(ChatController.localPrefix)
+                                      ? null
+                                      : () => setState(() {
+                                            _quoting = MessageQuote.of(m);
+                                            _editing = null;
+                                          }),
+                                  onJumpQuote: _reveal,
+                                  onEdit: m.id == chat.editableId
+                                      ? () => setState(() {
+                                            _editing = EditDraft.of(m);
+                                            _quoting = null;
+                                          })
+                                      : null),
                               ),
                             );
                             // 跨天处在消息上方插一行日期（今天 / 昨天 / 10月9日 星期五）

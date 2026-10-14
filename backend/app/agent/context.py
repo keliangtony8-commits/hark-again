@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, reply_language, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, wallet, workspace_instructions, workspaces
+from .. import agent_mentions, reply_language, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, reply_quote, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, wallet, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -207,6 +207,10 @@ async def _snapshot(db: AsyncSession, conversation_id: str) -> _Snapshot:
              for i, m in enumerate(rows)]  # 被打断/停下的回复附说明
     last_user = next((i for i in range(len(rows) - 1, -1, -1) if rows[i].role == "user"), len(rows) - 1)
     plain = [_render(m.blocks, i == last_user) + notes[i] for i, m in enumerate(rows)]
+    by_id = {m.id: m for m in rows}
+    for i, m in enumerate(rows):  # 引用回复（reply_quote）：当前这一问带被引原文，更早的只留一句记录
+        if m.role == "user" and m.reply_to:
+            plain[i] = reply_quote.render(by_id.get(m.reply_to), i == last_user) + plain[i]
     roles = [m.role for m in rows]
     skip = [False] * len(rows)
     for i, b in enumerate(shells):  # 用户自己跑的命令（!命令）：命令 + 结果合成一条“用户那边发生的事”（Codex <user_shell_command>）

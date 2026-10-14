@@ -1,4 +1,4 @@
 // 由 brand/sync.py 生成，别手改：改名字改 brand/brand.json，改版本改 VERSION，再跑 python3 brand/sync.py。
 export const appName = "Toyuis";
-export const appVersion = "2.86.1";
-export const appBuild = 28601;
+export const appVersion = "2.87.0";
+export const appBuild = 28700;

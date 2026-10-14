@@ -22,7 +22,8 @@ class Message {
       this.thinkFrom,
       this.thinkTo,
       this.retry,
-      this.feedback});
+      this.feedback,
+      this.quote});
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
       id: j['id'] as String,
@@ -32,7 +33,8 @@ class Message {
       end: ReplyEnd.parse(j['status']),
       steer: j['role'] == 'user' && j['status'] == steerStatus,
       createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal(),
-      feedback: j['feedback'] as String?);
+      feedback: j['feedback'] as String?,
+      quote: MessageQuote.fromJson(j['quote']));
 
   final String id, role;
   final List<Block> blocks;
@@ -77,6 +79,9 @@ class Message {
   /// 用户对这条回复的评价（v2.64，models/feedback.dart）：good = 👍，其余是 👎 的原因；null = 没评。
   final String? feedback;
 
+  /// 引用回复（§J，后端 app/reply_quote.py）：这条用户消息回的是哪条；null = 没引用。气泡顶上画一行 QuoteLine。
+  final MessageQuote? quote;
+
   /// 追加一段思考，超长只留尾部（思考可能有几万字，界面只看最近的）。[at] = 到达时间（测试可注入）。
   Message think(String delta, {DateTime? at}) {
     final t = thought + delta;
@@ -120,7 +125,38 @@ class Message {
       thinkFrom: thinkFrom ?? this.thinkFrom,
       thinkTo: thinkTo ?? this.thinkTo,
       retry: retry != null ? retry() : this.retry,
-      feedback: feedback != null ? feedback() : this.feedback);
+      feedback: feedback != null ? feedback() : this.feedback,
+      quote: quote);
+}
+
+/// 被引用的那条：id + 角色 + 一行原文（服务器截断，≤120 字）；missing = 原消息已删除（不报错，显示“原消息已删除”）。
+class MessageQuote {
+  const MessageQuote({required this.id, this.role = 'assistant', this.text = '', this.missing = false});
+
+  /// 从界面上的一条消息取引用（点“回复”时）：纯文字，没有文字就用附件名，压成一行。
+  factory MessageQuote.of(Message m) {
+    var t = plainText(m.blocks);
+    final names = m.blocks.whereType<FileBlock>().map((f) => f.name).where((n) => n.isNotEmpty).join('、');
+    if (t.isEmpty && names.isNotEmpty) t = '[附件] $names';
+    if (t.isEmpty) t = copyText(m.blocks);
+    t = t.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
+    return MessageQuote(id: m.id, role: m.role, text: t.length > snippet ? '${t.substring(0, snippet - 1)}…' : t);
+  }
+
+  static MessageQuote? fromJson(Object? j) {
+    if (j is! Map || j['id'] is! String) return null;
+    return MessageQuote(
+        id: j['id'] as String, role: j['role'] as String? ?? 'assistant', text: j['text'] as String? ?? '', missing: j['missing'] == true);
+  }
+
+  static const snippet = 120; // = 后端 reply_quote.SNIPPET
+  static const missingText = '原消息已删除';
+
+  final String id, role, text;
+  final bool missing;
+
+  /// 引用条上显示的那行字。
+  String get line => missing ? missingText : text;
 }
 
 /// 把 [m] 放到生成中的那条前面（没有生成中的就接在末尾）：回答途中补充的话排在这一轮回复之前，

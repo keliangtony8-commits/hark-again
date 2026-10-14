@@ -8,7 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 import logging
 
-from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, project_relay, run_conversations, skill_mentions, steering, user_shell, workspaces
+from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, project_relay, reply_quote, run_conversations, skill_mentions, steering, user_shell, workspaces
 from ..agent import approvals, context
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -88,7 +88,8 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
         run_conversations.promote(conv)  # 在定时任务的运行对话里接话 = 普通对话了，进列表
         follow = await agent_mentions.follow(db, conv.id, event.get("follow"), event.get("follow_title")) if text else []
         user_msg = Message(conversation_id=conv.id, role="user",
-                           blocks=(text_to_blocks(text) if text else []) + files + _skills(text) + (follow or _agents(text)))
+                           blocks=(text_to_blocks(text) if text else []) + files + _skills(text) + (follow or _agents(text)),
+                           reply_to=await reply_quote.valid(db, conv.id, event.get("reply_to")))
         db.add(user_msg)
         await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
@@ -108,8 +109,8 @@ async def _steer(event: dict) -> bool:
     （块和普通提问一样；created_at = 收下那一刻，早于这一轮的回复），在这一轮的事件流里推 turn.steered。
     返回 False = 没插进去，调用方照常排队。"""
     cid, text = event.get("conversation_id"), (event.get("text") or "").strip()
-    if not isinstance(cid, str) or not steering.active(cid):
-        return False
+    if not isinstance(cid, str) or not steering.active(cid) or event.get("reply_to"):
+        return False  # 引用回复是新的一件事：排成下一轮（模型要在那一轮的开头看到被引原文）
     ids, picked = event.get("attachments") or [], event.get("project_files") or []
     ids, picked = (ids if isinstance(ids, list) else []), (picked if isinstance(picked, list) else [])
     if steering.reason(text, files=len(ids) + len(picked), agent=bool(_agents(text) or event.get("follow")),
@@ -175,7 +176,7 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
             await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title, "replaced": replaced,
-                    **({"user_message": user_msg.to_wire()} if isinstance(text, str) else {})})
+                    **({"user_message": await reply_quote.wire_one(db, user_msg)} if isinstance(text, str) else {})})
         await _answer(db, conv, user_msg, emit, stop)
 
 

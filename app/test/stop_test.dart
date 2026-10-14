@@ -166,6 +166,8 @@ void main() {
     expect(find.text('已停止'), findsOneWidget);
     await tester.longPress(find.text('床前'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('更多')); // §J：前 4 项之后收进“更多”
+    await tester.pumpAndSettle();
     expect(find.text('重新生成'), findsOneWidget);
   });
 }

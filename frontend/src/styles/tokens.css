@@ -80,6 +80,7 @@
   --shadow-float: 0 1px 12px rgba(28, 27, 26, 0.04); /* 浮层：贴着玻璃的一圈很淡的影子，不要“贴纸感” */
   --blur: 24px;          /* 浮层（顶栏、输入胶囊、弹层）的背景模糊；列表里的卡片是“假玻璃”不模糊 */
   --blur-scrim: 14px;
+  --blur-focus: 28px;   /* 长按聚焦菜单的背景模糊（= App Glass.focusBlur） */
   /* 高度（= App ui/glass.dart 的三档）：页面 CSS 只用这几个，不直接写 --shadow-* / backdrop-filter */
   --elev-card: 0 0 0 0 transparent;                              /* 列表里的卡：没有投影没有高光（v2.80） */
   --elev-float: var(--elev-card), var(--shadow-float);         /* 贴着内容的浮层：顶栏、输入胶囊 */
@@ -165,4 +166,5 @@
   --backdrop-3: var(--bg);
   --blur: 0px;
   --blur-scrim: 0px;
+  --blur-focus: 0px;
 }

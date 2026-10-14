@@ -67,10 +67,12 @@ class Message(Base):
     search_text: Mapped[str] = mapped_column(Text, default="", server_default="")
     # v2.64 用户对这条回复的评价（good / wrong / incomplete / stuck / other，规则在 app/feedback.py）；None = 没评
     feedback: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # v2.87 引用回复（§J/§C）：这条用户消息回的是哪条（同对话的消息 id；规则在 app/reply_quote.py）。不建外键：原消息删了这里照留，显示“原消息已删除”
+    reply_to: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
 
-    def to_wire(self) -> dict:
+    def to_wire(self, quote: dict | None = None) -> dict:
         """协议里的消息形状；status 只在不是 done 时带上，老客户端无感。
         created_at 一律带时区（SQLite 读回来是无时区的，按 UTC 补上），客户端按本地日期画日期分隔。"""
         out = {"id": self.id, "role": self.role, "blocks": self.blocks}
@@ -82,6 +84,10 @@ class Message(Base):
             out["steps"] = self.steps
         if self.feedback:
             out["feedback"] = self.feedback
+        if self.reply_to:
+            out["reply_to"] = self.reply_to
+            if quote is not None:
+                out["quote"] = quote  # reply_quote.quote：{id, role, text} 或 {id, missing}
         return out
 
 

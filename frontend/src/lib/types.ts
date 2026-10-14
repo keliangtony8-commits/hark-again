@@ -167,7 +167,11 @@ export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopp
   /** 模型调用失败在自动重试 / 已换备用模型（v1.50 turn.retry，lib/retry.ts）：只在生成中的占位消息上。 */
   retry?: RetryNotice;
   /** v2.64 用户对这条回复的评价（good / wrong / incomplete / stuck / other，lib/feedback.ts）；没评就没有。 */
-  feedback?: string | null };
+  feedback?: string | null;
+  /** v2.87 引用回复（§J，后端 app/reply_quote.py）：这条用户消息回的是哪条 + 那条的一行原文（lib/quote.ts）。 */
+  reply_to?: string; quote?: MessageQuote };
+/** 被引用的那条：一行原文（服务器截断 ≤120 字）；missing = 原消息已删除。 */
+export type MessageQuote = { id: string; role?: Role; text?: string; missing?: boolean };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
 export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; routed_model?: string | null; mode?: string | null; updated_at: string; snippet?: string; message_id?: string };
 

@@ -187,6 +187,8 @@ abstract final class Motion {
   static const ease = Cubic(0.33, 1, 0.68, 1); // easeOutCubic，和网页版 --ease 相同
   static const spring = Cubic(0.34, 1.12, 0.64, 1); // 弹性很小的回弹（导航滑块、按压松手）：只过冲一点点
   static const rise = 6.0; // 入场时从下面浮上来的距离（淡入 + 上移 6px）
+  static const focusLift = 0.02; // 长按聚焦（§J）：被按的那条先放大 2% 再落回
+  static const menuFrom = 0.96; // 聚焦菜单卡从 96% 长到 100%
   static const theme = slow; // 浅/深色切换的整屏渐变
   // 循环动画的一圈
   static const shimmer = Duration(milliseconds: 1300); // 骨架闪光
@@ -229,6 +231,7 @@ abstract final class Timing {
 abstract final class Glass {
   static const blur = 24.0; // 背景模糊 sigma
   static const scrimBlur = 14.0; // 输入胶囊聚焦时整页的模糊（比浮层轻：还认得出后面是什么）
+  static const focusBlur = 28.0; // 长按聚焦菜单（§J）：背景重度模糊，只剩被按的那条清晰
   static const grabber = Size(36, 4); // 弹层顶上那根把手
 }
 
@@ -306,6 +309,8 @@ abstract final class Layout {
   static const mediumMin = 600.0; // ≥ 此宽：底部 Tab 换成左侧导航栏
   static const expandedMin = 840.0; // ≥ 此宽：聊天变双栏（历史 + 对话并排）
   static const sidePane = 320.0; // 双栏时历史栏宽度
+  static const focusMenuWidth = 232.0; // 长按聚焦菜单卡宽（§J）
+  static const focusMenuRows = 5; // 菜单最多直接列几行，再多收进“更多”
   static const dialogMax = 400.0; // 居中对话框最宽多宽（平板上不拉满）
   static const chartHeight = 120.0; // 用量页逐日柱状图的绘图区高度
   static const skeletonHero = 148.0, skeletonStat = 104.0, skeletonChart = 200.0; // 用量页骨架：月卡 / 统计格 / 每日图（与内容同高，换态不跳版）

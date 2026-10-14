@@ -374,29 +374,40 @@ class FrostScrim extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
+  Widget build(BuildContext context) => IgnorePointer(
+        ignoring: !visible,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: visible ? 1 : 0),
+          duration: context.motion(Motion.base),
+          curve: Motion.ease,
+          builder: (context, t, _) => FrostLayer(t: t, onTap: onTap, blur: Glass.scrimBlur),
+        ),
+      );
+}
+
+/// 磨砂层本身（t = 0…1 的进度，外面给动画）：模糊 + 着色按 t 渐入；t = 0 什么都不画。
+/// FrostScrim（输入框聚焦）和长按聚焦菜单（ui/focus_menu.dart，模糊更重）共用这一份。
+class FrostLayer extends StatelessWidget {
+  const FrostLayer({super.key, required this.t, this.onTap, this.blur = Glass.scrimBlur, this.semanticLabel});
+  final double t;
+  final VoidCallback? onTap;
+  final double blur;
+  final String? semanticLabel;
+
+  @override
   Widget build(BuildContext context) {
+    if (t == 0) return const SizedBox.expand();
     final p = context.palette;
     final solid = GlassMode.solidOf(context);
-    return IgnorePointer(
-      ignoring: !visible,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(end: visible ? 1 : 0),
-        duration: context.motion(Motion.base),
-        curve: Motion.ease,
-        builder: (context, t, _) {
-          if (t == 0) return const SizedBox.expand();
-          final tint = solid ? p.bg.withValues(alpha: Op.dimmed * t) : p.scrim.withValues(alpha: p.scrim.a * t);
-          final cover = ColoredBox(color: tint, child: const SizedBox.expand());
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            child: solid
-                ? cover
-                : ClipRect(
-                    child: BackdropFilter(filter: ImageFilter.blur(sigmaX: Glass.scrimBlur * t, sigmaY: Glass.scrimBlur * t), child: cover),
-                  ),
-          );
-        },
+    final tint = solid ? p.bg.withValues(alpha: Op.dimmed * t) : p.scrim.withValues(alpha: p.scrim.a * t);
+    final cover = ColoredBox(color: tint, child: const SizedBox.expand());
+    return Semantics(
+      label: semanticLabel,
+      button: semanticLabel != null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: solid ? cover : ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: blur * t, sigmaY: blur * t), child: cover)),
       ),
     );
   }

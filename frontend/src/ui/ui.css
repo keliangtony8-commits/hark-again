@@ -153,6 +153,19 @@ button.row-body { text-align: left; }
 /* 搜索命中标亮 */
 mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3px; padding: 0 1px; }
 
+/* 原地聚焦菜单（§J，ui/FocusMenu.tsx）：重度模糊遮罩 + 原位清晰的那条 + 实色菜单卡 */
+.focus-layer { position: fixed; inset: 0; z-index: 70; }
+.focus-scrim { position: absolute; inset: 0; background: var(--scrim); -webkit-backdrop-filter: blur(var(--blur-focus)); backdrop-filter: blur(var(--blur-focus)); animation: fade var(--dur) var(--ease); }
+.focus-lift { position: fixed; pointer-events: none; display: flex; flex-direction: column; animation: focus-lift var(--dur) var(--ease); }
+.focus-lift > * { flex: none; }
+.focus-menu { position: fixed; padding: 8px 0; background: var(--card); border-radius: var(--r-card); box-shadow: var(--elev-raised); overflow: hidden;
+  animation: focus-in var(--dur) var(--ease) both; }
+.focus-item { display: flex; align-items: center; gap: var(--sp-3); width: 100%; height: 48px; padding: 0 var(--sp-5);
+  font-size: var(--fs-md); color: var(--text); text-align: left; white-space: nowrap; animation: fade var(--dur) var(--ease); }
+.focus-item:hover, .focus-item:focus-visible { background: var(--tile); outline: none; }
+.focus-item.danger { color: var(--danger); }
+.focus-item span { overflow: hidden; text-overflow: ellipsis; }
+
 /* 弹出菜单 */
 .menu { position: relative; flex: none; }
 /* v1.12：浮在 body 上（kit Menu 量好位置再显示，量之前 visibility hidden），弹层玻璃 = 压得住底下的字 */
