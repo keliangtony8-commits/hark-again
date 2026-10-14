@@ -12,7 +12,7 @@
   --accent-soft: #edebe7;
   --on-accent: #ffffff;
   --danger: #c43d3d;
-  --warning: #b86e00;
+  --warning: #9a5b00; /* a11y：当小字用也够 AA（对底色 4.93、白卡 5.43）；= App tokens.dart */
   --success: #2e7d4f; /* v1.34 diff 的新增行与 +N；删除用 --danger */
   --knob: #ffffff;              /* 开关圆钮 */
   --qr-dark: #000000;   /* 两步验证二维码：永远黑码白底（验证器只认这一种），深色模式也不反色 */

@@ -1,7 +1,8 @@
 // 设计令牌：App 里所有颜色、间距、圆角、字号、动效只在这里定义。
 // 与网页版 frontend/src/styles/tokens.css 同源，两端视觉一致。
 // 组件里禁止写死任何颜色或时长——要新值就先加到这里。
-// 对比度底线（test/a11y_test.dart 会查）：正文 text/text2 与 accent 上的 onAccent ≥ 4.5:1，text3 ≥ 3:1。
+// 对比度底线（test/a11y_test.dart 会查，网页 scripts/check-contrast.mjs 同一批配对）：
+// 正文 text/text2、气泡字 onUserBubble、按钮 onInk/onAccent、警示 warning 与 danger/success ≥ 4.5:1；text3 ≥ 3:1。
 import 'package:flutter/material.dart';
 
 @immutable
@@ -83,7 +84,7 @@ class Palette {
     accentSoft: Color(0xFFEDEBE7),
     onAccent: Color(0xFFFFFFFF),
     danger: Color(0xFFC43D3D),
-    warning: Color(0xFFB86E00),
+    warning: Color(0xFF9A5B00), // a11y：这个色到处当小字用（bodySmall/labelSmall），得够 AA——对浅底 4.93、白卡 5.43；原来 #B86E00 只有 3.62 / 3.99
     success: Color(0xFF2E7D4F),
     shadow: Color(0x141C1B1A),
     backdrop: [Color(0xFFF3F1ED), Color(0xFFF7F6F3), Color(0xFFEFECE7)], // 三档暖白，几乎看不出渐变

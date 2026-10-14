@@ -14,6 +14,7 @@ import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/home/inbox.dart';
+import 'package:assistant/features/projects/save_reply.dart';
 import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/sheets.dart';
 import 'package:flutter/material.dart';
@@ -569,13 +570,19 @@ void main() {
       router.go('/chat');
       await tester.runAsync(() => container.read(chatProvider('').notifier).open('c1'));
       await _shot(tester, '$mode-chat');
-      // 主聊天里存回复 → 先选项目（v1.16）
-      await tester.tap(find.byTooltip('存到项目文件').last);
+      // 主聊天里存回复 → 先选项目（v1.16；v2.90 起「存成文件」在回复的操作菜单里，长按那条回复打开，项多了还得先点“更多”）
+      await tester.longPress(find.textContaining('今天的日额度', findRichText: true).first);
+      await tester.pumpAndSettle();
+      if (find.text('更多').evaluate().isNotEmpty) {
+        await tester.tap(find.text('更多').last);
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text(saveReplyLabel).last);
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200))); // 项目列表是真异步
       await tester.pumpAndSettle();
-      expect(find.text('存到哪个项目'), findsOneWidget);
+      expect(find.text('存到哪里'), findsOneWidget);
       await _shot(tester, '$mode-save-picker');
-      Navigator.of(tester.element(find.text('存到哪个项目'))).pop();
+      Navigator.of(tester.element(find.text('存到哪里'))).pop();
       await tester.pumpAndSettle();
       // 点一下较早的回复 → 露出它自己的操作行（v1.17）；先往回翻让它整条在视野里
       await tester.dragFrom(const Offset(200, 400), const Offset(0, 500));

@@ -41,7 +41,7 @@
 ## 五、用户提过但还没完成的要求（按优先级）
 > 完整原话与决定见 `docs/home-redesign.md`（A–P 各节）和 `docs/devlog.md`；凡标注“剩/待/未做”的都算未完成，接手后先逐节核对一遍。
 1. ~~重新部署 VPS~~ 已完成 v2.90.1。剩：真机打开网页确认标题是 Toyuis、实时画面和连发回复在服务器上能用；之后**每批改动都要重新部署**（用户原话：“你要把这版推上去啊，更新到服务器上去”）。
-2. **用户气泡截图验收**（v2.90.1 只改了颜色 token，未截图）：App 浅/深 + 网页，与 Hark 截图 1000035386 并排对比；a11y 对比度 ≥4.5 补测试。编辑中/引用条/长按聚焦也要跟随新颜色（home-redesign §L）。
+2. ~~**用户气泡截图验收**（v2.90.1 只改了颜色 token，未截图）：App 浅/深 + 网页，与 Hark 截图 1000035386 并排对比；a11y 对比度 ≥4.5 补测试。编辑中/引用条/长按聚焦也要跟随新颜色（home-redesign §L）。~~ 2026-10-15 做完：气泡 13.80:1（浅）/14.84:1（深），App 6 个新测试 + 网页构建期守门；顺带修了浅色警示色 3.62→4.93。**剩用户自己拿 Hark 截图并排看一眼**（图在 `shots-2.90.2/`）。
 2a. **连接器“点一下就能授权”**（用户 15:27 原话：“连接器没用，根本就连不上…人家是点一下就能够直接授个权”；更早：“连接 GitHub、Gmail…全面与你对标”“为什么现在连接不了 GitHub 还有 Gmail，显示还没有做”）。**v2.90.2 已做“按钮诚实化 + 引导页 + docs/oauth-setup.md”（未部署）；剩：在 GitHub / Google 后台注册应用、填 VPS `.env`、重启、真机走通授权。** 原因：OAuth 代码在 `backend/app/connectors/oauth.py`，但 VPS `.env` 的 GOOGLE_/GITHUB_CLIENT_ID/SECRET 是空的，点了必失败。要做：
    - 在 VPS 注册 GitHub OAuth App、Google OAuth（测试模式，把用户自己加为测试用户），回调地址 `https://toyuis.itsllm.com/...`（看 oauth.py），填进 `.env` 后重启，真机走通 GitHub、Gmail 一键授权。
    - 没配置的提供方，按钮不能“看起来能点、点了失败”：只显示已配置的；全没配时普通用户不显示，管理员显示“服务器还差一步：配置 Google 授权”并进引导页。
@@ -87,7 +87,7 @@
 | 点哪条气泡显示哪条的时间 | ✅ v2.84 | |
 | 长按聚焦菜单 + “回复”这条 | ✅ v2.87 | |
 | 软件名 Toyuis、做好版本管理、名字上面还写 assistant | ✅ v2.86 | |
-| 用户气泡不要白色，Hark 偏灰 | ⚠️ v2.90.1 改了颜色，未截图验收 | 第五节 2 |
+| 用户气泡不要白色，Hark 偏灰 | ✅ v2.90.1 改灰，2026-10-15 截图 + 对比度验收（气泡 13.8:1 / 深色 14.8:1） | 第五节 2 |
 | 网页“选档”（模型选择）UI 太拉、越改越丑 | ⚠️ v2.87 改过，未让用户确认 | devlog 18:40/18:56 |
 | 网页显示动不动就断、不流畅，学 Muse/Dots/browser 类项目 | ✅ v2.89 实时推流 | |
 | 截图 1000035389“排版怎么回事”、1000035390“这么割裂” | ❓ | 看 files/uploads 原图核对 |
@@ -137,6 +137,22 @@
 - `frontend/scripts/check-arch.mjs` 的 Windows 路径修好（以前在本机直接 ENOENT，架构守卫等于没跑）。
 - `app/test/design_test.dart` 字重/悬浮钮守卫的路径分隔符修好（Windows 上必红）。
 - `frontend/scripts/shots.py` 支持 `SHOTS_CHANNEL`；`.gitignore` 忽略 `*.tsbuildinfo` 并把它移出版本库。
+
+### App 截图回归（test/screens/shots_test.dart）也修好了（2026-10-15）
+同样卡在「存到项目文件」：v2.90 起它在回复的操作菜单里，不是 tooltip 了。已改成长按那条回复 →（项多时先点「更多」）→ 点 `saveReplyLabel`（「存成文件」）；选择弹层标题现在是「存到哪里」（不是「存到哪个项目」）。
+- Windows 上跑：`SHOTS=1`、`SHOTS_FONTS=<目录>`、`SHOTS_OUT=<目录>`、`TZ=Asia/Shanghai`、`FLUTTER_ROOT=<flutter sdk>`，`flutter test test/screens/shots_test.dart` → **一次 62 张（明/暗 × 30 屏）**。
+- 这台机器没有 Noto 字体（`fonts.google.com` 在国內也下不动）：临时用 `C:\Windows\Fonts\simhei.ttf` 当 `NotoSansSC.ttf`、`seguiemj.ttf` 当 `NotoEmoji.ttf` 顶一下。**颜色是 token 出的，绝对准；字形会跟正式截图有差异**，所以这组图用来看颜色/排版，不要当 design-refs 提交。
+
+### 第五节 2「用户气泡验收 + a11y ≥4.5」这一轮做完了（2026-10-15）
+- 量出来的数（`test/a11y_test.dart` 现在会守着；网页 `scripts/check-contrast.mjs` 同一批配对，`npm run build` 里跑）：
+  气泡字 onUserBubble/userBubble 浅色 **13.80:1**、深色 **14.84:1**（Hark 灰那版 v2.90.1 完全达标，不是「差不多」）。
+- **顺手抓到一个真问题**：浅色 `warning` = `#B86E00` 到处当小字用（`bodySmall`/`labelSmall`），对底色只有 **3.62:1**、对白卡 3.99:1——不到 AA。已压深到 `#9A5B00`（对底色 4.93、白卡 5.43），App `tokens.dart` 与网页 `tokens.css` 同步改。
+- 新增守门：App 侧 6 个测试（对比度表 + 气泡/回复卡画出来也达标 + 编辑条/引用条/长按聚焦跟随同一套色），网页侧 `check-contrast.mjs`（14 对 × 2 套主题 **且校验两端同值**，改了一边忘另一边会红）。
+- 截图：App 62 张（`%TEMP%\shots-app`）、网页 126 张；对照图放在 `shots-2.90.2/`（`app-chat/` 看气泡，`warning-aa/` 看警示色改前改后）。
+
+### 这台机器上别做的事（我踩了）
+- **不要用 PowerShell 的 `Get-Content`/`Set-Content` 改 Dart/CSS 源文件**：默认编码会把中文注释整片写成乱码（我这轮把 `tokens.dart` 弄坏过一次，`git restore` 才救回来）。要改就用编辑工具，或 `git apply`。
+- 别用 `git archive` 默认行尾打部署包（见上面 CRLF 那条）。
 
 ### 第五节 8「Web 截图重拍」已经修好（2026-10-15 凌晨）
 `frontend/scripts/shots.py` 之前根本跑不完：卡在项目对话那一步。原因是**假接口缺数据 + 定位器跟着 UI 漂了**，不是浏览器问题。现在整条流程能跑到底：`SHOTS_CHANNEL=chrome <backend 的 venv python> scripts/shots.py <输出目录>` → **一次出 126 张（桌面/手机 × 明/暗 × 30 多屏），退出码 0**。修的东西：
