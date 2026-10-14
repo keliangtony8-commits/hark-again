@@ -40,6 +40,7 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .row-sub { font-size: var(--fs-sm); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 行里标题和副标题永远上下两行（用 <span> 写时默认是行内，短文案会挤成一行“网页调研多来源搜索后汇总”，v1.06） */
 .row-body > .row-title, .row-body > .row-sub { display: block; }
+.section-count { font-variant-numeric: tabular-nums; }
 .row-trail { color: var(--text-3); display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); height: 40px; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); font-weight: var(--fw-title); transition: transform var(--dur-fast) var(--ease), background var(--dur); }

@@ -79,6 +79,9 @@ tf.throttle.reset()
 r = c.post("/api/auth/2fa/enable", headers=H, json={"code": fresh_code()})
 assert r.status_code == 200, r.text
 rec = r.json()["recovery_codes"]; assert len(rec) == 8 and r.json()["enabled"] and r.json()["recovery_left"] == 8
+# v2.61 打开 = 退出其他设备（上面登录过的那几台）；本机是老 token → 换发新 token
+assert r.json()["signed_out"] >= 1 and r.json()["token"], r.json()
+H = {"Authorization": f"Bearer {r.json()['token']}"}
 assert c.post("/api/auth/2fa/setup", headers=H).status_code == 409
 
 # 存的不是明文

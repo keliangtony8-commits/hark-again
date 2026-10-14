@@ -87,7 +87,8 @@ export default function MeScreen() {
   const root = !((window.history.state as { idx?: number } | null)?.idx);
   const [tf, setTf] = useState<TwoFactorStatus | null>(null);
   useEffect(() => { http.get<TwoFactorStatus>("/api/auth/2fa").then(setTf).catch(() => setTf(null)); }, []);
-  const logout = () => { auth.clear(); outbox.clear(); notifyUnauthorized(); };
+  // v2.61：先让服务器作废这个 token（登录设备里就没了这台），失败不拦
+  const logout = async () => { await http.post("/api/auth/logout", {}).catch(() => {}); auth.clear(); outbox.clear(); notifyUnauthorized(); };
   return (
     <div className="page me">
       <div className="page-inner">
@@ -124,7 +125,7 @@ export default function MeScreen() {
           </div>
         </Section>
         <Section enter={GROUPS.length + 3}>
-          <div className="list"><button className="row" onClick={logout}><div className="row-body"><div className="row-title danger-text">退出登录</div></div></button></div>
+          <div className="list"><button className="row" onClick={() => void logout()}><div className="row-body"><div className="row-title danger-text">退出登录</div></div></button></div>
         </Section>
       </div>
     </div>

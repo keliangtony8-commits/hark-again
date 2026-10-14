@@ -6,6 +6,7 @@
 ## 1. 鉴权
 - `POST /api/auth/login` `{username, password, code?}` → `{token, recovery_left?}`（JWT）。v2.58：开着两步验证没给 code → **428** `{detail}`（客户端展开验证码框）；错码/错密码 401；连续错 5 次 → 429（5 分钟）。code = 6 位验证码或恢复码（用恢复码时回 recovery_left）
 - `GET /api/auth/2fa` → `{enabled, enabled_at, recovery_left, pending}`；`POST /api/auth/2fa/setup` → `{secret（四个一组）, uri（otpauth://）, qr（模块矩阵行，"1" 黑）, issuer, account, digits, period}`（已开 → 409）；`POST /api/auth/2fa/enable` `{code}` → 状态 + `recovery_codes`（8 个，只这一次）（错码 400）；`POST /api/auth/2fa/disable` / `POST /api/auth/2fa/recovery` `{password, code}` → 状态（+ recovery 时新 `recovery_codes`）；密码或码错 → **403**（不是 401，免得客户端当登录过期退出）。规则 backend/app/two_factor.py；救急 `python -m app.two_factor --reset`
+- v2.61 登录设备：`POST /api/auth/login` 可带 `device`（App 报“Android App”，不报按 User-Agent 猜“Chrome · Windows”），token 里带 `sid`；`GET /api/auth/sessions` → `{sessions:[{id,label,kind(app|browser|other),created_at,last_seen_at,current}]}`（本机第一）；`DELETE /api/auth/sessions/{id}` → `{ok,current}`（已退出 404）；`POST /api/auth/sessions/revoke-others` → `{signed_out, token?}`（本机是升级前没 sid 的老 token 时换发 `token`，客户端换上）；`POST /api/auth/logout` 作废本机 token。`/2fa/enable` 回包多 `signed_out`（+ 可能 `token`）：打开两步验证顺手退出其他所有设备。被退出的 token → 401 `这台设备已经退出登录，请重新登录`（REST、?token=、/ws 都一样）。规则 backend/app/login_sessions.py
 - `GET /api/auth/me` → `{username}`（当前主人；“我的”页页头身份行用。老服务器没有 → 客户端只显示服务器域名）
 - REST：请求头 `Authorization: Bearer <token>`
 - WebSocket、图片/下载地址（带不了请求头）：`?token=<token>`

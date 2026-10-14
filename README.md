@@ -190,13 +190,14 @@ docker compose --profile build-only build sandbox-image                      # �
 客户端 → `user.message`（text、attachments、project_files、project_id）/ `approval.reply`（id、approved）
 
 ## 安全边界
-- v2.58 两步验证（我的 → 两步验证）：登录多一道验证器 App 的 6 位码（TOTP，RFC 6238，±30 秒容差、同一码只认一次），8 个一次性恢复码；秘钥加密存（钥匙由 JWT_SECRET 派生），恢复码只存哈希；关闭/重新生成要密码 + 码；登录/验证码连续错 5 次锁 5 分钟。手机和恢复码都丢了：服务器上 `docker compose exec backend python -m app.two_factor --reset`。已登录的设备不会被踢下线（换 JWT_SECRET 才会）。
+- v2.58 两步验证（我的 → 两步验证）：登录多一道验证器 App 的 6 位码（TOTP，RFC 6238，±30 秒容差、同一码只认一次），8 个一次性恢复码；秘钥加密存（钥匙由 JWT_SECRET 派生），恢复码只存哈希；关闭/重新生成要密码 + 码；登录/验证码连续错 5 次锁 5 分钟。手机和恢复码都丢了：服务器上 `docker compose exec backend python -m app.two_factor --reset`。（v2.61 起：打开两步验证会顺手退出其他所有设备。）
 - 密钥：只在 `vault.headers_for()` 解密，直接进 HTTP 头；接口无明文读取；响应里回显的密钥会被抹掉
 - 高风险动作（提交/推送代码、强删、发布、对外写请求）先弹审批卡；定时任务无人值守时一律拒绝
 - 代码执行在独立沙盒服务里，后端和模型都碰不到 Docker
 - OAuth Token、MCP 令牌同样加密；模型只知道“哪些域名已授权”
 - 助手电脑里的命令上网只走出网代理（v2.37）：内网 / 本机 / 云元数据地址被拦、助手照实说；沙盒网络 internal（直连没有路由）
 - 第十二轮修复（v2.60）：web_fetch 读到登录页（browser_sessions.login_page 同一条规则：密码框 / 登录网址 / 过期字样）→ 结果开头指向 browser_open（保险箱有账号就说会自动登录），登录页不缓存；定时任务时间带“今天 / 明天 / 周X”（clock.near_day）；浏览器编号参数 pattern=tool_args.DIGITS，模型写成 "[3]" / "#3" / "ref=3" 在审批之前就取出数字（风险判断也看得到真名字）；schedule_task 的 prompt 要保留“登录后看 / 用浏览器 / 哪个账号”。冒烟 tests/smoke_round12.py
+- v2.61 登录设备（我的 → 安全 → 登录设备）：看哪些手机/电脑/浏览器登着（设备名、最近活动、登录日期），退出某一台或一键“退出其他所有设备”，立刻生效（REST、文件链接、WebSocket 都认）；“退出登录”会让服务器作废本机 token；打开两步验证顺手退出其他设备。升级前登录的设备不用重登，但一键退出也会踢掉它们。规则 backend/app/login_sessions.py，迁移 0059，冒烟 tests/smoke_login_sessions.py
 - 工具参数猜错时第一次就把真正的参数表给模型（v2.38，tool_args.Streak.signature_once），省一次 describe；排版把输出名写成源文件时点名已有的 .md（doc_render.output_mixup）
 - 云浏览器拦截所有内网/回环地址；付款、下单、发送类按钮需审批；密码和验证码由你在实时画面里自己输
 - Pages 用 CSP sandbox 提供，页面脚本拿不到 App 登录信息；元数据（含 published 下线状态）只经 pages_store 读写，公开访问只走 public_html（下线与不存在同一个 404），改内容保留发布状态

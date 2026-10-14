@@ -32,6 +32,22 @@ class SessionNotifier extends AsyncNotifier<Session> {
     state = AsyncData(Session(server: clean, token: token));
   }
 
+  /// 本机主动退出登录：先告诉服务器作废这个 token（v2.61 登录设备，失败不拦），再清本地。
+  Future<void> logout() async {
+    try {
+      await ref.read(apiProvider).post('/api/auth/logout').timeout(const Duration(seconds: 5));
+    } catch (_) {}
+    await signOut();
+  }
+
+  /// 服务器换发了新 token（老 token 设备“退出其他所有设备” / 打开两步验证时）：只换 token，不动缓存。
+  Future<void> replaceToken(String token) async {
+    final s = state.value;
+    if (s == null || token.isEmpty) return;
+    await _secure.write(key: _tokenKey, value: token);
+    state = AsyncData(Session(server: s.server, token: token));
+  }
+
   Future<void> signOut() async {
     await _secure.delete(key: _tokenKey);
     await ref.read(cacheStoreProvider).clear(); // 离线缓存跟着账号走

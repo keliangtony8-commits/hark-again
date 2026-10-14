@@ -1,6 +1,6 @@
 // 两步验证（v2.58）：纯规则（解析、文字、码清洗）+ 安全页：没开 → 打开 → 扫码弹层（二维码画出来、秘钥可复制）
 // → 码不够 6 位按钮不可点 → 错码显示服务器原话 → 对码后恢复码弹层 → 页面变“已开”；已开时恢复码快用完有警示，
-// 关闭走密码 + 码表单并 POST；二维码固定黑码白底（深色模式也不反色）。
+// 关闭走密码 + 码表单并 POST；恢复码弹层写明退出了几台别的设备（v2.61）；二维码固定黑码白底（深色模式也不反色）。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/me/security_screen.dart';
@@ -29,6 +29,7 @@ class FakeApi implements Api {
   Future<dynamic> get(String path) async {
     calls.add('GET $path');
     if (path == '/api/auth/2fa') return _status;
+    if (path == '/api/auth/sessions') return {'sessions': []};
     throw UnimplementedError(path);
   }
 
@@ -42,7 +43,7 @@ class FakeApi implements Api {
       case '/api/auth/2fa/enable':
         if ((body as Map)['code'] != '123456') throw ApiError('验证码不对，看一下验证器里最新的 6 位码', 400);
         enabled = true;
-        return {..._status, 'recovery_codes': ['aaaa-bbbb', 'cccc-dddd']};
+        return {..._status, 'recovery_codes': ['aaaa-bbbb', 'cccc-dddd'], 'signed_out': 2};
       case '/api/auth/2fa/disable':
         enabled = false;
         return _status;
@@ -112,6 +113,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.calls, contains('POST /api/auth/2fa/enable {code: 123456}'));
     expect(find.text('aaaa-bbbb'), findsOneWidget);
+    expect(find.text('为了安全，已退出其他 2 台设备'), findsOneWidget); // v2.61 打开 = 退出其他设备
     await tester.tap(find.text('我已存好'));
     await tester.pumpAndSettle();
     expect(find.text('两步验证已开'), findsOneWidget);

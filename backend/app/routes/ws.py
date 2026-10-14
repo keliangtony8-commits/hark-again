@@ -23,7 +23,7 @@ router = APIRouter()
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     try:
-        verify_token(ws.query_params.get("token", ""))
+        await verify_token(ws.query_params.get("token", ""))
     except Exception:
         await ws.close(code=4401)
         return

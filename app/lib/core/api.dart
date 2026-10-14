@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/login_session.dart';
 import 'session.dart';
 
 class ApiError implements Exception {
@@ -80,7 +81,12 @@ class Api {
     final res = await http
         .post(Uri.parse('$server/api/auth/login'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'username': username, 'password': password, if (code != null && code.isNotEmpty) 'code': code}))
+            body: jsonEncode({
+              'username': username,
+              'password': password,
+              if (code != null && code.isNotEmpty) 'code': code,
+              'device': appDeviceLabel(Platform.operatingSystem), // “安全 → 登录设备”里显示的名字
+            }))
         .timeout(const Duration(seconds: 15));
     final data = _decode(res);
     if (res.statusCode >= 400) throw ApiError(_detail(data) ?? '登录失败', res.statusCode);

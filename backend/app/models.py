@@ -224,6 +224,19 @@ class OwnerSecurity(Base):
     last_step: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     recovery: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    # v2.61 “退出其他所有设备”的时刻：没有 sid 的老 token 签发早于它就作废（规则在 app/login_sessions.py）
+    sessions_cutoff: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LoginSession(Base):
+    """v2.61 一次登录 = 一台设备：token 里的 sid 指向这里。规则只在 app/login_sessions.py。"""
+    __tablename__ = "login_sessions"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    label: Mapped[str] = mapped_column(String(80))
+    kind: Mapped[str] = mapped_column(String(16), default="other")  # app | browser | other
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class HomeCard(Base):

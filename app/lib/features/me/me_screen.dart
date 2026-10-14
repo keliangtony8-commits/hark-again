@@ -146,7 +146,7 @@ class _MeBody extends ConsumerWidget {
             title: '退出登录',
             trailing: const SizedBox.shrink(),
             onTap: () async {
-              if (await confirmDanger(context, title: '退出登录？', action: '退出')) await ref.read(sessionProvider.notifier).signOut();
+              if (await confirmDanger(context, title: '退出登录？', action: '退出')) await ref.read(sessionProvider.notifier).logout();
             },
           ),
         ]),

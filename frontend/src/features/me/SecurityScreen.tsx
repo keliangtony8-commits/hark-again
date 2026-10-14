@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { http } from "../../lib/api";
+import { auth, http } from "../../lib/api";
+import { enabledSignedOutToast } from "../../lib/loginSessions";
 import {
   RECOVERY_LOW, cleanCode, looksLikeTotp, qrDrawable, qrPath, recoveryCodesText, recoveryLine, twoFactorSummary,
   type TwoFactorSetup, type TwoFactorStatus,
@@ -7,17 +8,20 @@ import {
 import CopyButton from "../../ui/CopyButton";
 import { IconChevron, IconKey, IconLock, IconShield } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton } from "../../ui/kit";
+import LoginSessions from "./LoginSessions";
 
 /** 安全（v2.58，= App features/me/security_screen.dart；对标 Hark 设置 → 安全 → 两步验证）。
  *  版式同保险箱：页头摘要 + 一句说明 → 一组行。打开：扫码（电脑上用手机扫）→ 回填 6 位码 → 一次性展示恢复码；
- *  关闭 / 重新生成恢复码要密码 + 一个码（错了服务器回 403，不会把你登出）。 */
+ *  关闭 / 重新生成恢复码要密码 + 一个码（错了服务器回 403，不会把你登出）。
+ *  v2.61：打开时服务器顺手退出其他所有设备（恢复码弹层写明几台）；下面一节“登录设备”在 LoginSessions.tsx。 */
 type Ask = { kind: "disable" | "recovery" } | null;
 
 export default function SecurityScreen() {
   const [s, setS] = useState<TwoFactorStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [setup, setSetup] = useState<TwoFactorSetup | null>(null);
-  const [codes, setCodes] = useState<{ list: string[]; title: string; account: string } | null>(null);
+  const [codes, setCodes] = useState<{ list: string[]; title: string; account: string; note?: string | null } | null>(null);
+  const [devicesKey, setDevicesKey] = useState(0);
   const [ask, setAsk] = useState<Ask>(null);
   const [note, setNote] = useState<string | null>(null);
 
@@ -72,8 +76,13 @@ export default function SecurityScreen() {
           </div>
         </Section>
       )}
+      <LoginSessions enter={2} reloadKey={devicesKey} onNote={setNote} />
       {setup && <SetupSheet setup={setup} onClose={() => { setSetup(null); load(); }}
-        onDone={(list) => { setSetup(null); load(); setCodes({ list, title: "两步验证已打开", account: setup.account }); }} />}
+        onDone={(r) => {
+          if (r.token) auth.set(r.token); // 本机是升级前的老登录：服务器换发了新 token
+          setSetup(null); load(); setDevicesKey((k) => k + 1);
+          setCodes({ list: r.recovery_codes, title: "两步验证已打开", account: setup.account, note: enabledSignedOutToast(r.signed_out ?? 0) });
+        }} />}
       {codes && <CodesSheet {...codes} onClose={() => setCodes(null)} />}
       {ask && <ConfirmSheet kind={ask.kind} onClose={() => setAsk(null)} onDone={(r) => {
         setAsk(null); setS(r);
@@ -84,13 +93,15 @@ export default function SecurityScreen() {
   );
 }
 
-function SetupSheet({ setup, onClose, onDone }: { setup: TwoFactorSetup; onClose: () => void; onDone: (codes: string[]) => void }) {
+type Enabled = { recovery_codes: string[]; signed_out?: number; token?: string };
+
+function SetupSheet({ setup, onClose, onDone }: { setup: TwoFactorSetup; onClose: () => void; onDone: (r: Enabled) => void }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const submit = async () => {
     setBusy(true); setErr(null);
-    try { onDone((await http.post<{ recovery_codes: string[] }>("/api/auth/2fa/enable", { code: cleanCode(code) })).recovery_codes); }
+    try { onDone(await http.post<Enabled>("/api/auth/2fa/enable", { code: cleanCode(code) })); }
     catch (e) { setErr(e instanceof Error ? e.message : "没打开"); }
     finally { setBusy(false); }
   };
@@ -124,13 +135,14 @@ export function QrCode({ rows, quiet = 2 }: { rows: string[]; quiet?: number }) 
   );
 }
 
-function CodesSheet({ list, title, account, onClose }: { list: string[]; title: string; account: string; onClose: () => void }) {
+function CodesSheet({ list, title, account, note, onClose }: { list: string[]; title: string; account: string; note?: string | null; onClose: () => void }) {
   return (
     <Sheet title={title} onClose={onClose} actions={<>
       <CopyButton text={recoveryCodesText(list, account)} label="复制全部" />
       <button className="btn btn-primary" onClick={onClose}>我已存好</button>
     </>}>
       <p className="row-sub wrap">把这些恢复码存到安全的地方（密码管理器、纸上）。手机丢了时，每个能代替验证码登录一次。关掉后不会再显示。</p>
+      {note && <p className="row-sub wrap">{note}</p>}
       <div className="tf-codes">{list.map((c, i) => <code key={c} className="mono enter" style={{ animationDelay: `${i * 30}ms` }}>{c}</code>)}</div>
     </Sheet>
   );

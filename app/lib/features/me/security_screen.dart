@@ -1,12 +1,14 @@
 // 安全（v2.58，对标 Hark 设置 → 安全 → 两步验证）：这台服务器能替你跑命令、开浏览器、动保险箱，只靠密码太薄。
 // 版式和保险箱同一套：页头摘要 + 一句说明 → 一组行。打开分两步（扫码/本机添加 → 回填 6 位码），成功后一次性
-// 展示恢复码；关闭 / 重新生成恢复码都要密码 + 一个码。规则在后端 app/two_factor.py，文字规则在 models/two_factor.dart。
+// 展示恢复码（服务器同时退出其他设备，关掉后提示退了几台）；关闭 / 重新生成恢复码都要密码 + 一个码。
+// 下面一节“登录设备”（v2.61）在 login_sessions_section.dart。规则在后端 app/two_factor.py，文字规则在 models/two_factor.dart。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../core/links.dart';
 import '../../core/session.dart';
+import '../../models/login_session.dart';
 import '../../models/two_factor.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -16,6 +18,7 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../../ui/sub_page.dart';
+import 'login_sessions_section.dart';
 
 /// 没登录（或测试里没有会话）不发请求、给 null：和 accountNameProvider 一样先看会话（抛错会被 Riverpod 自动重试）。
 final twoFactorProvider = FutureProvider.autoDispose<TwoFactorStatus?>((ref) async {
@@ -42,6 +45,7 @@ class SecurityScreen extends ConsumerWidget {
             _ => const SkeletonList(key: ValueKey('loading'), rows: 2),
           },
         ),
+        LoginSessionsSection(delay: Motion.stagger(2)),
       ]),
     );
   }
@@ -112,10 +116,15 @@ Future<void> enableTwoFactor(BuildContext context, WidgetRef ref) async {
     return;
   }
   if (!context.mounted) return;
-  final codes = await showAppScrollSheet<List<String>>(context, builder: (_) => SetupSheet(setup: setup, api: api));
+  final done = await showAppScrollSheet<Map>(context, builder: (_) => SetupSheet(setup: setup, api: api));
   ref.invalidate(twoFactorProvider);
-  if (codes == null || !context.mounted) return;
-  await showRecoveryCodes(context, codes, account: setup.account, title: '两步验证已打开');
+  if (done == null || !context.mounted) return;
+  // v2.61 打开 = 服务器顺手退出其他所有设备；本机是老 token 时换发了新 token
+  await ref.read(sessionProvider.notifier).replaceToken('${done['token'] ?? ''}');
+  ref.invalidate(loginSessionsProvider);
+  if (!context.mounted) return;
+  await showRecoveryCodes(context, [for (final c in done['recovery_codes'] as List) '$c'],
+      account: setup.account, title: '两步验证已打开', note: enabledSignedOutToast((done['signed_out'] as num?)?.toInt() ?? 0));
 }
 
 Future<void> regenerateCodes(BuildContext context, WidgetRef ref) async {
@@ -182,7 +191,7 @@ class _SetupSheetState extends State<SetupSheet> {
     });
     try {
       final j = await widget.api.post('/api/auth/2fa/enable', {'code': cleanCode(_code.text)}) as Map;
-      if (mounted) Navigator.pop(context, [for (final c in j['recovery_codes'] as List) '$c']);
+      if (mounted) Navigator.pop(context, j);
     } catch (e) {
       if (mounted) setState(() => _error = e is ApiError ? e.message : '没打开：$e');
     } finally {
@@ -259,13 +268,15 @@ class _SetupSheetState extends State<SetupSheet> {
 }
 
 /// 一次性展示恢复码：两列等宽字体、复制全部；关掉就再也看不到（服务器只存哈希）。
-Future<void> showRecoveryCodes(BuildContext context, List<String> codes, {String account = '', required String title}) =>
-    showAppScrollSheet<void>(context, builder: (ctx) => _CodesSheet(codes: codes, account: account, title: title));
+/// [note]：顺带发生的事（打开时退出了别的设备），写在说明下面。
+Future<void> showRecoveryCodes(BuildContext context, List<String> codes, {String account = '', required String title, String? note}) =>
+    showAppScrollSheet<void>(context, builder: (ctx) => _CodesSheet(codes: codes, account: account, title: title, note: note));
 
 class _CodesSheet extends StatelessWidget {
-  const _CodesSheet({required this.codes, required this.account, required this.title});
+  const _CodesSheet({required this.codes, required this.account, required this.title, this.note});
   final List<String> codes;
   final String account, title;
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +290,14 @@ class _CodesSheet extends StatelessWidget {
       const SizedBox(height: Sp.x1),
       Text('把这些恢复码存到安全的地方（密码管理器、纸上）。手机丢了时，每个能代替验证码登录一次。关掉这页后不会再显示。',
           style: context.text.bodySmall),
+      if (note != null) ...[
+        const SizedBox(height: Sp.x2),
+        Row(children: [
+          Icon(Icons.devices_rounded, size: 16, color: p.text3),
+          const SizedBox(width: Sp.x2),
+          Expanded(child: Text(note!, style: context.text.bodySmall?.copyWith(color: p.text2))),
+        ]),
+      ],
       const SizedBox(height: Sp.x4),
       Container(
         padding: const EdgeInsets.all(Sp.x4),
