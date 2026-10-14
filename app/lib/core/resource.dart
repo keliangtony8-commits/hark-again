@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/memory_note.dart';
+import '../models/wallet.dart';
 import '../models/resources.dart';
 import 'api.dart';
 import 'cache.dart';
@@ -106,6 +107,7 @@ final tasksProvider = _resource<ScheduledTask>('/api/tasks', ScheduledTask.fromJ
 final cardsProvider = _resource<HomeCard>('/api/cards', HomeCard.fromJson, (x) => x.id, cacheKey: 'cards');
 final skillsProvider = _resource<Skill>('/api/catalog/skills', Skill.fromJson, (x) => x.id, replaceOnUpdate: true);
 final secretsProvider = _resource<SecretItem>('/api/vault', SecretItem.fromJson, (x) => x.id);
+final walletProvider = _resource<PaymentCardItem>('/api/wallet', PaymentCardItem.fromJson, (x) => x.id);
 final connectorsProvider = _resource<Connector>('/api/connectors', Connector.fromJson, (x) => x.id);
 final mcpServersProvider = _resource<McpServerItem>('/api/connectors/mcp', McpServerItem.fromJson, (x) => x.id);
 final pagesProvider = _resource<PageItem>('/api/pages', PageItem.fromJson, (x) => x.id);

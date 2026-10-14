@@ -361,7 +361,9 @@ SNAPSHOT_JS = """
     if (!file && (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight * 3)) continue;
     const st = getComputedStyle(el); if (!file && (st.visibility === 'hidden' || st.display === 'none')) continue;
     const ref = String(++n); el.setAttribute('data-ref', ref);
-    const val = el.type === 'password' || file ? '' : el.value;  // 密码框的值绝不进快照
+    // 密码框、钱包代填过的卡号/安全码框（data-secret，v2.74）、浏览器认得的卡号/安全码框，值绝不进快照
+    const hidden = el.type === 'password' || file || el.hasAttribute('data-secret') || /^cc-(number|csc)$/.test(el.autocomplete || '');
+    const val = hidden ? '' : el.value;
     const label = file ? ((el.labels && el.labels[0] && el.labels[0].innerText) || el.accept || '选择文件') : '';
     // 下拉框 / 勾选框：名字取标签（innerText 是全部选项糊在一起，value 是 "on"），状态单独给（v2.53 forms.py）
     const sel_ = el.tagName === 'SELECT', tick = el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio');
@@ -700,6 +702,57 @@ async def login(name: str, body: LoginIn):
     except Exception as e:
         raise HTTPException(400, f"代填失败：{str(e)[:200]}")
     return await _after(name)
+
+
+class CardField(BaseModel):
+    ref: str
+    value: str
+    options: list[str] = []  # 下拉框依次试的写法（wallet.fields 给）
+    secret: bool = False     # 卡号 / 安全码：填完打 data-secret，之后的快照不带它的值
+
+
+class CardIn(BaseModel):
+    fields: list[CardField]
+
+
+@app.post("/sessions/{name}/card", dependencies=[Depends(auth)])
+async def card(name: str, body: CardIn):
+    """钱包代填付款卡（v2.74，规则在后端 app/wallet.py）：卡号只在这里出现一次，直接进框，返回的快照里没有它。
+    不点付款（付款按钮照常由 browser_click 点）。"""
+    page = await _session(_check_name(name))
+    _arm(name, None)
+    try:
+        for f in body.fields:
+            el = _ref(name, page, f.ref)
+            if await _gone(el):
+                raise HTTPException(400, f"当前页上没有编号 {f.ref}：页面已经换了，先 browser_look 拿新快照")
+            if await el.evaluate("e => e.tagName === 'SELECT'"):
+                await _select_any(el, f.options or [f.value])
+                continue
+            if f.secret:
+                await el.evaluate("e => e.setAttribute('data-secret', '1')")
+            await el.fill(f.value, timeout=8000)
+        await page.wait_for_timeout(800)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"代填失败：{str(e)[:200]}")
+    finally:
+        _disarm(name)
+    return await _after(name)
+
+
+async def _select_any(el, wants: list[str]) -> None:
+    """有效期下拉框：按 wallet 给的几种写法依次试（09 / 9 / 9月 / Sep…），都对不上说清楚。"""
+    info = await el.evaluate("e => [...e.options].map(o => ({text: o.text, value: o.value, disabled: o.disabled}))")
+    for w in wants:
+        try:
+            index = forms.pick(info, w)
+        except forms.PickError:
+            continue
+        await el.select_option(index=index, timeout=8000)
+        return
+    raise HTTPException(400, f"下拉框里没有 {wants[0]} 这一项：用 browser_select 自己选")
 
 
 @app.post("/sessions/{name}/upload", dependencies=[Depends(auth)])

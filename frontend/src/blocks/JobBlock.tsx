@@ -7,6 +7,7 @@ import { IconAlert, IconCheck, IconChip, IconCopy, IconDisk, IconStop } from "..
 import { useBlockActions } from "./actions";
 import { ChangesPanel } from "./ChangesBlock";
 import { jobChangesShown } from "../lib/changes";
+import { writeClipboard } from "../lib/clipboard";
 
 /** 后台任务卡（App blocks/job_block.dart 同一套行为）：运行中每 2 秒问一次进度、用时每秒本地跳、可取消；
  *  结束后等服务器在这段对话里接着说完（followup=pending），再让聊天页刷新一次——只在本卡亲眼看着它结束时触发，翻历史不会。 */
@@ -114,7 +115,7 @@ export function JobLog({ job, onClose }: { job: JobInfo; onClose: () => void }) 
     http.get<JobInfo>(`/api/jobs/${job.id}?tail=20000`).then((j) => { setText(j.tail); const d = jobDisk(j.disk); if (d) setDisk(d); }).catch(() => {});
   }, [job.id]);
   const copy = async () => {
-    await navigator.clipboard.writeText(text);
+    await writeClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };

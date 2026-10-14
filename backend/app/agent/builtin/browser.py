@@ -25,7 +25,7 @@ import uuid
 
 import asyncio
 
-from ... import browser_client, browser_files, browser_sessions, browser_shot, deliver, egress_note, file_edit, file_seen, reply_language, system_alerts, task_wall, vault, web_guard
+from ... import browser_client, browser_files, browser_sessions, browser_shot, deliver, egress_note, file_edit, file_seen, reply_language, system_alerts, task_wall, vault, wallet, web_guard
 from ...storage import project_dir
 from ...browser_sessions import Tab
 from ...config import settings
@@ -289,7 +289,12 @@ async def _snap(ctx: ToolContext, method: str, path: str, json: dict | None = No
 
 
 def _click_risk(args: dict, ctx: ToolContext | None = None) -> str | None:
-    name = _tab(ctx).names.get(str(args.get("ref")), "") if ctx else ""
+    if not ctx:
+        return None
+    tab = _tab(ctx)
+    name = tab.names.get(str(args.get("ref")), "")
+    if wallet.order_covers_click(tab, name):  # v2.74 用户刚在订单卡上同意过这一单：付款按钮不再问第二次
+        return None
     return f"点击「{name}」（可能付款、发送或删除）" if RISKY_BUTTON.search(name) else None
 
 
@@ -357,6 +362,9 @@ async def browser_click(ctx: ToolContext, ref: str, confirm: bool = False, promp
                                         "submit": {"type": "boolean", "default": False}},
        "required": ["ref", "text"]})
 async def browser_type(ctx: ToolContext, ref: str, text: str, submit: bool = False) -> ToolResult:
+    why = wallet.typing_block(_tab(ctx).names.get(str(ref), ""), text)  # 卡号只能从钱包代填（B44）
+    if why:
+        return ToolResult(why, failed="卡号不能手动输入")
     return await _act(ctx, "POST", "/act", {"action": "type", "ref": ref, "text": text, "submit": submit})
 
 
@@ -612,3 +620,53 @@ async def browser_upload(ctx: ToolContext, ref: str, paths: list[str]) -> ToolRe
     card = _card(tab, files=browser_files.card_files(moved.files, (r.blocks[0].get("files") if r.blocks else None)),
                  ws=ctx.workspace)
     return ToolResult(r.content, [card])
+
+
+@tool("browser_pay_card", "正在填付款卡",
+      "结账页上用钱包里的付款卡代填卡号、有效期、安全码（你永远看不到卡号和安全码）。只能在用户刚在 confirm_order 订单卡上"
+      "点了同意、订单卡 payment 写的就是这张卡之后用；只填不点，填完核对页面金额和订单卡一致，再 browser_click 付款按钮（不会再问一次）。"
+      "card = 钱包里那张卡的名字或尾号。每个框给快照里的编号：number 必填；有效期合在一个框用 exp，分成月/年两个框（常是下拉框）用 exp_month + exp_year；"
+      "cvc 安全码、holder 持卡人、postal 邮编有框才给。钱包里没有卡：告诉用户到 我的 → 钱包 添加，或用 browser_handoff 让他自己填。",
+      {"type": "object", "properties": {"card": {"type": "string"}, "number": REF, "exp": REF, "exp_month": REF,
+                                        "exp_year": REF, "cvc": REF, "holder": REF, "postal": REF},
+       "required": ["card", "number"]}, deferred=True)
+async def browser_pay_card(ctx: ToolContext, card: str, number: str, **refs) -> ToolResult:
+    tab = _tab(ctx)
+    if not tab.session:
+        return ToolResult(NOT_OPEN)
+    have = await wallet.cards(ctx.db)
+    if not have:
+        return ToolResult("钱包里还没有付款卡：告诉用户到 我的 → 钱包 添加一张，或者用 browser_handoff 请他在页面上自己填卡。",
+                          failed="钱包里没有卡")
+    chosen = wallet.find(have, card)
+    if chosen is None:
+        return ToolResult("钱包里对不上「" + card + "」，有这些：" + "；".join(wallet.describe(c) for c in have)
+                          + "。card 写名字或尾号。", failed="没找到这张卡")
+    why = wallet.may_fill(tab, chosen)
+    if why:
+        return ToolResult(why, failed="还不能代填")
+    refs = {k: v for k, v in {**refs, "number": number}.items() if k in wallet.KINDS and v}
+    refs, _ = wallet.guess_refs(refs, tab.names, chosen)  # 模型漏给的有效期 / 安全码框按框名补上（B43）
+    host = wallet.frame_block(tab, list(refs.values()))
+    if host:
+        return ToolResult(f"卡号框在别的网站（{host}）嵌进来的框里，不是这家店也不是公认的支付机构：不代填，"
+                          "告诉用户这个情况，要付就用 browser_handoff 请他自己填。", failed="卡号框不在可信的页面上")
+    try:
+        secret = wallet.reveal(chosen)
+        fields = wallet.fields(chosen, secret, refs, tab.names)
+    except wallet.CardError as e:
+        return ToolResult(str(e), failed=str(e))
+    except Exception:
+        return ToolResult("钱包解不开（服务器的 VAULT_KEY 变了？）：告诉用户这张卡要重新添加。", failed="钱包解不开")
+    try:
+        snap = await browser_client.snapshot_call(tab.session, "POST", "/card", {"fields": fields})
+    except Exception as e:
+        return ToolResult(wallet.scrub(f"代填没成功：{e}", secret["number"], chosen.last4), failed="代填没成功")
+    snap = {**snap, "text": wallet.scrub(snap.get("text", ""), secret["number"], chosen.last4),
+            "elements": [{**e, "name": wallet.scrub(e.get("name", ""), secret["number"], chosen.last4)} for e in snap.get("elements", [])]}
+    wallet.mark_used(chosen)
+    await ctx.db.commit()
+    filled = "、".join({"number": "卡号", "exp": "有效期", "exp_month": "有效期月", "exp_year": "有效期年", "cvc": "安全码",
+                       "holder": "持卡人", "postal": "邮编"}[k] for k in wallet.KINDS if k in refs)
+    return await _after(ctx, tab, f"已用 {wallet.describe(chosen)} 填好{filled}（快照里卡号、安全码框显示为空是故意隐藏，已经填上了，别再填一次）。先核对页面上的应付金额和订单卡"
+                        f"（{tab.order['total']}）一致，一致再点付款按钮；不一致就停下告诉用户。\n" + await _view(ctx, tab, snap))

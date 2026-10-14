@@ -18,6 +18,7 @@ import {
   type SlashCall, type SlashIcon,
 } from "../../lib/slash";
 import "./chat.css";
+import { uuid } from "../../lib/uuid";
 
 /** 托盘里的一项：本机文件（上传中 / upload / error）或项目文件引用（ref，现成的文件块）。 */
 type Pending = { key: string; name: string; upload?: Upload; ref?: FileBlock; error?: string };
@@ -89,7 +90,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
 
   const pick = (list: FileList | null) => {
     for (const f of Array.from(list ?? [])) {
-      const key = crypto.randomUUID();
+      const key = uuid();
       setFiles((s) => [...s, { key, name: f.name }]);
       http.upload<Upload>("/api/uploads", f)
         .then((u) => setFiles((s) => s.map((x) => (x.key === key ? { ...x, upload: u } : x))))
@@ -101,7 +102,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
   const uploading = files.some((f) => !f.upload && !f.ref && !f.error);
   const ready: FileBlock[] = files.flatMap((f) => (f.ref ? [f.ref] : f.upload ? [asFileBlock(f.upload)] : []));
   const takeRefs = (refs: FileBlock[]) => {
-    setFiles((s) => [...s, ...refs.map((r) => ({ key: crypto.randomUUID(), name: r.name, ref: r }))]);
+    setFiles((s) => [...s, ...refs.map((r) => ({ key: uuid(), name: r.name, ref: r }))]);
     setPicking(false);
     ref.current?.focus();
   };

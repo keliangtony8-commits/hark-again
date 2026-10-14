@@ -3,6 +3,7 @@ import { shellDuration, shellHasMore, shellSemantics, shellStateLabel, shellTail
 import type { ShellBlock as T } from "../lib/types";
 import { Sheet } from "../ui/kit";
 import { IconAlert, IconCheck, IconCopy, IconStop } from "../ui/icons";
+import { writeClipboard } from "../lib/clipboard";
 
 /** 用户自己跑的命令卡（输入框 !命令，不经过助手；App blocks/shell_block.dart 同一套）。
  *  样子沿用后台任务卡（blk-job 一家）：状态点 + $ 命令 + 用时 / 输出尾巴 / 一句说明 / 状态词 + 完整输出、复制。 */
@@ -14,7 +15,7 @@ export default function ShellBlock({ block: b }: { block: T }) {
   const empty = b.state === "running" ? "等待输出…" : b.state === "refused" || b.state === "error" ? "（没有执行）" : "（没有输出）";
   const label = shellStateLabel(b);
   const copy = async (text: string) => {
-    await navigator.clipboard.writeText(text);
+    await writeClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };

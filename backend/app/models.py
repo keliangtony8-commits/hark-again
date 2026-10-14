@@ -310,6 +310,23 @@ class Secret(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class PaymentCard(Base):
+    """v2.74 钱包里的一张付款卡（对标 Hark 设置里的 Wallets + 结账时浏览器代填卡）。卡号和安全码整包加密（ciphertext），
+    接口、模型、日志只见 label / brand / last4 / 有效期 / 持卡人。规则只在 app/wallet.py。"""
+    __tablename__ = "payment_cards"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    label: Mapped[str] = mapped_column(String(60))
+    brand: Mapped[str] = mapped_column(String(16))
+    last4: Mapped[str] = mapped_column(String(4))
+    exp_month: Mapped[int] = mapped_column(Integer)
+    exp_year: Mapped[int] = mapped_column(Integer)
+    holder: Mapped[str] = mapped_column(String(80), default="", server_default="")
+    postal_code: Mapped[str] = mapped_column(String(16), default="", server_default="")
+    ciphertext: Mapped[str] = mapped_column(String)  # {"number","cvc"} 的密文
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Connection(Base):
     """OAuth 连接（一个服务一个账户）。Token 整包加密存储，过期自动刷新。"""
     __tablename__ = "connections"

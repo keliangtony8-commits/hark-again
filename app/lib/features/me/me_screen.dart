@@ -1,6 +1,6 @@
 // 我的：点右上角头像进入的全屏页（设计 v2）。不是 Tab，没有 AppBar——和一级页面同一张壁纸、同一套玻璃。
 // 从上到下：返回钮 → 页头（大头像，点它改颜色；衬线“我的” + 服务器）→ 用量卡（本月花费 / 预算 + 查看用量）
-//   → 分组卡：了解你（记忆、技能、定时任务）· 连接（连接器、保险箱、Pages）· 外观与偏好（浅深色、减少透明度、头像颜色、回复语言）
+//   → 分组卡：了解你（记忆、技能、定时任务）· 连接（连接器、保险箱、钱包、Pages）· 外观与偏好（浅深色、减少透明度、头像颜色、回复语言）
 //   → 服务器 · 两步验证（v2.58 /me/security）→ 单独一行“退出登录”。页头身份行：用户名（GET /api/auth/me，取到后淡入）+ 服务器域名。每项一个子页面，路由在 app.dart（子页面是 ui/sub_page.dart 的 SubPage：同一张壁纸 + 玻璃标题栏）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -95,6 +95,7 @@ class _MeBody extends ConsumerWidget {
         child: GlassGroup(children: [
           RowTile(icon: Icons.hub_outlined, title: '连接器', subtitle: 'Google、GitHub 和 MCP 服务器', onTap: () => context.push('/me/connectors')),
           RowTile(icon: Icons.lock_outline_rounded, title: '保险箱', subtitle: 'API Key 和网站登录，加密保存', onTap: () => context.push('/me/vault')),
+          RowTile(icon: Icons.credit_card_rounded, title: '钱包', subtitle: '付款卡，结账时替你填', onTap: () => context.push('/me/wallet')),
           RowTile(icon: Icons.computer_rounded, title: '我的电脑', subtitle: '云端 Linux 的状态、后台任务和文件', onTap: () => context.push('/me/computer')),
           RowTile(icon: Icons.web_rounded, title: 'Pages', subtitle: '我为你做好并发布的网页', onTap: () => context.push('/me/pages')),
         ]),

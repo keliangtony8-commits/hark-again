@@ -280,6 +280,8 @@ abstract final class Layout {
   static const sectionGap = Sp.x6; // 区块之间（“为你准备”和“面板”之间）
   static const cardPad = Sp.x5 - Sp.x1; // 卡片内边距 20
   static const headTop = 28.0; // 页面主标题（问候语、“我的”）离顶栏多远
+  static const cardFace = 1.586; // 钱包里卡面的宽高比（ISO 银行卡 85.6 × 54）
+  static const cardFaceMax = 340.0; // 卡面最宽
   static const rowIcon = 22.0; // 列表行首的细线图标（不加色块底）
   static const jobLogLines = 6; // 后台任务卡里日志尾巴显示几行（完整的点“完整日志”）
   static const rowMin = 56.0, rowMinTwoLine = 64.0; // 列表行高：单行 / 带副标题

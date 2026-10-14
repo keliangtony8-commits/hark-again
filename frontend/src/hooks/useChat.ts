@@ -10,6 +10,7 @@ import { mergeRetry, RETRY_CLEARS_ON, retryNotice } from "../lib/retry";
 import { asFileBlock } from "../lib/files";
 import { followField } from "../lib/delegate";
 import { useConversations } from "./useConversations";
+import { uuid } from "../lib/uuid";
 
 /** 眼前这段对话：id 和消息总是一起换，持久化发件箱时才不会把 A 的消息写进 B。 */
 type Thread = { id: string | null; messages: Message[] };
@@ -431,7 +432,7 @@ export function useChat(projectId?: string) {
     if (busy) {
       if (!canSteer) return;
       // 途中补充（文字和 / 或附件，v1.93）：立刻插在生成中那条前面；线不通就标失败（“重发”= 挪到末尾排成下一轮）
-      const id = `local-${crypto.randomUUID()}`;
+      const id = `local-${uuid()}`;
       const blocks: Block[] = [...(text.trim() ? [{ type: "text" as const, text: text.trim() }] : []), ...files.map(asFileBlock)];
       const ok = link === "open" && !!socket.current?.send({
         type: "user.message", conversation_id: thread.id, project_id: projectId, text: text.trim(),
@@ -448,7 +449,7 @@ export function useChat(projectId?: string) {
       ...(text.trim() ? [{ type: "text" as const, text: text.trim() }] : []),
       ...files.map(asFileBlock),
     ];
-    setMessages((m) => [...m, { id: `local-${crypto.randomUUID()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
+    setMessages((m) => [...m, { id: `local-${uuid()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
   }, [busy, canSteer, link, thread.id, projectId]);
 
   /** 接着问某个子助手（v1.97，子任务卡上的“追问”）：气泡带“追问 · 标题”；正在回答时排队等这一轮结束（不插进这一轮）。 */
@@ -457,7 +458,7 @@ export function useChat(projectId?: string) {
     if (!t || !id) return;
     setError(null);
     const blocks: Block[] = [{ type: "text", text: t }, { type: "agent", id: "delegate", name: "子助手", target: id, title }];
-    setMessages((m) => [...m, { id: `local-${crypto.randomUUID()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
+    setMessages((m) => [...m, { id: `local-${uuid()}`, role: "user", blocks, outbox: "queued", created_at: new Date().toISOString() }]);
   }, []);
 
   /** 失败的消息重新排队：挪到末尾（回复会接在它后面），线通就发。 */

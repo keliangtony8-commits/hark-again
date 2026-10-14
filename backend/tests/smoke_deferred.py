@@ -34,7 +34,7 @@ load_builtin()
 META = deferred.META
 DEFERRED = {"save_attachment", "render_document", "analyze_video", "search_transcript", "offer_on_home", "manage_home", "share_conversation", "request_env",
             "restart_service", "browser_upload", "browser_handoff", "save_skill", "publish_page", "extract_data", "projects", "connector_accounts", "billing_status",
-            "edit_skill", "delete_skill", "mcp_servers", "connect_api_key", "browser_press", "set_reply_language"}
+            "edit_skill", "delete_skill", "mcp_servers", "connect_api_key", "browser_press", "set_reply_language", "browser_pay_card"}
 assert {n for n, t in REGISTRY.items() if t.deferred} == DEFERRED
 assert META in plan_mode.READ_TOOLS and REGISTRY[META].quiet and REGISTRY[META].parallel
 

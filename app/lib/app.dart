@@ -22,6 +22,7 @@ import 'features/me/usage_screen.dart';
 import 'features/me/feedback_screen.dart';
 import 'features/me/security_screen.dart';
 import 'features/me/vault_screen.dart';
+import 'features/me/wallet_screen.dart';
 import 'features/projects/project_brief_screen.dart';
 import 'features/projects/projects_screen.dart';
 import 'shell/app_shell.dart';
@@ -74,6 +75,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ]),
         GoRoute(path: 'connectors', builder: (_, s) => ConnectorsScreen(oauth: OAuthResult.fromQuery(s.uri.queryParameters))),
         GoRoute(path: 'vault', builder: (_, _) => const VaultScreen()),
+        GoRoute(path: 'wallet', builder: (_, _) => const WalletScreen()),
         GoRoute(path: 'security', builder: (_, _) => const SecurityScreen()),
         GoRoute(path: 'feedback', builder: (_, _) => const FeedbackScreen(), routes: [
           GoRoute(path: ':id', builder: (_, s) => FeedbackDetailScreen(id: s.pathParameters['id']!)),

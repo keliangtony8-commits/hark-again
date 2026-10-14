@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, reply_language, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, reply_language, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, wallet, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -50,6 +50,8 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
         p.add(STABLE, cred_line)
     if env_line := command_env.prompt(await command_env.names(db)):  # 沙盒命令里能用的环境变量（只给名字）
         p.add(STABLE, env_line)
+    if pay_line := wallet.prompt_line(await wallet.cards(db)):  # v2.74 钱包里的卡（只有名字和尾号）
+        p.add(STABLE, pay_line)
     servers = sorted(s.name for s in (await db.scalars(select(McpServer))).all())
     if servers:
         p.add(STABLE, "用户的 MCP 服务器（先 mcp_tools 再 mcp_call）：" + "、".join(servers))

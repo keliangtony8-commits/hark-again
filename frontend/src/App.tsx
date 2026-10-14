@@ -11,6 +11,7 @@ import SkillsScreen from "./features/me/SkillsScreen";
 import TaskDetailScreen from "./features/me/TaskDetailScreen";
 import TasksScreen from "./features/me/TasksScreen";
 import VaultScreen from "./features/me/VaultScreen";
+import WalletScreen from "./features/me/WalletScreen";
 import SecurityScreen from "./features/me/SecurityScreen";
 import FeedbackScreen from "./features/me/FeedbackScreen";
 import FeedbackDetail from "./features/me/FeedbackDetail";
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="me/skills" element={<SkillsScreen />} />
           <Route path="me/connectors" element={<ConnectorsScreen />} />
           <Route path="me/vault" element={<VaultScreen />} />
+          <Route path="me/wallet" element={<WalletScreen />} />
           <Route path="me/security" element={<SecurityScreen />} />
           <Route path="me/feedback" element={<FeedbackScreen />} />
           <Route path="me/feedback/:id" element={<FeedbackDetail />} />

@@ -10,6 +10,7 @@ import { latestChanges, latestChangesNote, NO_CHANGES } from "../../lib/changes"
 import { effectiveModel, findModel, findModelMiss, modelListNote, modelNote, toChoice, type ModelCatalog } from "../../lib/models";
 import { lastReplyText, type SlashCall } from "../../lib/slash";
 import type { Message, OutgoingFile } from "../../lib/types";
+import { writeClipboard } from "../../lib/clipboard";
 
 export const NO_CONVERSATION = "还没开始对话";
 export const planModeNote = (on: boolean) => (on ? "计划模式：先出方案，你批准后再动手" : "已退出计划模式");
@@ -34,7 +35,7 @@ export async function runSlash(call: SlashCall, files: OutgoingFile[], d: SlashD
     case "copy": {
       const t = lastReplyText(d.messages);
       if (!t) return "还没有可复制的回答";
-      try { await navigator.clipboard.writeText(t); return "已复制上一条回答"; } catch { return "浏览器不让写剪贴板"; }
+      try { await writeClipboard(t); return "已复制上一条回答"; } catch { return "浏览器不让写剪贴板"; }
     }
     case "status":
       if (!d.activeId) return NO_CONVERSATION;

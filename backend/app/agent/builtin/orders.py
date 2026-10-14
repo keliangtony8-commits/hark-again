@@ -5,6 +5,7 @@ confirm_order 走内核的审批流程（risk 永远要批准），但审批卡�
 点“不买了” / 停止 / 无人值守（定时任务 deny_all）→ 不付款。金额全部原样照页面写，服务器不算账。"""
 import uuid
 
+from ... import browser_sessions, wallet
 from ...blocks import OrderBlock
 from ..tools import ToolContext, ToolResult, tool
 
@@ -61,7 +62,9 @@ def _confirm_card(args: dict) -> dict:
       risk=lambda args, ctx=None: "确认下单", card=_confirm_card)
 async def confirm_order(ctx: ToolContext, total: str, merchant: str = "", **_) -> ToolResult:
     # 走到这里说明用户已经在订单卡上点了同意（卡片已由内核更新为 approved）
-    return ToolResult(f"用户已在订单卡上确认（{merchant}，合计 {total}）。现在去完成付款；"
+    wallet.remember_order(browser_sessions.tab(ctx.conversation_id, ctx.task_id), _.get("payment"), total)  # v2.74 代填卡 / 付款按钮只认这一单
+    hint = wallet.order_hint(await wallet.cards(ctx.db), _.get("payment"))
+    return ToolResult(f"用户已在订单卡上确认（{merchant}，合计 {total}）。现在去完成付款；{hint}"
                       "付完用 show_receipt 展示订单号。如果页面要求的金额和卡上不一致，先停下来告诉用户，不要付。")
 
 
@@ -73,6 +76,7 @@ async def show_receipt(ctx: ToolContext, **args) -> ToolResult:
     number = str(args.get("order_number") or "").strip()
     if not number:
         return ToolResult("没有订单号，说明还没真正下单成功，不要出回执；先确认页面上的结果。")
+    wallet.forget_order(browser_sessions.tab(ctx.conversation_id, ctx.task_id))  # 付完了：这一单不再放行代填 / 付款按钮
     try:
         block = _block(args, order_number=number, state="placed")
     except ValueError as e:

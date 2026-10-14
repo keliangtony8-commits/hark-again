@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { CodeBlock as T } from "../lib/types";
+import { writeClipboard } from "../lib/clipboard";
 
 /** 代码 / 命令输出卡。live = 命令还在跑：标题旁一个呼吸点 + “运行中”，不给复制（内容还在变），输出区贴着最新一行。 */
 export default function CodeBlock({ block }: { block: T }) {
@@ -9,7 +10,7 @@ export default function CodeBlock({ block }: { block: T }) {
     if (block.live && pre.current) pre.current.scrollTop = pre.current.scrollHeight;
   }, [block.live, block.source]);
   const copy = async () => {
-    await navigator.clipboard.writeText(block.source);
+    await writeClipboard(block.source);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };

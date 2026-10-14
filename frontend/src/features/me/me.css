@@ -46,3 +46,14 @@
 
 /* v2.64 反馈详情：整份报告一张卡 */
 .feedback-report { padding: var(--sp-4); margin-top: var(--sp-4); }
+
+/* 钱包卡面（v2.74，App CardFace 同款）：墨色底、ISO 卡比例、卡号等宽数字 */
+.wallet-face { aspect-ratio: 1.586; max-width: 340px; width: 100%; margin: 0 auto var(--sp-3); box-sizing: border-box;
+  display: flex; flex-direction: column; padding: 20px; border-radius: var(--r-lg); background: var(--ink); color: var(--on-ink);
+  transition: background var(--dur) var(--ease); }
+.wallet-face-top, .wallet-face-bottom { display: flex; justify-content: space-between; gap: var(--sp-2); }
+.wallet-face-label { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wallet-face-soft { opacity: 0.7; font-size: 12px; }
+.wallet-face-number { margin-top: auto; margin-bottom: var(--sp-3); font-size: 20px; letter-spacing: 1.5px;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wallet-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }

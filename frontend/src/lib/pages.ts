@@ -1,10 +1,11 @@
 import { server } from "./api";
+import { writeClipboard } from "./clipboard";
 
 /** 预览走当前连接的服务器地址（App 里可能和 PUBLIC_URL 不同），分享用后端给的公开地址。 */
 export const previewUrl = (slug: string) => `${server.get()}/p/${slug}/`;
 
 export async function copyLink(url: string): Promise<boolean> {
-  try { await navigator.clipboard.writeText(url); return true; } catch { return false; }
+  try { await writeClipboard(url); return true; } catch { return false; }
 }
 
 /** 老服务器没有 published 字段 = 已发布。 */
