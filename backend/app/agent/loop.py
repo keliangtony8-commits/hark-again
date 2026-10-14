@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .. import activity, browser_files, command_env, llm_retry, plan, plan_mode, spill, steering, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, claimed_action, compact, deferred, distill, loop_guard, next_speaker, owed_delivery, parallel, supersede, text_tool_call, tool_args, tool_mask, tool_trace
+from . import approvals, claimed_action, compact, deferred, distill, loop_guard, next_speaker, owed_delivery, parallel, supersede, text_tool_call, tool_args, tool_mask, tool_trace, weekday_check
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -391,6 +391,12 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                     messages.append({"role": "assistant", "content": said})
                 messages.append({"role": "user", "content": next_speaker.CONTINUE})
                 continue
+            fixed, changes = weekday_check.fix(said, next_speaker.last_question(messages))
+            if changes:  # “11月3日（周一）”其实是周二：星期几按日历就地改正，不再问模型（weekday_check.py）
+                for ev in builder.rollback(mark):
+                    yield ev
+                for ev in builder.text(fixed):
+                    yield ev
             break
         used_tools = True
 
