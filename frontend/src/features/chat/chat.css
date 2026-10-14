@@ -83,7 +83,7 @@
 .msg.user { align-items: flex-end; }
 .msg.user .bubble {
   max-width: 75%; padding: var(--sp-2) var(--sp-4);
-  background: var(--ink); color: var(--on-ink);
+  background: var(--user-bubble); color: var(--on-user-bubble);
   border-radius: var(--r-card);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }

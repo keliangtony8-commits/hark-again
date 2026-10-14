@@ -26,6 +26,8 @@ class Palette {
     required this.glassBorder,
     required this.ink,
     required this.onInk,
+    required this.userBubble,
+    required this.onUserBubble,
     required this.glassHighlight,
     required this.avatar,
     required this.scrim,
@@ -49,6 +51,8 @@ class Palette {
   /// 设计 v2.1「墨色」：主按钮、用户气泡、导航选中块、发送键用它，不用强调色（强调色一屏最多两处：未读点、进度、链接）。
   /// 浅色 = 近黑，深色 = 暖白；onInk 是压在上面的字（≥ 4.5:1，test/contrast_test.dart 查）。
   final Color ink, onInk;
+  /// §L 用户气泡：学 Hark 的中性偏灰，不用纯白/纯黑（v2.90.1）。
+  final Color userBubble, onUserBubble;
 
   /// 分段导航选中的实心胶囊 = 墨色（v2 起的名字，保留给顶栏读）。
   Color get pillOn => ink;
@@ -88,6 +92,8 @@ class Palette {
     glassHighlight: Color(0x00FFFFFF), // F.2：不要玻璃描边/高光
     ink: Color(0xFF111111),
     onInk: Color(0xFFFFFFFF),
+    userBubble: Color(0xFFE8E6E2), // 实测 Hark 浅色：暖浅灰配深字
+    onUserBubble: Color(0xFF1C1B1A),
     avatar: Color(0xFFE4DFD8),
     scrim: Color(0x4DE4E6EA),
     tile: Color(0x0A1C1B1A),
@@ -118,6 +124,8 @@ class Palette {
       glassHighlight: l(a.glassHighlight, b.glassHighlight),
       ink: l(a.ink, b.ink),
       onInk: l(a.onInk, b.onInk),
+      userBubble: l(a.userBubble, b.userBubble),
+      onUserBubble: l(a.onUserBubble, b.onUserBubble),
       avatar: l(a.avatar, b.avatar),
       scrim: l(a.scrim, b.scrim),
       tile: l(a.tile, b.tile),
@@ -147,6 +155,8 @@ class Palette {
     glassHighlight: Color(0x00FFFFFF),
     ink: Color(0xFFFFFFFF), // 主按钮 = 白胶囊黑字
     onInk: Color(0xFF0A0D16),
+    userBubble: Color(0xFF1B2032), // 实测 Hark 暗色：比背景亮一点的冷蓝灰
+    onUserBubble: Color(0xFFF5F5F7),
     avatar: Color(0xFF232838),
     scrim: Color(0x99080B16),
     tile: Color(0x0FFFFFFF),
