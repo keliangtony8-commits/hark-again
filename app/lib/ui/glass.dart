@@ -84,17 +84,7 @@ class Backdrop extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: p.backdrop),
       ),
-      // 右下一团极淡的强调色光晕：给壁纸一点我们自己的温度，又不抢内容
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0.9, 0.85),
-            radius: 0.9,
-            colors: [p.accent.withValues(alpha: 0.05), p.accent.withValues(alpha: 0)],
-          ),
-        ),
-        child: body,
-      ),
+      child: body, // v2.80：去掉强调色光晕——强调色是白，壁纸只留海军蓝渐变
     );
   }
 }
@@ -115,18 +105,20 @@ class GlassSurface extends StatelessWidget {
     final p = context.palette;
     final solid = GlassMode.solidOf(context);
     final shape = BorderRadius.circular(radius);
+    // v2.80 F.2：不模糊的面 = 列表卡片，一律实色 surface、无描边无高光；只有浮层（blur）是玻璃 + 发丝边。
+    final card = !blur;
     Widget body = AnimatedContainer(
       duration: context.motion(Motion.base),
       curve: Motion.ease,
       decoration: BoxDecoration(
-        color: solid ? p.surface : p.glass,
+        color: solid || card ? p.surface : p.glass,
         borderRadius: shape,
-        border: Border.all(color: borderColor ?? (solid ? p.border : p.glassBorder), width: 1),
+        border: Border.all(color: borderColor ?? (card ? p.surface.withValues(alpha: 0) : (solid ? p.border : p.glassBorder)), width: 1),
       ),
       padding: padding,
       child: child,
     );
-    body = GlassHighlight(radius: radius, child: body);
+    if (!card) body = GlassHighlight(radius: radius, child: body);
     if (blur && !solid) {
       body = ClipRRect(
         borderRadius: shape,
@@ -200,7 +192,7 @@ class ValueTile extends StatelessWidget {
       excludeSemantics: true,
       child: Container(
         padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: context.text.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: Sp.x1),

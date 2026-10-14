@@ -55,11 +55,11 @@ void main() {
     expect((card.decoration as BoxDecoration).color, ctx.palette.surface);
   });
 
-  testWidgets('普通模式下卡片是玻璃着色（和主页卡片同一材质）', (tester) async {
+  testWidgets('卡片是实色 surface（v2.80 F.2，和主页卡片同一材质）', (tester) async {
     await tester.pumpWidget(_app(_page()));
     await tester.pumpAndSettle();
     final ctx = tester.element(find.text('卡片'));
     final card = tester.widget<Container>(find.ancestor(of: find.text('卡片'), matching: find.byType(Container)).first);
-    expect((card.decoration as BoxDecoration).color, ctx.palette.glass);
+    expect((card.decoration as BoxDecoration).color, ctx.palette.surface);
   });
 }

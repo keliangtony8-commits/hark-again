@@ -123,7 +123,7 @@ class _Thumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(Radii.sm),
+      borderRadius: BorderRadius.circular(Radii.inner),
       child: Stack(fit: StackFit.expand, children: [
         Image.file(a.local!, fit: BoxFit.cover, semanticLabel: a.name),
         if (a.uploading)
@@ -148,7 +148,7 @@ class _Chip extends StatelessWidget {
       excludeSemantics: true,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: Sp.x3),
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         child: Row(children: [
           SizedBox.square(
             dimension: _badge,
@@ -156,7 +156,7 @@ class _Chip extends StatelessWidget {
               Container(
                 decoration: BoxDecoration(
                   border: Border.all(color: context.hairline),
-                  borderRadius: BorderRadius.circular(Radii.sm),
+                  borderRadius: BorderRadius.circular(Radii.inner),
                 ),
                 alignment: Alignment.center,
                 child: SwapSwitcher(

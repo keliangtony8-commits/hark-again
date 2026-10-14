@@ -235,7 +235,7 @@ class TopConversationList extends ConsumerWidget {
     if (c.deleted) return KeyedSubtree(key: Key('top-conv-${c.id}'), child: body);
     return InkWell(
       key: Key('top-conv-${c.id}'),
-      borderRadius: BorderRadius.circular(Radii.md),
+      borderRadius: BorderRadius.circular(Radii.inner),
       onTap: () => openConversation(context, ref, c.id),
       child: body,
     );

@@ -53,7 +53,7 @@ class _ThinkingCardState extends State<ThinkingCard> {
       label: '正在思考',
       excludeSemantics: true,
       child: GlassSurface(
-        radius: Radii.lg,
+        radius: Radii.card,
         shadow: false,
         padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
@@ -120,7 +120,7 @@ class _ThoughtSummaryState extends State<ThoughtSummary> {
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
-                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
                   child: SelectableText(body, style: context.text.bodySmall?.copyWith(color: p.text2)),
                 ),
               )

@@ -179,7 +179,7 @@ class OfferImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final image = ClipRRect(
-      borderRadius: BorderRadius.circular(Radii.tile),
+      borderRadius: BorderRadius.circular(Radii.inner),
       child: AspectRatio(aspectRatio: Layout.offerImageRatio, child: NetImage(card.imageUrl!)),
     );
     final link = card.linkUrl;

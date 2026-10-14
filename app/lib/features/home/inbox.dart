@@ -180,7 +180,7 @@ class InboxBanner extends StatelessWidget {
         // 浮在内容上的通知条 = 浮层：真模糊玻璃 + 统一的淡浮层投影（v2.1：不再手写重投影和实色底）
         child: GlassSurface(
           blur: true,
-          radius: Radii.lg,
+          radius: Radii.card,
           padding: const EdgeInsets.all(Sp.x3),
           child: Row(children: [
             IconBadge(report ? Icons.inbox_rounded : Icons.auto_awesome_rounded),

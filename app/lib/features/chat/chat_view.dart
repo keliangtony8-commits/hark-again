@@ -4,6 +4,7 @@
 // 定位（搜索命中）：ChatState.focus 指向的消息一进列表就取走 → 先回到底部，再一屏一屏往上找，直到它被建出来
 //   （列表是懒加载、高度不定，没法直接算偏移），然后平滑滚到视口中间并 FlashHighlight 闪一下。
 import 'package:flutter/material.dart';
+import 'package:assistant/ui/brand_mark.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -300,7 +301,7 @@ class _ErrorBar extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: Layout.contentMax),
           child: GlassSurface(
             blur: true,
-            radius: Radii.lg,
+            radius: Radii.card,
             borderColor: p.danger.withValues(alpha: 0.4),
             padding: const EdgeInsets.only(left: Sp.x4),
             child: ConstrainedBox(
@@ -376,12 +377,11 @@ class _Empty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(Sp.x5),
         child: Column(children: [
-          FadeSlideIn(child: Icon(Icons.auto_awesome_rounded, size: Sp.x6 + Sp.x2, color: p.text3, weight: 300)),
+          const FadeSlideIn(child: BrandMark()),
           const SizedBox(height: Sp.x3),
           FadeSlideIn(delay: Motion.stagger(2), child: Text('今天想做点什么？', style: context.text.titleLarge)),
           const SizedBox(height: Sp.x5),

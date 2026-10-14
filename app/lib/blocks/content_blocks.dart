@@ -32,7 +32,7 @@ class DraftBlockView extends StatelessWidget {
       container: true,
       label: '草稿：${block.title}',
       child: Container(
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -192,7 +192,7 @@ class _Figure extends StatelessWidget {
       Pressable(
         onTap: () => showImageViewer(context, item),
         semanticLabel: '图片${item.caption == null ? '' : '：${item.caption}'}，查看大图',
-        child: ClipRRect(borderRadius: BorderRadius.circular(Radii.md), child: child),
+        child: ClipRRect(borderRadius: BorderRadius.circular(Radii.inner), child: child),
       ),
       if (item.caption != null && item.caption!.isNotEmpty)
         Padding(
@@ -232,7 +232,7 @@ Future<void> showImageViewer(BuildContext context, ImageItem item) => showAppDia
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(Radii.md),
+          borderRadius: BorderRadius.circular(Radii.inner),
           child: AspectRatio(
             aspectRatio: 1,
             child: InteractiveViewer(maxScale: 4, child: NetImage(item.url, fit: BoxFit.contain)),

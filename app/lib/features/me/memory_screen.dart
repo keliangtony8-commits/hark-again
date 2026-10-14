@@ -175,7 +175,7 @@ class _MemoryRow extends StatelessWidget {
     final p = context.palette;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(Radii.md),
+      borderRadius: BorderRadius.circular(Radii.inner),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: A11y.minTap),
         child: Padding(

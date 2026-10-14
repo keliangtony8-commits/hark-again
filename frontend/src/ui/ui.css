@@ -26,14 +26,14 @@
 .section-title { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); color: var(--text-3); margin: 0 var(--sp-1) var(--sp-3); }
 
 /* 分组列表卡（App GlassGroup）：假玻璃、大圆角、行间内缩分隔线 */
-.list { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card); overflow: hidden; }
+.list { background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-card); box-shadow: var(--elev-card); overflow: hidden; }
 .row { display: flex; align-items: center; gap: var(--sp-3); width: 100%; padding: var(--sp-3) var(--sp-4); text-align: left; color: var(--text); min-height: 56px; }
 .row + .row { border-top: 1px solid var(--glass-border); }
 a.row:hover, button.row:hover { background: var(--tile); }
 /* v2.1：图标去底块——一枚细线图标（text-2），宽度占位保证各行文字对齐 */
 .row-icon { width: 28px; height: 28px; display: grid; place-items: center; flex: none; color: var(--text-2); font-size: 18px; }
 /* 取不到品牌图时的字标：和商品卡字标同一字族，小一号、安静的底 */
-.row-monogram { width: 24px; height: 24px; display: grid; place-items: center; border-radius: var(--r-sm); background: var(--tile);
+.row-monogram { width: 24px; height: 24px; display: grid; place-items: center; border-radius: var(--r-inner); background: var(--tile);
   color: var(--text-2); font-family: var(--font-serif); font-size: var(--fs-sm); font-weight: var(--fw-title); }
 .row-body { flex: 1; min-width: 0; }
 .row-title { font-size: var(--fs-md); font-weight: var(--fw-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -68,8 +68,8 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .toggle.on::after { transform: translateX(18px); background: var(--on-ink); }
 .toggle:disabled { opacity: .45; cursor: not-allowed; }
 
-.segmented { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 3px; border-radius: var(--r-md); background: var(--tile); }
-.segmented-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: calc(var(--r-md) - 3px); background: var(--ink); transform: translateX(calc(var(--i) * 100%)); transition: transform var(--dur-slow) var(--spring); }
+.segmented { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 3px; border-radius: var(--r-inner); background: var(--tile); }
+.segmented-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: calc(var(--r-inner) - 3px); background: var(--ink); transform: translateX(calc(var(--i) * 100%)); transition: transform var(--dur-slow) var(--spring); }
 .segmented button { position: relative; padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text-2); transition: color var(--dur) var(--ease); }
 .segmented button.on { color: var(--on-ink); }
 
@@ -100,18 +100,18 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .form-field { display: block; margin-bottom: var(--sp-4); }
 .form-field > span { display: block; font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text-2); margin-bottom: var(--sp-2); }
 /* 输入框坐在玻璃上：底 = --tile、边透明；聚焦时变实底 + 强调色边（和 SearchField 同一手感） */
-.form-field input, .form-field textarea, .form-field select { width: 100%; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); border: 1px solid transparent; background: var(--tile); color: var(--text); outline: 0;
+.form-field input, .form-field textarea, .form-field select { width: 100%; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); border: 1px solid transparent; background: var(--tile); color: var(--text); outline: 0;
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
 .form-field input::placeholder, .form-field textarea::placeholder { color: var(--text-3); }
 .form-field textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .form-field input:focus, .form-field textarea:focus, .form-field select:focus { border-color: color-mix(in srgb, var(--text) 24%, transparent); background: var(--surface); }
 .form-field small { display: block; color: var(--text-3); font-size: var(--fs-xs); margin-top: var(--sp-1); }
 
-.skeleton { height: 56px; border-radius: var(--r-md); background: linear-gradient(90deg, var(--tile), var(--glass), var(--tile)); background-size: 200% 100%; animation: shimmer 1.2s infinite linear; }
+.skeleton { height: 56px; border-radius: var(--r-inner); background: linear-gradient(90deg, var(--tile), var(--glass), var(--tile)); background-size: 200% 100%; animation: shimmer 1.2s infinite linear; }
 .skeleton + .skeleton { margin-top: var(--sp-2); }
 
 .emoji-pick { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-.emoji-pick button { width: 40px; height: 40px; border-radius: var(--r-sm); font-size: 20px; background: var(--tile); transition: background var(--dur), box-shadow var(--dur); }
+.emoji-pick button { width: 40px; height: 40px; border-radius: var(--r-inner); font-size: 20px; background: var(--tile); transition: background var(--dur), box-shadow var(--dur); }
 .emoji-pick button.on { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--ink); }
 .push-left { margin-right: auto; }
 .seg { display: flex; gap: var(--sp-2); overflow-x: auto; padding-bottom: var(--sp-1); margin-bottom: var(--sp-4); }
@@ -119,7 +119,7 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .desc { color: var(--text-2); font-size: var(--fs-sm); margin: 0 var(--sp-1) var(--sp-4); }
 .danger-text { color: var(--danger); }
 button.row-body { text-align: left; }
-.row-icon.file-ext { width: 32px; height: 32px; border-radius: var(--r-sm); background: var(--tile); font-size: 9px; font-weight: var(--fw-strong); letter-spacing: .04em; }
+.row-icon.file-ext { width: 32px; height: 32px; border-radius: var(--r-inner); background: var(--tile); font-size: 9px; font-weight: var(--fw-strong); letter-spacing: .04em; }
 /* 列表子页的页头（技能 / 定时任务）：摘要小标签 + 一句说明；空库的起步模板卡。 */
 /* 顶上不再加距：子页第一块内容一律在标题栏下 .page-inner 的 sp-5 处（用量页的卡片也在那），v1.08 */
 .page-intro { margin: 0; }
@@ -130,14 +130,14 @@ button.row-body { text-align: left; }
 .starter-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
 .starter-list .btn { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .skill-name { margin: 0 var(--sp-1) var(--sp-1); font-size: var(--fs-lg); font-weight: var(--fw-strong); }
-.skill-read { background: var(--tile); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); }
+.skill-read { background: var(--tile); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); }
 .skill-body-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: var(--sp-2) 0; font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
-.skill-body-input { width: 100%; min-height: 14em; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); border: 1px solid transparent; background: var(--tile); color: var(--text); outline: 0; resize: vertical; line-height: 1.55; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.skill-body-input { width: 100%; min-height: 14em; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); border: 1px solid transparent; background: var(--tile); color: var(--text); outline: 0; resize: vertical; line-height: 1.55; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .skill-body-input:focus { border-color: color-mix(in srgb, var(--text) 24%, transparent); background: var(--surface); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .text-link { display: block; margin: 0 0 var(--sp-4); font-size: var(--fs-sm); color: var(--accent); font-weight: var(--fw-title); }
 .error-banner { align-self: center; font-size: var(--fs-sm); color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); padding: var(--sp-2) var(--sp-4); border-radius: var(--r-full); }
-.notice { margin: 0 0 var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); font-size: var(--fs-sm); font-weight: var(--fw-title); cursor: pointer; animation: rise 200ms var(--ease); }
+.notice { margin: 0 0 var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); font-size: var(--fs-sm); font-weight: var(--fw-title); cursor: pointer; animation: rise 200ms var(--ease); }
 .notice.ok { background: var(--tile); color: var(--text); }
 .notice.err { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
 
@@ -155,10 +155,10 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
 .menu { position: relative; flex: none; }
 /* v1.12：浮在 body 上（kit Menu 量好位置再显示，量之前 visibility hidden），弹层玻璃 = 压得住底下的字 */
 .menu-pop { position: fixed; z-index: 60; min-width: 148px; max-width: min(320px, calc(100vw - 2 * var(--sp-3))); padding: var(--sp-1);
-  background: var(--glass-sheet); border: 1px solid var(--glass-border); border-radius: var(--r-md); box-shadow: var(--elev-raised);
+  background: var(--glass-sheet); border: 1px solid var(--glass-border); border-radius: var(--r-inner); box-shadow: var(--elev-raised);
   -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); visibility: hidden; }
 .menu-pop.placed { visibility: visible; animation: pop var(--dur) var(--ease); }
-.menu-item { display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm);
+.menu-item { display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-inner);
   font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text); text-align: left; white-space: nowrap; }
 .menu-item:hover { background: var(--tile); }
 .menu-item.danger { color: var(--danger); }
@@ -205,7 +205,7 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
 .daily-head { display: flex; align-items: baseline; gap: var(--sp-2); }
 .daily-head span { font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); }
 .daily-head b { font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.daily-plot { width: 100%; height: 120px; display: block; cursor: pointer; touch-action: pan-y; border-radius: var(--r-sm); }
+.daily-plot { width: 100%; height: 120px; display: block; cursor: pointer; touch-action: pan-y; border-radius: var(--r-inner); }
 .daily-plot:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .daily-plot .base { stroke: var(--border); stroke-width: 1; }
 .daily-plot rect { fill: var(--ink); opacity: .42; transform-box: fill-box; transform-origin: bottom; animation: bar-grow calc(var(--dur) * 2) var(--ease) both; transition: opacity var(--dur) var(--ease); }
@@ -223,7 +223,7 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
 .day-label { padding-top: var(--sp-3); font-size: var(--fs-xs); color: var(--text-2); }
 .day-convs { display: grid; gap: var(--sp-2); animation: rise var(--dur) var(--ease); }
 .day-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); width: 100%; text-align: left; color: inherit; }
-button.day-row { border-radius: var(--r-sm); transition: background var(--dur) var(--ease); }
+button.day-row { border-radius: var(--r-inner); transition: background var(--dur) var(--ease); }
 button.day-row:hover { background: var(--tile); }
 .day-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
 .day-row-name small { margin-left: var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); }
@@ -249,7 +249,7 @@ button.day-row:hover { background: var(--tile); }
 .dot-badge { position: relative; }
 .dot-badge.on::after { content: ""; position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: var(--r-full);
   background: var(--danger); border: 2px solid var(--glass); animation: pop var(--dur) var(--ease) both; }
-.task-head { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card);
+.task-head { background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-card); box-shadow: var(--elev-card);
   padding: var(--sp-4); animation: rise var(--dur) var(--ease) both; }
 .task-head-top { display: flex; align-items: center; gap: var(--sp-3); }
 .task-next { color: var(--text-2); animation: rise var(--dur) var(--ease); }
@@ -258,7 +258,7 @@ button.day-row:hover { background: var(--tile); }
 .plan-body .seg { margin-bottom: 0; }
 /* 连续失败被自动暂停的说明条（TaskDetailScreen）：小块底色 + 警示色图标，文字正文色；恢复后直接消失 */
 .task-pause-note { display: flex; gap: var(--sp-2); align-items: flex-start; margin-top: var(--sp-3); padding: var(--sp-3);
-  background: var(--tile); border-radius: var(--r-tile); font-size: var(--fs-sm); color: var(--text); animation: rise var(--dur) var(--ease) both; }
+  background: var(--tile); border-radius: var(--r-inner); font-size: var(--fs-sm); color: var(--text); animation: rise var(--dur) var(--ease) both; }
 .task-pause-note svg { flex: none; color: var(--warning); margin-top: 1px; }
 .task-prompt { margin: var(--sp-3) 0; color: var(--text-2); white-space: pre-wrap; }
 /* v1.84 定时脚本：命令等宽（详情页 + 表单），表单顶一句说明，提醒方式说明换档时淡入 */
@@ -327,7 +327,7 @@ button.run-row:hover { background: var(--tile); }
 .skill-row { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .skill-toggle { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: 0 0 var(--sp-3); }
 /* 技能编辑弹层顶部的出身说明：内置原样灰底，自定义版强调色底；切换时淡入 */
-.skill-origin { margin: 0 0 var(--sp-3); padding: var(--sp-3); border-radius: var(--r-md); background: var(--tile); color: var(--text-2); font-size: var(--fs-sm); animation: rise var(--dur) var(--ease) both; }
+.skill-origin { margin: 0 0 var(--sp-3); padding: var(--sp-3); border-radius: var(--r-inner); background: var(--tile); color: var(--text-2); font-size: var(--fs-sm); animation: rise var(--dur) var(--ease) both; }
 .skill-origin.on { background: var(--tile); color: var(--text); box-shadow: inset 2px 0 0 var(--ink); }
 
 /* v1.34/v1.68 文件改动 diff（ui/Diff.tsx：时间线一步 + 改动卡共用） */
@@ -336,7 +336,7 @@ button.run-row:hover { background: var(--tile); }
 .diff-remove { color: var(--danger); }
 .diff-hunk, .diff-note { color: var(--text-3); }
 .diff-context { color: var(--text-2); }
-.step-diff { margin: var(--sp-2) 0 0; padding: var(--sp-2); max-height: 280px; overflow: auto; background: var(--tile); border-radius: var(--r-sm);
+.step-diff { margin: var(--sp-2) 0 0; padding: var(--sp-2); max-height: 280px; overflow: auto; background: var(--tile); border-radius: var(--r-inner);
   font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.45; white-space: pre; animation: rise var(--dur) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) { .step-diff { animation: none; } }
 /* 一行文件（改动卡 + 时间线里 apply_patch 一步改几个文件，ui/Diff.tsx FileDiffRow） */
@@ -353,7 +353,7 @@ button.run-row:hover { background: var(--tile); }
 .note-head { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .note-title { font-size: var(--fs-lg); }
 .note-meta { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--text-3); }
-.note-body { background: var(--tile); border-radius: var(--r-md); padding: var(--sp-4); }
+.note-body { background: var(--tile); border-radius: var(--r-inner); padding: var(--sp-4); }
 .note-empty, .note-foot { font-size: var(--fs-sm); color: var(--text-3); margin: 0; }
 .note-foot { margin-top: var(--sp-3); }
 .note-editor { min-height: 18em; font-family: var(--font-mono, monospace); font-size: var(--fs-sm); }

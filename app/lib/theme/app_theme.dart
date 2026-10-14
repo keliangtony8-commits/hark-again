@@ -104,9 +104,9 @@ ThemeData buildTheme(Brightness brightness) {
       floatingLabelStyle: t(Fs.sm, Weights.body, p.text2), // 浮起的标签不用强调色（v2.1 克制）
       contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
       // 填充式圆角块（标签浮在块里，见 field_border.dart）；聚焦 = 填充变亮 + 一圈细线
-      border: const FieldBorder(radius: Radii.md),
-      enabledBorder: const FieldBorder(radius: Radii.md),
-      focusedBorder: FieldBorder(radius: Radii.md, borderSide: BorderSide(color: p.text3, width: 1)),
+      border: const FieldBorder(radius: Radii.inner),
+      enabledBorder: const FieldBorder(radius: Radii.inner),
+      focusedBorder: FieldBorder(radius: Radii.inner, borderSide: BorderSide(color: p.text3, width: 1)),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -125,7 +125,7 @@ ThemeData buildTheme(Brightness brightness) {
         foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.onInk : p.text2),
         iconColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.onInk : p.text2),
         side: const WidgetStatePropertyAll(BorderSide(color: Colors.transparent)),
-        shape: const WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(Radii.md)))),
+        shape: const WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(Radii.inner)))),
         textStyle: WidgetStatePropertyAll(t(Fs.sm, Weights.title).copyWith(height: 1.2)),
         animationDuration: Motion.base,
       ),
@@ -148,7 +148,7 @@ ThemeData buildTheme(Brightness brightness) {
     dialogTheme: DialogThemeData(
       backgroundColor: p.surface,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.lg)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.card)),
     ),
     textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: p.text, textStyle: t(Fs.sm, Weights.title))),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -183,7 +183,7 @@ ThemeData buildTheme(Brightness brightness) {
       behavior: SnackBarBehavior.floating,
       backgroundColor: p.ink,
       contentTextStyle: t(Fs.sm, Weights.body, p.onInk),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.md)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.inner)),
     ),
     pageTransitionsTheme: const PageTransitionsTheme(builders: {
       TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),

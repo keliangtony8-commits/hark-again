@@ -1,7 +1,7 @@
 /* 主页（v2.78 重做，= App stack_card.dart）：居中一列同款卡，没有小节标题。节奏只用令牌：左右 --gutter，卡片间 --card-gap */
 .home-stack { display: flex; flex-direction: column; gap: var(--card-gap); }
 .home-stack > .glass-card + .glass-card { margin-top: 0; }
-.stack-card { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card); overflow: hidden; }
+.stack-card { background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-card); box-shadow: var(--elev-card); overflow: hidden; }
 .stack-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; padding: var(--sp-2) var(--sp-2) 0 calc(var(--sp-4) + 4px); }
 .stack-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-title); }
 .stack-note { font-size: var(--fs-xs); color: var(--text-3); padding-right: var(--sp-2); }
@@ -32,7 +32,7 @@
 
 .removed-list { display: flex; flex-direction: column; margin-top: var(--sp-4); }
 .removed-label { font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); margin-bottom: var(--sp-1); }
-.removed-item { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; padding: 0 var(--sp-1); border-radius: var(--r-tile);
+.removed-item { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; padding: 0 var(--sp-1); border-radius: var(--r-inner);
   color: var(--text); font-size: var(--fs-sm); text-align: left; transition: background var(--dur-fast) var(--ease); }
 .removed-item:hover { background: var(--tile); }
 .removed-item svg { color: var(--text-3); flex: none; }
@@ -62,7 +62,7 @@
 
 /* 稍后提醒：建议卡标题右边的小钮 + “为你准备”底部一行（展开列出，可现在放回） */
 /* 建议卡配图（2:1 宽图，淡入）+ 来源行 */
-.offer-img { display: block; aspect-ratio: 2 / 1; margin-bottom: var(--sp-3); border-radius: var(--r-tile); overflow: hidden; background: var(--tile); }
+.offer-img { display: block; aspect-ratio: 2 / 1; margin-bottom: var(--sp-3); border-radius: var(--r-inner); overflow: hidden; background: var(--tile); }
 .offer-img img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--dur-slow) var(--ease), transform var(--dur-slow) var(--ease); }
 .offer-img img.ok { opacity: 1; }
 a.offer-img:hover img.ok { transform: scale(1.02); }
@@ -76,7 +76,7 @@ a.offer-img:hover img.ok { transform: scale(1.02); }
 .action-card-head .menu-trigger { color: var(--text-3); }
 .snoozed { margin-top: calc(-1 * var(--sp-1)); } /* 栈末一行，紧贴上一张卡 */
 .snoozed-head { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-1);
-  color: var(--text-2); font-size: var(--fs-sm); border-radius: var(--r-tile); transition: background var(--dur-fast) var(--ease); }
+  color: var(--text-2); font-size: var(--fs-sm); border-radius: var(--r-inner); transition: background var(--dur-fast) var(--ease); }
 .snoozed-head:hover { background: var(--tile); }
 .snoozed-head span { flex: 1; text-align: left; }
 .snoozed-head svg { color: var(--text-3); flex: none; }

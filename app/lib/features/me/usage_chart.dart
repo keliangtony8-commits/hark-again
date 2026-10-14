@@ -191,7 +191,7 @@ class DailyBarsPainter extends CustomPainter {
     final h = size.height;
     final slot = size.width / slots;
     final w = math.max(slot * (1 - _gapRatio), 1.0);
-    final radius = Radius.circular(math.min(w / 2, Radii.sm / 2));
+    final radius = Radius.circular(math.min(w / 2, Radii.inner / 2));
     canvas.drawLine(Offset(0, h - 0.5), Offset(size.width, h - 0.5), Paint()..color = guide);
 
     for (var i = 0; i < values.length && i < slots; i++) {

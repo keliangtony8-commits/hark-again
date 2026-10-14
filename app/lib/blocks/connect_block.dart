@@ -58,7 +58,7 @@ class _ConnectBlockViewState extends ConsumerState<ConnectBlockView> {
           Container(
             width: A11y.minTap,
             height: A11y.minTap,
-            decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+            decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
             child: Icon(_icons[b.provider] ?? Icons.link_rounded, color: s.tone == ConnectTone.off ? p.text3 : p.ink, weight: 300),
           ),
           const SizedBox(width: Sp.x3),

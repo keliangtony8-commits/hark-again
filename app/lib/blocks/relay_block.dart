@@ -26,7 +26,7 @@ class RelayBlockView extends StatelessWidget {
           width: A11y.minTap,
           height: A11y.minTap,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
           child: Text(block.emoji, style: context.text.titleLarge),
         ),
         const SizedBox(width: Sp.x3),

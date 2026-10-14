@@ -142,7 +142,7 @@ class _TaskState extends State<_Task> {
                       Container(
                         padding: const EdgeInsets.all(Sp.x3),
                         constraints: const BoxConstraints(maxHeight: 240),
-                        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+                        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
                         child: SingleChildScrollView(
                           child: SelectableText(t.result!, style: context.text.bodySmall?.copyWith(color: p.text2)),
                         ),

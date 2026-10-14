@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BrandMark from "../../ui/BrandMark";
 import { ApiError, api, auth, server } from "../../lib/api";
 import { cleanCode } from "../../lib/twoFactor";
 import "../../ui/ui.css";
@@ -33,7 +34,7 @@ export default function Login({ onDone }: { onDone: () => void }) {
   return (
     <div className="login">
       <form className="login-card glass" onSubmit={submit}>
-        <div className="brand"><span className="brand-dot" />Assistant</div>
+        <div className="brand"><BrandMark size={28} />Assistant</div>
         <h1>欢迎回来</h1>
         <p>登录你的私人助手</p>
         {showServer && <label className="form-field"><input placeholder="服务器地址，如 https://ai.example.com" value={srv}

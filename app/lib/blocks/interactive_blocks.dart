@@ -30,7 +30,7 @@ class FileBlockView extends ConsumerWidget {
         onTap: () => openUrl(url),
         semanticLabel: '图片 ${block.name}，打开原图',
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(Radii.md),
+          borderRadius: BorderRadius.circular(Radii.inner),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 320),
             child: Image.network(url, fit: BoxFit.cover, alignment: Alignment.topCenter, errorBuilder: (_, _, _) => _chip(context, url)),  // 整页长截图：露出页面顶部
@@ -51,7 +51,7 @@ class FileBlockView extends ConsumerWidget {
           width: 40,
           height: 40,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
           child: Text(ext.length > 4 ? ext.substring(0, 4) : ext, style: context.text.labelSmall?.copyWith(color: context.palette.text2, fontSize: 10)),
         ),
         const SizedBox(width: Sp.x3),
@@ -130,7 +130,7 @@ class ApprovalBlockView extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(Sp.x3),
-              decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+              decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
               child: SelectableText(block.detail, style: const TextStyle(fontFamily: 'monospace', fontSize: Fs.xs)),
             ),
           ],
@@ -191,7 +191,7 @@ class _ScopeRow extends StatelessWidget {
         semanticLabel: '批准，${option.label}',
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
-          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
           child: Row(children: [
             Icon(option.id == 'rule' ? Icons.rule_rounded : Icons.forum_outlined, size: 18, color: p.text2),
             const SizedBox(width: Sp.x2),
@@ -223,7 +223,7 @@ class PageBlockView extends StatelessWidget {
           width: 52,
           height: 52,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(Radii.sm),
+            borderRadius: BorderRadius.circular(Radii.inner),
             color: context.tileFill,
           ),
           child: Icon(Icons.web_rounded, color: p.text2, weight: 300),

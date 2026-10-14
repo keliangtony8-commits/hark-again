@@ -1,15 +1,15 @@
 /* 设计令牌：所有组件只引用这里的变量，不写死任何颜色/尺寸 */
 :root {
   /* 色彩：暖中性底 + 单一强调色 */
-  --bg: #faf9f7;
+  --bg: #f5f4f1;
   --surface: #ffffff;
-  --surface-2: #f3f1ee;
-  --border: #e7e4df;
-  --text: #1c1b1a;
-  --text-2: #6b6762;
-  --text-3: #8a857d;  /* 次要信息 ≥ 3:1 */
-  --accent: #b94f27;  /* 白字压上去 ≥ 4.5:1 */
-  --accent-soft: #fbeae3;
+  --surface-2: #f1efec;
+  --border: #e8e5e0;
+  --text: #111111;
+  --text-2: #64605a;
+  --text-3: #857f77;  /* 次要信息 ≥ 3:1 */
+  --accent: #111111;  /* 白字压上去 ≥ 4.5:1 */
+  --accent-soft: #edebe7;
   --on-accent: #ffffff;
   --danger: #c43d3d;
   --warning: #b86e00;
@@ -21,20 +21,20 @@
   color-scheme: light;
 
   /* 设计 v2「浮层 + 毛玻璃」：与 App theme/tokens.dart 的 Palette.backdrop/glass/... 同值 */
-  --backdrop-1: #dde3eb;   /* 雾蓝 → 灰白 → 带一点赤陶色的暖灰 */
-  --backdrop-2: #eeecea;
-  --backdrop-3: #ebe1dc;
-  --glass: rgba(255, 255, 255, 0.70);        /* 玻璃着色（下面是模糊后的内容） */
-  --glass-border: rgba(28, 27, 26, 0.10);    /* 玻璃的 1px 发丝边 */
-  --glass-highlight: rgba(255, 255, 255, 0.80); /* v2.1：卡片顶边 1px 内高光（卡片不要外投影，靠发丝边 + 高光分层） */
+  --backdrop-1: #f3f1ed;   /* 雾蓝 → 灰白 → 带一点赤陶色的暖灰 */
+  --backdrop-2: #f7f6f3;
+  --backdrop-3: #efece7;
+  --glass: rgba(255, 255, 255, 0.85);        /* 玻璃着色（下面是模糊后的内容） */
+  --glass-border: rgba(28, 27, 26, 0.07);    /* 玻璃的 1px 发丝边 */
+  --glass-highlight: transparent; /* v2.1：卡片顶边 1px 内高光（卡片不要外投影，靠发丝边 + 高光分层） */
   /* v2.1「墨色」：主按钮、用户气泡、导航选中块、发送键、开关。强调色一屏最多两处（未读点、进度、链接） */
-  --ink: #22201e;
+  --ink: #111111;
   --on-ink: #ffffff;
   --pill-on: var(--ink);   /* 分段导航选中的实心胶囊（v2 的名字，保留） */
   --on-pill-on: var(--on-ink);
-  --tile: rgba(28, 27, 26, 0.06);            /* 玻璃卡里再嵌一层的小块（标签 + 大数字） */
+  --tile: rgba(28, 27, 26, 0.04);            /* 玻璃卡里再嵌一层的小块（标签 + 大数字） */
   --glass-scrim: rgba(228, 230, 234, 0.3);   /* 输入胶囊聚焦时盖住页面 */
-  --glass-sheet: rgba(255, 255, 255, 0.88);  /* 弹层玻璃：比浮条更实，表单字要压得住底下的内容 */
+  --glass-sheet: rgba(255, 255, 255, 0.95);  /* 弹层玻璃：比浮条更实，表单字要压得住底下的内容 */
 
   /* 字体 */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "HarmonyOS Sans SC",
@@ -42,11 +42,11 @@
   /* 衬线只做点缀（问候、品牌词、引导卡大标题），不打包字体 */
   --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", Georgia, serif;
   --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
-  --fs-xs: 12px;
-  --fs-sm: 14px;
-  --fs-md: 16px;
+  --fs-xs: 13px;
+  --fs-sm: 15px;
+  --fs-md: 17px;
   --fs-lg: 20px;
-  --fs-xl: 28px;
+  --fs-xl: 32px;
   --fs-display: 34px;  /* 问候语、“我的”这类页面主标题（衬线、偏细） */
   --lh: 1.6;
   /* 字重降一档（v2.1，= App Weights）：正文 400、标题/按钮/导航 500、只有页面主标题和大数字 600 */
@@ -67,19 +67,20 @@
   --section-gap: 32px;  /* 区块之间（App Layout.sectionGap） */
 
   /* 圆角与阴影 */
-  --r-sm: 8px;
-  --r-md: 14px;
-  --r-tile: 16px;  /* 卡片里的小块（App Radii.tile） */
-  --r-lg: 20px;   /* 子卡片、气泡 */
+  /* v2.80 F.3：圆角只有三种 = App Radii（inner 小块/输入框/缩略图 · card 卡片/气泡/块 · full 胶囊） */
+  --r-inner: 16px;
   --r-full: 999px;
   --shadow-1: 0 1px 2px rgba(28, 27, 26, 0.05), 0 1px 1px rgba(28, 27, 26, 0.03);
   --shadow-2: 0 8px 28px rgba(28, 27, 26, 0.08), 0 2px 6px rgba(28, 27, 26, 0.04);
-  --r-card: 24px;   /* 玻璃卡片（App Radii.card） */
+  --r-card: 32px;
+  /* v2.80 F.2：列表里的卡 = 实色 surface、无描边无高光；玻璃只给浮层 */
+  --card: var(--surface);
+  --card-edge: transparent;
   --shadow-float: 0 1px 12px rgba(28, 27, 26, 0.04); /* 浮层：贴着玻璃的一圈很淡的影子，不要“贴纸感” */
   --blur: 24px;          /* 浮层（顶栏、输入胶囊、弹层）的背景模糊；列表里的卡片是“假玻璃”不模糊 */
   --blur-scrim: 14px;
   /* 高度（= App ui/glass.dart 的三档）：页面 CSS 只用这几个，不直接写 --shadow-* / backdrop-filter */
-  --elev-card: inset 0 1px 0 var(--glass-highlight);            /* 列表里的卡：只有顶边内高光，没有外投影 */
+  --elev-card: 0 0 0 0 transparent;                              /* 列表里的卡：没有投影没有高光（v2.80） */
   --elev-float: var(--elev-card), var(--shadow-float);         /* 贴着内容的浮层：顶栏、输入胶囊 */
   --elev-raised: var(--elev-card), var(--shadow-2);            /* 盖在内容上的：弹层、横幅、抽屉、对话框 */
   --elev-knob: var(--shadow-1);                                 /* 开关/色环上的小圆钮 */
@@ -92,8 +93,8 @@
   --topbar-h: 52px;      /* 浮动顶栏（分段导航）高度，App Layout.topBar */
   --topbar-top: 10px;    /* 顶栏离窗口上沿 */
   --shell-top: calc(var(--topbar-top) + var(--topbar-h) + 12px + env(safe-area-inset-top)); /* 内容让出顶栏 */
-  --gutter: 20px;        /* 页面左右边距（App Layout.gutter） */
-  --card-gap: 12px;      /* 卡片之间（App Layout.cardGap） */
+  --gutter: 24px;        /* 页面左右边距（App Layout.gutter） */
+  --card-gap: 16px;      /* 卡片之间（App Layout.cardGap） */
   --segments-w: 300px;   /* 分段导航最宽 */
   --avatar-neutral: #e4dfd8; /* 没自选颜色时的头像底（中性），上面是正文色衬线首字 */
   --avatar: var(--avatar-neutral); /* lib/look.ts 按偏好覆盖 */
@@ -116,18 +117,18 @@
 
 /* 深色：只认 <html data-theme="dark">（由 lib/theme.ts 和 index.html 首帧脚本按偏好/系统写入） */
 :root[data-theme="dark"] {
-  /* v2.1：深色不是反色——带一点蓝紫的炭灰，玻璃更透，正文 92% 白，墨色是暖白（= App Palette.dark） */
-  --bg: #131418;
-  --surface: #1b1c21;
-  --surface-2: #23242a;
-  --border: #2c2d34;
-  --text: #ebebed;
-  --text-2: #a4a3aa;
-  --text-3: #8b8a91;
-  --accent: #ef7a4f;
-  --accent-soft: #3a2219;
-  --on-accent: #1a0f0a; /* 亮橙底配深字（6.8:1） */
-  --danger: #e06060;
+  /* v2.80 Hark 式（home-redesign.md F）：海军蓝渐变底 → 近黑不透明卡无描边 → 白字；唯一强调色 = 白（= App Palette.dark） */
+  --bg: #0d1226;
+  --surface: #0a0d16;
+  --surface-2: #141824;
+  --border: #1d2130;
+  --text: #ffffff;
+  --text-2: #a0a4af;
+  --text-3: #7f8390;
+  --accent: #ffffff;
+  --accent-soft: #1e2230;
+  --on-accent: #0a0d16; /* 亮橙底配深字（6.8:1） */
+  --danger: #e5675f;
   --warning: #e0a040;
   --success: #62bd86;
   --knob: #f4f3f1;
@@ -135,18 +136,18 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.45);
   --shadow-float: 0 1px 12px rgba(0, 0, 0, 0.2);
-  --backdrop-1: #1b1f2a;   /* 蓝灰炭 → 近黑 → 灰紫 */
-  --backdrop-2: #16171c;
-  --backdrop-3: #221e2b;
-  --glass: rgba(37, 39, 47, 0.55);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --glass-highlight: rgba(255, 255, 255, 0.08);
-  --ink: #ece7df;
-  --on-ink: #16161a;
-  --avatar-neutral: #2e2f38;
-  --tile: rgba(0, 0, 0, 0.2);
-  --glass-scrim: rgba(16, 17, 20, 0.5);
-  --glass-sheet: rgba(29, 31, 37, 0.88);
+  --backdrop-1: #0e1428;   /* 蓝灰炭 → 近黑 → 灰紫 */
+  --backdrop-2: #121a33;
+  --backdrop-3: #1b2342;
+  --glass: rgba(10, 13, 22, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: transparent;
+  --ink: #ffffff;
+  --on-ink: #0a0d16;
+  --avatar-neutral: #232838;
+  --tile: rgba(255, 255, 255, 0.06);
+  --glass-scrim: rgba(8, 11, 22, 0.6);
+  --glass-sheet: rgba(12, 16, 32, 0.95);
   color-scheme: dark;
 }
 

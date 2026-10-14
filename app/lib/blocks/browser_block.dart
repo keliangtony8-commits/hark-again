@@ -300,7 +300,7 @@ class _DownPanel extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.fromLTRB(Sp.x2, 0, Sp.x2, Sp.x2),
           padding: const EdgeInsets.all(Sp.x3),
-          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Padding(padding: const EdgeInsets.only(top: 2), child: Icon(Icons.public_off_rounded, size: 18, color: p.warning)),
             const SizedBox(width: Sp.x2),
@@ -336,7 +336,7 @@ class _HandoffBar extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.fromLTRB(Sp.x2, 0, Sp.x2, Sp.x2),
         padding: const EdgeInsets.fromLTRB(Sp.x3, Sp.x3, Sp.x2, Sp.x2),
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           ExcludeSemantics(
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -390,7 +390,7 @@ class _FileRows extends ConsumerWidget {
                   child: Container(
                   constraints: const BoxConstraints(minHeight: Layout.rowMin),
                   padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
-                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
                   child: Row(children: [
                     Icon(f.uploaded ? Icons.upload_file_rounded : Icons.download_done_rounded, size: 18, color: p.text2),
                     const SizedBox(width: Sp.x2),

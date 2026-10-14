@@ -51,7 +51,7 @@ class DiffView extends StatelessWidget {
       child: Container(
         width: double.infinity,
         constraints: const BoxConstraints(maxHeight: maxHeight),
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(Sp.x2),
           child: SingleChildScrollView(

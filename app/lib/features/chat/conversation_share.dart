@@ -148,7 +148,7 @@ class _ConversationShareSheetState extends ConsumerState<ConversationShareSheet>
         onTap: () => _copy(page.url),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
-          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
           child: Row(children: [
             Icon(Icons.link_rounded, size: Fs.lg, color: p.text2),
             const SizedBox(width: Sp.x3),

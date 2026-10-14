@@ -40,7 +40,7 @@ class AppMarkdown extends StatelessWidget {
           border: Border(left: BorderSide(color: context.hairline, width: 3)),
         ),
         code: TextStyle(fontFamily: 'monospace', fontSize: Fs.sm, backgroundColor: context.tileFill, color: p.text),
-        codeblockDecoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+        codeblockDecoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         tableBorder: TableBorder.all(color: context.hairline),
         tableHead: base.copyWith(fontWeight: Weights.strong),
         tableBody: context.text.bodyMedium,

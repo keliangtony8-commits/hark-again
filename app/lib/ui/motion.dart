@@ -137,7 +137,7 @@ class _PressableState extends State<Pressable> {
 
 /// 骨架屏闪光：加载时代替转圈，布局不跳。
 class Shimmer extends StatefulWidget {
-  const Shimmer({super.key, this.height = 56, this.radius = Radii.md});
+  const Shimmer({super.key, this.height = 56, this.radius = Radii.inner});
   final double height;
   final double radius;
 
@@ -407,7 +407,7 @@ class _FlashHighlightState extends State<FlashHighlight> with SingleTickerProvid
                 : DecoratedBox(
                     decoration: BoxDecoration(
                       color: tint.withValues(alpha: tint.a * (1 - fade.value)),
-                      borderRadius: BorderRadius.circular(Radii.md),
+                      borderRadius: BorderRadius.circular(Radii.inner),
                     ),
                   ),
           ),

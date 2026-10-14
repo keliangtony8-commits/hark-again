@@ -2,7 +2,7 @@
 .project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--card-gap); }
 .project-skel { height: 112px; margin: 0 !important; border-radius: var(--r-card); }
 .project-card { position: relative; min-height: 112px; --project-pad: calc(var(--sp-4) + 4px); --project-emoji: 36px;
-  background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card);
+  background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-card); box-shadow: var(--elev-card);
   transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
 .project-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
 .project-card:active { transform: scale(.98); transition-duration: var(--dur-fast); }
@@ -12,7 +12,7 @@
 .project-card > .menu .menu-trigger { color: var(--text-3); }
 .project-card:has(.menu.open) { z-index: 3; } /* 入场动画让每张卡自成层叠上下文：菜单打开时抬高本卡，弹出层才盖得住下一张 */
 .project-card-head { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
-.project-emoji { flex: none; display: grid; place-items: center; width: var(--project-emoji); height: var(--project-emoji); border-radius: var(--r-tile); background: var(--tile); font-size: 20px; }
+.project-emoji { flex: none; display: grid; place-items: center; width: var(--project-emoji); height: var(--project-emoji); border-radius: var(--r-inner); background: var(--tile); font-size: 20px; }
 .project-name { font-weight: var(--fw-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-rules { font-size: var(--fs-sm); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-meta { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
@@ -22,7 +22,7 @@
 .brief-stamp { display: inline-block; margin-bottom: var(--sp-3); padding: 2px var(--sp-3); border-radius: var(--r-full); background: var(--tile); color: var(--text-2); font-size: var(--fs-xs); }
 .brief-stamp.ai { background: var(--tile); color: var(--text); }
 .brief-body { animation: rise var(--dur) var(--ease) both; }
-.brief-view { padding: var(--sp-4); border-radius: var(--r-tile); background: var(--tile); max-height: 56dvh; overflow-y: auto; }
+.brief-view { padding: var(--sp-4); border-radius: var(--r-inner); background: var(--tile); max-height: 56dvh; overflow-y: auto; }
 .brief-editor { min-height: 320px !important; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .form-field small.danger, .brief-error { color: var(--danger); }
 .brief-note { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--text-3); }
@@ -31,12 +31,12 @@
 .project-home { max-width: var(--content-w); width: 100%; margin: 0 auto;
   padding: calc(var(--thread-top) + var(--sp-3)) var(--gutter) calc(var(--footer-h, 88px) + var(--sp-4)); } /* v1.12：首屏标题离浮动标题栏多留一档 */
 .project-home-head { display: flex; align-items: center; gap: var(--sp-4); }
-.project-home-mark { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-tile); background: var(--tile); font-size: 26px; }
+.project-home-mark { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-inner); background: var(--tile); font-size: 26px; }
 .project-home-titles { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
 .project-home-titles h1 { margin: 0; font-family: var(--font-serif); font-weight: var(--fw-title); font-size: calc(var(--fs-xl) - 4px); line-height: 1.2;
   letter-spacing: var(--display-tracking); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .project-home-line { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; margin-top: var(--sp-3);
-  text-align: left; color: var(--text-2); border-radius: var(--r-sm); transition: color var(--dur) var(--ease); }
+  text-align: left; color: var(--text-2); border-radius: var(--r-inner); transition: color var(--dur) var(--ease); }
 .project-home-line > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .project-home-line > svg { flex: none; color: var(--text-3); transition: transform var(--dur) var(--ease); }
 .project-home-line:hover { color: var(--text); }

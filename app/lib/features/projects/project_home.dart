@@ -96,7 +96,7 @@ class ProjectHome extends ConsumerWidget {
                   width: Layout.projectMark,
                   height: Layout.projectMark,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
                   child: Text(pr.emoji, style: context.text.titleLarge?.copyWith(fontSize: Fs.xl - 4)),
                 ),
                 const SizedBox(width: Sp.x4),

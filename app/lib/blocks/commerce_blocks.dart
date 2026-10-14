@@ -92,7 +92,7 @@ class _ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final picture = ClipRRect(
-      borderRadius: BorderRadius.circular(Radii.md),
+      borderRadius: BorderRadius.circular(Radii.inner),
       child: AspectRatio(
         aspectRatio: wide ? 4 / 3 : 1,
         child: item.image != null
@@ -129,7 +129,7 @@ class _ProductRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(Radii.sm),
+          borderRadius: BorderRadius.circular(Radii.inner),
           child: SizedBox.square(dimension: Layout.orderThumb, child: _Monogram(item.name, size: context.text.titleMedium)),
         ),
         const SizedBox(width: Sp.x3),
@@ -302,7 +302,7 @@ class _Line extends StatelessWidget {
       child: Row(children: [
         if (line.image != null) ...[
           ClipRRect(
-            borderRadius: BorderRadius.circular(Radii.sm),
+            borderRadius: BorderRadius.circular(Radii.inner),
             child: SizedBox.square(dimension: Layout.orderThumb, child: NetImage(line.image!)),
           ),
           const SizedBox(width: Sp.x3),

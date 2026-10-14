@@ -249,7 +249,7 @@ class CardFace extends StatelessWidget {
             duration: context.motion(Motion.base),
             curve: Motion.ease,
             padding: const EdgeInsets.all(Layout.cardPad),
-            decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(Radii.lg)),
+            decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(Radii.card)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Row(children: [
                 Expanded(

@@ -110,7 +110,7 @@ class _ConversationMemoryCardState extends ConsumerState<ConversationMemoryCard>
                   key: ValueKey('summary-${c.summary.hashCode}'),
                   margin: const EdgeInsets.only(top: Sp.x1),
                   padding: const EdgeInsets.all(Sp.x3),
-                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
                   child: SelectableText(c.summary, style: context.text.bodySmall?.copyWith(color: p.text)),
                 )
               : null,

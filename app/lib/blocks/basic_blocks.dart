@@ -131,7 +131,7 @@ class CodeBlockView extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: context.tileFill, // 坐在 AI 回复的玻璃卡里：再深一层的小块，不再是实色板
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.inner),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

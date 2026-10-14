@@ -128,3 +128,5 @@
 - browser/dialogs.py + browser_click/browser_press confirm: semantics after microsoft/playwright-mcp browser_handle_dialog (Apache-2.0); own implementation (decided before the action, not left pending), no code copied.
 - browser/frames.py (iframe content inlined into one snapshot with globally unique refs): semantics after microsoft/playwright-mcp aria snapshot (Apache-2.0); own implementation, no code copied.
 - browser/shadow.py (open shadow DOM inlined into the snapshot): semantics after microsoft/playwright-mcp aria snapshot and Playwright's shadow-piercing CSS locators (Apache-2.0); own implementation, no code copied.
+
+- Design method in project skill hark-elegant-ui adapted from anthropics/skills skills/frontend-design (Apache-2.0), modified. Guidance only, no code.

@@ -1,3 +1,5 @@
+import BrandMark from "../../ui/BrandMark";
+
 const SUGGESTIONS = [
   { title: "帮我规划这周的学习计划", hint: "按科目和截止日期排" },
   { title: "解释一下 Docker 和虚拟机的区别", hint: "用大白话" },
@@ -11,6 +13,7 @@ export default function EmptyState({ onPick, subtitle }: { onPick: (t: string) =
   return (
     <div className="empty">
       <div className="empty-inner">
+        <BrandMark />
         <h1>{greet}</h1>
         <p>{subtitle ?? "今天想先搞定哪件事？"}</p>
         <div className="suggestions">

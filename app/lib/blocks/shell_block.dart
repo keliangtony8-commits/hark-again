@@ -71,7 +71,7 @@ class ShellBlockView extends StatelessWidget {
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
-                decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+                decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
                 child: ExcludeSemantics(
                   child: Text(
                     tail.isEmpty ? empty : tail,

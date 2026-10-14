@@ -66,31 +66,32 @@ class Palette {
   /// 底部弹层的玻璃：比浮条（glass）更实，表单字要压得住底下被模糊的页面（= 网页版 --glass-sheet）。
   final Color glassSheet;
 
+  /// v2.80「Hark 式」浅色（home-redesign.md F）：暖白底、白卡不描边、唯一强调色 = 近黑（主按钮黑胶囊）。
   static const light = Palette(
-    bg: Color(0xFFFAF9F7),
+    bg: Color(0xFFF5F4F1),
     surface: Color(0xFFFFFFFF),
-    surface2: Color(0xFFF3F1EE),
-    border: Color(0xFFE7E4DF),
-    text: Color(0xFF1C1B1A),
-    text2: Color(0xFF6B6762),
-    text3: Color(0xFF8A857D), // 次要信息（时间戳、图标）：对底色 ≥ 3:1
-    accent: Color(0xFFB94F27), // 白字压在上面 ≥ 4.5:1（WCAG AA）
-    accentSoft: Color(0xFFFBEAE3),
+    surface2: Color(0xFFF1EFEC),
+    border: Color(0xFFE8E5E0),
+    text: Color(0xFF111111),
+    text2: Color(0xFF64605A),
+    text3: Color(0xFF857F77), // 次要信息（时间戳、图标）：对底色 ≥ 3:1
+    accent: Color(0xFF111111), // 唯一强调色 = 墨色：未读点、进度、链接
+    accentSoft: Color(0xFFEDEBE7),
     onAccent: Color(0xFFFFFFFF),
     danger: Color(0xFFC43D3D),
     warning: Color(0xFFB86E00),
     success: Color(0xFF2E7D4F),
     shadow: Color(0x141C1B1A),
-    backdrop: [Color(0xFFDDE3EB), Color(0xFFEEECEA), Color(0xFFEBE1DC)], // 雾蓝 → 灰白 → 带一点我们赤陶色的暖灰
-    glass: Color(0xB3FFFFFF),
-    glassBorder: Color(0x1A1C1B1A),
-    glassHighlight: Color(0xCCFFFFFF),
-    ink: Color(0xFF22201E),
+    backdrop: [Color(0xFFF3F1ED), Color(0xFFF7F6F3), Color(0xFFEFECE7)], // 三档暖白，几乎看不出渐变
+    glass: Color(0xD9FFFFFF),
+    glassBorder: Color(0x121C1B1A), // = 分隔线
+    glassHighlight: Color(0x00FFFFFF), // F.2：不要玻璃描边/高光
+    ink: Color(0xFF111111),
     onInk: Color(0xFFFFFFFF),
     avatar: Color(0xFFE4DFD8),
     scrim: Color(0x4DE4E6EA),
-    tile: Color(0x0F1C1B1A),
-    glassSheet: Color(0xE0FFFFFF),
+    tile: Color(0x0A1C1B1A),
+    glassSheet: Color(0xF2FFFFFF),
   );
 
   /// 逐色插值：切换浅/深色时 MaterialApp 的主题过渡用它，整屏颜色平滑渐变而不是一跳。
@@ -124,32 +125,32 @@ class Palette {
     );
   }
 
-  /// 深色不是反色（v2.1）：底是带一点蓝紫的炭灰，玻璃更透（alpha 更低），正文 92% 白，墨色按钮是暖白。
+  /// v2.80「Hark 式」深色（home-redesign.md F）：深海军蓝渐变底 → 近黑不透明卡（无描边）→ 白字；唯一强调色 = 白。
   static const dark = Palette(
-    bg: Color(0xFF131418),
-    surface: Color(0xFF1B1C21),
-    surface2: Color(0xFF23242A),
-    border: Color(0xFF2C2D34),
-    text: Color(0xFFEBEBED),
-    text2: Color(0xFFA4A3AA),
-    text3: Color(0xFF8B8A91),
-    accent: Color(0xFFEF7A4F),
-    accentSoft: Color(0xFF3A2219),
-    onAccent: Color(0xFF1A0F0A), // 深色下强调色很亮，上面用深字才够对比（6.8:1）
-    danger: Color(0xFFE06060),
+    bg: Color(0xFF0D1226),
+    surface: Color(0xFF0A0D16),
+    surface2: Color(0xFF141824),
+    border: Color(0xFF1D2130),
+    text: Color(0xFFFFFFFF),
+    text2: Color(0xFFA0A4AF), // ≈ 60% 白
+    text3: Color(0xFF7F8390),
+    accent: Color(0xFFFFFFFF), // 唯一强调色 = 白：未读点、进度、链接
+    accentSoft: Color(0xFF1E2230),
+    onAccent: Color(0xFF0A0D16),
+    danger: Color(0xFFE5675F),
     warning: Color(0xFFE0A040),
     success: Color(0xFF62BD86),
-    shadow: Color(0x66000000),
-    backdrop: [Color(0xFF1B1F2A), Color(0xFF16171C), Color(0xFF221E2B)], // 蓝灰炭 → 近黑 → 灰紫
-    glass: Color(0x8C25272F),
-    glassBorder: Color(0x1FFFFFFF),
-    glassHighlight: Color(0x14FFFFFF),
-    ink: Color(0xFFECE7DF),
-    onInk: Color(0xFF16161A),
-    avatar: Color(0xFF2E2F38),
-    scrim: Color(0x80101114),
-    tile: Color(0x33000000),
-    glassSheet: Color(0xE01D1F25),
+    shadow: Color(0x80000000),
+    backdrop: [Color(0xFF0E1428), Color(0xFF121A33), Color(0xFF1B2342)], // 深海军蓝
+    glass: Color(0xD90A0D16),
+    glassBorder: Color(0x14FFFFFF), // 8% 白 = 分隔线
+    glassHighlight: Color(0x00FFFFFF),
+    ink: Color(0xFFFFFFFF), // 主按钮 = 白胶囊黑字
+    onInk: Color(0xFF0A0D16),
+    avatar: Color(0xFF232838),
+    scrim: Color(0x99080B16),
+    tile: Color(0x0FFFFFFF),
+    glassSheet: Color(0xF20C1020),
   );
 }
 
@@ -158,14 +159,14 @@ abstract final class Sp {
   static const x1 = 4.0, x2 = 8.0, x3 = 12.0, x4 = 16.0, x5 = 24.0, x6 = 32.0, x7 = 48.0;
 }
 
-/// 圆角层级（v2.1）：大卡片 card 24 → 子卡片/气泡 lg 20 → 卡片里的小块 tile 16 → 输入框 md 14 → 胶囊 full。
+/// 圆角只有三种（v2.80，home-redesign.md F.3）：卡片/气泡/块 card 32 → 卡片里的小块、输入框、缩略图 inner 16 → 胶囊 full。
 abstract final class Radii {
-  static const sm = 8.0, md = 14.0, tile = 16.0, lg = 20.0, card = 24.0, full = 999.0;
+  static const inner = 16.0, card = 32.0, full = 999.0;
 }
 
 /// 字号。display = 问候语这类页面主标题（衬线、偏细）；xl = 大数字。
 abstract final class Fs {
-  static const xs = 12.0, sm = 14.0, md = 16.0, lg = 20.0, xl = 28.0, display = 34.0;
+  static const xs = 13.0, sm = 15.0, md = 17.0, lg = 20.0, xl = 32.0, display = 34.0; // v2.80 F.4：字少而大
   static const lineHeight = 1.6;
 }
 
@@ -276,16 +277,16 @@ abstract final class Layout {
   static const contentMax = 720.0; // 平板/折叠屏上限制阅读宽度
   static const followSlack = 80.0; // 聊天“贴底跟随”：离最新一条这么近以内算在底部；再往上翻出“回到最新”（= 网页 FOLLOW_SLACK）
   static const topBar = 52.0; // 浮动顶栏（分段导航、头像、左侧上下文按钮）的高度
-  static const gutter = 20.0; // 全 App 统一的左右留白（顶栏、页面、浮动按钮都对齐这条线）
-  static const cardGap = Sp.x3; // 卡片之间的间距
+  static const gutter = 24.0; // 全 App 统一的左右留白（顶栏、页面、浮动按钮都对齐这条线）
+  static const cardGap = Sp.x4; // 卡片之间的间距
   static const sectionGap = Sp.x6; // 区块之间（“为你准备”和“面板”之间）
-  static const cardPad = Sp.x5 - Sp.x1; // 卡片内边距 20
+  static const cardPad = Sp.x5; // 卡片内边距 24（F.9）
   static const headTop = 28.0; // 页面主标题（问候语、“我的”）离顶栏多远
   static const cardFace = 1.586; // 钱包里卡面的宽高比（ISO 银行卡 85.6 × 54）
   static const cardFaceMax = 340.0; // 卡面最宽
   static const rowIcon = 22.0; // 列表行首的细线图标（不加色块底）
   static const jobLogLines = 6; // 后台任务卡里日志尾巴显示几行（完整的点“完整日志”）
-  static const rowMin = 56.0, rowMinTwoLine = 64.0; // 列表行高：单行 / 带副标题
+  static const rowMin = 64.0, rowMinTwoLine = 72.0; // 列表行高：单行 / 带副标题
   static const topBarTop = Sp.x2; // 顶栏离状态栏的距离
   static const shellTop = topBarTop + topBar + Sp.x3; // 一级页面内容要让出的顶部高度（不含状态栏）= 顶栏 + 12
   static const topFadeRamp = Sp.x4; // 让位线下面再渐显这么高（缓入），滚上去的深色气泡不再在标题下切出硬边；≤ 聊天列表顶部留白

@@ -65,7 +65,7 @@ class _MemoRow extends ConsumerWidget {
       label: '${memo.title}：$preview，点按看全文',
       excludeSemantics: true,
       child: InkWell(
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.inner),
         onTap: () => _open(context, ref),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),

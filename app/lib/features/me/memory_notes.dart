@@ -66,7 +66,7 @@ class _NoteRow extends StatelessWidget {
       excludeSemantics: true,
       child: InkWell(
         onTap: () => context.push('/me/memory/notes/${n.id}'),
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.inner),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: A11y.minTap),
           child: Padding(

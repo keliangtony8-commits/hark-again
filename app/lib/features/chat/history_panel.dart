@@ -235,9 +235,9 @@ class _ConversationRow extends StatelessWidget {
     return AnimatedContainer(
       duration: Motion.base,
       curve: Motion.ease,
-      decoration: BoxDecoration(color: active ? context.tileFill : null, borderRadius: BorderRadius.circular(Radii.md)),
+      decoration: BoxDecoration(color: active ? context.tileFill : null, borderRadius: BorderRadius.circular(Radii.inner)),
       child: InkWell(
-        borderRadius: BorderRadius.circular(Radii.md),
+        borderRadius: BorderRadius.circular(Radii.inner),
         onTap: onTap,
         onLongPress: onLongPress,
         child: Padding(

@@ -28,7 +28,7 @@ a { color: var(--accent); text-decoration: none; }
 /* 只在窄屏出现（!important：别的类会给它设 display） */
 @media (min-width: 861px) { .mobile-only { display: none !important; } }
 .brand { font-weight: var(--fw-strong); letter-spacing: -0.01em; display: flex; align-items: center; gap: var(--sp-2); }
-.brand-dot { width: 10px; height: 10px; border-radius: var(--r-full); background: var(--accent); }
+.brand-mark { display: block; flex: none; }
 .send-btn { width: 40px; height: 40px; border-radius: var(--r-full); background: var(--ink); color: var(--on-ink); display: grid; place-items: center; flex: none; transition: transform var(--dur-fast) var(--ease), opacity var(--dur); }
 .send-btn:disabled { opacity: 0.3; cursor: default; }
 .send-btn:not(:disabled):active { transform: scale(0.92); }
@@ -60,7 +60,7 @@ html.theme-switching, html.theme-switching *, html.theme-switching *::before, ht
 
 /* ---- 无障碍底线（与 App 的 test/a11y_test.dart 同一套要求） ---- */
 /* 键盘操作时才出现的焦点环；鼠标点击不显示 */
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-inner); }
 :focus:not(:focus-visible) { outline: none; }
 .skip-link {
   position: fixed; left: var(--sp-3); top: var(--sp-3); z-index: 100;

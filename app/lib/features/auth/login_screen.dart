@@ -4,6 +4,7 @@
 // v2.58 两步验证：服务器回 428 → 密码框下面展开“验证码”框（FadeSwitcher 长出来、自动聚焦），再点登录带上码；
 // 填恢复码也行。改了地址/用户名就收起（换了服务器，未必开着）。
 import 'package:flutter/material.dart';
+import 'package:assistant/ui/brand_mark.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
@@ -89,15 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(Radii.lg),
-                          gradient: LinearGradient(colors: [p.accent, p.accent.withValues(alpha: 0.7)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                        ),
-                        child: Icon(Icons.auto_awesome_rounded, color: p.onAccent, size: 32),
-                      ),
+                      child: const BrandMark(size: 64),
                     ),
                     const SizedBox(height: Sp.x5),
                     Text('你好', style: context.text.displaySmall),

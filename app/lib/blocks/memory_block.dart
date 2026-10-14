@@ -77,7 +77,7 @@ class _MemoryBlockViewState extends ConsumerState<MemoryBlockView> {
         padding: const EdgeInsets.fromLTRB(Sp.x3, Sp.x2, Sp.x1, Sp.x3),
         decoration: BoxDecoration(
           color: context.tileFill,
-          borderRadius: BorderRadius.circular(Radii.md),
+          borderRadius: BorderRadius.circular(Radii.inner),
           border: Border.all(color: context.hairline),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

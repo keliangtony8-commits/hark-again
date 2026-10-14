@@ -63,7 +63,7 @@ class _WallBody extends StatelessWidget {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(Sp.x3, Sp.x3, Sp.x3, Sp.x1),
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           ExcludeSemantics(
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

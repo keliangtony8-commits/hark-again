@@ -73,7 +73,7 @@ class _ActivitySummaryState extends State<ActivitySummary> {
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(Sp.x3, Sp.x3, Sp.x4, Sp.x3),
-                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+                  decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
                   child: AnimatedSize(
                     duration: context.motion(Motion.base),
                     curve: Motion.ease,

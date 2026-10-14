@@ -95,7 +95,7 @@ class MessageView extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: Sp.x4 + 2, vertical: Sp.x3 - 2),
             // 一行时就是胶囊；多行时四角一样圆（不再做“小尾巴”，和玻璃卡同一套圆角语言）
-            decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(Radii.lg)), // v2.1：用户气泡是墨色，不是橙色
+            decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(Radii.card)), // v2.1：用户气泡是墨色，不是橙色
             child: Text(text, style: context.text.bodyLarge?.copyWith(color: p.onInk)),
           ),
         ),
@@ -173,7 +173,7 @@ class MessageView extends StatelessWidget {
     Widget prose(ReplySegment s, {required bool tail}) => ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: GlassSurface(
-            radius: Radii.lg,
+            radius: Radii.card,
             shadow: false,
             padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

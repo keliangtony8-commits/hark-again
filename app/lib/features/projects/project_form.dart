@@ -64,7 +64,7 @@ class EmojiPicker extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: e == chosen ? context.cardFill : context.tileFill,
                       border: Border.all(color: e == chosen ? p.ink : Colors.transparent, width: 1.5),
-                      borderRadius: BorderRadius.circular(Radii.md),
+                      borderRadius: BorderRadius.circular(Radii.inner),
                     ),
                     child: AnimatedScale(
                       scale: e == chosen ? 1.12 : 1,

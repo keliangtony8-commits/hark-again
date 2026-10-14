@@ -266,7 +266,7 @@ class _PauseNote extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(Sp.x3),
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.tile)),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(Icons.pause_circle_outline_rounded, size: Sp.x5, color: context.palette.warning),
           const SizedBox(width: Sp.x2),
@@ -376,7 +376,7 @@ class _RunLayout extends StatelessWidget {
       button: onTap != null,
       label: semantics,
       excludeSemantics: true,
-      child: onTap == null ? row : InkWell(onTap: onTap, borderRadius: BorderRadius.circular(Radii.md), child: row),
+      child: onTap == null ? row : InkWell(onTap: onTap, borderRadius: BorderRadius.circular(Radii.inner), child: row),
     );
   }
 }

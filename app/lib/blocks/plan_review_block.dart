@@ -101,7 +101,7 @@ class _PlanReviewBlockViewState extends State<PlanReviewBlockView> {
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       Container(
                         padding: const EdgeInsets.all(Sp.x3),
-                        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+                        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(maxHeight: long && !_full ? _peek : double.infinity),
                           // 露一截：不能滚的滚动视图负责裁掉多出的部分（不报溢出）；“展开全部”放开高度
@@ -157,7 +157,7 @@ class _SavedFile extends ConsumerWidget {
         child: ExcludeSemantics(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
-            decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.sm)),
+            decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
             child: Row(children: [
               Icon(Icons.description_outlined, size: 16, color: p.text2),
               const SizedBox(width: Sp.x2),

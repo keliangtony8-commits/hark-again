@@ -37,7 +37,7 @@ class PreviewBlockView extends StatelessWidget {
           Container(
             width: 52,
             height: 52,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.sm), color: context.tileFill),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.inner), color: context.tileFill),
             child: Icon(Icons.language_rounded, color: expired ? p.text3 : p.ink, weight: 300),
           ),
           const SizedBox(width: Sp.x3),

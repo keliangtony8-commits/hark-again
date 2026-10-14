@@ -263,7 +263,7 @@ class _StatusTile extends StatelessWidget {
     );
     return onOpen == null
         ? tile
-        : InkWell(onTap: onOpen, borderRadius: BorderRadius.circular(Radii.md), child: tile);
+        : InkWell(onTap: onOpen, borderRadius: BorderRadius.circular(Radii.inner), child: tile);
   }
 }
 

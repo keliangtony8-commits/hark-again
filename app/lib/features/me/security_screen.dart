@@ -301,7 +301,7 @@ class _CodesSheet extends StatelessWidget {
       const SizedBox(height: Sp.x4),
       Container(
         padding: const EdgeInsets.all(Sp.x4),
-        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.md)),
+        decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
         child: Wrap(spacing: Sp.x5, runSpacing: Sp.x2, children: [
           for (final (i, c) in codes.indexed)
             FadeSlideIn(
@@ -328,7 +328,7 @@ class QrMatrix extends StatelessWidget {
         label: '两步验证二维码',
         image: true,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(Radii.md),
+          borderRadius: BorderRadius.circular(Radii.inner),
           child: CustomPaint(size: const Size.square(QrColors.size), painter: _QrPainter(rows)),
         ),
       );

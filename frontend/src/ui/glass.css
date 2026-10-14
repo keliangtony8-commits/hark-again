@@ -14,12 +14,12 @@
 /* 盖在内容上的真玻璃（弹层、横幅）：更明显的一层投影把它和下面分开 */
 .glass.raised { background: var(--glass-sheet); box-shadow: var(--elev-raised); } /* 更实一点：盖住的内容只透出颜色，不透出字和线 */
 /* 抽屉：宽屏是贴边的假玻璃卡，窄屏滑出来盖在内容上时才变真玻璃 */
-.glass-drawer { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card); }
+.glass-drawer { background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-card); box-shadow: var(--elev-card); }
 @media (max-width: 860px) {
   .glass-drawer { background: var(--glass-sheet); box-shadow: var(--elev-raised); -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); }
 }
 .glass-card {
-  background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card);
+  background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-card);
   box-shadow: var(--elev-card); /* v2.1：没有外投影，顶边一条内高光 */
   padding: calc(var(--sp-4) + 4px); display: flex; flex-direction: column; gap: var(--sp-3);
   animation: rise var(--dur) var(--ease) both;
@@ -28,7 +28,7 @@
 .glass-title { font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: var(--fw-title); line-height: 1.35; margin: 0; letter-spacing: 0; }
 .glass-sub { font-size: var(--fs-sm); color: var(--text-2); margin: 0; }
 
-.tile { padding: var(--sp-3) var(--sp-4); border-radius: var(--r-tile); background: var(--tile); min-width: 0; }
+.tile { padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); background: var(--tile); min-width: 0; }
 .tile-label { font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
 .tile-value { font-family: var(--font-serif); font-size: var(--fs-xl); font-weight: var(--fw-title); line-height: 1.25; letter-spacing: var(--display-tracking); font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
