@@ -491,7 +491,7 @@ async def display_file(ctx: ToolContext, paths: list[str]) -> ToolResult:
     blocks, notes = [], []
     for path in list(dict.fromkeys(paths))[:deliver.MAX_FILES]:
         try:
-            d = await asyncio.to_thread(deliver.deliver, ctx.workspace, path)
+            d = await asyncio.to_thread(deliver.deliver, ctx.workspace, path, ctx.delivered)
         except deliver.DeliverError as e:
             notes.append(f"没有交付 {path}：{e}")
             continue
@@ -526,7 +526,7 @@ async def render_document(ctx: ToolContext, path: str, output: str = "", format:
     blocks = []
     if show:
         try:
-            blocks.append((await asyncio.to_thread(deliver.deliver, ctx.workspace, r.rel)).block)
+            blocks.append((await asyncio.to_thread(deliver.deliver, ctx.workspace, r.rel, ctx.delivered)).block)
         except deliver.DeliverError as e:
             show = False
             r.notes.append(f"没交付：{e}")

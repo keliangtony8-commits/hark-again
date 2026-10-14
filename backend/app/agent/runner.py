@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, reply_language, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
+from .. import deliver, host_mode, jobs, reply_language, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -219,6 +219,7 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
         await _try_emit(emit, {"type": "conversation.mode", "conversation_id": cid, "mode": plan_mode.DEFAULT})
     blocks = builder.partial() if status == "stopped" else builder.final()
     blocks = await jobs.current_blocks(db, blocks)  # v2.27 这一轮里已经结束的任务：卡片别停在“运行中”
+    blocks = await asyncio.to_thread(deliver.refresh, ctx.delivered, blocks)  # v2.77 B45 交付后又改过的文件：卡片给最终版
     if card := turn_changes.finish(ctx.changes, ctx.workspace):  # 这一轮改过的文件：净改动卡 + 整轮撤销（被停下也出）
         blocks = [*blocks, card]
     reply = None

@@ -15,11 +15,15 @@
 - v2.65 o8：交付的 CSV（单个文件或打包目录里的）按 app/csv_bom.py 的规则加 UTF-8 BOM，Excel 打开中文不乱码；
   同样只改快照 / 包里的副本，工作区原文件不动；改了会在给模型的那句话里说一声。
 - 空文件、不存在的路径 → DeliverError（模型看到原因，自己改正）。
+- v2.77 B45：快照是“交给你那一刻”的版本，但同一轮里模型交付之后又改了那个文件（E2E w5：先交了转错码的 txt，
+  再重新转码覆盖同名文件、回复说“已转好”）→ 用户拿到的是坏的那份。所以每轮记下交付了什么（Tracker），
+  这一轮收尾时 refresh()：源文件/目录变了就按同样规则重拍进同一个 upload id（卡片不变、内容跟上最终版）；
+  同一个路径这一轮交付了多次，只留最后一张卡。源被删了、变空了、超上限了 → 保留原快照不动。
 返回给工具的是 Delivery(block, note)：block = 文件块 dict（blocks.FileBlock 字段），note = 给模型的一句话。"""
 import shutil
 import uuid
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import csv_bom, storage
@@ -37,6 +41,48 @@ class DeliverError(Exception):
 class Delivery:
     block: dict
     note: str
+
+
+SIG_WALK_MAX = 5000  # 目录签名最多看这么多项；更多就不跟踪（不为收尾一次刷新扫一个巨型目录）
+
+
+def _sig(p: Path) -> tuple | None:
+    """源的“版本”：文件 = (mtime_ns, size)；目录 = 打包会收的文件的 (个数, 最新 mtime_ns, 总大小)。不存在 = None。"""
+    try:
+        if p.is_file():
+            st = p.stat()
+            return ("f", st.st_mtime_ns, st.st_size)
+        if not p.is_dir():
+            return None
+        n = newest = total = 0
+        for q in p.rglob("*"):
+            n += 1
+            if n > SIG_WALK_MAX:
+                return None
+            rel = q.relative_to(p)
+            if storage.hidden(rel.parts) or ZIP_SKIP.intersection(rel.parts) or not q.is_file():
+                continue
+            st = q.stat()
+            newest, total = max(newest, st.st_mtime_ns), total + st.st_size
+        return ("d", n, newest, total)
+    except OSError:
+        return None
+
+
+@dataclass
+class _Seen:
+    workspace: str
+    rel: str
+    sig: tuple | None
+
+
+@dataclass
+class Tracker:
+    """这一轮交付过的快照：upload id → 源路径和交付时的签名（每轮一个；并行副本、子助手共用）。"""
+    seen: dict[str, _Seen] = field(default_factory=dict)
+
+    def add(self, uid: str, workspace: str, rel: str, sig: tuple | None) -> None:
+        self.seen[uid] = _Seen(workspace, rel, sig)
 
 
 def _cap() -> int:
@@ -138,7 +184,16 @@ def _zip_dir(src: Path, root: Path) -> tuple[Path, int]:
         raise
 
 
-def deliver(workspace: str, path: str) -> Delivery:
+def deliver(workspace: str, path: str, tracker: Tracker | None = None) -> Delivery:
+    d = _deliver(workspace, path)
+    if tracker is not None and d.block.get("source") == "upload":
+        root = storage.project_dir(workspace).resolve()
+        p = storage.safe_join(root, path)
+        tracker.add(d.block["id"], workspace, p.relative_to(root).as_posix(), _sig(p))
+    return d
+
+
+def _deliver(workspace: str, path: str) -> Delivery:
     root = storage.project_dir(workspace).resolve()
     try:
         p = storage.safe_join(root, path)
@@ -169,3 +224,71 @@ def deliver(workspace: str, path: str) -> Delivery:
     block = {"type": "file", "source": "project", "id": rel.as_posix(), "name": p.name, "mime": storage.mime_of(p.name),
              "size": size, "project_id": workspace}
     return Delivery(block, f"{rel} 有 {_mb(size)}，超过快照上限，给用户的是工作区文件卡（之后改动会跟着变，别删它）。")
+
+
+def _reshoot(uid: str, seen: _Seen) -> dict | None:
+    """源变了：按交付时同样的规则重拍进同一个 upload id。返回新的 size/name（或 None = 保留原快照）。"""
+    root = storage.project_dir(seen.workspace).resolve()
+    try:
+        p = storage.safe_join(root, seen.rel)
+    except ValueError:
+        return None
+    if p.is_dir():
+        try:
+            z, _ = _zip_dir(p, root)
+        except DeliverError:
+            return None
+        src, name, cleanup = z, z.name, z.parent
+    elif p.is_file() and 0 < p.stat().st_size <= _cap():
+        src, name, cleanup = p, p.name, None
+    else:
+        return None
+    d = storage.UPLOADS / uid
+    try:
+        tmp = d / f".new-{uuid.uuid4().hex}"
+        shutil.copyfile(src, tmp)
+        for old in d.iterdir():
+            if old != tmp and old.is_file():
+                old.unlink()
+        dst = d / name
+        tmp.rename(dst)
+        if dst.suffix.lower() == ".zip":
+            _utf8_names(dst)
+        elif not p.is_dir():
+            csv_bom.fix_file(dst)
+        return {"name": dst.name, "size": dst.stat().st_size, "mime": storage.mime_of(dst.name)}
+    except OSError:
+        return None
+    finally:
+        if cleanup is not None:
+            shutil.rmtree(cleanup, ignore_errors=True)
+
+
+def refresh(tracker: Tracker, blocks: list[dict]) -> list[dict]:
+    """这一轮收尾调（runner）：交付后又改过的源重拍进原卡；同一路径交付多次只留最后一张。返回新的块列表。"""
+    if not tracker.seen:
+        return blocks
+    last: dict[tuple[str, str], str] = {}
+    for b in blocks:
+        s = tracker.seen.get(b.get("id")) if b.get("type") == "file" and b.get("source") == "upload" else None
+        if s is not None:
+            last[(s.workspace, s.rel)] = b["id"]
+    out, done = [], set()
+    for b in blocks:
+        s = tracker.seen.get(b.get("id")) if b.get("type") == "file" and b.get("source") == "upload" else None
+        if s is None:
+            out.append(b)
+            continue
+        if last[(s.workspace, s.rel)] != b["id"]:
+            continue  # 后面还有同一路径的卡：只留最后一张
+        if b["id"] not in done:
+            done.add(b["id"])
+            root = storage.project_dir(s.workspace).resolve()
+            try:
+                now = _sig(storage.safe_join(root, s.rel))
+            except ValueError:
+                now = None
+            if now is not None and now != s.sig and (fresh := _reshoot(b["id"], s)):
+                b = {**b, **fresh}
+        out.append(b)
+    return out

@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import archives, file_seen, quota
+from . import archives, file_read, file_seen, quota
 from .storage import hidden, project_dir, safe_join, sandbox_rel, upload_path
 
 DIR = "uploads"     # 默认放进工作区的哪个目录
@@ -134,6 +134,13 @@ def detail(s: Saved) -> str:
     return s.rel
 
 
+def _safe_upload(uid: str) -> Path | None:
+    try:
+        return upload_path(uid)
+    except ValueError:
+        return None
+
+
 def hint(blocks: list[dict]) -> str:
     """消息里用户发来的附件（upload）→ 一句编号 + 用法；没有 → 空串。图片、文档、二进制一样给。"""
     ups = [b for b in blocks if b.get("type") == "file" and b.get("source") == "upload" and b.get("id")]
@@ -142,4 +149,7 @@ def hint(blocks: list[dict]) -> str:
     ids = "、".join(f"{b.get('name') or '附件'} = {b['id']}" for b in ups)
     peek = "；压缩包只是看里面有什么 / 读其中一个，用 read_file attachment（member 选文件），不用存也不用解压" \
         if any(archives.kind_of(b.get("name") or "") for b in ups) else ""
-    return f"（附件编号：{ids}。要在命令里处理（解压、转码、跑脚本…）先用 {TOOL} 存进工作区{peek}。）"
+    gbk = [b.get("name") or "附件" for b in ups if (f := _safe_upload(b["id"])) is not None and file_read.sniff(f)]
+    enc = (f"；{'、'.join(gbk)} 是 GBK 编码的中文文字（不是坏文件；要 UTF-8 版本就 iconv -f GBK -t UTF-8 转，别猜别的编码）"
+           if gbk else "")
+    return f"（附件编号：{ids}。要在命令里处理（解压、转码、跑脚本…）先用 {TOOL} 存进工作区{peek}{enc}。）"

@@ -45,13 +45,17 @@ TAIL = 160           # 闸门只看回复最后这么多字
 
 # 结尾像“说要做”：中文常见说法 + Gemini 例句的英文说法
 _PROMISE = re.compile(
-    r"(接下来|下一步|然后|现在|这就|马上|稍等|稍后)[^。！？!?\n]{0,12}(我|让我|来|去|开始|继续|处理|执行|检查|修改|运行|查看|看看)"
+    r"(?<![你您])(接下来|下一步|然后|现在|这就|马上|稍等|稍后)[^。！？!?\n你您]{0,12}(我|让我|来|去|开始|继续|处理|执行|检查|修改|运行|查看|看看)"
     r"|(让我|我来|我先|我再|我去|我会|我将|我要|我这就|我马上|我现在)[^。！？!?\n]{0,20}(一下|看看|检查|修改|运行|执行|处理|查|改|试|装|写|读|打开|搜索|确认|继续)"
     r"|\b(let me|i'll now|i will now|now i'll|now i will|next,? i(?:'ll| will)|i'm going to|moving on to)\b",
     re.I)
 _DANGLING = re.compile(r"(：|:|…|\.\.\.|，|,|、)\s*$")  # 以冒号 / 省略号 / 逗号收尾：后面本该有东西
 _ASKS = re.compile(r"[？?]\s*\W*\s*$|回复|告诉我|你(要|想|觉得|看)|需要我|要不要|是否|可以吗|好吗|行吗|确认一下|请(你|您)|let me know|would you|do you want", re.I)
 _SENT = re.compile(r"[。！？!?\n]+")
+# v2.77 B46（E2E w5）：结尾是给用户的“可选提议”（要是还要…也可以说 / 需要的话我可以… / 随时告诉我）→ 话已说完，等用户；
+# 以前“你现在直接打开我交的文件…”被当成“现在我…”去续一圈，模型又把结论说了一遍（两段重复的收尾）。
+_OFFER = re.compile(r"也可以(说|告诉我|跟我说|找我)|随时(说|告诉|叫|找)|需要的话|如果(还)?(需要|想|要)|要是(还)?(需要|想|要)"
+                    r"|我可以(再|帮你|直接|给你)|if you (want|need|like)|happy to", re.I)
 
 
 def mode() -> str:
@@ -87,6 +91,8 @@ def gate(text: str, cut: bool = False, used_tools: bool = False) -> str | None:
     if _DANGLING.search(tail):
         return "maybe"
     last = _last_sentence(tail)
+    if last and _OFFER.search(last):
+        return None
     if last and _PROMISE.search(last):
         return "maybe"
     return None

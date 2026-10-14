@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
+from . import file_read
 from .quota import size_text
 
 KINDS = (  # 长的后缀在前
@@ -274,18 +275,11 @@ def _capped(f, label: str) -> bytes:
 
 
 def decode_text(body: bytes) -> tuple[str, str] | None:
-    """成员是不是文字：没有 NUL 且 UTF-8 解得开 → (文字, "")；GBK 解得开且有中文 → (文字, "按 GBK 解码")；否则 None。"""
-    if b"\0" in body[:65536]:
+    """成员是不是文字：规则在 file_read.decode（UTF-8 / 有中文的 GBK / NUL = 二进制）→ (文字, 说明) 或 None。"""
+    got = file_read.decode(body)
+    if got is None:
         return None
-    for enc, note in (("utf-8-sig", ""), ("gbk", "按 GBK 解码")):
-        try:
-            text = body.decode(enc)
-        except UnicodeDecodeError:
-            continue
-        if note and not re.search(r"[\u4e00-\u9fff]", text):
-            return None
-        return text, note
-    return None
+    return got[0], ("按 GBK 解码" if got[1] == "GBK" else "")
 
 
 EXTRACT = re.compile(r"\b(?:unzip(?![^|;&]*\s-[A-Za-z]*[lvZ]\b)|gunzip|bsdtar\s+-?x|7za?\s+[xe]\b|gzip\s+-[A-Za-z]*d"

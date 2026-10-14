@@ -27,7 +27,7 @@ assert d.block["name"] == "简历_已改.docx", d
 assert attachment_save.target(root, "a.txt", "/workspace/docs/a.txt") == root / "docs" / "a.txt"
 load_builtin()
 tool = REGISTRY["display_file"]
-ctx = NS(workspace="me")
+ctx = NS(workspace="me", delivered=None)
 r = asyncio.run(tool.run(ctx, paths=["/workspace/uploads/简历_已改.docx"]))
 assert r.blocks and not r.failed, r
 r = asyncio.run(tool.run(ctx, paths=["/workspace/nope.docx"]))

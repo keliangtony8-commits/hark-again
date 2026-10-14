@@ -70,6 +70,6 @@ from app.agent.builtin.workspace import display_file
 from app.agent.tools import REGISTRY, load_builtin
 load_builtin()
 assert "BOM" in REGISTRY["display_file"].description
-r = asyncio.run(display_file(NS(workspace=ws), paths=["成绩.csv"]))
+r = asyncio.run(display_file(NS(workspace=ws, delivered=None), paths=["成绩.csv"]))
 assert r.blocks and "BOM" in r.content, r.content
 print("smoke_csv_bom OK")

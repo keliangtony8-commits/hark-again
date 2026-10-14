@@ -8,8 +8,12 @@
 - lines：按行，offset 是第几行（从 1 起，和 grep 的“路径:行号”一致；负数 = 最后 N 行），每行带行号前缀；
   一次最多 LINES_MAX 行、WINDOW_BYTES 字节，单行超过 LINE_CHARS 字截断；行数总是数准的（只数换行符，不解码）；
 - bytes：按字节，offset 负数 = 从结尾倒数，一次最多 BYTES_MAX；首尾对齐到 UTF-8 字符边界。
+v2.77（E2E w5）：文字怎么解码也只在这里（decode）：UTF-8 解得开就是 UTF-8；解不开、按 GBK（gb18030）解得开且确有中文
+→ 按 GBK 显示并在开头说一句“这是 GBK 编码”（以前一律 UTF-8 替换成 �，模型以为是乱码、按 Latin-1 乱转）。
+只管整篇读的 chars 模式（< STREAM_MIN）；lines/bytes 按字节扫，仍按 UTF-8。压缩包成员（archives.decode_text）同一规则。
 """
 import codecs
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -206,6 +210,40 @@ def read_bytes(src, offset: int = 0, limit: int = BYTES_MAX) -> tuple[str, str]:
             f"第 {s}–{e} 字节 / 共 {size}")
 
 
+GBK_NOTE = "（这个文件是 GBK 编码，下面已按 GBK 解码显示；用户要正常打开的版本就转成 UTF-8：iconv -f GBK -t UTF-8，或 Python 按 gb18030 读、utf-8 写。）\n"
+
+
+def decode(body: bytes) -> tuple[str, str] | None:
+    """文字解码的唯一规则：有 NUL → None（二进制）；UTF-8 解得开 → (文字, "")；GBK 解得开且有中文 → (文字, "GBK")；否则 None。"""
+    if b"\0" in body[:65536]:
+        return None
+    try:
+        return body.decode("utf-8-sig"), ""
+    except UnicodeDecodeError:
+        pass
+    try:
+        text = body.decode("gb18030")
+    except UnicodeDecodeError:
+        return None
+    return (text, "GBK") if re.search(r"[\u4e00-\u9fff]", text) else None
+
+
+SNIFF_BYTES = 256 * 1024
+
+
+def sniff(path) -> str:
+    """附件提示用：文件是不是 GBK 编码的中文文字 → "GBK"；其他（UTF-8、二进制、读不了）→ ""。只看开头 SNIFF_BYTES（切到换行）。"""
+    try:
+        with Path(path).open("rb") as f:
+            raw = f.read(SNIFF_BYTES + 1)
+    except OSError:
+        return ""
+    if len(raw) > SNIFF_BYTES:
+        raw = raw[:raw.rfind(b"\n", 0, SNIFF_BYTES) + 1] or raw[:SNIFF_BYTES]
+    got = decode(raw)
+    return got[1] if got else ""
+
+
 def page(text: str, offset: int = 0, limit: int = CHARS_DEFAULT) -> str:
     """按字符分页：全文放得下原样返回；否则给这一段并说明位置和下一段从哪开始。"""
     total = len(text)
@@ -238,7 +276,11 @@ def read(src, mode: str = "chars", offset: int = 0, limit: int = 0) -> tuple[str
         return page(src, offset, limit or CHARS_DEFAULT), None
     size = Path(src).stat().st_size
     if size < STREAM_MIN:
-        return page(Path(src).read_text(encoding="utf-8", errors="replace"), offset, limit or CHARS_DEFAULT), None
+        raw = Path(src).read_bytes()
+        got = decode(raw)
+        if got is not None and got[1] == "GBK":
+            return GBK_NOTE + page(got[0], offset, limit or CHARS_DEFAULT), "GBK 编码"
+        return page(raw.decode("utf-8", errors="replace"), offset, limit or CHARS_DEFAULT), None
     w = window(src, -BIG_TAIL if offset < 0 else 1, BIG_TAIL if offset < 0 else LINES_MAX)
     note = (f"（文件有 {size_text(size)}，按字符分页要整篇读进内存，改按行给"
             f"{'最后 ' + str(BIG_TAIL) + ' 行' if offset < 0 else ''}；之后用 mode=lines 按行号读，或 mode=bytes 按字节读。）\n")

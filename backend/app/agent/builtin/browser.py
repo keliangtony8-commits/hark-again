@@ -463,7 +463,7 @@ async def browser_screenshot(ctx: ToolContext, path: str = "", full_page: bool =
     blocks, note = [], ""
     if show:
         try:
-            blocks.append((await asyncio.to_thread(deliver.deliver, ctx.workspace, shot.rel)).block)
+            blocks.append((await asyncio.to_thread(deliver.deliver, ctx.workspace, shot.rel, ctx.delivered)).block)
         except deliver.DeliverError as e:
             show, note = False, f"\n没交付：{e}"
     res = await _after(ctx, tab, browser_shot.for_model(shot, show) + note)

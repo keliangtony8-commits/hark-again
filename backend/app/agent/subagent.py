@@ -227,7 +227,7 @@ async def _child(parent: ToolContext, t: Task, push, deadline: float) -> None:
         model = t.model if t.model and t.model in settings.chat_models else parent.model  # 那个模型下架了 → 用现在的
         ctx = ToolContext(db=db, project_id=parent.project_id, conversation_id=parent.conversation_id,
                           task_id=parent.task_id, model=model, effort=parent.effort, allow=CHILD_TOOLS, depth=parent.depth + 1,
-                          changes=parent.changes,  # 子助手改的文件也算进这一轮的改动卡
+                          changes=parent.changes, delivered=parent.delivered,  # 子助手改的文件、交付的快照也算进这一轮
                           plan=plan_mode.State(active=True, can_exit=False) if parent.plan and parent.plan.active else None)
         prompt = (await build_system_prompt(db, parent.project_id, t.prompt)).add(STABLE, ROLE)
         if t.resume:

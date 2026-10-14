@@ -44,6 +44,12 @@ assert G("要我接着部署吗？") is None
 assert G("做了一半：还差最后一步。回复“继续”我接着做。") is None
 assert G("接下来我可以帮你配置域名，需要我做吗") is None
 assert G("全部完成。下次我会记得先备份。") is None or True  # 说的是以后的事：交给判官即可（这里不强求）
+# v2.77 B46：用户做的事 / 可选提议不续
+assert G("已修复。\n\n你现在直接打开我交的 **歌词_utf8.txt** 就能看，要是还要我直接贴正文也可以说。") is None
+assert G("文件发你了，需要的话我可以再做成 PDF。") is None
+assert G("已完成。如果还想改格式，随时告诉我。") is None
+assert G("你现在就可以下载了") is None
+assert G("文件已备好。现在我来运行测试。") == "maybe"
 print("ok: gate")
 
 # ---- 2. 解析 ----

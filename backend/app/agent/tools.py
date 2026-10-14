@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..deliver import Tracker as DeliverTracker
 from ..plan_mode import State as PlanState
 from ..turn_changes import Tracker as ChangeTracker
 from ..workspace_instructions import Tracker
@@ -58,6 +59,8 @@ class ToolContext:
     instructions: Tracker = field(default_factory=Tracker)
     # 这一轮 write_file / edit_file 碰过的文件基线（app/turn_changes.py）：收尾出净改动卡 + 整轮撤销；并行副本、子助手共用
     changes: ChangeTracker = field(default_factory=ChangeTracker)
+    # v2.77 这一轮交付过的快照（app/deliver.py）：收尾时源又变了就重拍进原卡；并行副本、子助手共用
+    delivered: DeliverTracker = field(default_factory=DeliverTracker)
     # 计划模式（app/plan_mode.py）：None = 没开；State.active 时只放只读工具，exit_plan_mode 批准后 lift()。并行副本共用
     plan: "PlanState | None" = None
     host: bool = False  # 服务器主机模式开着（run_turn 每轮从 host_mode.enabled 读）：scope="host" 的工具才出现
