@@ -2,7 +2,7 @@
 每段对话都有工作区（项目 = 项目的，主聊天/定时任务 = 个人的），用 ctx.workspace，规则在 app/workspaces.py。"""
 import asyncio
 
-from ... import apply_patch as patching, attachment_save, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, job_usage, jobs, memory_view, missing_env, omission, quota, read_many, runaway, sandbox_client, vision, workspace_search, workspaces
+from ... import apply_patch as patching, attachment_save, duplicates, command_changes, command_credentials, command_env, command_guard, computer, deliver, doc_render, documents, egress_note, file_edit, glyph_note, file_read, file_seen, foreground, job_memory, job_startup, job_usage, jobs, memory_view, missing_env, omission, quota, read_many, runaway, sandbox_client, vision, workspace_search, workspaces
 from ...config import settings
 from ...storage import hidden, looks_text, mime_of, project_dir, safe_join, upload_path
 from ..tools import ToolContext, ToolImage, ToolResult, tool
@@ -67,6 +67,26 @@ async def grep(ctx: ToolContext, pattern: str, path: str = "", include: str = ""
     except workspace_search.SearchError as e:
         return ToolResult(str(e), failed=e.short)
     return ToolResult(text)
+
+
+@tool("find_duplicates", "正在找重复文件",
+      "找内容完全相同的文件（重复照片、下载了两次的文件、副本），按内容（SHA-256）比，文件名和修改时间不算。"
+      "结果已经分好组：每组几个、每个多大、每个路径一行，删多余的能省多少。"
+      "用户要找 / 清理重复文件就用它，别用 run_command 跑 md5sum / sha256sum 自己数。"
+      "用户说了哪个文件夹就把 path 指过去（接着处理“这些重复的”时也一样，别扩到整个工作区去动别的文件夹）。"
+      "回答时把每组的每个文件都写出来；它只找不删，删之前先问用户留哪个。",
+      {"type": "object", "properties": {
+          "path": {**_PATH, "default": "", "description": "在哪个目录里找（默认整个工作区）"},
+          "include": {"type": "string", "default": "",
+                      "description": "只比文件名匹配这个 glob 的，如 *.{jpg,jpeg,png,heic}"}}},
+      parallel=True)
+async def find_duplicates(ctx: ToolContext, path: str = "", include: str = "") -> ToolResult:
+    try:
+        r = await asyncio.to_thread(duplicates.find, ctx.workspace, path, include)  # 规则全在 app/duplicates.py
+    except workspace_search.SearchError as e:
+        return ToolResult(str(e), failed=e.short)
+    detail = f"{len(r.groups)} 组重复" if r.groups else "没有重复"
+    return ToolResult(await asyncio.to_thread(duplicates.render, ctx.workspace, path, include, r), detail=detail)
 
 
 @tool("read_file", "正在读文件",

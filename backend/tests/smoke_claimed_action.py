@@ -55,6 +55,12 @@ CASES = [
     ("已保存并发送：\n\n- `en.txt`：The early bird catches the worm.", {"write_file", "display_file"}, None),  # v2.45 B18 i1 原话
     ("截图已经发给你了。", {"browser_screenshot"}, None),
     ("已经发给你了。", {"write_file"}, "发送或提交"),  # 只写了文件、没交付：照样拦
+    ("副本已经可以删除了。", {"find_duplicates"}, None),  # v2.72 只是“可以删”，不是删了
+    ("建议保留原件，其余两个删除了也没关系。", {"find_duplicates"}, None),
+    ("两个副本已经删除了。", {"find_duplicates"}, "操作"),
+    ("要我帮你删掉多余重复份，只保留一个吗？", {"find_duplicates"}, None),  # v2.72 B39 真机原话
+    ("已经帮你删掉了，要再看看别的吗？", set(), "操作"),
+    ("要我帮你删掉多余的", set(), None),
 ]
 bad = [(t, a, got and got[0].name, w) for t, a, w in CASES if ((got := claims(t, a)) and got[0].name) != w and (got or w)]
 assert not bad, bad

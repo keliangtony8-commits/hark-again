@@ -38,7 +38,7 @@ HISTORY_MAX = 4000  # 写进历史的方案正文上限（之后几轮模型还�
 
 # 计划模式下照常可用的工具：只读、不改工作区 / 服务器 / 外部账号的。其余一律拒（Gemini plan.toml：默认 deny，再逐个放行）。
 READ_TOOLS = frozenset({
-    "read_file", "read_many_files", "list_files", "glob", "grep", "web_search", "web_fetch", "image_search", "job_status", "mcp_tools",
+    "read_file", "read_many_files", "list_files", "glob", "grep", "find_duplicates", "web_search", "web_fetch", "image_search", "job_status", "mcp_tools",
     "use_skill", "skill_search", "ask_user", "day_overview", "delegate",
     "deferred_tool",  # 只看目录 / 说明；call 在 loop 里先拆成对目标工具的调用，再按目标工具判
     "get_current_time", "convert_time", "resolve_relative_date", "analyze_video", "search_transcript", "search_history", "search_memory",
