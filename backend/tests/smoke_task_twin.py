@@ -52,7 +52,9 @@ assert asyncio.run(count()) == 3
 r3 = asyncio.run(call(action="create", name="早报", prompt="给我今天的早报", cron="0 8 * * *", notify="always"))
 assert r3.startswith("已安排") and "notify 只对定时脚本" in r3, r3
 assert "已经安排过了" in asyncio.run(call(action="create", name="早报2", prompt="给我今天的早报", cron="0  8 * * *"))
-assert asyncio.run(call(action="create", name="早报", prompt="给我今天的早报", cron="0 9 * * *")).startswith("已安排")
+# v2.63 B34：同内容只差钟点 → 不建，给合并后的 cron（app/cron_merge.py）
+assert "cron='0 8,9 * * *'" in asyncio.run(call(action="create", name="早报", prompt="给我今天的早报", cron="0 9 * * *"))
+assert asyncio.run(call(action="create", name="早报", prompt="给我今天的早报", cron="30 9 * * *")).startswith("已安排")
 # 暂停的 / 已经跑过的一次性 → 不算（可以重新建）
 async def deactivate():
     async with SessionLocal() as db:

@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
-from ... import clock, schedule, script_tasks, task_brief, task_runs, task_store, task_wall
+from ... import clock, cron_merge, schedule, script_tasks, task_brief, task_runs, task_store, task_wall
 from ...config import settings
 from ...models import ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
@@ -68,6 +68,22 @@ def _when(run_at: str | None) -> datetime | None:
     return schedule.parse_local(run_at) if run_at else None
 
 
+async def _merge_hint(db, *, prompt: str, cron: str | None, kind: str, project_id: str | None) -> str:
+    """v2.63 B34：同内容、只差钟点的重复任务 → 不再建，告诉模型合并后的 cron 去 update（规则在 app/cron_merge.py）。"""
+    if not cron:
+        return ""
+    sibs = [t for t in await task_store.same_job(db, prompt=prompt, kind=kind, project_id=project_id) if t.cron]
+    if not sibs:
+        return ""
+    merged = cron_merge.merge([t.cron for t in sibs] + [cron])
+    if merged is None:
+        return ""
+    keep, extra = sibs[0], sibs[1:]
+    drop = "；再 cancel 多余的 " + "、".join(t.id for t in extra) if extra else ""
+    return (f"没建：同一件事已经有定时任务了（{'；'.join(_line(t) for t in sibs)}）。一天几个时刻只用一个任务——"
+            f"action=update id={keep.id} cron='{merged}'（已含原有时刻和这次的时刻；还有别的时刻就一起写进去）{drop}。")
+
+
 @tool("schedule_task", "正在安排任务",
       "管理定时任务和一次性提醒。action=create：cron（重复，5 段，用户时区）与 run_at（一次性，用户时区 'YYYY-MM-DD HH:MM'）二选一；"
       "prompt 是到点时独立执行的指令（看不到当前对话，写全要做什么；用户原话里的要求一个不丢，如“登录后看”“用浏览器”“用哪个账号”；纯提醒就写“提醒我：……”），结果进 Home 收件箱。"
@@ -75,6 +91,7 @@ def _when(run_at: str | None) -> datetime | None:
       "适合备份、定时抓取/爬虫、跑测试、清理文件这类固定步骤（复杂的先写成脚本文件放工作区再调用）；"
       "notify（只对 command 脚本）：failure 只在失败时告诉用户（默认）/ always 每次 / change 输出和上次不一样时（监控网页、价格用这个）；交给助手的任务每次到点都会通知，不传。"
       "同计划同内容的任务已存在时 create 不会再建，改已有的用 update。"
+      "同一件事一天几个时刻也只建一个任务，时刻都写进同一个 cron：'0 9-21/2 * * *' = 9 点到 21 点每 2 小时，'30 8,12,18 * * *' = 8:30、12:30、18:30；不要一个时刻建一个。"
       "需要判断、总结、搜索的事才用 prompt 交给助手。"
       "action=list 看现有任务和 id；update 按 id 改 name/prompt/command/notify/cron/run_at/active（换成一次性传 run_at，换回重复传 cron）；cancel 按 id 删除。"
       "runs 看最近几次运行（成功 / 失败原因 / 没打扰用户的原因）；run_now 立刻跑一次；skip_next 跳过下一次（unskip 撤销）。"
@@ -131,6 +148,10 @@ async def schedule_task(ctx: ToolContext, action: str, id: str | None = None, na
         if same is not None:
             return ToolResult(f"一模一样的已经安排过了，没再建（不然到点会提醒两遍）：{_line(same)}。"
                               f"要改名、改时间或内容用 action=update id={same.id}。{tail}")
+        merged = await _merge_hint(db, prompt=command or prompt, cron=cron, kind=kind,
+                                   project_id=ctx.project_id if command else None)
+        if merged:
+            return ToolResult(merged + tail)
         try:
             if command:
                 t = await task_store.create(db, name=name, prompt=command, cron=cron or "", run_at=when, kind="script",

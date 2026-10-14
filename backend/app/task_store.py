@@ -75,16 +75,19 @@ async def twin(db, *, prompt: str, cron: str = "", run_at: datetime | None = Non
     还会再跑的（启用、一次性的没跑过）、同类型、同计划（cron 一样或 run_at 同一分钟）、内容一样（prompt / 命令，空白不计）的
     报告类任务算同一个；名字不看（模型换个说法起名很常见）。面板不在这查（create_panel 自有标题）。
     只给智能体工具用：用户在界面上自己建两个一样的，是他的事。"""
-    rows = (await db.scalars(select(ScheduledTask).where(
-        ScheduledTask.active.is_(True), ScheduledTask.kind == kind, ScheduledTask.output == "report"))).all()
-    for t in rows:
-        if schedule.is_done(t) or not _same_text(t.prompt, prompt):
-            continue
-        if kind == "script" and t.project_id != project_id:
-            continue
+    for t in await same_job(db, prompt=prompt, kind=kind, project_id=project_id):
         if (t.cron or "").split() == (cron or "").split() and _utc(t.run_at) == _utc(run_at):
             return t
     return None
+
+
+async def same_job(db, *, prompt: str, kind: str = "agent", project_id: str | None = None) -> list[ScheduledTask]:
+    """还会再跑的、同类型、内容一样的报告类任务（不看计划）。twin 在这里面找同计划的；
+    v2.63 B34：schedule_task create 用它找“同一件事换了个钟点”的兄弟任务，合并成一个 cron（app/cron_merge.py）。"""
+    rows = (await db.scalars(select(ScheduledTask).where(
+        ScheduledTask.active.is_(True), ScheduledTask.kind == kind, ScheduledTask.output == "report"))).all()
+    return [t for t in rows if not schedule.is_done(t) and _same_text(t.prompt, prompt)
+            and (kind != "script" or t.project_id == project_id)]
 
 
 async def create(db, *, name: str, prompt: str, cron: str = "", run_at: datetime | None = None,

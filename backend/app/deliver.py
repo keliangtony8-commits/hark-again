@@ -9,6 +9,9 @@
 - 目录：打包成 <目录名>.zip 再交付（跳过 .git/.jobs/.spill、node_modules、__pycache__、.venv 等垃圾）。
 - 快照上限 settings.deliver_max_mb：超过时普通文件退回“工作区文件卡”（source=project，之后改动会跟着变，
   隐藏目录里的文件客户端下载不到 → 直接拒绝）；目录打包超限 → 拒绝并建议先挑文件或压缩。
+- v2.63 B33：模型自己用 zip 命令打的包，中文文件名常常没标 UTF-8（Info-ZIP 在非 UTF-8 locale 下不标），
+  Windows / 部分手机解压成乱码 → 交付快照时检查：有非 ASCII 名字没标 UTF-8、原始字节又确实是 UTF-8 → 重写名字并标上
+  （内容按原压缩方式重写）；不是 UTF-8 的（真 GBK 包）不碰。工作区里的原文件不动。
 - 空文件、不存在的路径 → DeliverError（模型看到原因，自己改正）。
 返回给工具的是 Delivery(block, note)：block = 文件块 dict（blocks.FileBlock 字段），note = 给模型的一句话。"""
 import shutil
@@ -49,8 +52,44 @@ def _snapshot(src: Path, name: str) -> dict:
     d.mkdir(parents=True)
     dst = d / (Path(name).name or "file")
     shutil.copyfile(src, dst)
+    if dst.suffix.lower() == ".zip":
+        _utf8_names(dst)
     return {"type": "file", "source": "upload", "id": uid, "name": dst.name, "mime": storage.mime_of(dst.name),
             "size": dst.stat().st_size}
+
+
+UTF8_FLAG = 0x800
+
+
+def _utf8_names(path: Path) -> bool:
+    """zip 里没标 UTF-8 的非 ASCII 名字，若原始字节是 UTF-8 → 就地重写成标了 UTF-8 的（原样拷数据）。改了返回 True。"""
+    try:
+        with zipfile.ZipFile(path) as z:
+            infos = z.infolist()
+            fixes = {}
+            for i in infos:
+                if i.flag_bits & UTF8_FLAG or i.filename.isascii():
+                    continue
+                try:
+                    fixes[i.filename] = i.filename.encode("cp437").decode("utf-8")
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    return False  # 有一个不是 UTF-8（GBK 包）：整包不碰，免得改坏
+            if not fixes:
+                return False
+            tmp = path.with_name(path.name + ".fix")
+            with zipfile.ZipFile(tmp, "w") as out:
+                for i in infos:
+                    name = fixes.get(i.filename, i.filename)
+                    n = zipfile.ZipInfo(name, i.date_time)
+                    n.compress_type, n.external_attr, n.comment, n.create_system = (
+                        i.compress_type, i.external_attr, i.comment, i.create_system)
+                    with z.open(i) as src, out.open(n, "w") as dst:
+                        shutil.copyfileobj(src, dst)
+        tmp.replace(path)
+        return True
+    except (zipfile.BadZipFile, OSError, RuntimeError, NotImplementedError):  # 加密 / 坏包：原样交付
+        path.with_name(path.name + ".fix").unlink(missing_ok=True)
+        return False
 
 
 def _zip_dir(src: Path, root: Path) -> Path:
