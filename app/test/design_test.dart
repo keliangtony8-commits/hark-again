@@ -29,8 +29,9 @@ void main() {
   test('字重降一档：页面里不出现 w700 及以上（只有 theme 定义字重）', () {
     final bad = <String>[];
     for (final f in _dart('lib')) {
-      if (f.path.contains('lib/theme/')) continue;
-      if (RegExp(r'FontWeight\.w[789]00|FontWeight\.bold').hasMatch(f.readAsStringSync())) bad.add(f.path);
+      final path = f.path.replaceAll(r'\', '/'); // Windows 上分隔符是 \，守卫不能只在 macOS/Linux 生效
+      if (path.contains('lib/theme/')) continue;
+      if (RegExp(r'FontWeight\.w[789]00|FontWeight\.bold').hasMatch(f.readAsStringSync())) bad.add(path);
     }
     expect(bad, isEmpty);
   });
@@ -47,7 +48,7 @@ void main() {
   });
 
   test('页面级动作在标题栏：不用 Material 悬浮钮（它不吃设计令牌）', () {
-    final bad = [for (final f in _dart('lib')) if (f.readAsStringSync().contains('FloatingActionButton(')) f.path];
+    final bad = [for (final f in _dart('lib')) if (f.readAsStringSync().contains('FloatingActionButton(')) f.path.replaceAll(r'\', '/')];
     expect(bad, isEmpty);
   });
 

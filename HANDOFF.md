@@ -103,3 +103,38 @@
 - 他会一边看你做一边连发消息：同一件事合并回复，进度问题快速短答，别逐条啰嗦。
 - 说过的要求要记住并真正做完；做不到要直说，不要说“改了”而实际没改（气泡颜色就是被漏掉的例子）。
 - 他说“停”才停；不要每轮问“继续吗”。
+
+## 九、接手记录二（2026-10-14 晚，Windows 工作站）
+
+### 先看这条：这个仓库可能同时有别的会话在推
+- 我在 `9aef516` 克隆，做完一轮准备 push 时发现 main 已经多了 `0595497`（v2.90.2 连接器按钮诚实化 + docs/oauth-setup.md + docs/devlog.md）和 `18cc00f`。
+- **开工前先 `git fetch origin && git log --oneline origin/main -5`**；动手做第五节任何一条前，先确认 main 上没人已经做了。
+- 我那一轮把连接器这块做重了（自己写了 `visibleAccounts/oauthCallbackUrl` + 自己的引导弹层 + `docs/connectors-oauth.md`），比对后**整块丢掉**，采用 main 上的实现：它由后端 `GET /api/connectors` 每项给 `setup`（去哪注册、回调地址、env 变量名），App/Web 只画，单一数据源更好。我的备份分支：`my-clone-work`。
+- 只留下与连接器无关、main 上确实缺的修补（见本节末“留下的”）。
+
+### 这台 Windows 工作站怎么跑起来（不要再从零摸索）
+- **Flutter 3.47.7 / Dart 3.13.5**：`C:\Users\zhish\flutter\flutter\bin`（SDK zip 从 `https://storage.flutter-io.cn/flutter_infra_release/releases/stable/windows/` 下，1.8G，断线要 `curl -C -` 续传）。命令前设 `PUB_HOSTED_URL=https://pub.flutter-io.cn`、`FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn`，`flutter pub get` 才通；`pypi.org`、`storage.googleapis.com` 直连超时，pip 用 `https://mirrors.aliyun.com/pypi/simple/`。
+- **后端**：`cd backend && uv venv --python 3.12 .venv && uv pip install --python .venv -r requirements.txt --index-url <aliyun>`，另外要 `uv pip install aiosqlite`（requirements 里没有，smoke 全用 SQLite）。跑单个 smoke：`.venv\Scripts\python.exe tests\smoke_x.py`。
+- **网页截图**：playwright 装在 `backend/.venv` 里，本机不必下 chromium——设 `SHOTS_CHANNEL=chrome` 用系统 Chrome（`frontend/scripts/shots.py` 已支持）。`python scripts/shots.py <输出目录>`。
+- **不要 `dart format`、不要用 PowerShell 直接 `git commit -m "中文"`**（PS 5.1 会把中文搞坏）：把提交信息写进临时文件再 `git commit -F`。
+
+### Windows 上踩过的两个坑（已修，别再改回去）
+1. **CRLF 会毁掉部署包**：这台机器 `core.autocrlf=true`，`git archive` 打出来的 `*.sh` 是 CRLF，传到服务器就是 `set: pipefail: invalid option name`、`$'\r': command not found`。已加 `.gitattributes`（`*.sh` / `Dockerfile` / `compose*.yml` 钉 LF）；生成部署包时仍要 `git -c core.autocrlf=false archive ...`。
+2. **大小写同名文件**：`projectHome.ts` 与组件 `ProjectHome.tsx` 只差大小写，Windows/macOS 上 `tsc -b` 直接 TS1149。纯规则文件已改名 `projectHomeRules.ts`，别再改回来。
+
+### 后端 smoke 在 Windows 上的真实基线（2026-10-14 实测）
+- 200 个 smoke：**Windows 上 143 通过 / 57 失败**；把控制台改成 UTF-8（`PYTHONUTF8=1`）后 15 个恢复，其余 42 个是平台差异，不是 bug：
+  `os.statvfs`（Linux-only）、符号链接权限（WinError 1314）、路径分隔符断言（`notes\plan.md` vs `notes/plan.md`）、GBK 编码打印、依赖 Docker 沙盒/作业容器的 `smoke_job_*`/`smoke_sandbox_*`/`smoke_services`、需要真 key 的 `smoke_stepfun`/`smoke_vision`。
+- 结论：**别用 Windows 上的全量 smoke 判定回归**；改后端时挑相关 smoke 跑，整量回归放到 Linux（VPS 或沙盒）上做。
+
+### 仓库里仍然缺的东西
+- 只有 `docs/protocol.md`、`docs/devlog.md`、`docs/oauth-setup.md` 三个文档；`docs/home-redesign.md`、`docs/blueprint.md`、`docs/core-research.md`、`docs/core-gaps.md`、`work/`（含 e2e-harness）**从未提交过**，所以 §L/§N/§P 的确切规格只能靠第五节和 §八 的描述复原（我已用 `git log --all` 确认全历史里都没有）。
+- 推断的 VPS 事实（只读 ssh 核实，别名 `hark`，172.93.163.240）：代码在 `/opt/assistant/app`，`.env` 第 64–68 行的 `GOOGLE_/GITHUB_CLIENT_ID/SECRET` 是空的（连接器连不上的根因），磁盘 29G/35G（88%），build cache 5.4G / 可回收 3.9G——**下次构建前先 `docker builder prune`**。
+
+### 我这一轮留下的（相对 main）
+- `.gitattributes` + `scripts/check_version.sh`（补丁版 tag 用全版本号，vX.Y 与 vX.Y.Z 都收）。
+- `brand/sync.py` 一并同步 `frontend/package-lock.json`（main 上 lock 还停在 2.90.1，`--check` 之前根本不管它）。
+- `frontend/scripts/check-arch.mjs` 的 Windows 路径修好（以前在本机直接 ENOENT，架构守卫等于没跑）。
+- `app/test/design_test.dart` 字重/悬浮钮守卫的路径分隔符修好（Windows 上必红）。
+- `frontend/scripts/shots.py` 支持 `SHOTS_CHANNEL`；`.gitignore` 忽略 `*.tsbuildinfo` 并把它移出版本库。
+

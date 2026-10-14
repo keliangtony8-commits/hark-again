@@ -1,0 +1,9 @@
+# 部署目标是 Linux：下面这些文件必须是 LF。
+# Windows 工作站上 core.autocrlf=true 会把检出的文件写成 CRLF，传到服务器就变成
+# “set: pipefail: invalid option name”“$'\r': command not found” 这类怪错（v2.90.2 踩过一次）。
+*.sh text eol=lf
+.gitattributes text eol=lf
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+compose*.yml text eol=lf

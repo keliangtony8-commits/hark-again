@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { workspaceEmptyText, workspaceFilesTitle } from "../../lib/workspace";
 import { fileUrl, http } from "../../lib/api";
 import { extOf } from "../../lib/files";
-import { projectFileLine } from "./projectHome";
+import { projectFileLine } from "./projectHomeRules";
 import type { ProjectFile } from "../../lib/types";
 import { IconDownload, IconFile, IconTrash, IconUpload } from "../../ui/icons";
 import { Hint, Sheet, Skeleton } from "../../ui/kit";

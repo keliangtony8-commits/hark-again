@@ -8,6 +8,7 @@
 时间固定在 Asia/Shanghai 白天，免得问候语和日期分隔随跑的时刻变。
 """
 import json
+import os
 import sys
 import threading
 from functools import partial
@@ -253,7 +254,8 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     base = serve()
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        # 默认用 playwright 自带的 chromium；本机装不上（或只想用系统浏览器）时设 SHOTS_CHANNEL=chrome / msedge
+        browser = p.chromium.launch(channel=os.environ.get("SHOTS_CHANNEL") or None)
         for theme in ("light", "dark"):
             for name, size in (("desktop", (1280, 820)), ("phone", (400, 860))):
                 ctx = browser.new_context(viewport={"width": size[0], "height": size[1]}, device_scale_factor=2 if name == "phone" else 1,

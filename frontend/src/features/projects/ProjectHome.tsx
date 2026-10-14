@@ -9,7 +9,7 @@ import type { ConversationSummary, Project, ProjectFile } from "../../lib/types"
 import { IconChat, IconChevron, IconPin, IconUpload } from "../../ui/icons";
 import { stagger } from "../../ui/kit";
 import ComputerSection from "../computer/ComputerSection";
-import { PROJECT_FILES_MAX, projectFileLine, projectFilePath, projectLine, projectRecent, projectRecentFiles } from "./projectHome";
+import { PROJECT_FILES_MAX, projectFileLine, projectFilePath, projectLine, projectRecent, projectRecentFiles } from "./projectHomeRules";
 
 type Props = {
   project: Project; conversations: ConversationSummary[]; suggestions: string[];

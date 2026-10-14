@@ -9,8 +9,9 @@
 //      （未读点、进度/运行中、链接/搜索命中、焦点环、唯一关键状态）；其余用 --ink / --text-2。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("../src", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../src", import.meta.url)); // Windows 上 URL.pathname 是 /C:/…，直接用会拼成 C:\C:\…
 const files = [];
 const walk = (d) => readdirSync(d).forEach((n) => { const p = join(d, n); statSync(p).isDirectory() ? walk(p) : files.push(p); });
 walk(root);
@@ -25,7 +26,7 @@ const ACCENT = {
 };
 const bad = [];
 for (const f of files) {
-  const rel = relative(root, f);
+  const rel = relative(root, f).replaceAll("\\", "/"); // 规则按 / 写，Windows 的 relative() 给的是 \
   const src = readFileSync(f, "utf8");
   if (!rel.startsWith("styles/tokens")) {
     const n = (src.match(/var\(--accent/g) || []).length;

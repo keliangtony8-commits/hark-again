@@ -4,7 +4,7 @@ import { http } from "../../lib/api";
 import { extOf, MAX_MESSAGE_FILES, projectFileBlock } from "../../lib/files";
 import { formatWhen } from "../../lib/format";
 import type { FileBlock, ProjectFile } from "../../lib/types";
-import { projectFileLine } from "./projectHome";
+import { projectFileLine } from "./projectHomeRules";
 import { IconCheck, IconFile } from "../../ui/icons";
 import { Hint, Sheet, Skeleton, stagger } from "../../ui/kit";
 

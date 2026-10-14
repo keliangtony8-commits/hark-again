@@ -12,7 +12,7 @@ import { shellCommandOf } from "../../lib/shell";
 import { Menu } from "../../ui/kit";
 import { AGENT_MENTION, MENTION_MAX, agentMatches, applyMention, mentionAt, rankMentions, rankSkills, type MentionQuery, type Sigil } from "../../lib/mentions";
 import type { ProjectFile, Skill } from "../../lib/types";
-import { projectFileLine } from "../projects/projectHome";
+import { projectFileLine } from "../projects/projectHomeRules";
 import MentionList, { type MentionItem } from "./MentionList";
 import { steerable } from "../../lib/steer";
 import {

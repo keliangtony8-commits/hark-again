@@ -1,4 +1,6 @@
 // 项目首屏的纯规则（v1.10，App features/projects/project_home.dart 同规则）。
+// 名字不能改回 projectHome.ts：它和同目录组件 ProjectHome.tsx 只差大小写，
+// Windows / macOS 上 tsc 会当成同一个文件（TS1149），v2.90.2 前一直在报这个错。
 import { formatSize } from "../../lib/files";
 import type { ConversationSummary, Project, ProjectFile } from "../../lib/types";
 

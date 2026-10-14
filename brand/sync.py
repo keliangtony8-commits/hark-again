@@ -3,7 +3,8 @@
 唯一来源只有两个文件：brand/brand.json（产品名）和 VERSION（语义化版本 大版本.功能轮.修复）。
 本脚本把它们写进所有手写过名字 / 版本的地方，别处不许手改：
   Android label、iOS CFBundleDisplayName/CFBundleName、App pubspec version 与 lib/brand.dart、
-  网页 index.html <title>、manifest name/short_name、package.json version 与 src/brand.ts、后端 app/version.py。
+  网页 index.html <title>、manifest name/short_name、package.json 与 package-lock.json 的 version、
+  src/brand.ts、后端 app/version.py。
 构建号 = 版本数字化（2.86.0 → 28600）：确定、单调递增，不随提交变化，所以跑两次没有改动（幂等）。
 
 用法（在 assistant/ 下）：
@@ -59,6 +60,11 @@ def plan(name: str, version: str, build: int) -> dict[str, str]:
     manifest["name"] = manifest["short_name"] = name
     out["frontend/public/manifest.webmanifest"] = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     edit("frontend/package.json", (r'^(  "version": )"[^"]*"', rf'\g<1>"{version}"'))
+    # npm 的锁文件里也有版本（顶层 + packages[""]）：npm install 会把它写回 package.json 的值，
+    # 这里一起同步，锁文件和 package.json 才不会各说各话。
+    edit("frontend/package-lock.json",
+         (r'^(  "version": )"[^"]*"', rf'\g<1>"{version}"'),
+         (r'^(    "": \{\r?\n      "name": "[^"]*",\r?\n      "version": )"[^"]*"', rf'\g<1>"{version}"'))
 
     head = "由 brand/sync.py 生成，别手改：改名字改 brand/brand.json，改版本改 VERSION，再跑 python3 brand/sync.py。"
     out["app/lib/brand.dart"] = (
