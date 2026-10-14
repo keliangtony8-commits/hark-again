@@ -138,12 +138,14 @@
 - `app/test/design_test.dart` 字重/悬浮钮守卫的路径分隔符修好（Windows 上必红）。
 - `frontend/scripts/shots.py` 支持 `SHOTS_CHANNEL`；`.gitignore` 忽略 `*.tsbuildinfo` 并把它移出版本库。
 
-### 第五节 8「Web 截图重拍」现在走到哪了（2026-10-14 晚）
-`frontend/scripts/shots.py` 之所以一直拍不全，不是浏览器问题，是**假接口缺数据**：页面请求了没假数据的接口 → 拿到 `[]` → 前端读 `undefined.length` → 整屏白掉，脚本就卡在那一步。已修：
-- 补 `/api/preferences`（缺了它「我的 → 偏好设置」「用量」「项目里对话」三张图是同一张白屏）、`/api/projects/pr1/computer`（缺了它项目首屏白屏）。
-  → 这三张图现在分别是 142KB / 170KB / 205KB，内容各不相同（以前完全一样）。
-- 「存到项目文件」已经收进回复的 ⋯ 菜单，定位器改成先开「这条回复的操作」再点菜单项「存成文件」。
-- 脚本跑完（或跑挂）会打印「请求了但没有假数据」的清单，照单补 `FIXTURES` 即可。
-- 现在仍卡在：点开项目对话后找 `.msg.assistant.last` 里那个 ⋯（类名或结构又变了，需要 dump 一次 DOM 确认）。**下一个人从这里接着修**，修完就能一次拍出明/暗 × 桌面/手机的整套图。
+### 第五节 8「Web 截图重拍」已经修好（2026-10-15 凌晨）
+`frontend/scripts/shots.py` 之前根本跑不完：卡在项目对话那一步。原因是**假接口缺数据 + 定位器跟着 UI 漂了**，不是浏览器问题。现在整条流程能跑到底：`SHOTS_CHANNEL=chrome <backend 的 venv python> scripts/shots.py <输出目录>` → **一次出 126 张（桌面/手机 × 明/暗 × 30 多屏），退出码 0**。修的东西：
+- 补假接口：`/api/preferences`（缺了它「我的 → 偏好设置」「用量」「项目里对话」三张图是同一张白屏）、`/api/projects/pr1/computer`（缺了它项目首屏白屏，形状照 `lib/computer.ts` 的 `ComputerStatus`）。
+- 「存到项目文件」早已收进回复的 ⋯ 菜单：定位器改成先点「这条回复的操作」再点菜单项「存成文件」；而且**必须挑那条有 markdown 的回复**（假数据里的 `data-msg-id="m2"`），最后一条 assistant 常常是订单卡，没有这一项。
+- 那个 ⋯ 平时 `opacity: 0`（`.msg:hover` / `:focus-within` / 触屏设备才显形，`chat.css` 里写了 `@media (hover: none)`），所以脚本里要**先 hover 再 click**，否则第一次点会落空。
+- 输入框占位符带品牌名（`给 Toyuis 发消息`，来自 `brand.ts`）；头像颜色 v2.81 起搬到了「偏好设置」。
+- 访问日志不再往 stderr 灌（`_QuietHandler`），跑完了就是干净的退出码 0；跑完/跑挂都会打印「请求了但没有假数据」清单。
+- 剩下的（不影响跑通，只是那几屏偏空）：`GET /api/connectors/mcp`、`GET /api/memory-notes` 还没有假数据。
+
 
 

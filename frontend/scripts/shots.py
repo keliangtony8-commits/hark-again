@@ -239,9 +239,15 @@ _check_times(FIXTURES)
 _check_times(BANNER_ITEM, "BANNER_ITEM")
 
 
+class _QuietHandler(SimpleHTTPRequestHandler):
+    """静态请求别往 stderr 打访问日志：会把“跑完了”也刷成一片红，看不出到底成没成。"""
+
+    def log_message(self, *a, **k) -> None:
+        pass
+
+
 def serve() -> str:
-    handler = partial(SimpleHTTPRequestHandler, directory=str(DIST))
-    handler.log_message = lambda *a, **k: None
+    handler = partial(_QuietHandler, directory=str(DIST))
     srv = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return f"http://127.0.0.1:{srv.server_port}"
@@ -352,14 +358,19 @@ def main():
                 (page.get_by_text("DeepSeek 和 GPT 的价格对比").first if name == "desktop"
                  else page.locator(".project-home button.row", has_text="DeepSeek 和 GPT 的价格对比")).click()
                 page.wait_for_timeout(800)
-                # v2.90.2：“存到项目文件”已经收进回复的 ⋯ 菜单（MessageView 的 actions），点菜单项叫“存成文件”
-                page.locator(".msg.assistant.last").get_by_label("这条回复的操作").click()
+                # v2.90.2：“存到项目文件”已经收进回复的 ⋯ 菜单（点菜单项“存成文件”）。
+                # 挑那条有 markdown 的回复（假数据里的 m2）；最后一条 assistant 往往是订单卡，没有这一项。
+                # ⋯ 平时 opacity:0（hover 才显形，触屏设备常显），所以先 hover 再点，否则第一次点会落空。
+                more = page.locator('.msg.assistant[data-msg-id="m2"]').get_by_label("这条回复的操作")
+                more.hover()
+                more.click()
                 page.get_by_role("menuitem", name="存成文件").click()
                 page.wait_for_timeout(500)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-project-saved.png"))
                 page.get_by_label("添加附件").first.click()
                 page.wait_for_timeout(300)
-                page.get_by_role("menuitem", name="项目里的文件").click()
+                # 菜单项叫的是“项目文件”（lib/workspace.ts 的 workspaceFilesTitle），不是“项目里的文件”
+                page.get_by_role("menuitem", name="项目文件", exact=True).click()
                 page.wait_for_timeout(600)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-project-picker.png"))
                 boxes = page.get_by_role("checkbox")
@@ -380,8 +391,11 @@ def main():
                     page.get_by_text("DeepSeek 和 GPT 的价格对比").first.click()
                 page.wait_for_timeout(800)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-chat.png"))
-                # v1.16：主聊天里存回复 → 先选项目
-                page.locator(".msg.assistant.last").get_by_label("存到项目文件").click()
+                # v1.16：主聊天里存回复 → 先选项目（v2.90.2 起同样收在回复的 ⋯ 菜单里）
+                more = page.locator('.msg.assistant[data-msg-id="m2"]').get_by_label("这条回复的操作")
+                more.hover()
+                more.click()
+                page.get_by_role("menuitem", name="存成文件").click()
                 page.wait_for_timeout(600)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-save-picker.png"))
                 page.keyboard.press("Escape")
@@ -433,10 +447,11 @@ def main():
                 if theme == "light":
                     page.goto(base + "/#/")
                     page.wait_for_timeout(500)
-                    page.get_by_placeholder("给助手发消息").click()
+                    # 占位符带品牌名（Composer 里是 `给 ${appName} 发消息`，brand.ts 的 appName）
+                    page.get_by_placeholder("给 Toyuis 发消息").click()
                     page.wait_for_timeout(500)
                     page.screenshot(path=str(OUT / f"{name}-{theme}-home-focused.png"))
-                    page.goto(base + "/#/me")
+                    page.goto(base + "/#/me/preferences")  # v2.81 起头像颜色在“偏好设置”里，不在“我的”首屏
                     page.wait_for_timeout(500)
                     page.get_by_label("换头像颜色").click()
                     page.wait_for_timeout(400)
