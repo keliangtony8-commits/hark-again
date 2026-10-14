@@ -1,4 +1,4 @@
-// 回复语言（v2.67）：“我的 → 外观与偏好”里的一行 + 选择菜单（ui/sheets.dart 的 showActionSheet，选中项打勾）。
+// 回复语言（v2.67）：“我的 → 偏好设置”里的一行 + 选择菜单（ui/sheets.dart 的 showActionSheet，选中项打勾）。
 // 选了立即生效：先改界面（乐观），PATCH 失败退回原值并提示。对话里说“以后用英文回我”时助手调 set_reply_language
 // 改的是同一个设置；provider 是 autoDispose，每次进“我的”页都重新取，所以那边改了这里也看得到。
 import 'package:flutter/material.dart';
@@ -52,7 +52,7 @@ class ReplyLanguageTile extends ConsumerWidget {
       key: const Key('reply-language'),
       icon: Icons.translate_rounded,
       title: '回复语言',
-      subtitle: prefs?.replyLanguageLabel ?? '跟随我的语言',
+      value: prefs?.replyLanguageLabel ?? '跟随我的语言',
       onTap: prefs == null || prefs.choices.isEmpty ? null : () => _pick(context, ref, prefs),
     );
   }

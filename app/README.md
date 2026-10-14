@@ -7,7 +7,7 @@
 lib/
   theme/tokens.dart     设计令牌：颜色、间距、圆角、字号、动效（唯一来源）
   theme/app_theme.dart  令牌 → Material 主题；组件用 context.palette；systemOverlay() 管状态栏/手势条
-  theme/appearance.dart 外观偏好（跟随系统/浅色/深色），只有 app.dart 读、“我的 → 外观”写
+  theme/appearance.dart 外观偏好（跟随系统/浅色/深色），只有 app.dart 读、“我的 → 偏好设置 → 外观”写
   theme/look.dart       个性化偏好（头像颜色、减少透明度），只存本机；app.dart 把 solid 注入 GlassMode
   ui/motion.dart        共用动效：FadeSlideIn、Pressable、Shimmer、TypingDots、PulseDot、SlideDownSwitcher、SwapSwitcher（小块换值：上下错开淡入淡出）、SidePaneSwitcher、FlashHighlight、MeterBar（进度条，长到目标值）、SlidingThumb（分段滑块）、FloatAway（浮层淡出让位）、RiseSwitcher（从下方升起：输入胶囊上方的建议条/错误条、左侧收起钮）
   ui/glass_mode.dart    材质最底层：GlassMode（减少透明度）+ GlassFills（context.cardFill/tileFill/hairline）；只依赖 theme，motion.dart 和 glass.dart 都用，glass.dart re-export
@@ -179,6 +179,7 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - v2.58 两步验证：features/me/security_screen.dart（/me/security；twoFactorProvider 没登录给 null 不发请求；SetupSheet = QrMatrix 自画二维码（QrColors 永远黑码白底）+ “在这台手机上添加”拉起 otpauth + 复制秘钥 + 6 位码；一次性恢复码弹层；关闭/重新生成走 showFormSheet 密码 + 码）、models/two_factor.dart（纯文字规则 + cleanCode 全角转半角）、登录页 428 → 展开验证码框（改地址/用户名收起）、Api.login(code:)；我的页“服务器”下一行两步验证。test/two_factor_test.dart。
 - v2.61 登录设备：features/me/login_sessions_section.dart（安全页第二节：本机第一标“本机”，别的行尾“退出”，组尾“退出其他所有设备”，都 confirmDanger；loginSessionsProvider）、models/login_session.dart（解析 + 文字规则 + appDeviceLabel）；Api.login 报 device；SessionNotifier.logout()（先 POST /api/auth/logout 再清本地）+ replaceToken()（老 token 换发）；打开两步验证后恢复码弹层写明退出了几台。test/login_session_test.dart。
 - v2.64 反馈：features/chat/reply_rating.dart（回复操作行末尾 👍 / 👎，👎 弹原因单；PopSwitcher 换实心；ChatController.rate 先本机换、失败换回）、features/me/feedback_screen.dart（反馈页 待处理 / 有用的回复 / 已解决 + 报告问题；详情 = 报告 Markdown + 复制报告 · 打开对话 · 标为已解决，路由 /me/feedback/:id）、models/feedback.dart（解析 + 文字规则）；Message.feedback。test/feedback_test.dart。
-- v2.67 回复语言：features/me/reply_language.dart（“我的 → 外观与偏好”一行 ReplyLanguageTile + showActionSheet 打勾菜单；PreferencesNotifier 乐观更新、失败退回 + 提示；没登录/老服务器 → null 不重试）、models/preferences.dart（选项由服务器给）。test/reply_language_test.dart。
+- v2.67 回复语言：features/me/reply_language.dart（“我的 → 偏好设置”一行 ReplyLanguageTile + showActionSheet 打勾菜单；PreferencesNotifier 乐观更新、失败退回 + 提示；没登录/老服务器 → null 不重试）、models/preferences.dart（选项由服务器给）。test/reply_language_test.dart。
 - v2.74 钱包：features/me/wallet_screen.dart（/me/wallet；walletProvider；AddCardSheet = CardFace 卡面（Layout.cardFace 比例、墨色底、卡组织 SwapSwitcher）+ CardNumberFormatter/ExpiryFormatter + 点保存才逐格提示；行“已过期”problem、改名/删除）、models/wallet.dart（卡组织 / Luhn 银联放宽 / 有效期 / 安全码，与后端同规则）；我的页“连接”组加一行。test/wallet_test.dart。
 - v2.80：Hark 式令牌（docs/home-redesign.md F）。圆角只有 `Radii.inner`(16) / `Radii.card`(32) / `Radii.full`；卡片一律实色 `cardFill`=surface、无描边无高光（GlassSurface 不模糊=卡片，模糊=浮层玻璃）；唯一强调色深色白/浅色黑；BlockFrame calm 不描边。品牌标记只用 ui/brand_mark.dart（图标源 brand/source.png + brand/make_icons.py）。
+- v2.81 “我的”页减法（docs/home-redesign.md B）：me_screen.dart 页头一行（返回 + 名字/域名）→ 用量卡一行 → 组1 个人资料/定时任务/账户/钱包/我的电脑 → 组2 安全/偏好设置/反馈/关于 → 退出胶囊，9 行无副标题，412×915 一屏（design_p3_test）。收拢页 me_hub.dart（MeHub enum：profile、accounts）；preferences_screen.dart（外观一行+动作单选、减少透明度、头像颜色、回复语言）；about_screen.dart（APP_VERSION 编译参数、服务器、开源许可）；Pages 一行在 computer_screen（个人）。kit RowTile.value（行尾当前值）+ SubPageLine（子页顶部一句说明）。截图 app_shots_test me-light/me-dark/me-preferences-dark。

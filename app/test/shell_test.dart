@@ -111,7 +111,7 @@ void main() {
     await tester.tap(find.byTooltip('我的'));
     await _settle(tester);
     expect(router.state.uri.path, '/me');
-    expect(find.text('记忆'), findsOneWidget);
+    expect(find.text('个人资料'), findsOneWidget);
     expect(find.byTooltip('回到主页'), findsNothing); // 能返回：左上是返回钮（我的页没有 AppBar，是玻璃圆钮）
     await tester.tap(find.byTooltip('返回'));
     await _settle(tester);

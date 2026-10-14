@@ -263,7 +263,7 @@ def main():
                 page.route("**/api/**", api)
                 page.route("https://img.example.com/**", image)
                 page.route_web_socket("**/ws**", lambda ws: None)
-                shots = [("home", "/#/"), ("projects", "/#/projects"), ("me", "/#/me"), ("usage", "/#/me/usage"), ("project-chat", "/#/projects/pr1")]
+                shots = [("home", "/#/"), ("projects", "/#/projects"), ("me", "/#/me"), ("me-preferences", "/#/me/preferences"), ("usage", "/#/me/usage"), ("project-chat", "/#/projects/pr1")]
                 for shot, url in shots:
                     page.goto(base + url)
                     page.wait_for_timeout(700)

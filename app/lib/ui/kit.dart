@@ -74,6 +74,20 @@ class PageIntro extends StatelessWidget {
       );
 }
 
+/// 子页顶部的一句说明（v2.81）：列表行不带副标题，这一页“是干什么的”只在这里说一次。下面留一个区块间距。
+class SubPageLine extends StatelessWidget {
+  const SubPageLine(this.line, {super.key});
+  final String line;
+
+  @override
+  Widget build(BuildContext context) => FadeSlideIn(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, Sp.x5),
+          child: Text(line, style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
+        ),
+      );
+}
+
 /// 起步卡：列表为空时代替“空空如也”——标题 + 一句引导 + 一排起步按钮（PillButton）。
 /// 点按钮只是带内容打开新建表单，用户没确认前什么都不会存。
 class StarterCard extends StatelessWidget {
@@ -141,8 +155,12 @@ class PullRefresh extends StatelessWidget {
 
 class RowTile extends StatelessWidget {
   const RowTile(
-      {super.key, this.icon, required this.title, this.subtitle, this.problem, this.trailing, this.onTap, this.onLongPress, this.leading, this.dimmed = false});
+      {super.key, this.icon, required this.title, this.subtitle, this.value, this.problem, this.trailing, this.onTap, this.onLongPress, this.leading, this.dimmed = false});
   final IconData? icon;
+
+  /// 行尾的当前值（“跟随系统”“中文”“toyuis.com”）：一行、次要色、放不下就省略，后面照常跟箭头——
+  /// 设置类列表用它代替副标题，行高保持单行（v2.81 “我的”页减法）。
+  final String? value;
   final Widget? leading;
   final String title;
   final String? subtitle;
@@ -196,6 +214,14 @@ class RowTile extends StatelessWidget {
             ]),
           ),
         ),
+        if (value != null) ...[
+          const SizedBox(width: Sp.x3),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: Layout.rowValueMax),
+            child: Text(value!, style: context.text.bodyMedium?.copyWith(color: p.text3), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end),
+          ),
+          const SizedBox(width: Sp.x1),
+        ],
         if (trailing != null) trailing! else if (onTap != null) Icon(Icons.chevron_right_rounded, color: p.text3, size: Layout.rowIcon),
       ]),
       ),

@@ -17,6 +17,9 @@ import FeedbackScreen from "./features/me/FeedbackScreen";
 import FeedbackDetail from "./features/me/FeedbackDetail";
 import PagesScreen from "./features/me/PagesScreen";
 import UsageScreen from "./features/me/UsageScreen";
+import MeHub from "./features/me/MeHub";
+import PreferencesScreen from "./features/me/PreferencesScreen";
+import AboutScreen from "./features/me/AboutScreen";
 import ProjectScreen from "./features/projects/ProjectScreen";
 import ProjectsScreen from "./features/projects/ProjectsScreen";
 import { auth, onUnauthorized } from "./lib/api";
@@ -54,6 +57,10 @@ export default function App() {
           <Route path="me/computer" element={<ComputerScreen />} />
           <Route path="me/pages" element={<PagesScreen />} />
           <Route path="me/usage" element={<UsageScreen />} />
+          <Route path="me/profile" element={<MeHub hub="profile" />} />
+          <Route path="me/accounts" element={<MeHub hub="accounts" />} />
+          <Route path="me/preferences" element={<PreferencesScreen />} />
+          <Route path="me/about" element={<AboutScreen />} />
           {/* v0.47 前的“设置”页已拆进“我的”和“用量”：旧链接回到我的 */}
           <Route path="me/settings" element={<Navigate to="/me" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

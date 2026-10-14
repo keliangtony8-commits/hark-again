@@ -1,28 +1,21 @@
-// 我的：点右上角头像进入的全屏页（设计 v2）。不是 Tab，没有 AppBar——和一级页面同一张壁纸、同一套玻璃。
-// 从上到下：返回钮 → 页头（大头像，点它改颜色；衬线“我的” + 服务器）→ 用量卡（本月花费 / 预算 + 查看用量）
-//   → 分组卡：了解你（记忆、技能、定时任务）· 连接（连接器、保险箱、钱包、Pages）· 外观与偏好（浅深色、减少透明度、头像颜色、回复语言）
-//   → 服务器 · 两步验证（v2.58 /me/security）→ 单独一行“退出登录”。页头身份行：用户名（GET /api/auth/me，取到后淡入）+ 服务器域名。每项一个子页面，路由在 app.dart（子页面是 ui/sub_page.dart 的 SubPage：同一张壁纸 + 玻璃标题栏）。
+// 我的：点右上角头像进入的全屏页（v2.81 按 docs/home-redesign.md B 做减法，对照 Hark 个人页，一屏装下）。
+// 从上到下：页头一行（返回钮 + 名字大字 / 服务器域名小字）→ 用量卡（本月花费 + 查看用量）
+//   → 组 1：个人资料（记忆、技能）· 定时任务 · 账户（连接器、保险箱）· 钱包 · 我的电脑（状态、文件、Pages）
+//   → 组 2：安全（两步验证、登录设备、服务器）· 偏好设置（外观、透明度、头像颜色、回复语言）· 反馈 · 关于
+//   → 一颗“退出登录”胶囊。每行只有 图标 + 标题 + 箭头，说明都在子页顶部；路由在 app.dart，子页是 ui/sub_page.dart 的 SubPage。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/session.dart';
-import '../../models/feedback.dart';
-import '../../models/two_factor.dart';
 import '../../models/usage.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/appearance.dart';
-import '../../theme/look.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
 import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
-import 'avatar_color_sheet.dart';
-import 'feedback_screen.dart';
-import 'reply_language.dart';
-import 'security_screen.dart';
 import 'usage_screen.dart';
 
 class MeScreen extends ConsumerWidget {
@@ -52,30 +45,18 @@ class _MeBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final server = ref.watch(sessionProvider).value?.server ?? '';
-    final appearance = ref.watch(appearanceProvider).value ?? Appearance.system;
-    final look = ref.watch(lookProvider).value ?? const Look();
     final host = Uri.tryParse(server)?.host ?? '';
     const gap = SizedBox(height: Sp.x4);
 
     return PageBody(children: [
-      Align(
-        alignment: Alignment.centerLeft,
-        child: root
-            ? GlassIconButton(icon: Icons.close_rounded, tooltip: '回到主页', onTap: () => context.go('/home'))
-            : GlassIconButton(icon: Icons.arrow_back_rounded, tooltip: '返回', onTap: () => Navigator.of(context).maybePop()),
-      ),
-      const SizedBox(height: Sp.x5),
+      // 页头一行：返回钮 + 名字/域名（不再单独占一行返回钮 + 一行页名，整页省出一屏）
       FadeSlideIn(
         child: Row(children: [
-          Avatar(initial: '我', size: Layout.avatarLarge, color: look.avatar, tooltip: '更换头像颜色', onTap: () => showAvatarColorSheet(context)),
+          root
+              ? GlassIconButton(icon: Icons.close_rounded, tooltip: '回到主页', onTap: () => context.go('/home'))
+              : GlassIconButton(icon: Icons.arrow_back_rounded, tooltip: '返回', onTap: () => Navigator.of(context).maybePop()),
           const SizedBox(width: Sp.x4),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('我的', style: context.text.displayMedium),
-              const SizedBox(height: Sp.x1),
-              _Identity(name: ref.watch(accountNameProvider).value, host: host),
-            ]),
-          ),
+          Expanded(child: _Identity(name: ref.watch(accountNameProvider).value, host: host)),
         ]),
       ),
       const SizedBox(height: Sp.x5),
@@ -84,89 +65,41 @@ class _MeBody extends ConsumerWidget {
       FadeSlideIn(
         delay: Motion.stagger(2),
         child: GlassGroup(children: [
-          RowTile(icon: Icons.psychology_outlined, title: '记忆', subtitle: '我记住的偏好和事实', onTap: () => context.push('/me/memory')),
-          RowTile(icon: Icons.auto_awesome_outlined, title: '技能', subtitle: '教我做事的固定方法', onTap: () => context.push('/me/skills')),
-          RowTile(icon: Icons.schedule_rounded, title: '定时任务', subtitle: '简报、提醒和面板刷新', onTap: () => context.push('/me/tasks')),
+          RowTile(icon: Icons.person_outline_rounded, title: '个人资料', onTap: () => context.push('/me/profile')),
+          RowTile(icon: Icons.schedule_rounded, title: '定时任务', onTap: () => context.push('/me/tasks')),
+          RowTile(icon: Icons.hub_outlined, title: '账户', onTap: () => context.push('/me/accounts')),
+          RowTile(icon: Icons.credit_card_rounded, title: '钱包', onTap: () => context.push('/me/wallet')),
+          RowTile(icon: Icons.computer_rounded, title: '我的电脑', onTap: () => context.push('/me/computer')),
         ]),
       ),
       gap,
       FadeSlideIn(
         delay: Motion.stagger(3),
         child: GlassGroup(children: [
-          RowTile(icon: Icons.hub_outlined, title: '连接器', subtitle: 'Google、GitHub 和 MCP 服务器', onTap: () => context.push('/me/connectors')),
-          RowTile(icon: Icons.lock_outline_rounded, title: '保险箱', subtitle: 'API Key 和网站登录，加密保存', onTap: () => context.push('/me/vault')),
-          RowTile(icon: Icons.credit_card_rounded, title: '钱包', subtitle: '付款卡，结账时替你填', onTap: () => context.push('/me/wallet')),
-          RowTile(icon: Icons.computer_rounded, title: '我的电脑', subtitle: '云端 Linux 的状态、后台任务和文件', onTap: () => context.push('/me/computer')),
-          RowTile(icon: Icons.web_rounded, title: 'Pages', subtitle: '我为你做好并发布的网页', onTap: () => context.push('/me/pages')),
+          RowTile(icon: Icons.shield_outlined, title: '安全', onTap: () => context.push('/me/security')),
+          RowTile(icon: Icons.tune_rounded, title: '偏好设置', onTap: () => context.push('/me/preferences')),
+          RowTile(icon: Icons.feedback_outlined, title: '反馈', onTap: () => context.push('/me/feedback')),
+          RowTile(icon: Icons.info_outline_rounded, title: '关于', onTap: () => context.push('/me/about')),
         ]),
       ),
-      const SectionTitle('外观与偏好'),
+      const SizedBox(height: Sp.x4),
       FadeSlideIn(
         delay: Motion.stagger(4),
-        child: GlassGroup(children: [
-          Padding(
-            padding: const EdgeInsets.all(Sp.x3),
-            child: SegmentedButton<Appearance>(
-              key: const Key('appearance'),
-              showSelectedIcon: false,
-              segments: [for (final a in Appearance.values) ButtonSegment(value: a, label: Text(a.label), icon: Icon(a.icon, size: 18))],
-              selected: {appearance},
-              onSelectionChanged: (s) => ref.read(appearanceProvider.notifier).set(s.first),
-            ),
-          ),
-          RowTile(
-            icon: Icons.blur_off_rounded,
-            title: '减少透明度',
-            subtitle: '玻璃和壁纸换成实色，也更省电',
-            trailing: Switch(key: const Key('solid'), value: look.solid, onChanged: (v) => ref.read(lookProvider.notifier).setSolid(v)),
-          ),
-          RowTile(
-            icon: Icons.palette_outlined,
-            title: '头像颜色',
-            trailing: Avatar(initial: '', onTap: null, size: Sp.x5, color: look.avatar, tooltip: '当前头像颜色'),
-            onTap: () => showAvatarColorSheet(context),
-          ),
-          const ReplyLanguageTile(), // v2.67 回复语言（features/me/reply_language.dart）
-        ]),
-      ),
-      gap,
-      FadeSlideIn(
-        delay: Motion.stagger(5),
-        child: GlassGroup(children: [
-          RowTile(icon: Icons.dns_outlined, title: '服务器', subtitle: server.isEmpty ? '未设置' : '$server · 退出后可在登录页更换'),
-          RowTile(
-            icon: Icons.shield_outlined,
-            title: '两步验证',
-            subtitle: twoFactorRowSubtitle(ref.watch(twoFactorProvider).value),
-            onTap: () => context.push('/me/security'),
-          ),
-          RowTile(
-            icon: Icons.feedback_outlined,
-            title: '反馈',
-            subtitle: feedbackRowSubtitle(ref.watch(feedbackProvider).value),
-            onTap: () => context.push('/me/feedback'),
-          ),
-        ]),
-      ),
-      gap,
-      FadeSlideIn(
-        delay: Motion.stagger(6),
-        child: GlassGroup(children: [
-          RowTile(
-            icon: Icons.logout_rounded,
-            title: '退出登录',
-            trailing: const SizedBox.shrink(),
+        child: Center(
+          child: PillButton(
+            key: const Key('logout'),
+            label: '退出登录',
             onTap: () async {
               if (await confirmDanger(context, title: '退出登录？', action: '退出')) await ref.read(sessionProvider.notifier).logout();
             },
           ),
-        ]),
+        ),
       ),
     ]);
   }
 }
 
-/// 页头身份行：“用户名 · 域名”。用户名没取到（加载中 / 老服务器）只显示域名；取到后整行换态淡入，不跳版（高度一行）。
+/// 页头：名字大字 + 服务器域名小字（Hark 个人页：名字 + 邮箱，没有大头像）。名字没取到（加载中 / 老服务器）就写“我的”，取到后换态淡入；高度不变不跳版。
 class _Identity extends StatelessWidget {
   const _Identity({required this.name, required this.host});
   final String? name;
@@ -174,23 +107,16 @@ class _Identity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     final where = host.isEmpty ? '未设置服务器' : host;
     final n = name;
-    return SwapSwitcher(
-      child: Text.rich(
-        key: ValueKey(n ?? ''),
-        TextSpan(children: [
-          if (n != null) ...[
-            TextSpan(text: n, style: context.text.titleSmall?.copyWith(color: p.text)),
-            TextSpan(text: '  ·  ', style: context.text.bodySmall?.copyWith(color: p.text3)),
-          ],
-          TextSpan(text: where, style: context.text.bodySmall),
-        ]),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        semanticsLabel: n == null ? '服务器 $where' : '已登录 $n，服务器 $where',
-      ),
+    return Semantics(
+      label: n == null ? '服务器 $where' : '已登录 $n，服务器 $where',
+      excludeSemantics: true,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SwapSwitcher(child: Text(n ?? '我的', key: ValueKey(n ?? ''), style: context.text.displayMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
+        const SizedBox(height: Sp.x1),
+        Text(where, style: context.text.bodyMedium?.copyWith(color: context.palette.text3), maxLines: 1, overflow: TextOverflow.ellipsis),
+      ]),
     );
   }
 }
@@ -212,8 +138,16 @@ class _UsageCard extends StatelessWidget {
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('本月花费', style: context.text.bodySmall),
-              Semantics(label: '本月花费 $value', excludeSemantics: true, child: CountUp(value, style: context.text.displaySmall)),
+              // 一行：“本月 ¥12.30”（像 Hark 方案卡左边一行字）；有预算才多一行小字
+              Semantics(
+                label: '本月花费 $value',
+                excludeSemantics: true,
+                child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                  Text('本月', style: context.text.bodyMedium?.copyWith(color: p.text3)),
+                  const SizedBox(width: Sp.x2),
+                  Flexible(child: CountUp(value, style: context.text.titleLarge)),
+                ]),
+              ),
               if (r?.budget != null) Text('预算 ${formatMoney(r!.budget!, r.currency)}', style: context.text.labelSmall),
             ]),
           ),

@@ -7,7 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/workspace.dart';
 import '../../models/computer.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../theme/tokens.dart';
+import '../../ui/glass.dart';
+import '../../ui/motion.dart';
 import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
 import '../projects/project_files_sheet.dart';
@@ -45,8 +49,16 @@ class ComputerScreen extends ConsumerWidget {
           ProcessSection(ws: ws, delay: Motion.stagger(3)),
           StorageSection(ws: ws, delay: Motion.stagger(4), onFiles: () => showProjectFiles(context, ws)),
           DiskJobsSection(ws: ws, delay: Motion.stagger(5)),
-          if (personal) BrowserSessionsSection(delay: Motion.stagger(6)),
-          if (personal) HostSection(delay: Motion.stagger(7)),
+          if (personal) // v2.81：Pages 从“我的”首屏收进这里——它们就是这台电脑替你做好、发布出去的网页
+            FadeSlideIn(
+              delay: Motion.stagger(6),
+              child: Padding(
+                padding: const EdgeInsets.only(top: Layout.sectionGap),
+                child: GlassGroup(children: [RowTile(icon: Icons.web_rounded, title: 'Pages', onTap: () => context.push('/me/pages'))]),
+              ),
+            ),
+          if (personal) BrowserSessionsSection(delay: Motion.stagger(7)),
+          if (personal) HostSection(delay: Motion.stagger(8)),
         ]),
       ),
     );

@@ -1,4 +1,4 @@
-import 'package:assistant/features/me/me_screen.dart';
+import 'package:assistant/features/me/preferences_screen.dart';
 import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/appearance.dart';
 import 'package:assistant/theme/tokens.dart';
@@ -33,7 +33,7 @@ void main() {
     expect((await SharedPreferences.getInstance()).getString('appearance'), 'dark');
   });
 
-  testWidgets('我的 → 外观：点“深色”整屏切到深色调色板', (tester) async {
+  testWidgets('偏好设置 → 外观：选“深色”整屏切到深色调色板', (tester) async {
     SharedPreferences.setMockInitialValues({'server': 'https://a.example'});
     FlutterSecureStoragePlatformMock.install();
     tester.view.physicalSize = const Size(1080, 2400); // 长屏：整页一次排完，不靠滚动
@@ -47,12 +47,14 @@ void main() {
           darkTheme: buildTheme(Brightness.dark),
           themeMode: mode,
           themeAnimationDuration: Motion.theme,
-          home: const MeScreen(),
+          home: const PreferencesScreen(),
         );
       }),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('深色'));
+    await tester.tap(find.byKey(const Key('appearance')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('深色').last);
     await tester.pumpAndSettle();
     final ctx = tester.element(find.byType(Scaffold));
     expect(Theme.of(ctx).brightness, Brightness.dark);

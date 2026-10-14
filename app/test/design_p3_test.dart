@@ -3,6 +3,7 @@ import 'package:assistant/blocks/block_view.dart';
 import 'package:assistant/features/home/action_card.dart';
 import 'package:assistant/features/me/avatar_color_sheet.dart';
 import 'package:assistant/features/me/me_screen.dart';
+import 'package:assistant/features/me/preferences_screen.dart';
 import 'package:assistant/features/me/usage_screen.dart';
 import 'package:assistant/models/usage.dart';
 import 'package:assistant/models/block.dart';
@@ -11,6 +12,7 @@ import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/look.dart';
 import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/glass.dart';
+import 'package:assistant/ui/kit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -121,7 +123,7 @@ void main() {
     expect(widths.length, 1);
   });
 
-  testWidgets('我的：点大头像 → 选预设色，顶部头像跟着变；减少透明度开关落到偏好', (tester) async {
+  testWidgets('我的：名字 + 域名 + 用量卡；偏好设置：头像颜色 → 选预设色，减少透明度开关落到偏好', (tester) async {
     SharedPreferences.setMockInitialValues({'server': 'https://me.example'});
     FlutterSecureStoragePlatformMock.install();
     tester.view.physicalSize = const Size(1080, 2600);
@@ -136,8 +138,14 @@ void main() {
     expect(find.text('me.example'), findsOneWidget);
     expect(find.text('¥12.30'), findsOneWidget);
     expect(find.text('预算 ¥50.00'), findsOneWidget);
+    expect(find.byType(RowTile), findsNWidgets(9)); // 一屏：两组 9 行，行里没有副标题
+    for (final r in tester.widgetList<RowTile>(find.byType(RowTile))) {
+      expect(r.subtitle, isNull);
+    }
 
-    await tester.tap(find.byTooltip('更换头像颜色'));
+    await tester.pumpWidget(UncontrolledProviderScope(container: c, child: _wrap(const PreferencesScreen())));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('头像颜色'));
     await tester.pumpAndSettle();
     expect(find.byType(HueWheel), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('预设颜色').at(2));
@@ -156,5 +164,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.read(lookProvider).value!.solid, isTrue);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('我的：常见安卓手机（412×915）一屏装下，退出登录不用滚就看得到', (tester) async {
+    SharedPreferences.setMockInitialValues({'server': 'https://me.example'});
+    FlutterSecureStoragePlatformMock.install();
+    tester.view.physicalSize = const Size(1236, 2745);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final c = ProviderContainer(overrides: [
+      usageProvider.overrideWith((ref) async => UsageReport.fromJson({'currency': 'CNY', 'priced': [], 'today': {}, 'month': {'tokens': 3100000}})),
+    ]);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(container: c, child: _wrap(const MeScreen())));
+    await tester.pumpAndSettle();
+    final bottom = tester.getBottomLeft(find.byKey(const Key('logout'))).dy;
+    expect(bottom, lessThanOrEqualTo(915));
   });
 }

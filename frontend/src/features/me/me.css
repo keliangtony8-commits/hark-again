@@ -2,16 +2,22 @@
 .me .page-inner { padding-top: calc(var(--topbar-top) + env(safe-area-inset-top)); }
 .me-top { height: var(--topbar-h); display: flex; align-items: center; }
 .me-top .glass-btn { width: var(--topbar-h); height: var(--topbar-h); }
-.me-hero { position: relative; z-index: 2; /* 弹层要压在后面的卡片上（卡片的入场动画会各自起层叠上下文） */ display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2) 0 var(--section-gap); animation: rise var(--dur) var(--ease) both; }
-.me-hero h1 { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-3) 0 0; }
+.me-head { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-2) 0 var(--sp-5); }
+.me-id { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.me-id h1 { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .me-server { font-size: var(--fs-sm); color: var(--text-3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.me-name { color: var(--text); font-weight: var(--fw-strong); }
-.me-dot { margin: 0 var(--sp-2); color: var(--text-3); font-weight: var(--fw-body); }
-
-.me-usage { gap: var(--sp-2); }
-.me-usage-row { display: flex; align-items: baseline; gap: var(--sp-2); }
+.me-usage { gap: var(--sp-3); }
+.me-usage-row { display: flex; align-items: center; gap: var(--sp-2); }
+.me-usage-label { color: var(--text-3); font-size: var(--fs-md); }
+.me-usage-value { font-size: var(--fs-lg); font-weight: var(--fw-title); font-variant-numeric: tabular-nums; }
 .me-usage-budget { color: var(--text-3); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.me-usage .pills { margin-top: var(--sp-2); max-width: 200px; }
+.me-usage-go { margin-left: auto; flex: none; }
+.me-group { margin-top: var(--card-gap); }
+.pref-avatar { overflow: visible; position: relative; z-index: 2; }
+.pref-avatar-box { position: relative; }
+.pref-avatar-box .avatar-pop { left: auto; right: 0; translate: none; top: calc(100% + var(--sp-2)); transform-origin: top right; }
+.me-logout { display: flex; justify-content: center; margin-top: var(--sp-5); }
+.me-logout .pill { flex: none; padding: 0 var(--sp-6); }
 .meter.thin { height: 4px; background: var(--tile); }
 .me-appearance .segmented { flex: 0 1 300px; }
 .me-language .segmented { flex-basis: 380px; } /* 四个语言名比“浅色/深色”长 */

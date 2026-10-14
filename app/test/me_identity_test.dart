@@ -56,19 +56,21 @@ Future<void> _pump(WidgetTester tester, Widget home, _Api api) async {
   await tester.pumpAndSettle();
 }
 
-Finder _identity(String label) => find.byWidgetPredicate((w) => w is Text && w.semanticsLabel == label);
+Finder _identity(String label) => find.bySemanticsLabel(label);
 
 void main() {
-  testWidgets('页头：用户名 · 域名', (tester) async {
+  testWidgets('页头：用户名大字 + 域名小字', (tester) async {
     await _pump(tester, const MeScreen(), _Api());
     expect(_identity('已登录 keliang，服务器 ai.example.com'), findsOneWidget);
-    expect(find.textContaining('keliang', findRichText: true), findsOneWidget);
+    expect(find.text('keliang'), findsOneWidget);
+    expect(find.text('ai.example.com'), findsOneWidget);
   });
 
   testWidgets('老服务器没有 /api/auth/me：只显示域名', (tester) async {
     await _pump(tester, const MeScreen(), _Api(me: false));
     expect(_identity('服务器 ai.example.com'), findsOneWidget);
-    expect(find.textContaining('keliang', findRichText: true), findsNothing);
+    expect(find.text('keliang'), findsNothing);
+    expect(find.text('我的'), findsOneWidget);
   });
 
   testWidgets('本月零调用：说明卡，不画每日图', (tester) async {

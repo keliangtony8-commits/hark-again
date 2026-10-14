@@ -1,7 +1,7 @@
 // App 截图（v2.78）：真字体（文泉驿正黑 = 中文 + 拉丁，MaterialIcons 来自 Flutter SDK）把整个 App 外壳画成 PNG，
 // 对照 Hark 截图自查。默认跳过；要出图：
 //   SHOTS_DIR=/tmp/shots/app CJK_FONT=/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc flutter test test/shots/app_shots_test.dart
-// 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light（手机 412×915 逻辑像素，2.625 倍）。
+// 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-dark / me-preferences-dark（手机 412×915 逻辑像素，2.625 倍）。
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -65,6 +65,9 @@ class _Api implements Api {
         ],
       ]};
     }
+    if (path == '/api/auth/me') return {'username': 'keliang'};
+    if (path == '/api/usage') return {'currency': 'CNY', 'priced': [], 'today': {}, 'month': {'tokens': 3100000, 'calls': 420}};
+    if (path == '/api/preferences') return {'reply_language': 'auto', 'reply_languages': [{'code': 'auto', 'label': '跟随我的语言'}, {'code': 'en', 'label': 'English'}]};
     if (path.startsWith('/api/conversations')) {
       return [
         {'id': 'c1', 'title': '早间简报', 'updated_at': _wire(today8), 'created_at': _wire(today8)},
@@ -182,5 +185,23 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, 700));
     await _settle(tester);
     await _shot(tester, 'chat-jump-latest-light');
+  }, skip: _out == null);
+
+  // v2.81：我的页一屏 + 偏好设置
+  testWidgets('me page light', (tester) async {
+    final router = await _pump(tester, dark: false);
+    router.push('/me');
+    await _settle(tester);
+    await _shot(tester, 'me-light');
+  }, skip: _out == null);
+
+  testWidgets('me page dark + preferences', (tester) async {
+    final router = await _pump(tester, dark: true);
+    router.push('/me');
+    await _settle(tester);
+    await _shot(tester, 'me-dark');
+    router.push('/me/preferences');
+    await _settle(tester);
+    await _shot(tester, 'me-preferences-dark');
   }, skip: _out == null);
 }

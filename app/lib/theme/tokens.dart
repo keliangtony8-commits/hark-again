@@ -286,6 +286,7 @@ abstract final class Layout {
   static const cardFaceMax = 340.0; // 卡面最宽
   static const rowIcon = 22.0; // 列表行首的细线图标（不加色块底）
   static const jobLogLines = 6; // 后台任务卡里日志尾巴显示几行（完整的点“完整日志”）
+  static const rowValueMax = 180.0; // 行尾当前值最宽多少（RowTile.value），再长就省略
   static const rowMin = 64.0, rowMinTwoLine = 72.0; // 列表行高：单行 / 带副标题
   static const topBarTop = Sp.x2; // 顶栏离状态栏的距离
   static const shellTop = topBarTop + topBar + Sp.x3; // 一级页面内容要让出的顶部高度（不含状态栏）= 顶栏 + 12

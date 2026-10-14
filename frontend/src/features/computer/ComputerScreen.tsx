@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { computerStateLabel } from "../../lib/computer";
 import { PERSONAL_WORKSPACE, isPersonalWorkspace } from "../../lib/workspace";
-import { Page, PageHeader, PageIntro } from "../../ui/kit";
+import { IconLayout } from "../../ui/icons";
+import { Page, PageHeader, PageIntro, stagger } from "../../ui/kit";
+import { MeRows } from "../me/meRows";
 import ProjectFiles from "../projects/ProjectFiles";
 import BrowserSessionsSection from "./BrowserSessionsSection";
 import HostSection from "./HostSection";
@@ -31,6 +33,7 @@ export default function ComputerScreen() {
       <ProcessSection ctl={ctl} enter={4} />
       <StorageSection ws={ws} ctl={ctl} enter={5} onFiles={() => setFiles(true)} />
       <DiskJobsSection ctl={ctl} enter={6} />
+      {personal && <div className="enter me-group" style={stagger(7)}><MeRows rows={[{ to: "/me/pages", icon: IconLayout, title: "Pages" }]} /></div>}
       {personal && <BrowserSessionsSection enter={7} />}
       {personal && <HostSection enter={8} />}
       {files && <ProjectFiles projectId={ws} onClose={() => setFiles(false)} />}
