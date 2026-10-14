@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import host_mode, jobs, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
+from .. import host_mode, jobs, reply_language, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -158,6 +158,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     if brief:
         prompt.add(VOLATILE, brief)
     system = prompt.text()
+    history = reply_language.nudge(history, await reply_language.get(db))  # 固定回复语言：最后一条用户消息补一句（只改请求副本）
     builder = loop.MessageBuilder()
     journal = turn_journal.Journal(cid, task_id)  # 进程被杀时这一轮的进度还在（turn_journal.py）
     await journal.open()

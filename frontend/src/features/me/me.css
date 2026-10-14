@@ -14,6 +14,7 @@
 .me-usage .pills { margin-top: var(--sp-2); max-width: 200px; }
 .meter.thin { height: 4px; background: var(--tile); }
 .me-appearance .segmented { flex: 0 1 300px; }
+.me-language .segmented { flex-basis: 380px; } /* 四个语言名比“浅色/深色”长 */
 
 /* 头像色弹层：头像下方弹出的一小块玻璃 */
 .avatar-pop { position: absolute; z-index: 10; top: calc(100% - var(--sp-3)); left: 50%; translate: -50% 0; width: 280px; /* 5 个 40px 色块 + 4 个 12px 间距 + 两侧 16px */ padding: var(--sp-4);

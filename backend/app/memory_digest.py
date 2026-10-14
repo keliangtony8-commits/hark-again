@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import llm
+from . import llm, reply_language
 from .config import settings
 from .models import Memory, MemoryDigest
 from .wire_time import iso
@@ -68,7 +68,8 @@ async def regenerate(db: AsyncSession) -> dict:
             await db.delete(old)
             await db.commit()
         return _wire(None, mems)
-    text = await llm.complete([{"role": "system", "content": PROMPT}, {"role": "user", "content": _lines(mems)}],
+    prompt = PROMPT.replace("请用中文", "请用" + reply_language.name_or(await reply_language.get(db), "中文"))
+    text = await llm.complete([{"role": "system", "content": prompt}, {"role": "user", "content": _lines(mems)}],
                               model=settings.summary_model, kind="digest")
     if not text:
         raise RuntimeError("empty digest")

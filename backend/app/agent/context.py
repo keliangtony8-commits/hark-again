@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
+from .. import agent_mentions, reply_language, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -73,10 +73,13 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     if hint := skill_catalog.relevant_section(skills_store.enabled_skills(), query):
         p.add(VOLATILE, hint)  # 目录省略了技能时，按这句话点名相关的（规则在 skill_catalog）
     mems = await memory_store.relevant(db, query)
+    lang = reply_language.prompt_line(await reply_language.get(db))
     if mems:
         p.add(VOLATILE, "关于用户你已知道（# 后是引用，改/删时传给 update_memory / forget）：\n"
               + "\n".join(memory_store.context_line(m) for m in mems)
               + (("\n" + note) if (note := memory_store.overflow_note(await memory_store.count(db), len(mems))) else ""))
+    if lang:  # 固定回复语言放在最后（离用户这句话最近；放前面小模型会跟着用户的语言走——v2.67 真测）
+        p.add(VOLATILE, lang)
     return p
 
 

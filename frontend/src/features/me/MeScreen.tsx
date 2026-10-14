@@ -12,6 +12,7 @@ import { IconBack, IconBrain, IconChevron, IconClock, IconComputer, IconFeedback
 import { Section, Segmented, Toggle, stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
 import AvatarColorPop from "./AvatarColorPop";
+import ReplyLanguageRow from "./ReplyLanguageRow";
 import "./me.css";
 
 const GROUPS = [
@@ -126,6 +127,7 @@ export default function MeScreen() {
               <Segmented label="外观" value={appearance} options={APPEARANCES} onChange={setAppearance} /></div>
             <div className="row"><div className="row-body"><div className="row-title">减少透明度</div><div className="row-sub">玻璃换成实色，不模糊（更省电、更清楚）</div></div>
               <Toggle on={solid} onChange={setSolid} label="减少透明度" /></div>
+            <ReplyLanguageRow />
           </div>
         </Section>
         <Section enter={GROUPS.length + 3}>

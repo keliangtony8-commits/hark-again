@@ -23,7 +23,7 @@ from typing import Awaitable, Callable
 
 from sqlalchemy import select, update
 
-from . import llm
+from . import llm, reply_language
 from .blocks import blocks_to_text
 from .config import settings
 from .db import SessionLocal
@@ -98,12 +98,15 @@ def clean(raw: str | None) -> str | None:
     return s or None
 
 
-async def generate(messages: list[tuple[str, str]], timeout: float = TIMEOUT_S) -> str | None:
-    """Gemini generateSummary：没材料 → 不调模型；任何失败 → None（优雅退化）。"""
+async def generate(messages: list[tuple[str, str]], timeout: float = TIMEOUT_S, language: str = "") -> str | None:
+    """Gemini generateSummary：没材料 → 不调模型；任何失败 → None（优雅退化）。
+    language：reply_language.generated_line（固定回复语言时“用英文写。”；跟随 → 空）。"""
     picked = select_messages(messages)
     if not picked:
         return None
     prompt = PROMPT.replace("{conversation}", conversation_text(picked))
+    if language:
+        prompt = prompt.replace("\n\n标题：", f"\n\n{language}\n标题：")
     try:
         raw = await asyncio.wait_for(
             llm.complete([{"role": "user", "content": prompt}], model=settings.summary_model, kind="title", max_tokens=60),
@@ -133,8 +136,9 @@ async def maybe(db, cid: str) -> str | None:
     msgs, users = await _material(db, cid)
     if users == 0 or users > TITLE_TRIES or not any(r == "assistant" and t.strip() for r, t in msgs):
         return None
+    language = reply_language.generated_line(await reply_language.get(db))
     await db.commit()  # 读语句也要先结束事务，再去调模型（SQLite：别占着连接）
-    title = await generate(msgs)
+    title = await generate(msgs, language=language)
     if not title:
         return None
     # 期间用户可能改了名：只在仍是 first 时写（同一条 UPDATE 里判断）；不动 updated_at（列表排序不因起名而变）

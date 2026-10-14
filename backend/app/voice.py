@@ -37,12 +37,13 @@ def _step_headers() -> dict:
     return {"Authorization": f"Bearer {settings.step_api_key}"}
 
 
-async def transcribe(filename: str, data: bytes) -> str:
+async def transcribe(filename: str, data: bytes, language: str = "zh") -> str:
+    """language：识别语种（reply_language.asr_code；只有 StepFun 用得上）。"""
     if settings.voice_provider != "stepfun":
         return await llm.transcribe(filename, data)
     fmt, audio = await _for_stepfun(filename, data)
     body = {"audio": {"data": base64.b64encode(audio).decode(), "input": {
-        "transcription": {"model": settings.step_asr_model, "language": "zh", "enable_itn": True},
+        "transcription": {"model": settings.step_asr_model, "language": language or "zh", "enable_itn": True},
         "format": {"type": fmt}}}}
     text, parts, used = "", [], None
     async with httpx.AsyncClient(timeout=60) as c:

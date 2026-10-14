@@ -185,7 +185,7 @@ async def main():
         await db.commit()
     real = ct.generate
 
-    async def racing(m, timeout=ct.TIMEOUT_S):
+    async def racing(m, timeout=ct.TIMEOUT_S, **kw):
         async with SessionLocal() as db2:
             await db2.execute(Conversation.__table__.update().where(Conversation.id == cid5)
                               .values(title_source="user", title="用户起的"))
