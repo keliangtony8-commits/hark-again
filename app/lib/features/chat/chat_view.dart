@@ -1,4 +1,5 @@
 // 可复用的聊天区：消息列表 + 输入框。主聊天页和项目页都用它（projectId 区分）。
+// 点一条消息 = 这条的时间开关（_timesShown，§I）；长按一条消息 = 它的动作菜单（MessageView）。
 // 编辑最后一条用户消息：长按气泡 → “编辑” → 输入框进入编辑态（顶部“编辑消息”条，返回键/叉号取消），
 //   发送时走 ChatController.edit。编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。
 // 定位（搜索命中）：ChatState.focus 指向的消息一进列表就取走 → 先回到底部，再一屏一屏往上找，直到它被建出来
@@ -6,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:assistant/ui/brand_mark.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocks/block_actions.dart';
@@ -44,8 +46,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
   final _anchor = GlobalKey(); // 挂在要定位的那条消息上
   String? _target;
 
-  /// 较早回复里当前露出操作行的那条（点卡片切换，同时只露一条；最后一条本来就常驻，不进这里）。
-  String? _revealed;
+  /// §I（用户 17:45 定稿）：点哪条显示哪条的时间——每条各自开关，可同时开几条。会话内状态，不持久化；换对话清空。
+  final Set<String> _timesShown = {};
+  void _toggleTime(String id) {
+    HapticFeedback.selectionClick();
+    setState(() => _timesShown.contains(id) ? _timesShown.remove(id) : _timesShown.add(id));
+  }
+
   int _flash = 0;
   bool _seeking = false;
   late final SpeechController _speech = ref.read(speechProvider.notifier); // dispose 里不能再用 ref
@@ -121,6 +128,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final ctl = ref.read(chatProvider(widget.projectId).notifier);
     ref.listen(chatProvider(widget.projectId).select((s) => s.activeId), (_, _) {
       _speech.stop(); // 换对话 = 停读
+      if (_timesShown.isNotEmpty) setState(_timesShown.clear);
       // 换对话 = 回到最新一条：不然上一个对话往回翻的位置会带过来，新对话的卡片按钮压在输入胶囊下面
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scroll.hasClients && _scroll.offset != 0) _scroll.jumpTo(0);
@@ -194,10 +202,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
                             final m = chat.messages[idx];
                             final regen = i == 0 && !m.isUser && chat.canRegenerate; // 只有最后一条回复能重新生成
                             final target = m.id == _target;
+                            // 点这条（气泡 / 回复正文 / 卡片空白处）= 这条的时间开关；卡片里的按钮 / 链接是更内层的手势，照旧先赢
                             final row = FlashHighlight(
                               key: target ? _anchor : ValueKey(m.id),
                               play: target ? _flash : 0,
-                              child: MessageView(m,
+                              child: GestureDetector(
+                                onTap: m.pending ? null : () => _toggleTime(m.id),
+                                child: MessageView(m,
                                   key: ValueKey(m.id),
                                   onResend: ctl.resend,
                                   onDiscard: ctl.discard,
@@ -205,10 +216,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   onContinue: regen && m.end.continuable ? () => ctl.send(continueText) : null,
                                   onSave: m.isUser || m.pending ? null : () => saveReplyToProject(context, ref, messageId: m.id, projectId: widget.projectId),
                                   onRate: m.isUser || m.pending ? null : (kind, {note}) => ctl.rate(m.id, kind, note: note),
-                                  last: i == 0 && !m.isUser,
-                                  revealed: m.id == _revealed,
-                                  onReveal: i == 0 || m.isUser || m.pending ? null : () => setState(() => _revealed = _revealed == m.id ? null : m.id),
+                                  showTime: _timesShown.contains(m.id),
                                   onEdit: m.id == chat.editableId ? () => setState(() => _editing = EditDraft.of(m)) : null),
+                              ),
                             );
                             // 跨天处在消息上方插一行日期（今天 / 昨天 / 10月9日 星期五）
                             if (!startsNewDay(chat.messages, idx)) return row;

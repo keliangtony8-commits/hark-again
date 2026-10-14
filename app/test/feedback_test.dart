@@ -3,6 +3,7 @@
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/reply_rating.dart';
+import 'package:assistant/ui/sheets.dart';
 import 'package:assistant/features/me/feedback_screen.dart';
 import 'package:assistant/models/feedback.dart';
 import 'package:assistant/models/message.dart';
@@ -90,14 +91,18 @@ class _RatedState extends State<_Rated> {
   String? current;
   @override
   Widget build(BuildContext context) => Scaffold(
+        // §I：评价在长按回复的动作菜单里；这里用一颗按钮打开同一份菜单
         body: Center(
-          child: ReplyRating(
-            current: current,
-            onRate: (k, {note}) async {
-              widget.log.add((k, note));
-              if (widget.fail) throw ApiError('服务器出错了', 500);
-              setState(() => current = k);
-            },
+          child: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showActionSheet<void>(context,
+                  actions: ratingActions(context, (k, {note}) async {
+                    widget.log.add((k, note));
+                    if (widget.fail) throw ApiError('服务器出错了', 500);
+                    setState(() => current = k);
+                  }, current)),
+              child: const Text('菜单'),
+            ),
           ),
         ),
       );
@@ -136,20 +141,27 @@ void main() {
     expect([for (final (k, _) in feedbackReasons) k], ['wrong', 'incomplete', 'stuck', 'other']);
   });
 
-  testWidgets('thumbs up toggles, thumbs down asks a reason', (tester) async {
+  testWidgets('有用可取消，不好要原因（长按菜单里的两项）', (tester) async {
     final log = <(String?, String?)>[];
     await tester.pumpWidget(MaterialApp(theme: buildTheme(Brightness.light), home: _Rated(log: log)));
-    await tester.tap(find.byTooltip('有用'));
-    await tester.pumpAndSettle();
+    Future<void> pick(String label) async {
+      await tester.tap(find.text('菜单'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+
+    await pick('有用');
     expect(log.last, ('good', null));
-    expect(find.byIcon(Icons.thumb_up_alt_rounded), findsOneWidget);
     expect(find.text('谢谢，记下了'), findsOneWidget);
-    await tester.tap(find.byTooltip('取消“有用”'));
+    await tester.tap(find.text('菜单'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.thumb_up_alt_rounded), findsOneWidget); // 已评过：实心 + “取消”
+    await tester.tap(find.text('取消“有用”'));
     await tester.pumpAndSettle();
     expect(log.last, (null, null));
 
-    await tester.tap(find.byTooltip('不好'));
-    await tester.pumpAndSettle();
+    await pick('不好');
     expect(find.text('哪里不好？'), findsOneWidget);
     final submit = find.widgetWithText(FilledButton, '提交');
     expect(tester.widget<FilledButton>(submit).onPressed, isNull); // 没选原因
@@ -159,10 +171,8 @@ void main() {
     await tester.tap(submit);
     await tester.pumpAndSettle();
     expect(log.last, ('incomplete', '只做了一半'));
-    expect(find.byIcon(Icons.thumb_down_alt_rounded), findsOneWidget);
 
-    await tester.tap(find.byTooltip('取消评价')); // 已经 👎：再点 = 取消，不弹原因单
-    await tester.pumpAndSettle();
+    await pick('取消评价'); // 已经不好：再点 = 取消，不弹原因单
     expect(log.last, (null, null));
     expect(find.text('哪里不好？'), findsNothing);
   });
@@ -170,10 +180,11 @@ void main() {
   testWidgets('failure shows a toast', (tester) async {
     final log = <(String?, String?)>[];
     await tester.pumpWidget(MaterialApp(theme: buildTheme(Brightness.light), home: _Rated(log: log, fail: true)));
-    await tester.tap(find.byTooltip('有用'));
+    await tester.tap(find.text('菜单'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('有用'));
     await tester.pumpAndSettle();
     expect(find.text('服务器出错了'), findsOneWidget);
-    expect(find.byIcon(Icons.thumb_up_alt_outlined), findsOneWidget);
   });
 
   testWidgets('feedback screen groups, reports, details', (tester) async {

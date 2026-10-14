@@ -16,6 +16,16 @@ export function formatWhen(iso: string | null, now = new Date()): string {
   return `${t.getFullYear()}年${t.getMonth() + 1}月${t.getDate()}日 ${clock}`;
 }
 
+/** 聊天里点一下露出的消息时间（§I，同 App formatClock）：当天 17:07 / 10月13日 17:07 / 2025年10月13日 17:07（本地时区）。 */
+export function formatClock(iso: string | null | undefined, now = new Date()): string {
+  if (!iso) return "";
+  const t = new Date(iso);
+  const clock = `${two(t.getHours())}:${two(t.getMinutes())}`;
+  if (t.getFullYear() === now.getFullYear() && t.getMonth() === now.getMonth() && t.getDate() === now.getDate()) return clock;
+  if (t.getFullYear() === now.getFullYear()) return `${t.getMonth() + 1}月${t.getDate()}日 ${clock}`;
+  return `${t.getFullYear()}年${t.getMonth() + 1}月${t.getDate()}日 ${clock}`;
+}
+
 /** 不到 1 秒 / 12 秒 / 3 分 5 秒 / 1 小时 2 分。 */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return "不到 1 秒";

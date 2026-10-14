@@ -74,6 +74,16 @@ String formatWhen(DateTime? t, {DateTime? now}) {
   return '${l.year}年${l.month}月${l.day}日 $clock';
 }
 
+/// 聊天里点一下露出的消息时间（§I，= 网页 formatClock）：当天 17:07 / 10月13日 17:07 / 2025年10月13日 17:07（本地时区）。
+String formatClock(DateTime? t, {DateTime? now}) {
+  if (t == null) return '';
+  final l = t.toLocal(), n = (now ?? DateTime.now()).toLocal();
+  final clock = '${_two(l.hour)}:${_two(l.minute)}';
+  if (l.year == n.year && l.month == n.month && l.day == n.day) return clock;
+  if (l.year == n.year) return '${l.month}月${l.day}日 $clock';
+  return '${l.year}年${l.month}月${l.day}日 $clock';
+}
+
 /// 耗时：<1 秒 / 12 秒 / 3 分 5 秒 / 1 小时 2 分。
 String formatDuration(int ms) {
   if (ms < 1000) return '不到 1 秒';

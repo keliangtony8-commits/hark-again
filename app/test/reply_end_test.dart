@@ -61,7 +61,7 @@ Widget _host(Message m, {VoidCallback? onContinue, double width = 400}) => Provi
         theme: buildTheme(Brightness.light),
         home: Scaffold(
             body: SingleChildScrollView(
-                child: SizedBox(width: width, child: MessageView(m, last: true, onRegenerate: () {}, onSave: () {}, onContinue: onContinue)))),
+                child: SizedBox(width: width, child: MessageView(m, onRegenerate: () {}, onSave: () {}, onContinue: onContinue)))),
       ),
     );
 

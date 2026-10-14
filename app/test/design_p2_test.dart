@@ -131,9 +131,9 @@ void main() {
     expect(reply.left, lessThan(Sp.x4 + 1)); // 靠左
     expect(reply.width, lessThanOrEqualTo((400 - Sp.x4 * 2) * Layout.bubbleMax + 0.5)); // 不铺满：留出一侧
 
-    // 列表让出浮动输入胶囊：最后一条回复（和它的操作行）都在胶囊上方
+    // 列表让出浮动输入胶囊：最后一条回复整张卡都在胶囊上方
     final composerTop = tester.getTopLeft(find.byType(Composer)).dy;
-    expect(tester.getBottomLeft(find.byTooltip('重新生成')).dy, lessThanOrEqualTo(composerTop + Sp.x3));
+    expect(reply.bottom, lessThanOrEqualTo(composerTop + Sp.x3));
   });
 
   testWidgets('一级页面输入胶囊：聚焦 → 磨砂 + 收起钮 + 建议；点建议 = 新对话发出并切到聊天', (tester) async {

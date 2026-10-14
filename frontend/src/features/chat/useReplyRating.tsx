@@ -3,12 +3,12 @@ import { createPortal } from "react-dom";
 import { http } from "../../lib/api";
 import { FEEDBACK_GOOD, FEEDBACK_REASONS, feedbackPath, feedbackToast, isBadFeedback } from "../../lib/feedback";
 import { IconThumbDown, IconThumbUp } from "../../ui/icons";
-import { Sheet } from "../../ui/kit";
+import { type MenuItem, Sheet } from "../../ui/kit";
 
-/** 回复操作条末尾的 👍 / 👎（v2.64，= App features/chat/reply_rating.dart）——网页唯一入口。
- *  👍 点一下记“有用”、再点取消；👎 弹原因单（必选一个原因 + 可选一句补充），已经 👎 再点 = 取消。
- *  先在本机换上（实心），服务器没收下换回原样、键旁一行原因；成功键旁一行提示。报告里存什么只在后端 app/feedback.py。 */
-export default function ReplyRating({ messageId, initial }: { messageId: string; initial?: string | null }) {
+/** 回复评价（v2.64，= App features/chat/reply_rating.dart）——网页唯一入口；§I 起是“⋯”菜单里的两项（items），不再是两颗图标。
+ *  有用：点一下记下、已记过就是“取消“有用””；不好：弹原因单（必选一个原因 + 可选一句补充），已经不好再点 = 取消。
+ *  先在本机换上，服务器没收下换回原样；结果（note）由 MessageView 画在回复下的状态行。报告里存什么只在后端 app/feedback.py。 */
+export function useReplyRating(messageId: string, initial?: string | null) {
   const [kind, setKind] = useState<string | null>(initial ?? null);
   const [note, setNote] = useState<{ text: string; err?: boolean } | null>(null);
   const [asking, setAsking] = useState(false);
@@ -29,16 +29,15 @@ export default function ReplyRating({ messageId, initial }: { messageId: string;
 
   const up = kind === FEEDBACK_GOOD;
   const down = isBadFeedback(kind);
-  return (
-    <>
-      <button className={`icon-btn sm rate-btn${up ? " is-on" : ""}`} aria-pressed={up} aria-label={up ? "取消“有用”" : "有用"} title={up ? "取消“有用”" : "有用"}
-        onClick={() => void send(up ? null : FEEDBACK_GOOD)}><span key={up ? "on" : "off"} className="icon-pop"><IconThumbUp /></span></button>
-      <button className={`icon-btn sm rate-btn${down ? " is-on" : ""}`} aria-pressed={down} aria-label={down ? "取消评价" : "不好"} title={down ? "取消评价" : "不好"}
-        onClick={() => (down ? void send(null) : setAsking(true))}><span key={down ? "on" : "off"} className="icon-pop"><IconThumbDown /></span></button>
-      {note && <span key={note.text} className={`msg-saved fade-in${note.err ? " is-err" : ""}`} role="status">{note.text}</span>}
-      {asking && createPortal(<ReasonSheet onPick={(k, t) => void send(k, t)} onClose={() => setAsking(false)} />, document.body)}
-    </>
-  );
+  const items: MenuItem[] = [
+    { label: up ? "取消“有用”" : "有用", icon: <IconThumbUp />, onSelect: () => void send(up ? null : FEEDBACK_GOOD) },
+    { label: down ? "取消评价" : "不好", icon: <IconThumbDown />, onSelect: () => (down ? void send(null) : setAsking(true)) },
+  ];
+  return {
+    items,
+    note: note ? <span key={note.text} className={`msg-saved fade-in${note.err ? " is-err" : ""}`} role="status">{note.text}</span> : null,
+    sheet: asking ? createPortal(<ReasonSheet onPick={(k, t) => void send(k, t)} onClose={() => setAsking(false)} />, document.body) : null,
+  };
 }
 
 function ReasonSheet({ onPick, onClose }: { onPick: (kind: string, note: string) => void; onClose: () => void }) {

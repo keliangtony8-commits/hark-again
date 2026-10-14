@@ -1,6 +1,5 @@
-// 回复下的 👍 / 👎（v2.64，对标 Hark / ChatGPT 的回复评价）：操作行末尾两颗安静的小图标。
-// 👍 点一下记“有用”、再点取消；👎 弹原因单（答错了 / 没做完 / 太慢或卡住了 / 别的问题 + 可选一句补充），
-// 已经是 👎 时再点 = 取消。评过的那颗画实心（PopSwitcher 原地换），另一颗照常可点、点了就换成它。
+// 回复评价（v2.64；§I 起在长按回复的动作菜单里）：“有用”点一下记下、已记过就是“取消“有用””；
+// “不好”弹原因单（答错了 / 没做完 / 太慢或卡住了 / 别的问题 + 可选一句补充），已经是不好时 = 取消。
 // 本机先换、服务器没收下换回原样（ChatController.rate）。报告里存什么只在后端 app/feedback.py。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,49 +13,30 @@ import '../../ui/sheets.dart';
 
 typedef RateReply = Future<void> Function(String? kind, {String? note});
 
-class ReplyRating extends StatelessWidget {
-  const ReplyRating({super.key, required this.current, required this.onRate});
-  final String? current;
-  final RateReply onRate;
+/// 长按回复的动作菜单里的两项（§I：原来是操作行末尾两颗图标）。已评过的那项写成“取消…”。
+List<SheetAction<void>> ratingActions(BuildContext context, RateReply onRate, String? current) {
+  final up = current == feedbackGood, down = isBadFeedback(current);
+  return [
+    SheetAction(up ? Icons.thumb_up_alt_rounded : Icons.thumb_up_alt_outlined, up ? '取消“有用”' : '有用',
+        onTap: () => _send(context, onRate, up ? null : feedbackGood)),
+    SheetAction(down ? Icons.thumb_down_alt_rounded : Icons.thumb_down_alt_outlined, down ? '取消评价' : '不好',
+        onTap: () => down ? _send(context, onRate, null) : _down(context, onRate)),
+  ];
+}
 
-  Future<void> _send(BuildContext context, String? kind, {String? note}) async {
-    HapticFeedback.selectionClick();
-    try {
-      await onRate(kind, note: note);
-      if (context.mounted) showToast(context, feedbackToast(kind));
-    } on ApiError catch (e) {
-      if (context.mounted) showToast(context, e.isNetwork ? '没连上服务器，评价没记下' : e.message);
-    }
+Future<void> _send(BuildContext context, RateReply onRate, String? kind, {String? note}) async {
+  HapticFeedback.selectionClick();
+  try {
+    await onRate(kind, note: note);
+    if (context.mounted) showToast(context, feedbackToast(kind));
+  } on ApiError catch (e) {
+    if (context.mounted) showToast(context, e.isNetwork ? '没连上服务器，评价没记下' : e.message);
   }
+}
 
-  Future<void> _down(BuildContext context) async {
-    if (isBadFeedback(current)) return _send(context, null);
-    final picked = await showAppSheet<(String, String)>(context, builder: (_) => const _ReasonSheet());
-    if (picked != null && context.mounted) await _send(context, picked.$1, note: picked.$2);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final up = current == feedbackGood;
-    final down = isBadFeedback(current);
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      QuietAction(
-        tooltip: up ? '取消“有用”' : '有用',
-        onPressed: () => _send(context, up ? null : feedbackGood),
-        icon: up
-            ? Icon(Icons.thumb_up_alt_rounded, key: const ValueKey('up-on'), color: p.text2)
-            : const Icon(Icons.thumb_up_alt_outlined, key: ValueKey('up')),
-      ),
-      QuietAction(
-        tooltip: down ? '取消评价' : '不好',
-        onPressed: () => _down(context),
-        icon: down
-            ? Icon(Icons.thumb_down_alt_rounded, key: const ValueKey('down-on'), color: p.text2)
-            : const Icon(Icons.thumb_down_alt_outlined, key: ValueKey('down')),
-      ),
-    ]);
-  }
+Future<void> _down(BuildContext context, RateReply onRate) async {
+  final picked = await showAppSheet<(String, String)>(context, builder: (_) => const _ReasonSheet());
+  if (picked != null && context.mounted) await _send(context, onRate, picked.$1, note: picked.$2);
 }
 
 /// 👎 的原因单：先选一个原因（必选），补充一句可不填。返回 (原因, 补充)。

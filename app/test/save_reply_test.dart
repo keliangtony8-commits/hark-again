@@ -55,13 +55,20 @@ Future<void> _pump(WidgetTester tester, _Api api, {String projectId = ''}) async
         body: Consumer(
           builder: (context, ref, _) => MessageView(
             const Message(id: 'm1', role: 'assistant', blocks: [TextBlock('# 复习计划\n先看线代')]),
-            last: true,
             onSave: () => saveReplyToProject(context, ref, messageId: 'm1', projectId: projectId),
           ),
         ),
       ),
     ),
   ));
+  await _settle(tester);
+}
+
+/// §I：存成文件在长按回复的动作菜单里。
+Future<void> _saveFromMenu(WidgetTester tester) async {
+  await tester.longPress(find.textContaining('先看线代'));
+  await _settle(tester);
+  await tester.tap(find.text(saveReplyLabel));
   await _settle(tester);
 }
 
@@ -76,42 +83,26 @@ void main() {
     expect(savedReplyText('考研', '复习计划.md'), '已存进「考研」· 复习计划.md');
   });
 
-  testWidgets('没给 onSave 就没有这颗键', (tester) async {
+  testWidgets('没给 onSave 就没有这一项（长按菜单）', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ProviderScope(
       child: MaterialApp(
         theme: buildTheme(Brightness.light),
-        home: const Scaffold(body: MessageView(Message(id: 'm1', role: 'assistant', blocks: [TextBlock('好')]), last: true)),
+        home: const Scaffold(body: MessageView(Message(id: 'm1', role: 'assistant', blocks: [TextBlock('好')]))),
       ),
     ));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.byTooltip('复制'), findsOneWidget);
-    expect(find.byTooltip(saveReplyLabel), findsNothing);
-  });
-
-  testWidgets('操作条顺序和网页一致：复制 · 重新生成 · 存成文件（v1.16）', (tester) async {
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(ProviderScope(
-      child: MaterialApp(
-        theme: buildTheme(Brightness.light),
-        home: Scaffold(
-          body: MessageView(const Message(id: 'm1', role: 'assistant', blocks: [TextBlock('好')]),
-              last: true, onRegenerate: () {}, onSave: () {}),
-        ),
-      ),
-    ));
-    await tester.pump(const Duration(seconds: 1));
-    double x(String tip) => tester.getCenter(find.byTooltip(tip)).dx;
-    expect(x('复制') < x('重新生成'), isTrue);
-    expect(x('重新生成') < x(saveReplyLabel), isTrue);
+    await tester.longPress(find.text('好'));
+    await _settle(tester);
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text(saveReplyLabel), findsNothing);
   });
 
   testWidgets('项目对话：一点就存进本项目，不弹选择', (tester) async {
     final api = _Api();
     await _pump(tester, api, projectId: 'p1');
-    await tester.tap(find.byTooltip(saveReplyLabel));
+    await _saveFromMenu(tester);
     await _settle(tester);
     expect(api.posts.single.$1, '/api/messages/m1/save-to-project');
     expect(api.posts.single.$2, {'project_id': 'p1'});
@@ -122,7 +113,7 @@ void main() {
   testWidgets('主聊天：我的文件在最前，项目最近的在前，选了才存', (tester) async {
     final api = _Api(projects: [_p('p1', '考研', '2026-10-01T00:00:00Z'), _p('p2', '旅行', '2026-10-11T00:00:00Z')]);
     await _pump(tester, api);
-    await tester.tap(find.byTooltip(saveReplyLabel));
+    await _saveFromMenu(tester);
     await _settle(tester);
     expect(find.text('存到哪里'), findsOneWidget);
     expect(tester.getTopLeft(find.text('我的文件')).dy, lessThan(tester.getTopLeft(find.text('旅行')).dy));
@@ -137,7 +128,7 @@ void main() {
   testWidgets('主聊天：还没有项目 → 不用选，直接存进我的文件', (tester) async {
     final api = _Api();
     await _pump(tester, api);
-    await tester.tap(find.byTooltip(saveReplyLabel));
+    await _saveFromMenu(tester);
     await _settle(tester);
     expect(find.text('存到哪里'), findsNothing);
     expect(api.posts.single.$2, {'project_id': 'me'});
@@ -147,7 +138,7 @@ void main() {
   testWidgets('主聊天：选我的文件', (tester) async {
     final api = _Api(projects: [_p('p1', '考研', null)]);
     await _pump(tester, api);
-    await tester.tap(find.byTooltip(saveReplyLabel));
+    await _saveFromMenu(tester);
     await _settle(tester);
     await tester.tap(find.text('我的文件'));
     await _settle(tester);
@@ -157,7 +148,7 @@ void main() {
   testWidgets('服务器拒绝 → 提示原因', (tester) async {
     final api = _Api();
     await _pump(tester, api, projectId: 'bad');
-    await tester.tap(find.byTooltip(saveReplyLabel));
+    await _saveFromMenu(tester);
     await _settle(tester);
     expect(find.text('项目不存在'), findsOneWidget);
   });

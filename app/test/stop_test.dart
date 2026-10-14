@@ -164,6 +164,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.bySemanticsLabel('停止生成'), findsNothing);
     expect(find.text('已停止'), findsOneWidget);
-    expect(find.byTooltip('重新生成'), findsOneWidget);
+    await tester.longPress(find.text('床前'));
+    await tester.pumpAndSettle();
+    expect(find.text('重新生成'), findsOneWidget);
   });
 }

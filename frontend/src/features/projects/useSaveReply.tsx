@@ -5,14 +5,14 @@ import { http } from "../../lib/api";
 import { formatWhen } from "../../lib/format";
 import { SAVE_REPLY_LABEL, saveTargets, savedReplyText, type SavedReply } from "../../lib/saveReply";
 import type { Project } from "../../lib/types";
-import { IconFolder, IconSaveTo } from "../../ui/icons";
+import { IconFolder } from "../../ui/icons";
 import { Sheet, Skeleton, stagger } from "../../ui/kit";
 import { PERSONAL_WORKSPACE, isPersonalWorkspace, workspaceFilesTitle } from "../../lib/workspace";
 
-/** 回复操作条上的“存成文件”（v1.15；v1.21 我的文件；与 App saveReplyToProject 同款）——网页唯一入口。
+/** 回复动作菜单里的“存成文件”（v1.15；§I 起从操作条挪进“⋯”菜单；与 App saveReplyToProject 同款）——网页唯一入口。
  *  项目对话 → 一点就存进本项目；主聊天 → 弹层里选“我的文件”或项目（我的文件最前，项目最近活跃在前）。
- *  存好 → 键旁边一行“已存进「…」· 文件名”（项目可点去项目页）；失败 → 同一位置一行原因。 */
-export default function SaveReplyButton({ messageId, projectId }: { messageId: string; projectId?: string }) {
+ *  结果（note）由 MessageView 画在回复下的状态行：“已存进「…」· 文件名”（项目可点去项目页）或一行原因。 */
+export function useSaveReply(messageId: string, projectId?: string) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<SavedReply | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -33,19 +33,18 @@ export default function SaveReplyButton({ messageId, projectId }: { messageId: s
     if (n === 0) save(PERSONAL_WORKSPACE); else setPicking(true);
   };
 
-  return (
-    <>
-      <button className="icon-btn sm" aria-label={SAVE_REPLY_LABEL} title={SAVE_REPLY_LABEL} disabled={busy}
-        onClick={() => (projectId ? save(projectId) : choose())}><IconSaveTo /></button>
-      {done && (isPersonalWorkspace(done.project_id)
-        ? <span key={done.path} className="msg-saved fade-in" role="status">{savedReplyText(done.project_name, done.name)}</span>
-        : <Link key={done.path} className="msg-saved fade-in" to={`/projects/${done.project_id}`} title="去项目里看看">
-            {savedReplyText(done.project_name, done.name)}
-          </Link>)}
-      {err && <span key={err} className="msg-saved is-err fade-in" role="status">{err}</span>}
-      {picking && createPortal(<ProjectPicker onPick={save} onClose={() => setPicking(false)} />, document.body)}
-    </>
-  );
+  const note = done
+    ? (isPersonalWorkspace(done.project_id)
+      ? <span key={done.path} className="msg-saved fade-in" role="status">{savedReplyText(done.project_name, done.name)}</span>
+      : <Link key={done.path} className="msg-saved fade-in" to={`/projects/${done.project_id}`} title="去项目里看看">
+          {savedReplyText(done.project_name, done.name)}
+        </Link>)
+    : err ? <span key={err} className="msg-saved is-err fade-in" role="status">{err}</span> : null;
+  return {
+    busy, note,
+    start: () => { if (!busy) void (projectId ? save(projectId) : choose()); },
+    picker: picking ? createPortal(<ProjectPicker onPick={save} onClose={() => setPicking(false)} />, document.body) : null,
+  };
 }
 
 function ProjectPicker({ onPick, onClose }: { onPick: (pid: string) => void; onClose: () => void }) {

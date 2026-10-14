@@ -1,8 +1,9 @@
-// 设计 v2：用户 = 右侧强调色胶囊；助手 = 左侧玻璃卡（假玻璃，不模糊），两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
-// 一条消息：用户 = 右侧气泡（没发出的带“待发送/发送失败”状态行；长按出菜单：复制，最后一条另有“编辑”）；助手 = 全宽块列表 + 工具进度 + 思考动画，
-// 生成完的回复下方一行操作（复制、朗读、存成文件、👍 / 👎；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
-// 没正常说完的最后一条（停止 / 被打断 / 步数用完 / 原地打转）操作行下再给一颗“继续”（v1.56，发出去就是一句“继续”）。
-// 操作行只常驻在最后一条（和没正常说完的回复）上；更早的回复点一下卡片才露出来（v1.17，ChatView 记住露出的是哪条，同时只露一条）。
+// 设计 v2：用户 = 右侧墨色气泡；助手 = 左侧回复卡，两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
+// §I（v2.84，对标 Hark）：气泡下面没有常驻按钮。
+// - 点哪条显示哪条的时间（ChatView._timesShown，每条各自开关），这里只按 showTime 在自己那侧画一行灰色时间。
+// - 长按 = 动作菜单：用户气泡（复制，最后一条另有“编辑”）；回复（复制、选择文字、朗读、重新生成、存成文件、有用 / 不好）。
+//   回复正文不原地可选（ProseScope），选字走菜单里的“选择文字”。
+// - 照常显示的状态行：待发送 / 发送失败、补充给这一轮、没正常说完（ReplyEnd.label）、“继续”、正在朗读（点了停止）。
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -31,17 +32,11 @@ import 'retry_line.dart';
 import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
-  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onContinue, this.onEdit, this.onSave, this.onRate, this.last = false, this.revealed = false, this.onReveal});
+  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onContinue, this.onEdit, this.onSave, this.onRate, this.showTime = false});
   final Message message;
 
-  /// 是不是对话里最后一条回复：只有它常驻“复制 / 重新生成”一排小图标（版面更干净）。
-  final bool last;
-
-  /// 更早的回复：点一下卡片露出 / 收起操作行（复制 · 朗读 · 存成文件）。用点按不用长按——
-  /// 回复是可选中文字，长按归系统选字；点正文经 TextTapScope 传上来，点卡片空白处由外层 GestureDetector 收。
-  /// onReveal 只给已完成、非最后一条的回复（ChatView 决定）；revealed = 现在是不是露着。
-  final bool revealed;
-  final VoidCallback? onReveal;
+  /// 这条的时间开着（ChatView._timesShown 唯一状态）：在气泡同侧画一行时间（formatClock）；没有时间（还没落库）就不画。
+  final bool showTime;
   final void Function(String id)? onResend, onDiscard;
   final VoidCallback? onRegenerate;
 
@@ -143,8 +138,60 @@ class MessageView extends StatelessWidget {
           },
         ),
       ),
+      RiseSwitcher(child: _time(context, end: true)),
     ]);
   }
+
+  /// 点一下露出的时间行（§I）：灰色小字，靠气泡那侧。
+  Widget? _time(BuildContext context, {required bool end}) {
+    final t = formatClock(message.createdAt);
+    if (!showTime || t.isEmpty) return null;
+    return Padding(
+      key: const ValueKey('time'),
+      padding: const EdgeInsets.fromLTRB(Sp.x2, Sp.x1, Sp.x2, 0),
+      child: Align(
+        alignment: end ? Alignment.centerRight : Alignment.centerLeft,
+        child: Text(t, style: context.text.labelSmall?.copyWith(color: context.palette.text3)),
+      ),
+    );
+  }
+
+  /// 长按回复：一份动作菜单（原来常驻的操作行全部并进这里，同序：复制 · 朗读 · 重新生成 · 存成文件 · 评价）。
+  void _replyMenu(BuildContext context) {
+    final text = copyText(message.blocks);
+    final spoken = speakableText(message.blocks);
+    final speech = ProviderScope.containerOf(context, listen: false);
+    final speaking = speech.read(speechProvider).phaseOf(message.id) != SpeechPhase.idle;
+    HapticFeedback.selectionClick();
+    showActionSheet<void>(context, actions: [
+      if (text.isNotEmpty)
+        SheetAction(Icons.content_copy_rounded, '复制', onTap: () {
+          Clipboard.setData(ClipboardData(text: text));
+          showToast(context, '已复制');
+        }),
+      if (text.isNotEmpty) SheetAction(Icons.text_fields_rounded, '选择文字', onTap: () => _selectText(context, text)),
+      if (spoken.isNotEmpty)
+        SheetAction(speaking ? Icons.stop_rounded : Icons.volume_up_rounded, speaking ? '停止朗读' : '朗读', onTap: () async {
+          final err = await speech.read(speechProvider.notifier).toggle(message.id, spoken);
+          if (err != null && context.mounted) showToast(context, err);
+        }),
+      if (onRegenerate != null) SheetAction(Icons.refresh_rounded, '重新生成', onTap: onRegenerate),
+      if (text.isNotEmpty && onSave != null) SheetAction(Icons.drive_folder_upload_outlined, saveReplyLabel, onTap: onSave),
+      if (onRate != null) ...ratingActions(context, onRate!, message.feedback),
+    ]);
+  }
+
+  /// “选择文字”：整条回复放进一张可选中的弹层（聊天里原地选字会抢点按和长按）。
+  void _selectText(BuildContext context, String text) => showAppScrollSheet<void>(
+        context,
+        builder: (ctx) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x3),
+            child: Text('选择文字', style: ctx.text.titleMedium),
+          ),
+          SheetList(padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x5), children: [AppMarkdown(text)]),
+        ]),
+      );
 
   void _userMenu(BuildContext context, String text) => showActionSheet<void>(context, actions: [
         if (text.isNotEmpty)
@@ -227,7 +274,8 @@ class MessageView extends StatelessWidget {
         child: RiseSwitcher(
             child: message.pending && message.retry != null ? RetryLine(key: const ValueKey('retry'), notice: message.retry!) : null),
       ),
-      _tappable(
+      _pressable(
+        context,
         AnimatedSize(
           duration: context.motion(Motion.base),
           curve: Motion.ease,
@@ -239,22 +287,10 @@ class MessageView extends StatelessWidget {
           ),
         ),
       ),
-      // 操作行长出 / 收起都走 RiseSwitcher（回复不再是最后一条时也是平滑收起，不是一跳）
-      RiseSwitcher(
-        child: !message.pending && (last || message.end.continuable || revealed)
-            ? _ReplyActions(
-                key: const ValueKey('actions'),
-                id: message.id,
-                text: copyText(message.blocks),
-                spoken: speakableText(message.blocks),
-                end: message.end,
-                onRegenerate: onRegenerate,
-                onSave: onSave,
-                feedback: message.feedback,
-                onRate: onRate,
-              )
-            : null,
-      ),
+      // 没正常说完：一行说明（原来挤在操作行尾）；正在朗读：一行“点按停止”（原来是操作行里的停止键）
+      RiseSwitcher(child: !message.pending && message.end.label != null ? _EndLine(key: const ValueKey('end'), end: message.end) : null),
+      if (!message.pending) _SpeakingLine(id: message.id),
+      RiseSwitcher(child: message.pending ? null : _time(context, end: false)),
       // 用户发了别的、或开始生成：“继续”平滑收起
       RiseSwitcher(
         child: !message.pending && onContinue != null ? _ContinueRow(key: const ValueKey('continue'), end: message.end, onTap: onContinue!) : null,
@@ -262,21 +298,13 @@ class MessageView extends StatelessWidget {
     ]);
   }
 
-  /// 较早的回复：整块（正文 + 卡片空白处）点一下切换操作行；卡片里自己的按钮/链接照旧优先。
-  Widget _tappable(Widget child) {
-    final reveal = onReveal;
-    if (reveal == null) return child;
-    void tap() {
-      HapticFeedback.selectionClick();
-      reveal();
-    }
-
-    return TextTapScope(
-      onTap: tap,
-      child: Semantics(
-        onTapHint: revealed ? '收起操作' : '显示复制等操作',
-        child: GestureDetector(onTap: tap, child: child),
-      ),
+  /// 回复卡：正文不原地可选（ProseScope）；生成完的回复长按出动作菜单。卡片里自己的按钮/链接照旧优先。
+  Widget _pressable(BuildContext context, Widget child) {
+    final scoped = ProseScope(isSelectable: false, child: child);
+    if (message.pending) return scoped;
+    return Semantics(
+      onLongPressHint: '更多操作',
+      child: GestureDetector(onLongPress: () => _replyMenu(context), child: scoped),
     );
   }
 }
@@ -324,62 +352,20 @@ class _OutboxStatus extends StatelessWidget {
   }
 }
 
-/// 回复下方的操作行：低调的小图标（kit QuietAction，不抢内容）。回复完成时逐个错峰浮现；
-/// 复制 → 对勾、朗读 → 停止都是原地 PopSwitcher；“重新生成”随可用状态淡入淡出。
-class _ReplyActions extends StatelessWidget {
-  const _ReplyActions({super.key, required this.id, required this.text, required this.spoken, this.end = ReplyEnd.done, this.onRegenerate, this.onSave, this.feedback, this.onRate});
-  final String id;
-  final String text;
-  final String spoken; // 只含正文，没有就不给朗读键
-  final ReplyEnd end; // 没正常说完：行尾标一句说明（ReplyEnd.label），太长就省略
-
-  final VoidCallback? onRegenerate;
-  final VoidCallback? onSave; // 存成文件：有可复制的内容才给
-  final String? feedback;
-  final RateReply? onRate; // 👍 / 👎：排在最后（评价是看完之后的事），和网页同序
+/// 没正常说完的说明行：图标 + ReplyEnd.label（太长就省略）。
+class _EndLine extends StatelessWidget {
+  const _EndLine({super.key, required this.end});
+  final ReplyEnd end;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final items = <Widget>[
-      if (text.isNotEmpty) CopyAction(text: text),
-      if (spoken.isNotEmpty) _SpeakButton(id: id, text: spoken),
-      AnimatedSwitcher(
-        duration: context.motion(Motion.fast),
-        child: onRegenerate == null
-            ? const SizedBox.shrink()
-            : QuietAction(
-                key: const ValueKey('regen'),
-                icon: const Icon(Icons.refresh_rounded),
-                tooltip: '重新生成',
-                onPressed: onRegenerate,
-              ),
-      ),
-      // 把回复带走（存成文件）排在“就地重来”之后，和网页同序：复制 · 朗读 · 重新生成 · 存成文件（v1.16）
-      if (text.isNotEmpty && onSave != null)
-        QuietAction(icon: const Icon(Icons.drive_folder_upload_outlined), tooltip: saveReplyLabel, onPressed: onSave),
-      if (onRate != null) ReplyRating(current: feedback, onRate: onRate!),
-    ];
-    final label = end.label;
-    // 和卡片里的正文左缘对齐：图标键自带 8px 内边距，再补一点。说明文字占剩下的宽，窄屏省略不溢出
     return Padding(
-      padding: const EdgeInsets.only(top: Sp.x1, left: Sp.x1),
-      child: Row(children: [
-        for (var i = 0; i < items.length; i++) FadeSlideIn(delay: Motion.stagger(i, from: 1), child: items[i]),
-        if (label != null)
-          Flexible(
-            child: FadeSlideIn(
-              delay: Motion.stagger(items.length, from: 1),
-              child: Padding(
-                padding: const EdgeInsets.only(left: Sp.x1),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(replyEndIcon(end), size: 14, color: end.warn ? p.warning : p.text3),
-                  const SizedBox(width: Sp.x1),
-                  Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall?.copyWith(color: p.text3))),
-                ]),
-              ),
-            ),
-          ),
+      padding: const EdgeInsets.fromLTRB(Sp.x2, Sp.x1, Sp.x2, 0),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(replyEndIcon(end), size: 14, color: end.warn ? p.warning : p.text3),
+        const SizedBox(width: Sp.x1),
+        Flexible(child: Text(end.label!, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall?.copyWith(color: p.text3))),
       ]),
     );
   }
@@ -424,29 +410,34 @@ class _ContinueRow extends StatelessWidget {
       );
 }
 
-/// 朗读键：喇叭 →（向服务器要语音时）闪烁的小点 → 停止方块；同一时间只有一条在读（core/speech.dart）。
-class _SpeakButton extends ConsumerWidget {
-  const _SpeakButton({required this.id, required this.text});
+/// 正在朗读这条（从长按菜单开始的）：一行“正在朗读 · 点按停止”，准备语音时是闪烁小点；同一时间只有一条在读（core/speech.dart）。
+class _SpeakingLine extends ConsumerWidget {
+  const _SpeakingLine({required this.id});
   final String id;
-  final String text;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final phase = ref.watch(speechProvider.select((s) => s.phaseOf(id)));
-    final icon = switch (phase) {
-      SpeechPhase.idle => const Icon(Icons.volume_up_rounded, key: ValueKey('idle')),
-      SpeechPhase.loading => SizedBox.square(
-          key: const ValueKey('loading'), dimension: QuietAction.iconSize, child: Center(child: PulseDot(color: p.text2))),
-      SpeechPhase.playing => Icon(Icons.stop_rounded, key: const ValueKey('playing'), color: p.ink),
-    };
-    return QuietAction(
-      onPressed: () async {
-        final err = await ref.read(speechProvider.notifier).toggle(id, text);
-        if (err != null && context.mounted) showToast(context, err);
-      },
-      tooltip: phase == SpeechPhase.idle ? '朗读' : '停止朗读',
-      icon: icon,
+    return RiseSwitcher(
+      child: phase == SpeechPhase.idle
+          ? null
+          : Pressable(
+              key: const ValueKey('speaking'),
+              onTap: () => ref.read(speechProvider.notifier).stop(),
+              semanticLabel: '停止朗读',
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: A11y.minTap),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Sp.x2),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    phase == SpeechPhase.loading ? PulseDot(color: p.text2) : Icon(Icons.stop_rounded, size: 14, color: p.text2),
+                    const SizedBox(width: Sp.x1),
+                    Text(phase == SpeechPhase.loading ? '准备朗读…' : '正在朗读 · 点按停止', style: context.text.bodySmall?.copyWith(color: p.text2)),
+                  ]),
+                ),
+              ),
+            ),
     );
   }
 }

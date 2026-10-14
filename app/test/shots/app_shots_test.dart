@@ -2,7 +2,7 @@
 // 拉丁/数字 = 打包的 Inter（assets/fonts，三种字重），中文 = Noto Sans CJK（真机上是 MiSans/苹方，同为黑体），
 // MaterialIcons 来自 Flutter SDK。默认跳过；要出图（先按 app/README.md「截图」下 NotoSansSC.ttf）：
 //   SHOTS_DIR=/tmp/shots/app flutter test test/shots/app_shots_test.dart
-// 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-dark / me-preferences-dark（手机 412×915 逻辑像素，2.625 倍）。
+// 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-dark / me-preferences-dark / chat-times-dark / chat-menu-dark（手机 412×915 逻辑像素，2.625 倍）。
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -194,6 +194,23 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, 700));
     await _settle(tester);
     await _shot(tester, 'chat-jump-latest-light');
+  }, skip: _out == null);
+
+  // v2.84 §I：点哪条出哪条的时间（这里点一条回复 + 一条提问）；长按回复 = 动作菜单
+  testWidgets('chat times + reply menu', (tester) async {
+    final router = await _pump(tester, dark: true);
+    router.go('/chat');
+    await _settle(tester);
+    await tester.runAsync(() => _container.read(chatProvider('').notifier).open('c2'));
+    await _settle(tester);
+    final reply = find.textContaining('续航 30 小时', findRichText: true).hitTestable().first;
+    await tester.tap(reply, warnIfMissed: false);
+    await tester.tap(find.textContaining('第 4 个问题').hitTestable().first, warnIfMissed: false);
+    await _settle(tester);
+    await _shot(tester, 'chat-times-dark');
+    await tester.longPress(reply, warnIfMissed: false);
+    await _settle(tester);
+    await _shot(tester, 'chat-menu-dark');
   }, skip: _out == null);
 
   // v2.81：我的页一屏 + 偏好设置

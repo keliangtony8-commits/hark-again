@@ -108,12 +108,7 @@
 .thought-full { margin: 0 0 var(--sp-2); padding: var(--sp-3) var(--sp-4); background: var(--tile); border-radius: var(--r-inner); font-size: var(--fs-sm);
   line-height: var(--lh-prose); color: var(--text-2); white-space: pre-wrap; animation: rise var(--dur) var(--ease) both; }
 .icon-pop { display: inline-flex; animation: icon-pop var(--dur) var(--spring) both; }
-/* 回复完成：操作键逐个错峰浮现 */
-.msg.assistant .msg-actions > * { animation: rise var(--dur) var(--ease) both; }
-.msg.assistant .msg-actions > :nth-child(2) { animation-delay: var(--stagger); }
-.msg.assistant .msg-actions > :nth-child(3) { animation-delay: calc(2 * var(--stagger)); }
-.msg.assistant .msg-actions > :nth-child(4) { animation-delay: calc(3 * var(--stagger)); }
-@media (prefers-reduced-motion: reduce) { .icon-pop, .thought-sum, .thought-full, .msg.assistant .msg-actions > * { animation: none; } .thought-toggle svg:last-child { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .icon-pop, .thought-sum, .thought-full, .msg-time { animation: none; } .thought-toggle svg:last-child { transition: none; } }
 .thought-tail { height: calc(2 * 1.6 * var(--fs-sm)); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
   mask-image: linear-gradient(to bottom, transparent 0, #000 25%); -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 25%); }
 .thought-tail p { margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-3); }
@@ -186,15 +181,19 @@ button.skill-chip { border: 0; font: inherit; font-size: var(--fs-xs); cursor: p
 .composer-hint.slash-note { color: var(--text-2); animation: rise var(--dur) var(--ease) both; } /* 斜杠命令结果的一句提示（4 秒后收起） */
 @media (prefers-reduced-motion: reduce) { .composer-hint.slash-note { animation: none; } }
 
-/* 回复操作条 */
-/* 回复操作条：最后一条常驻，更早的悬停/聚焦才出现（触屏常驻） */
-.msg-actions { display: flex; gap: var(--sp-1); margin-top: calc(-1 * var(--sp-2)); color: var(--text-3); transition: opacity var(--dur) var(--ease); }
+/* §I（v2.84，= App 长按菜单）：没有常驻操作条。悬停 / 键盘聚焦才出现一颗“⋯”（触屏常驻），打开这条消息的动作菜单；
+   回复的“⋯”悬在卡片下沿外，不占位。点哪条显示哪条的时间（气泡同侧一行灰色小字）。 */
 .msg.assistant { position: relative; }
-/* 更早的回复：操作条悬浮在卡片下沿外（不占位，免得每条之间都空出一行） */
-.msg.assistant:not(.last) .msg-actions { opacity: 0; position: absolute; left: 0; top: 100%; margin-top: 2px; z-index: 1; }
-.msg.assistant:not(.last):hover .msg-actions, .msg.assistant .msg-actions:focus-within { opacity: 1; }
-@media (hover: none) { .msg.assistant:not(.last) .msg-actions { opacity: 1; } }
-.msg-actions .icon-btn { color: inherit; }
+.msg-more { flex: none; color: var(--text-3); opacity: 0; transition: opacity var(--dur) var(--ease); }
+.msg-more .icon-btn { color: inherit; }
+.msg.assistant > .msg-more { position: absolute; left: 0; top: 100%; margin-top: 2px; z-index: 1; }
+.msg:hover .msg-more, .msg-more:focus-within, .msg-more:has(.menu.open) { opacity: 1; }
+@media (hover: none) { .msg-more { opacity: 1; } }
+.msg-lines { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); min-width: 0; margin-top: calc(-1 * var(--sp-2)); }
+.msg-time { padding: 0 var(--sp-2); margin-top: calc(-1 * var(--sp-2)); font-size: var(--fs-xs); color: var(--text-3); animation: rise var(--dur) var(--ease) both; }
+.msg.user .msg-time { align-self: flex-end; }
+.msg-speaking { align-self: flex-start; min-height: 32px; border: 0; background: none; cursor: pointer; }
+.msg-speaking:hover { color: var(--text-2); }
 
 /* 发件箱：待发送 = 气泡变淡；发送失败 = 气泡下一行红字可点重发 */
 .msg.user .bubble, .msg.user .msg-files { transition: opacity var(--dur) var(--ease); }
@@ -216,14 +215,10 @@ button.skill-chip { border: 0; font: inherit; font-size: var(--fs-xs); cursor: p
 .link-dot { width: 8px; height: 8px; border-radius: var(--r-full); background: var(--warning); animation: blink 1.2s infinite; flex: none; }
 .link-text { flex: 1; min-width: 0; }
 
-/* 重新生成：只挂在最后一条回复上，出现时轻轻浮起；错误条里的“重试”和文字同排 */
-.msg-regen { animation: rise var(--dur) var(--ease); }
+/* 菜单动作的结果（已复制 / 已存进… / 评价）：回复下的状态行里一句 */
 .msg-saved { display: inline-flex; align-items: center; min-width: 0; padding: 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .msg-saved.is-err { color: var(--danger); }
-/* v2.64 👍 / 👎：评过的那颗实心、墨色（不占强调色） */
-.rate-btn.is-on { color: var(--ink); }
-.rate-btn.is-on svg path { fill: currentColor; }
 .rate-reasons { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
 .rate-reasons .chip { height: 32px; padding: 0 var(--sp-3); font-size: var(--fs-sm); border: 0; cursor: pointer; }
 .msg-stopped { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-3); }
@@ -239,9 +234,6 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 /* 用户消息：气泡左边一排（悬停才出现，不占竖向空间） */
 .bubble-row { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-1); width: 100%; }
 .bubble-row .bubble { min-width: 0; }
-.user-actions { justify-content: flex-end; margin-top: 0; flex: none; opacity: 0; transition: opacity var(--dur) var(--ease); }
-.msg.user:hover .user-actions, .user-actions:focus-within { opacity: 1; }
-@media (hover: none) { .user-actions { opacity: 1; } }
 .msg.user.editing .bubble, .msg.user.editing .msg-files { opacity: .45; }
 .edit-bar { display: flex; align-items: center; gap: var(--sp-2); padding: 0 0 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); animation: rise var(--dur) var(--ease); }
 .edit-bar > svg { color: var(--text-2); flex: none; }

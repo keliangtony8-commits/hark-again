@@ -39,9 +39,11 @@ Future<void> _pump(WidgetTester t) async {
   await t.pump(const Duration(milliseconds: 600));
 }
 
-Widget _host(Message m) => MaterialApp(
-      theme: buildTheme(Brightness.light),
-      home: Scaffold(body: SizedBox(width: 400, child: MessageView(m))),
+Widget _host(Message m) => ProviderScope(
+      child: MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: Scaffold(body: SizedBox(width: 400, child: MessageView(m))),
+      ),
     );
 
 void main() {

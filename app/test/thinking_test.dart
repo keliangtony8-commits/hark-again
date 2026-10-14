@@ -33,9 +33,11 @@ Future<void> _settle() async {
   }
 }
 
-Widget _host(Message m) => MaterialApp(
-      theme: buildTheme(Brightness.light),
-      home: Scaffold(body: SizedBox(width: 400, child: MessageView(m))),
+Widget _host(Message m) => ProviderScope(
+      child: MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: Scaffold(body: SizedBox(width: 400, child: MessageView(m))),
+      ),
     );
 
 void main() {

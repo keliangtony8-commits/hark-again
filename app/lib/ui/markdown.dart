@@ -18,10 +18,9 @@ class AppMarkdown extends StatelessWidget {
     final base = context.text.bodyLarge!.copyWith(height: Fs.prose); // 要读的正文才用宽行高（v2.83 §G）
     return MarkdownBody(
       data: data,
-      selectable: selectable,
+      // 聊天回复里不原地可选（长按归动作菜单，选字走菜单里的“选择文字”），由外层 ProseScope 关掉
+      selectable: selectable && ProseScope.selectable(context),
       onTapLink: (_, href, _) => href != null ? openUrl(href) : null,
-      // 可选中文字会吃掉点按手势：外层（聊天回复卡）要知道“点了正文”，就挂一个 TextTapScope
-      onTapText: selectable ? TextTapScope.of(context) : null,
       styleSheet: MarkdownStyleSheet(
         p: base,
         a: base.copyWith(color: p.accent, decoration: TextDecoration.underline, decorationColor: p.accent.withValues(alpha: 0.4)),
@@ -52,15 +51,14 @@ class AppMarkdown extends StatelessWidget {
   }
 }
 
-/// 给子树里的可选中正文（AppMarkdown）一个“点了文字”的回调。
-/// 可选中文字自己认领点按（放光标/清选区），外层 GestureDetector 收不到；挂这个就能收到，长按选字不受影响。
-/// 现在只有聊天里较早的回复用它：点一下回复卡露出操作行（features/chat/message_view.dart）。
-class TextTapScope extends InheritedWidget {
-  const TextTapScope({super.key, required this.onTap, required super.child});
-  final VoidCallback onTap;
+/// 子树里的 AppMarkdown 能不能原地选字（§I）：聊天回复卡挂 ProseScope(selectable: false)——
+/// 可选中文字会吃掉点按（点一下 = 全对话时间开关）和长按（= 动作菜单）。别处默认可选。
+class ProseScope extends InheritedWidget {
+  const ProseScope({super.key, required this.isSelectable, required super.child});
+  final bool isSelectable;
 
-  static VoidCallback? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<TextTapScope>()?.onTap;
+  static bool selectable(BuildContext context) => context.dependOnInheritedWidgetOfExactType<ProseScope>()?.isSelectable ?? true;
 
   @override
-  bool updateShouldNotify(TextTapScope old) => old.onTap != onTap;
+  bool updateShouldNotify(ProseScope old) => old.isSelectable != isSelectable;
 }

@@ -44,7 +44,8 @@ function LinkBar({ onRetry, streaming }: { onRetry: () => void; streaming: boole
   );
 }
 
-/** 编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
+/** 点一条消息 = 这条的时间开关（§I）；每条消息悬停一颗“⋯” = 它的动作菜单（MessageView）。
+ *  编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
  *  编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。 */
 export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, canSteer, focus, onFocused, accessory, onSend, onSlash, onReconnect, onResend, onDiscard, greeting, empty: emptyView, projectId }: Props) {
   const last = messages[messages.length - 1];
@@ -84,6 +85,19 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, focus, onFocused]);
 
+  // §I（用户 17:45 定稿，= App ChatView._timesShown）：点哪条显示哪条的时间，各自开关、可同时开几条；换对话清空。
+  // 选了文字、点在按钮 / 链接 / 输入框 / 菜单上不算（电脑上点一下常常是在选字或操作卡片）。
+  const [timesShown, setTimesShown] = useState<ReadonlySet<string>>(new Set());
+  const firstId = messages[0]?.id;
+  useEffect(() => setTimesShown(new Set()), [firstId]);
+  const toggleTime = (id: string) => (e: React.MouseEvent) => {
+    const t = e.target as HTMLElement;
+    if (!t.closest(".bubble, .ai-card, .ai-block, .msg-files")) return; // 点气泡 / 回复本身才算，不算两旁空白
+    if (t.closest("button, a, input, textarea, select, label, summary, [role=button], [role=menu], [contenteditable=true], .menu")) return;
+    if (window.getSelection()?.toString()) return;
+    setTimesShown((s) => { const n = new Set(s); if (!n.delete(id)) n.add(id); return n; });
+  };
+
   const pad = { ["--footer-h" as string]: `${footerH}px` } as CSSProperties;
   return (
     <>
@@ -93,9 +107,9 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
         ) : (
           <div className="thread-inner">
             {messages.map((m, i) => (
-              <div key={m.id} className="msg-slot">
+              <div key={m.id} className="msg-slot" onClick={m.pending ? undefined : toggleTime(m.id)}>
                 {startsNewDay(messages, i) && <div className="day-sep">{formatDay(m.created_at!)}</div>}
-                <MessageView message={m} last={m === last} onResend={onResend} onDiscard={onDiscard}
+                <MessageView message={m} showTime={timesShown.has(m.id)} onResend={onResend} onDiscard={onDiscard}
                   onRegenerate={m === last && m.role === "assistant" && canRegenerate ? onRegenerate : undefined}
                   onContinue={m === last && m.role === "assistant" && canRegenerate && continuable(m) ? () => onSend(CONTINUE_TEXT) : undefined}
                   onEdit={m.id === editableId ? startEdit : undefined} editing={m.id === editing?.id} projectId={projectId} />
