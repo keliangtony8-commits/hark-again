@@ -5,7 +5,7 @@
 
 - auto（默认）：跟随用户这句话的语言。不往系统提示加任何字（零 token，老用户的提示缓存不变）。
 - zh-Hans / zh-Hant / en：固定语言。系统提示最后（VOLATILE 段末尾，离用户这句话最近）加一句（prompt_line），并在这一轮最后一条用户消息末尾补“（用英文回复。）”（nudge，只改请求副本；只靠系统提示小模型会被用户的语言带跑，v2.67 真测），自动标题、记忆概括同样照办
-  （generated_line），语音识别用对应语种（asr_code）。
+  （generated_line），语音识别用对应语种（asr_code），云浏览器的网页语言也跟着换（browser_locale，v2.68）。
 - 改法：我的 → 偏好设置（PATCH /api/preferences），或对话里说“以后都用英文回答”→ 模型调 set_reply_language。
   只这一句要别的语言（“这段翻成英文”）不改设置。
 存在 app_settings 表 key="reply_language"（不用迁移）；不认识的值一律当 auto。
@@ -26,13 +26,14 @@ class Choice:
     label: str      # 设置里显示的名字（用这门语言自己的写法）
     name: str       # 写进给模型的那句话里
     asr: str        # 语音识别语种
+    web: str        # 云浏览器的语言（BCP 47：navigator.language + Accept-Language，browser/region.py 用）
 
 
 CHOICES: tuple[Choice, ...] = (
-    Choice(AUTO, "跟随我的语言", "", "zh"),
-    Choice("zh-Hans", "简体中文", "简体中文", "zh"),
-    Choice("zh-Hant", "繁體中文", "繁体中文（台湾/香港用字）", "zh"),
-    Choice("en", "English", "英文（English）", "en"),
+    Choice(AUTO, "跟随我的语言", "", "zh", "zh-CN"),
+    Choice("zh-Hans", "简体中文", "简体中文", "zh", "zh-CN"),
+    Choice("zh-Hant", "繁體中文", "繁体中文（台湾/香港用字）", "zh", "zh-TW"),
+    Choice("en", "English", "英文（English）", "en", "en-US"),
 )
 CODES = tuple(c.code for c in CHOICES)
 _BY_CODE = {c.code: c for c in CHOICES}
@@ -125,6 +126,11 @@ def name_or(code: str, default: str) -> str:
 
 def asr_code(code: str) -> str:
     return choice(code).asr
+
+
+def browser_locale(code: str) -> str:
+    """云浏览器开新会话时网页看到的语言（v2.68）：网站按它给中文 / 繁体 / 英文页面。auto 当简体（用户群默认）。"""
+    return choice(code).web
 
 
 def wire(code: str) -> dict:

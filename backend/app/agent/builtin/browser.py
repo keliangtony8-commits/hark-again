@@ -25,7 +25,7 @@ import uuid
 
 import asyncio
 
-from ... import browser_client, browser_files, browser_sessions, browser_shot, deliver, egress_note, file_edit, file_seen, system_alerts, task_wall, vault, web_guard
+from ... import browser_client, browser_files, browser_sessions, browser_shot, deliver, egress_note, file_edit, file_seen, reply_language, system_alerts, task_wall, vault, web_guard
 from ...storage import project_dir
 from ...browser_sessions import Tab
 from ...config import settings
@@ -312,7 +312,7 @@ async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolRes
     tab.names.clear()
     ctx.live(_card(tab, live=True))  # 打开要几秒到几十秒：先让用户看到画面卡
     try:
-        snap = await browser_client.snapshot_call(name, "POST", "/goto", {"url": url})
+        snap = await browser_client.snapshot_call(name, "POST", "/goto", await _goto_body(ctx, url))
     except browser_client.BrowserDown as e:
         return _down(tab, e)
     tab.opened(snap.get("login"))
@@ -322,6 +322,11 @@ async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolRes
     if switched:
         note += f"（从会话 {switched} 换到了这个；之后的点击、输入都作用于 {name}。）"
     return await _after(ctx, tab, f"会话：{name}。{note}\n" + text, card=True)
+
+
+async def _goto_body(ctx: ToolContext, url: str) -> dict:
+    """打开网页的请求：网页看到的语言跟“回复语言”、时区跟用户 TIMEZONE（v2.68，浏览器那边 region.py 校验，设置变了重开会话）。"""
+    return {"url": url, "locale": reply_language.browser_locale(await reply_language.get(ctx.db)), "timezone": settings.timezone}
 
 
 REF = {"type": "string", "pattern": tool_args.DIGITS, "description": "快照里元素的编号，只写数字（如 3）"}

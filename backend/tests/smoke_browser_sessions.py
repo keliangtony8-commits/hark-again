@@ -176,8 +176,18 @@ async def model_turns():
     blocks = evs[-1].blocks
     assert [b["type"] for b in blocks] == ["browser", "text"] and "live" not in blocks[0]
     assert calls[-1][:3] == ("taobao-com", "POST", "/goto")
+    # v2.68 地区：网页语言跟回复语言（auto → zh-CN）、时区跟 TIMEZONE
+    assert calls[-1][3] == {"url": "https://www.taobao.com/", "locale": "zh-CN", "timezone": "Asia/Shanghai"}, calls[-1]
     tool_msg = json.loads(model_saw[-1])[-1]["content"]
     assert "会话：taobao-com" in tool_msg and "沿用了这个会话之前保存的登录" in tool_msg, tool_msg
+
+    from app import reply_language
+    for code, web in (("en", "en-US"), ("zh-Hant", "zh-TW"), ("auto", "zh-CN")):
+        async with SessionLocal() as db:
+            await reply_language.set(db, code)
+        await events_for("k0", ("browser_open", {"url": "https://example.com/"}), "好")
+        assert calls[-1][3]["locale"] == web and calls[-1][3]["timezone"] == "Asia/Shanghai", (code, calls[-1])
+    print("ok: browser locale/timezone follow settings")
 
     # 同一回复里同会话再开一次 → 仍一张卡；换网站 → 第二张；显式 session
     evs = await events_for("k2", ("browser_open", {"url": "https://taobao.com/a"}), ("browser_open", {"url": "https://buyer.taobao.com/b"}),

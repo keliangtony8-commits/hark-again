@@ -30,9 +30,11 @@ class Browser:
     def is_connected(self): return self.alive
     async def new_context(self, **kw):
         Browser.n += 1
+        opts.append({k: kw.get(k) for k in ("locale", "timezone_id")})
         return Ctx(Browser.n)
 
 
+opts: list[dict] = []  # 每次 new_context 的 locale / timezone_id
 launch_fail: list[str] = []  # 非空 → 下次 launch 抛这条错（模拟缺系统库）
 launches = [0]
 
@@ -118,5 +120,29 @@ async def launch_tests():
     service._launch_error = (0, "")  # 冷却过了
     assert (await service._session("d")).startswith("page-") and launches[0] == 3 and service._launch_error is None
     print("✓ 浏览器起不来 / 崩溃恢复测试通过")
+    await region_tests()
+
+
+async def region_tests():
+    """地区（v2.68 region.py）：新会话按 goto 要的语言 / 时区开；同名会话设置变了 → 存好登录重开；一样 → 复用；
+    别的动作新开会话沿用最近一次 goto 的地区。"""
+    import region
+    for n in list(service._sessions):
+        await service._evict(n)
+    saved.clear(); opts.clear()
+    en = region.pick("en-US", "America/New_York")
+    p1 = await service._session("r", en)
+    assert opts[-1] == {"locale": "en-US", "timezone_id": "America/New_York"} and service._region["r"] == en
+    assert await service._session("r", region.pick("en-US", "America/New_York")) == p1 and len(opts) == 1  # 一样 → 复用
+    assert await service._session("r") == p1 and len(opts) == 1  # 别的动作（不带地区）从不重开
+    zh = region.pick("zh-CN", "America/New_York")
+    p2 = await service._session("r", zh)  # 用户改回中文 → 存好登录、重开
+    assert p2 != p1 and saved[-1] == "r.json" and opts[-1]["locale"] == "zh-CN" and service._region["r"] == zh
+    await service.close("r", forget=True)
+    assert "r" not in service._region
+    service._region_last = region.pick("zh-TW", "Asia/Taipei")
+    await service._session("s")
+    assert opts[-1] == {"locale": "zh-TW", "timezone_id": "Asia/Taipei"}, opts
+    print("✓ 浏览器地区（语言 / 时区）测试通过")
 
 asyncio.run(main())

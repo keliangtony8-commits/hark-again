@@ -69,6 +69,7 @@ services:
       BROWSER_MAX_SESSIONS: ${BROWSER_MAX_SESSIONS:-3}
       # 浏览器出网关卡的允许名单（与后端 OUTBOUND_ALLOW_HOSTS 同一份：用户自己的 NAS 之类）
       BROWSER_ALLOW_HOSTS: ${OUTBOUND_ALLOW_HOSTS:-}
+      BROWSER_TZ: ${TIMEZONE:-Asia/Shanghai}   # 网页看到的时区 = 用户时区（后端每次打开网页也会带上，region.py）
     volumes:
       - ${HOST_DATA_DIR}/browser:/state
     shm_size: ${BROWSER_SHM:-1gb}

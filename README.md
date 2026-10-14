@@ -205,6 +205,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - v2.65 表格交付不乱码：让助手做的 CSV 发到手机/电脑后用 Excel 直接打开，中文不再变乱码（交付时自动加 UTF-8 BOM，打包文件夹里的 CSV 也一样；工作区原文件不动，真 GBK 文件不碰）。规则 backend/app/csv_bom.py，冒烟 tests/smoke_csv_bom.py
 - v2.66 工作区时钟 = 你的时区：助手在云电脑里跑的脚本写“当前时间”、ls -l 看文件时间，都是你的本地时间（以前是 UTC 晚 8 小时）。.env 的 TIMEZONE 一处配置，提醒和工作区共用；规则 sandbox/runner.py clock_zone，冒烟 tests/smoke_round14.py + smoke_command_env.py
 - v2.67 回复语言：我的 → 外观与偏好 → 回复语言，或直接说“以后都用英文回我”。固定语言时回复、卡片、自动标题、记忆概括、语音识别都用它；默认“跟随我的语言”不加任何 token。规则 backend/app/reply_language.py，接口 GET/PATCH /api/preferences，工具 set_reply_language（按需），冒烟 tests/smoke_reply_language.py
+- v2.68 云浏览器的地区跟你走：网页看到的语言跟“回复语言”（默认/简体 → zh-CN，繁體 → zh-TW，English → en-US，网站据此给对应语言的页面），时区跟 TIMEZONE（订票、预约页面显示的时间不再固定上海时间）。改了设置后下次打开网页自动重开会话、登录保留。规则 browser/region.py + backend/app/reply_language.py browser_locale；compose 给浏览器 BROWSER_TZ；无迁移，客户端不变。
 - 工具参数猜错时第一次就把真正的参数表给模型（v2.38，tool_args.Streak.signature_once），省一次 describe；排版把输出名写成源文件时点名已有的 .md（doc_render.output_mixup）
 - 云浏览器拦截所有内网/回环地址；付款、下单、发送类按钮需审批；密码和验证码由你在实时画面里自己输
 - Pages 用 CSP sandbox 提供，页面脚本拿不到 App 登录信息；元数据（含 published 下线状态）只经 pages_store 读写，公开访问只走 public_html（下线与不存在同一个 404），改内容保留发布状态

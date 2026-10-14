@@ -18,6 +18,8 @@
   用户在实时画面里亲手点 = accept
 - 内嵌框（v2.59，规则在 frames.py）：看得见的 iframe（支付卡号框、嵌入的登录框 / 表单、Cookie 同意层）里的元素和文字
   一起进快照，编号全局接着编、元素带 frame 标签；点 / 填 / 登录 / 上传按 ref 自动去对应的框里找
+- 地区（v2.68，规则在 region.py）：网页看到的语言 / 时区跟用户走——后端 goto 带 locale（回复语言）+ timezone（TIMEZONE），
+  设置变了下次 goto 存好登录重开会话
 - 文件（v1.32）：POST /upload 把后端传来的工作区文件放进网页的文件框（<input type=file> 直接设；
   别的按钮先等“选文件”对话框再设）；页面触发的下载存到 DOWNLOADS/<会话>/，GET /downloads 列出、
   取走后 DELETE——后端把它搬进工作区 downloads/（app/browser_files.py），这里只是中转，关会话就清掉
@@ -42,6 +44,7 @@ import dialogs
 import egress
 import forms
 import frames
+import region
 import shadow
 import tabs
 
@@ -68,6 +71,8 @@ _dialog_notes: dict[str, list[dict]] = {}  # 会话 → 上次快照以来弹过
 _frame_of: dict[str, dict[str, object]] = {}  # 会话 → {ref: 内嵌框}（上一张快照里在 iframe 里的元素，frames.py）
 _dialog_seen: dict[str, int] = {}  # 会话 → 这次动作里已弹过几个（连环弹框判定）
 ARM_AFTER_S = 2.0  # 动作返回后说好的处理再保留这么久（点完弹框可能稍后才到）
+_region: dict[str, region.Region] = {}  # 会话 → 开它时的语言 / 时区（region.py）
+_region_last: region.Region = region.pick()  # 最近一次 goto 要的地区：别的动作新开会话时沿用
 _restored: set[str] = set()  # 这次是从存好的登录状态恢复出来的会话（goto 回报给后端，模型知道“沿用了登录”）
 _lock = asyncio.Lock()
 _egress = egress.Egress(egress.ALLOW_HOSTS)
@@ -122,6 +127,7 @@ def _forget_browser() -> None:
         _sessions.pop(name, None)
         _tabs.pop(name, None)
         _used.pop(name, None)
+        _region.pop(name, None)
         _drop_downloads(name)
         _egress.forget(name)
         _forget_dialogs(name)
@@ -152,15 +158,19 @@ async def _ensure_browser() -> Browser:
     return _browser
 
 
-async def _session(name: str) -> Page:
+async def _session(name: str, want: region.Region | None = None) -> Page:
+    """want = 这次 goto 要的地区；已开着的同名会话地区不同 → 存好登录状态重开（region.needs_reopen）。"""
     async with _lock:
         await _ensure_browser()
+        if want is not None and name in _sessions and region.needs_reopen(_region.get(name), want):
+            await _evict(name)
         if name not in _sessions:
+            reg = want or _region_last
             while len(_sessions) >= MAX_SESSIONS:
                 await _evict(min(_sessions, key=lambda n: _used.get(n, 0)))
             path = _state_path(name)
             saved = os.path.exists(path)
-            ctx = await _browser.new_context(viewport=VIEW, locale="zh-CN", timezone_id="Asia/Shanghai",
+            ctx = await _browser.new_context(viewport=VIEW, **reg.options(),
                                              storage_state=path if saved else None, accept_downloads=True,
                                              proxy=_egress.proxy_for(name), service_workers="block")
             if saved:
@@ -173,6 +183,7 @@ async def _session(name: str) -> Page:
             _tabs[name] = tabs.Tabs(page)
             _watch(name, page)
             _sessions[name] = (ctx, page)
+            _region[name] = reg
     _used[name] = time.time()
     return await _follow(name)
 
@@ -216,6 +227,7 @@ async def _evict(name: str) -> None:
     ctx, _ = _sessions.pop(name)
     _tabs.pop(name, None)
     _used.pop(name, None)
+    _region.pop(name, None)
     await ctx.close()
     _drop_downloads(name)
     _egress.forget(name)
@@ -463,6 +475,8 @@ async def _after(name: str) -> dict:
 
 class GotoIn(BaseModel):
     url: str
+    locale: str | None = None    # BCP 47，后端按“回复语言”给（region.py）；新开 / 地区变了才用
+    timezone: str | None = None  # IANA，后端 settings.timezone
 
 
 class ActIn(BaseModel):
@@ -512,7 +526,9 @@ class KeysIn(BaseModel):
 async def goto(name: str, body: GotoIn):
     if urlparse(body.url).scheme not in ("http", "https"):
         raise HTTPException(400, "只允许 http(s)")
-    page = await _session(_check_name(name))
+    global _region_last
+    _region_last = region.pick(body.locale, body.timezone)
+    page = await _session(_check_name(name), _region_last)
     _arm(name, None)
     try:
         await page.goto(body.url, timeout=30000, wait_until="domcontentloaded")
@@ -795,7 +811,7 @@ async def render(body: RenderIn):
         async with _lock:
             browser = await _ensure_browser()
         ctx = await browser.new_context(viewport={"width": width, "height": 800 if body.format == "pdf" else 64}, java_script_enabled=False,
-                                        offline=True, service_workers="block", locale="zh-CN")
+                                        offline=True, service_workers="block", locale=_region_last.locale)
         try:
             await ctx.route("**/*", guard)
             page = await ctx.new_page()
@@ -908,6 +924,7 @@ async def close(name: str, forget: bool = False):
                 ctx, _ = _sessions.pop(name)
                 _tabs.pop(name, None)
                 _used.pop(name, None)
+                _region.pop(name, None)
                 await ctx.close()
                 _drop_downloads(name)
                 _egress.forget(name)
