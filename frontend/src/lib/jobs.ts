@@ -66,7 +66,7 @@ export const jobDiskLabel = (d: JobDisk) => [
 ].join(" · ");
 export function jobDiskDetail(d: JobDisk): string {
   const groups = d.top.map((t) => `${jobDiskGroupName(t.path)} ${formatSize(t.size)}`).join("、");
-  const notes = [...(d.partial ? ["文件太多只数了一部分"] : []), ...(d.overlap > 0 ? [`同时段还有 ${d.overlap} 个任务在跑，可能含它们写的`] : [])];
+  const notes = [...(d.partial ? ["文件太多只数了一部分"] : []), ...(d.overlap > 0 ? [`同时段另有 ${d.overlap} 个任务运行，可能包含它们写入的内容`] : [])];
   const head = d.files > 0 ? `运行期间新写或改过 ${d.files} 个文件，共 ${formatSize(d.written)}${groups ? `：${groups}` : ""}` : "运行期间没有新写文件";
   return `${head}；日志 ${formatSize(d.log)}${notes.length ? `（${notes.join("；")}）` : ""}`;
 }
@@ -78,7 +78,7 @@ export const jobTone = (s: JobState, autoStopped = false): JobTone =>
   autoStopped ? "problem" : s === "done" ? "ok" : s === "failed" || s === "timed_out" || s === "lost" ? "problem" : s === "cancelled" ? "quiet" : "running";
 
 /** v2.25 取消的状态词：你停的 / 助手停的 / 不知道是谁（老任务）。App models/job.dart 同一套。 */
-export const jobStopperLabel = (by?: string | null) => (by === "user" ? "你停掉了" : by === "agent" ? "助手停掉了" : "已取消");
+export const jobStopperLabel = (by?: string | null) => (by === "user" ? "已由你停止" : by === "agent" ? "已由助手停止" : "已取消");
 
 export function jobStateLabel(j: Pick<JobInfo, "state" | "exit_code" | "stop_reason" | "keep_alive" | "restart_at"> & { stopped_by?: string | null }): string {
   switch (j.state) {

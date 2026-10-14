@@ -34,7 +34,7 @@ void main() {
     expect(jobDiskDetail(d), '运行期间新写或改过 12 个文件，共 2.0 MB：images/ 2.0 MB、装的软件 10 B；日志 300 KB');
     final shared = JobDisk.tryParse({...raw, 'overlap': 2, 'partial': true})!;
     expect(jobDiskLabel(shared), '写入 2.0 MB+ · 12+ 个文件 · 最多 images/ · 日志 300 KB · 含同时段任务');
-    expect(jobDiskDetail(shared), endsWith('（文件太多只数了一部分；同时段还有 2 个任务在跑，可能含它们写的）'));
+    expect(jobDiskDetail(shared), endsWith('（文件太多只数了一部分；同时段另有 2 个任务运行，可能包含它们写入的内容）'));
     final none = JobDisk.tryParse({'log': 2 * mb, 'written': 0, 'files': 0, 'overlap': 1})!;
     expect(jobDiskLabel(none), '没写新文件 · 日志 2.0 MB');
     expect(jobDiskDetail(none), startsWith('运行期间没有新写文件；日志 2.0 MB'));

@@ -80,7 +80,7 @@ void main() {
 
     final t = memoryViewOf(ComputerStatus.fromJson(_status(used: 950 * _mb)))!;
     expect(t.tight, isTrue);
-    expect(memoryTightNote(t), allOf(startsWith('快满了'), contains('「大任务」（约 350.0 MB）')));
+    expect(memoryTightNote(t), allOf(startsWith('内存紧张'), contains('「大任务」（约 350.0 MB）')));
 
     // 不出现：休眠、没得排、老服务器没有 memory 字段
     expect(memoryViewOf(ComputerStatus.fromJson(_status(state: 'stopped'))), isNull);
@@ -115,7 +115,7 @@ void main() {
 
   testWidgets('快满了：警示一句点名最大的；休眠时整节不出现', (tester) async {
     await _pump(tester, _status(used: 950 * _mb));
-    expect(find.textContaining('最大的是「大任务」'), findsOneWidget);
+    expect(find.textContaining('占用最多的是「大任务」'), findsOneWidget);
   });
 
   testWidgets('休眠：不出现', (tester) async {

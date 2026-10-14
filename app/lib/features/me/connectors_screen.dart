@@ -242,7 +242,7 @@ class _McpRow extends ConsumerWidget {
       builder: (ctx) => FutureBuilder(
           future: tools,
           builder: (ctx, snap) {
-            if (snap.hasError) return EmptyHint(icon: Icons.cloud_off_rounded, title: '连不上', text: '${snap.error}');
+            if (snap.hasError) return EmptyHint(icon: Icons.cloud_off_rounded, title: '无法连接', text: '${snap.error}');
             if (!snap.hasData) return const Padding(padding: EdgeInsets.all(Sp.x5), child: SkeletonList());
             final list = snap.data as List;
             return Column(mainAxisSize: MainAxisSize.min, children: [SheetList(padding: const EdgeInsets.only(bottom: Sp.x5), children: [

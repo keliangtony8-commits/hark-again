@@ -21,12 +21,12 @@ export function groupTasks(list: ScheduledTask[]) {
   };
 }
 
-/** “6 个任务 · 4 个在跑 · 1 个需要留意”；空列表是一句引导。 */
+/** “6 个任务 · 4 个运行中 · 1 个需要留意”；空列表是一句引导。 */
 export function taskSummary(list: ScheduledTask[]) {
   if (!list.length) return "到点我自己去做的事";
   const g = groupTasks(list);
   const live = list.filter((t) => t.active && !t.done).length;
-  return [`${list.length} 个任务`, live === list.length ? "全部在跑" : `${live} 个在跑`,
+  return [`${list.length} 个任务`, live === list.length ? "全部运行中" : `${live} 个运行中`,
     ...(g.attention.length ? [`${g.attention.length} 个需要留意`] : [])].join(" · ");
 }
 

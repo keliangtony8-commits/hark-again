@@ -73,7 +73,7 @@ Future<void> startOffer(WidgetRef ref, HomeCard card, OpenConversation open) asy
 /// 标题上方那行小字：已开始 → 已交给助手；助手提议且能替你做 → 可以替你做；
 /// 没有指令只有去处（助手提议或系统提醒，如“连接已失效”）→ 需要你亲自处理；其余（普通系统提醒）没有。
 String? cardEyebrow(HomeCard card, CardTarget? target) {
-  if (card.started) return '已交给助手 · 看看进展';
+  if (card.started) return '已交给助手 · 查看进展';
   if (card.actionPrompt == null) return target != null ? '需要你亲自处理' : null;
   return card.offered ? '可以替你做' : null;
 }

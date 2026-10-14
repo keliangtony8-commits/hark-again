@@ -47,7 +47,7 @@ bool screenShouldPause({required Duration idle, required bool control, required 
 /// 读屏：takeover = 在接管页里（点哪里就点网页哪里）；卡片上 = 预览，点开接管。
 String browserScreenSemantics({required bool takeover, required bool paused, String? site}) {
   final where = site == null ? '浏览器' : '$site 的浏览器';
-  if (paused) return '$where画面已暂停，点一下继续';
+  if (paused) return '$where画面已暂停，轻点继续';
   return takeover ? '$where实时画面，已接管，点哪里就点网页哪里' : '$where实时画面，点开接管';
 }
 

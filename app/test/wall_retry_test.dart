@@ -36,7 +36,7 @@ void main() {
     expect(wallHint(t), contains('已经在重新运行'));
     final waiting = ScheduledTask.fromJson(taskJson(label: '需要登录 jw.example.edu', fixable: true, open: 'vault', output: 'report'));
     expect(waiting.wallRetrying, isFalse);
-    expect(wallHint(waiting), contains('自动重跑'));
+    expect(wallHint(waiting), contains('自动重新运行'));
     expect(withRetried('已连接 GitHub', null), '已连接 GitHub');
     expect(withRetried('已连接 GitHub', '之前卡在这里的「周报」已重新运行'), '已连接 GitHub。之前卡在这里的「周报」已重新运行');
     final r = OAuthResult.fromQuery({'connected': 'github', 'retried': '之前卡在这里的「周报」已重新运行'})!;

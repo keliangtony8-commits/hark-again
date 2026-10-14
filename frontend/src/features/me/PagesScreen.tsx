@@ -59,7 +59,7 @@ export default function PagesScreen() {
   return (
     <Page header={<PageHeader title="Pages" back />}>
       <PageIntro loading={pages.loading} summary={pagesSummary(pages.items)}
-        line="行程、邀请函、菜单这类要给别人看的东西，我会做成网页。链接带随机后缀不会被搜到；暂时不想让人看就下线，链接不变。" />
+        line="行程、邀请函、菜单等需要分享的内容，我会制作成网页。链接含随机后缀，不会被搜索到；可随时下线，链接保持不变。" />
       {error && <p className="desc" role="alert">{error}</p>}
       {pages.loading ? <Skeleton /> : (<>
         {pages.items.length === 0 && (

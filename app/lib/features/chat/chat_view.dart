@@ -246,8 +246,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
                               ),
                             );
                             // 跨天处在消息上方插一行日期（今天 / 昨天 / 10月9日 星期五）
-                            if (!startsNewDay(chat.messages, idx)) return row;
-                            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [DaySeparator(m.createdAt!), row]);
+                            // §O 本机刚发出的那条（local id、1 秒内首次画出）往上弹一下；历史、同步、别的设备发来的不弹
+                            final fresh = m.isUser && m.id.startsWith(ChatController.localPrefix) && m.createdAt != null &&
+                                DateTime.now().difference(m.createdAt!) < Motion.sendFresh;
+                            final shown = SendRise(play: fresh, child: row);
+                            if (!startsNewDay(chat.messages, idx)) return shown;
+                            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [DaySeparator(m.createdAt!), shown]);
                           },
                         ),
                       ),

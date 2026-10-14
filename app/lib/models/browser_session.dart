@@ -70,4 +70,4 @@ String browserSessionSemantics(BrowserSession s, {DateTime? now}) =>
 String browserSignOutText(BrowserSession s) => '会关掉这个网站的浏览器，并删掉保存的登录。下次要用 ${s.label} 时需要重新登录。';
 
 const browserSessionsEmpty = '还没有保存的网站登录';
-const browserSessionsEmptyLine = '让我在网页上登录一次，之后的任务都会接着用这个登录。';
+const browserSessionsEmptyLine = '在网页上登录一次，之后的任务将沿用该登录状态。';

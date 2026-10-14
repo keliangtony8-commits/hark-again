@@ -68,12 +68,12 @@ function repeat(cron: string): string {
 }
 
 export const agendaDetail = (i: AgendaItem) =>
-  i.state === "paused" ? `连续失败 ${i.task.fail_streak ?? 0} 次，今天不会跑` : i.task.run_at ? "一次性" : repeat(i.task.cron);
+  i.state === "paused" ? `连续失败 ${i.task.fail_streak ?? 0} 次，今日不再运行` : i.task.run_at ? "一次性" : repeat(i.task.cron);
 
 export function agendaSummary(items: AgendaItem[]): string {
   if (items.length === 0) return "今天没有排定的任务";
   const next = items.find((i) => i.state === "next");
   const left = items.filter((i) => i.state === "next" || i.state === "later" || i.state === "running").length;
-  if (left === 0) return `今天的 ${items.length} 件都跑完了`;
+  if (left === 0) return `今天的 ${items.length} 项均已完成`;
   return next ? `还剩 ${left} 件 · 下一个 ${next.time}` : `还剩 ${left} 件`;
 }

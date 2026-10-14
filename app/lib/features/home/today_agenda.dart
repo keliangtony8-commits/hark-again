@@ -92,7 +92,7 @@ String? agendaProblem(AgendaItem i) => switch (i.state) {
 
 /// 副标题：暂停的说为什么（连续失败 N 次），其余是计划本身的人话（每天 08:00 → 只说“每天”太重复，用规则名）。
 String agendaDetail(AgendaItem i) =>
-    i.state == AgendaState.paused ? '连续失败 ${i.task.failStreak} 次，今天不会跑' : (i.task.isOnce ? '一次性' : _repeat(i.task.cron));
+    i.state == AgendaState.paused ? '连续失败 ${i.task.failStreak} 次，今日不再运行' : (i.task.isOnce ? '一次性' : _repeat(i.task.cron));
 
 String _repeat(String cron) {
   final f = cron.trim().split(RegExp(r'\s+'));
@@ -103,11 +103,11 @@ String _repeat(String cron) {
   return '每天';
 }
 
-/// 区块标题旁的一句话：还剩 2 件 · 下一个 21:00 / 今天的 3 件都跑完了 / 今天没有排定的任务。
+/// 区块标题旁的一句话：还剩 2 件 · 下一个 21:00 / 今天的 3 项均已完成 / 今天没有排定的任务。
 String agendaSummary(List<AgendaItem> items) {
   if (items.isEmpty) return '今天没有排定的任务';
   final next = items.where((i) => i.state == AgendaState.next).firstOrNull;
   final left = items.where((i) => i.state == AgendaState.next || i.state == AgendaState.later || i.state == AgendaState.running).length;
-  if (left == 0) return '今天的 ${items.length} 件都跑完了';
+  if (left == 0) return '今天的 ${items.length} 项均已完成';
   return next == null ? '还剩 $left 件' : '还剩 $left 件 · 下一个 ${next.time}';
 }

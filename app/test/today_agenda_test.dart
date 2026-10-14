@@ -64,7 +64,7 @@ void main() {
     ]);
     expect(agendaSummary(items), '还剩 4 件 · 下一个 15:00');
     expect(agendaProblem(items[1]), '已暂停');
-    expect(agendaDetail(items[1]), '连续失败 3 次，今天不会跑');
+    expect(agendaDetail(items[1]), '连续失败 3 次，今日不再运行');
     expect(agendaProblem(items[3]), '失败');
     expect([agendaHint(items[0]), agendaHint(items[4]), agendaHint(items[5]), agendaHint(items[6])], ['已完成', '进行中…', '下一个', '']);
     expect([agendaDetail(items[2]), agendaDetail(items[5])], ['每天', '一次性']);
@@ -73,7 +73,7 @@ void main() {
   test('摘要：空 / 都跑完', () {
     expect(agendaSummary(const []), '今天没有排定的任务');
     final all = todayAgenda([task('a', '0 8 * * *', last: 'ok', lastRun: DateTime(2026, 10, 12, 8))], now);
-    expect(agendaSummary(all), '今天的 1 件都跑完了');
+    expect(agendaSummary(all), '今天的 1 项均已完成');
     expect(todayAgenda([task('q', '0 20 * * *', requested: true)], now).single.state, AgendaState.running);
   });
 

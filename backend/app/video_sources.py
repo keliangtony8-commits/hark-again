@@ -128,11 +128,11 @@ async def _video_html(c: httpx.AsyncClient, video_id: str) -> str:
     if CONSENT_ACTION in html:
         m = re.search('name="v" value="(.*?)"', html)
         if m is None:
-            raise VideoError("YouTube 要求先同意 cookie 条款，自动同意没成功。")
+            raise VideoError("YouTube 要求先同意 cookie 条款，自动同意失败。")
         c.cookies.set("CONSENT", "YES+" + m.group(1), domain=".youtube.com")
         html = await _html(c, video_id)
         if CONSENT_ACTION in html:
-            raise VideoError("YouTube 要求先同意 cookie 条款，自动同意没成功。")
+            raise VideoError("YouTube 要求先同意 cookie 条款，自动同意失败。")
     return html
 
 

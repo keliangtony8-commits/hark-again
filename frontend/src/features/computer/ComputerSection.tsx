@@ -14,7 +14,7 @@ import "./computer.css";
 import { type ComputerCtl, useComputer } from "./useComputer";
 
 /** “电脑”一节（v1.25，= App features/computer/computer_section.dart）：项目首屏和“我的电脑”页共用。
- *  状态行（运行/休眠/没开机/连不上 + 内存 · 文件 + 内存条）→ 正在跑的后台任务（点开完整日志、可取消）；标题右边“重启”只在运行中给。
+ *  状态行（运行/休眠/没开机/连不上 + 内存 · 文件 + 内存条）→ 正在运行的后台任务（点开完整日志、可取消）；标题右边“重启”只在运行中给。
  *  数据：给了 ctl（电脑页，几节共用一份）就用它，否则自己 useComputer(ws)（项目首屏）。加载中 / 失败 → 整节不画。
  *  v1.27：说明行带 CPU；内存打满被系统杀过 → 一行警示；to 给了（项目首屏）→ 状态行是链接，进这台电脑的详情页。
  *  v1.82：常驻服务排在任务前（服务器 app/services.py）：健康点（在跑闪点 / 等重启警示闪点 / 停了警示点）、副标题、
@@ -33,7 +33,7 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
     if (!await confirmDialog({ title: "重启这台电脑？", text: computerRestartText(s), action: "重启" })) return;
     setRestarting(true);
     try { set(await http.post<ComputerStatus>(`${computerPath(ws)}/restart`, {})); }
-    catch (e) { void noticeDialog("没能重启", e instanceof Error ? e.message : undefined); }
+    catch (e) { void noticeDialog("重启失败", e instanceof Error ? e.message : undefined); }
     setRestarting(false);
   };
   const cancel = async (j: JobInfo) => {
@@ -44,7 +44,7 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
   const bounce = async (v: ServiceInfo) => {
     setBouncing((b) => new Set(b).add(v.id));
     try { await http.post(`/api/jobs/${v.id}/restart`, {}); await load(true); }
-    catch (e) { void noticeDialog("没能重启", e instanceof Error ? e.message : undefined); }
+    catch (e) { void noticeDialog("重启失败", e instanceof Error ? e.message : undefined); }
     setBouncing((b) => { const n = new Set(b); n.delete(v.id); return n; });
   };
   const ratio = computerMemoryRatio(s);

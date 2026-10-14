@@ -49,7 +49,7 @@ print("ok: validation")
 b = {"type": "delegate", "tasks": [{"title": "查价格", "state": "done", "steps": 3, "seconds": 12, "result": "便宜"},
                                    {"title": "看评论", "state": "partial", "steps": 20}]}
 DelegateBlock(**b)
-assert blocks_to_text([b]) == "[子任务：查价格（完成）；看评论（交了半截）]"
+assert blocks_to_text([b]) == "[子任务：查价格（已完成）；看评论（部分完成）]"
 assert blocks_to_text([{"type": "delegate", "tasks": []}]) == ""
 print("ok: block / history")
 
@@ -147,7 +147,7 @@ async def main():
     assert "没有可用的工具 delegate" in tool_msg("查价格")[0]["content"]  # 深度 1
     # 交回主助手
     back = tool_msg()[0]["content"]
-    assert back.startswith("2 个子任务已结束（完成 2 个）") and "## 1. 写报告（编号 sa_" in back and "— 完成（1 步" in back and "B：最低 99 元" in back
+    assert back.startswith("2 个子任务已结束（完成 2 个）") and "## 1. 写报告（编号 sa_" in back and "— 已完成（1 步" in back and "B：最低 99 元" in back
     # 实时卡片：插一次，之后原地换
     starts = [e for e in evs if isinstance(e, loop.BlockStart) and e.block["type"] == "delegate"]
     ups = [e for e in evs if isinstance(e, loop.BlockUpdate) and e.block["type"] == "delegate"]

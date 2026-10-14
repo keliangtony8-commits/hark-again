@@ -661,7 +661,7 @@ async def browser_pay_card(ctx: ToolContext, card: str, number: str, **refs) -> 
     try:
         snap = await browser_client.snapshot_call(tab.session, "POST", "/card", {"fields": fields})
     except Exception as e:
-        return ToolResult(wallet.scrub(f"代填没成功：{e}", secret["number"], chosen.last4), failed="代填没成功")
+        return ToolResult(wallet.scrub(f"代填失败：{e}", secret["number"], chosen.last4), failed="代填失败")
     snap = {**snap, "text": wallet.scrub(snap.get("text", ""), secret["number"], chosen.last4),
             "elements": [{**e, "name": wallet.scrub(e.get("name", ""), secret["number"], chosen.last4)} for e in snap.get("elements", [])]}
     wallet.mark_used(chosen)

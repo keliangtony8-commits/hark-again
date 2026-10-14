@@ -48,7 +48,7 @@ export function computerStateLabel(s: ComputerState): string {
     case "running": return "运行中";
     case "stopped": return "休眠中";
     case "none": return "还没开机";
-    default: return "连不上沙盒";
+    default: return "无法连接沙盒";
   }
 }
 
@@ -66,8 +66,8 @@ export function computerDetail(c: ComputerStatus): string {
       return [sb.cpu_percent != null ? `CPU ${Math.round(sb.cpu_percent)}%` : "", sb.memory_used != null ? `内存 ${formatSize(sb.memory_used)}${sb.memory_limit != null ? ` / ${formatSize(sb.memory_limit)}` : ""}` : "", disk]
         .filter(Boolean).join(" · ");
     case "stopped": return `${sleepReason(c)}用到时自动开机 · ${disk}`;
-    case "none": return `第一次跑命令时开机 · ${disk}`;
-    default: return `服务器上的沙盒服务没在跑，命令和后台任务暂时用不了 · ${disk}`;
+    case "none": return `首次运行命令时启动 · ${disk}`;
+    default: return `沙盒服务未运行，命令和后台任务暂不可用 · ${disk}`;
   }
 }
 
@@ -84,10 +84,10 @@ export const computerBusy = (c: ComputerStatus) => c.running_jobs.length > 0 || 
 export const computerHintWarn = (c: ComputerStatus) => diskFull(c) || deadServices(c) > 0;
 
 export function computerHint(c: ComputerStatus): string | null {
-  if (diskFull(c)) return "磁盘满了";
+  if (diskFull(c)) return "磁盘已满";
   if (deadServices(c)) return `${deadServices(c)} 个服务停了`;
-  if (c.running_jobs.length) return `${c.running_jobs.length} 个任务在跑`;
-  if (liveServices(c)) return `${liveServices(c)} 个服务在跑`;
+  if (c.running_jobs.length) return `${c.running_jobs.length} 个任务运行中`;
+  if (liveServices(c)) return `${liveServices(c)} 个服务运行中`;
   if (c.sandbox.outdated && c.sandbox.state !== "unreachable") return "下次用到时更新";
   return c.sandbox.state === "running" ? "空闲" : null;
 }
@@ -107,18 +107,18 @@ export const computerDiskLine = (c: ComputerStatus) =>
 
 export function computerDiskNote(c: ComputerStatus): string | null {
   switch (c.disk_level) {
-    case "full": return "满了：新文件写不进，后台任务会被停下。清理一下，或删掉不要的文件";
-    case "tight": return "快满了：满了以后新文件写不进、后台任务会被停下";
+    case "full": return "已满：无法写入新文件，后台任务将被停止。请清理空间或删除不需要的文件";
+    case "tight": return "空间紧张：写满后将无法写入新文件，后台任务也会停止";
     default: return null;
   }
 }
 
 export const computerRestartText = (c: ComputerStatus) =>
-  (c.running_jobs.length ? `会停掉 ${c.running_jobs.length} 个正在跑的后台任务。` : "")
+  (c.running_jobs.length ? `将停止 ${c.running_jobs.length} 个正在运行的后台任务。` : "")
   + (liveServices(c) ? `${liveServices(c)} 个常驻服务会马上重新拉起。` : "") + "文件和装过的软件都在，下次用到时自动开机。";
 
 export const computerSemantics = (c: ComputerStatus) =>
-  `电脑${computerStateLabel(c.sandbox.state)}，${computerDetail(c)}${c.running_jobs.length ? `，${c.running_jobs.length} 个后台任务在跑` : ""}`
+  `电脑${computerStateLabel(c.sandbox.state)}，${computerDetail(c)}${c.running_jobs.length ? `，${c.running_jobs.length} 个后台任务运行中` : ""}`
   + `${liveServices(c) ? `，${liveServices(c)} 个常驻服务` : ""}${deadServices(c) ? `，${deadServices(c)} 个服务停了` : ""}`;
 
 /** 服务行的副标题（= App serviceLine）：在跑 → 运行多久 · 端口 · 重启过几次；等重启 → 几秒后重启 · 上次退出码；停了 → 原因。 */
@@ -180,7 +180,7 @@ export function storageRows(st: ComputerStorage): [StorageKey, string, string, n
 }
 
 export const cleanupLabel = (st: ComputerStorage) => (st.cleanable > 0 ? `清理 ${formatSize(st.cleanable)}` : null);
-export const CLEANUP_TEXT = "删掉长输出存档、已结束任务的完整日志和下载缓存。文件、装的软件、正在跑的任务都不动；聊天里的任务卡照常能看结论。";
+export const CLEANUP_TEXT = "删除长输出存档、已结束任务的完整日志和下载缓存。文件、已安装软件和运行中的任务不受影响；聊天中的任务卡仍可查看结论。";
 export const cleanupDone = (freed: number) => (freed > 0 ? `腾出了 ${formatSize(freed)}` : "没有可清理的了");
 
 export function toolsSummary(tools: InstalledTool[]): string {
@@ -214,8 +214,8 @@ export const memoryPercent = (share: number) => (share > 0 && share < 0.01 ? "�
 export function memoryTightNote(v: MemoryView): string | null {
   if (!memoryTight(v)) return null;
   const top = v.rows[0];
-  const who = top ? `，最大的是「${memoryRowTitle(top)}」（约 ${formatSize(top.memory)}），先停它最管用` : "";
-  return `快满了：再涨系统会强制结束程序（先结束普通后台任务）${who}`;
+  const who = top ? `，占用最多的是「${memoryRowTitle(top)}」（约 ${formatSize(top.memory)}），优先停止它效果最明显` : "";
+  return `内存紧张：继续增长将强制结束程序（优先结束普通后台任务）${who}`;
 }
 
 export const memoryRowLine = (r: MemoryRow) => [
@@ -274,6 +274,6 @@ export function computerIntro(c: ComputerStatus | undefined | null, personal: bo
   const size = [c?.sandbox.memory_limit != null ? `内存 ${formatSize(c.sandbox.memory_limit)}` : "",
     c?.disk_limit != null ? `空间 ${formatSize(c.disk_limit)}` : ""].filter(Boolean).join(" · ");
   const head = `${personal ? "你的云电脑" : "这个项目的云电脑"}是服务器上隔出来的一块云端 Linux${size ? `（${size}）` : ""}`;
-  return personal ? `${head}：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。`
-    : `${head}：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。`;
+  return personal ? `${head}：我在这里运行代码、安装软件、执行后台任务，产物存入“我的文件”。`
+    : `${head}：项目内的对话在这里运行代码、安装软件、执行后台任务，文件即项目文件。`;
 }

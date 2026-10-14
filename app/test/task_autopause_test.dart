@@ -33,7 +33,7 @@ void main() {
     expect(t(taskJson()).failStreak, 0); // 老服务器没有这个字段
     expect(taskStateLabel(p), '连续失败 3 次，已暂停');
     expect(nextRunLabel(p), '连续失败，已暂停');
-    expect(autoPauseNote(p), contains('连着失败了 3 次'));
+    expect(autoPauseNote(p), contains('已连续失败 3 次'));
     expect(taskStateLabel(t({...taskJson(), 'fail_streak': 2})), '连续失败 2 次');
     expect(taskStateLabel(t({...taskJson(), 'fail_streak': 1})), '上次失败');
     final manual = t(paused(reason: null));
@@ -57,7 +57,7 @@ void main() {
     expect(g.idle.map((x) => x.id), ['b']);
     expect(g.running.map((x) => x.id), ['c']);
     expect([taskIdle(list[0]), taskIdle(list[1])], [isFalse, isTrue]);
-    expect(taskSummary(list), '3 个任务 · 1 个在跑 · 1 个需要留意');
+    expect(taskSummary(list), '3 个任务 · 1 个运行中 · 1 个需要留意');
   });
 
   testWidgets('列表行：问题字警示色 + 计划', (tester) async {
@@ -70,11 +70,11 @@ void main() {
   testWidgets('详情页：说明条，打开开关后收起', (tester) async {
     final api = PatchApi(tasks: [paused()], runs: [runJson('r1', 'error', error: '模型调用失败：401')]);
     await pump(tester, api, '/me/tasks/t1');
-    expect(find.textContaining('连着失败了 3 次'), findsOneWidget);
+    expect(find.textContaining('已连续失败 3 次'), findsOneWidget);
     expect(find.text('连续失败，已暂停'), findsOneWidget);
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(api.calls.any((c) => c.startsWith('PATCH /api/tasks/t1')), isTrue);
-    expect(find.textContaining('连着失败了 3 次'), findsNothing);
+    expect(find.textContaining('已连续失败 3 次'), findsNothing);
   });
 }

@@ -23,7 +23,7 @@ from .models import Conversation, Feedback, Message
 from .wire_time import iso
 
 # 回复下能选的评价（👍 = good，其余是 👎 的原因）；problem = 设置页里自己写的问题报告
-MESSAGE_KINDS = {"good": "有用", "wrong": "答错了", "incomplete": "没做完", "stuck": "太慢或卡住了", "other": "别的问题"}
+MESSAGE_KINDS = {"good": "有用", "wrong": "答错了", "incomplete": "未完成", "stuck": "响应缓慢或无响应", "other": "其他问题"}
 KINDS = {**MESSAGE_KINDS, "problem": "问题报告"}
 STATUSES = ("open", "resolved")
 

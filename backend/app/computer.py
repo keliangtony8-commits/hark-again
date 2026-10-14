@@ -211,7 +211,7 @@ async def restart(db: AsyncSession, ws: str) -> dict:
     try:
         await sandbox_client.status(ws)  # 先确认沙盒服务在，免得任务停了一半
     except httpx.HTTPError as e:
-        raise ComputerError("沙盒服务连不上，没能重启") from e
+        raise ComputerError("无法连接沙盒服务，重启失败") from e
     for job in await running_jobs(db, ws):
         if job.keep_alive:
             continue  # 常驻任务不停：容器删了之后马上排队重启（像开机自启的服务）

@@ -42,7 +42,7 @@ export function cardRoute(t: CardTarget, card: Pick<HomeCard, "task_id" | "targe
  *  没有指令只有去处（助手提议或系统提醒，如“连接已失效”）→ 需要你亲自处理；其余（普通系统提醒）没有。 */
 export function cardEyebrow(card: Pick<HomeCard, "origin" | "action_prompt" | "conversation_id">, target: CardTarget | undefined): string | null {
   const offered = card.origin === "agent";
-  if (offered && card.conversation_id) return "已交给助手 · 看看进展";
+  if (offered && card.conversation_id) return "已交给助手 · 查看进展";
   if (!card.action_prompt) return target ? "需要你亲自处理" : null;
   return offered ? "可以替你做" : null;
 }

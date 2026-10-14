@@ -651,7 +651,7 @@ class McpServerItem {
   final String? problem;
 
   /// 行上的那句话；不认识的值当没有。
-  String? get problemText => switch (problem) { 'auth' => '令牌被拒绝', 'down' => '连不上', _ => null };
+  String? get problemText => switch (problem) { 'auth' => '令牌被拒绝', 'down' => '无法连接', _ => null };
 }
 
 class PageItem {

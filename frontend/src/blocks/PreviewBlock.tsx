@@ -27,7 +27,7 @@ export default function PreviewBlock({ block }: { block: T }) {
           <a className="icon-btn" href={block.url} target="_blank" rel="noreferrer" aria-label="在新标签页打开"><IconExternal /></a>
         </>}
       </div>
-      {expired ? <p className="blk-handoff-line">链接已过期。服务还在跑的话，让我重新生成一条。</p> : (
+      {expired ? <p className="blk-handoff-line">链接已过期。服务仍在运行时，可让我重新生成。</p> : (
         <div className="blk-preview-actions">
           {inline && <button className="btn btn-sm btn-ghost" onClick={() => setNonce((n) => n + 1)}>刷新</button>}
           <button className="btn btn-sm btn-ghost" aria-expanded={inline} onClick={() => setInline((v) => !v)}>{inline ? "收起" : "在这里看"}</button>

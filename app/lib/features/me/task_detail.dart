@@ -88,7 +88,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         title: const Text('定时任务'),
         body: tasks.isLoading
             ? const PageBody(children: [SkeletonList(rows: 3)])
-            : const PageBody(children: [EmptyHint(icon: Icons.event_busy_rounded, title: '这个任务已经不在了', text: '可能已在别的设备上删除。')]),
+            : const PageBody(children: [EmptyHint(icon: Icons.event_busy_rounded, title: '该任务已删除', text: '可能已在别的设备上删除。')]),
       );
     }
     final runs = ref.watch(taskRunsProvider(widget.id));
@@ -135,7 +135,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       await _refresh();
       if (mounted) showToast(context, task.isPanel ? '已开始，面板稍后更新' : '已开始，结果会出现在 Home');
     } catch (e) {
-      if (mounted) showToast(context, '没能开始：$e');
+      if (mounted) showToast(context, '启动失败：$e');
     }
   }
 

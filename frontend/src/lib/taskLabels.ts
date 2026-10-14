@@ -47,7 +47,7 @@ export const usesModel = (t: ScheduledTask) => !isScript(t) && !isLog(t);
 export const NOTIFY_LABELS = { failure: "失败时告诉我", always: "每次都告诉我", change: "输出变了告诉我" } as const;
 export const NOTIFY_HINTS = {
   failure: "成功了不打扰；失败时结果进 Home 收件箱。",
-  always: "每次跑完都把输出放进 Home 收件箱。",
+  always: "每次运行后将输出放入主页收件箱。",
   change: "输出和上次不一样才告诉你，适合盯网页、价格、库存。",
 } as const;
 
@@ -56,13 +56,13 @@ export function taskOutputLabel(t: ScheduledTask): string {
   if (isLog(t)) return "记录面板 · 不调用模型";
   if (t.output === "panel") return "刷新 Home 上的面板";
   if (!isScript(t)) return "结果放进 Home 收件箱";
-  return `${t.project_id ? "在项目工作区里跑" : "在我的文件里跑"} · ${NOTIFY_LABELS[t.notify ?? "failure"]}`;
+  return `${t.project_id ? "在项目工作区中运行" : "在我的文件中运行"} · ${NOTIFY_LABELS[t.notify ?? "failure"]}`;
 }
 
 /** 详情页说明条：只有被自动暂停时才有，告诉用户怎么恢复。 */
 export function autoPauseNote(t: ScheduledTask): string | null {
   return autoPaused(t)
-    ? `连着失败了 ${t.fail_streak ?? 0} 次，我先把它停了，免得一直白跑。改好后打开开关恢复；也可以先“立即运行”试一次，成功了会自动恢复。`
+    ? `已连续失败 ${t.fail_streak ?? 0} 次，已自动暂停。修改后打开开关即可恢复；也可先“立即运行”测试，成功后自动恢复。`
     : null;
 }
 
@@ -81,7 +81,7 @@ export const runStateLabel = (r: TaskRun) =>
 /** v2.15 碰壁条下面的小字（= App wallHint）。 */
 export const wallHint = (t: ScheduledTask) => t.wall_retrying ? "已经在重新运行，成功后这条会自动收起。"
   : !t.wall_fixable ? "不用你管，下次会自动再试。"
-  : t.output === "panel" ? "面板先显示上一次的内容。处理好后会自动重跑，也可以点“重试”。" : "处理好后会自动重跑，也可以点“重试”。";
+  : t.output === "panel" ? "面板先显示上一次的内容。处理完成后将自动重新运行，也可以点“重试”。" : "处理完成后将自动重新运行，也可以点“重试”。";
 
 /** v2.19 存登录 / 连连接器之后的提示：服务端给了“已重新运行”那句就接在后面（= App withRetried）。 */
 export const withRetried = (head: string, note?: string | null) => note ? `${head}。${note}` : head;

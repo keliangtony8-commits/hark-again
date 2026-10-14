@@ -52,11 +52,11 @@ class Api {
     try {
       res = await http.post(uri(path), headers: _headers, body: jsonEncode(body)).timeout(const Duration(seconds: 60));
     } on SocketException {
-      throw ApiError('连不上服务器');
+      throw ApiError('无法连接服务器');
     } on TimeoutException {
       throw ApiError('连接超时');
     } on http.ClientException {
-      throw ApiError('连不上服务器');
+      throw ApiError('无法连接服务器');
     }
     if (res.statusCode == 401) {
       await _ref.read(sessionProvider.notifier).signOut();
@@ -98,11 +98,11 @@ class Api {
     try {
       res = await call().timeout(const Duration(seconds: 30));
     } on SocketException {
-      throw ApiError('连不上服务器');
+      throw ApiError('无法连接服务器');
     } on TimeoutException {
       throw ApiError('连接超时');
     } on http.ClientException {
-      throw ApiError('连不上服务器');
+      throw ApiError('无法连接服务器');
     }
     if (res.statusCode == 401) {
       await _ref.read(sessionProvider.notifier).signOut();

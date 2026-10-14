@@ -49,7 +49,7 @@ CHILD_TOOLS = frozenset({
 })
 
 STATES = ("running", "done", "partial", "failed", "stopped")
-LABEL = {"running": "在做", "done": "完成", "partial": "交了半截", "failed": "没成", "stopped": "被停下"}
+LABEL = {"running": "进行中", "done": "已完成", "partial": "部分完成", "failed": "失败", "stopped": "已停止"}
 
 ROLE = """你现在是子助手：主助手把下面这件事交给你独立完成。你的最终回复会原样交回主助手（不是直接给用户看）。
 规则：

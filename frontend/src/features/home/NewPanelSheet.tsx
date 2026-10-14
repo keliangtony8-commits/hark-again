@@ -27,7 +27,7 @@ export default function NewPanelSheet({ onClose, briefMissing, removed, onBrief,
       <button className="btn btn-ghost" onClick={onClose}>取消</button>
       <button className="btn btn-primary" disabled={!what.trim()} onClick={() => go(what)}>开始做</button>
     </>}>
-      <p className="desc">说说想在主页一眼看到什么，我来找数据、定刷新频率。</p>
+      <p className="desc">描述想在主页查看的内容，我会查找数据并设定刷新频率。</p>
       <label className="form-field">
         <span>想看什么</span>
         <textarea autoFocus rows={2} value={what} onChange={(e) => setWhat(e.target.value)} placeholder="比如：每天早上的天气和课表"

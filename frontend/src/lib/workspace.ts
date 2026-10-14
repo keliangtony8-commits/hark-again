@@ -13,8 +13,8 @@ export const workspaceFilesTitle = (ws?: string | null) => (isPersonalWorkspace(
 
 /** 文件夹是空的时的说明。 */
 export const workspaceEmptyText = (ws: string) => isPersonalWorkspace(ws)
-  ? "上传资料后，在主聊天里我可以直接读它们，也能在云端电脑上跑代码处理；我生成的文件也会放在这里。"
-  : "上传资料让我参考，或者让我在这个项目里写代码、跑命令，生成的文件都会出现在这里。";
+  ? "上传资料后，我可以在主聊天中直接读取，也能在云端电脑上运行代码处理；我生成的文件也会存放在这里。"
+  : "上传资料供我参考，或让我在此项目中编写代码、运行命令，生成的文件会显示在这里。";
 
 /** 引用选择器里文件夹是空的时的说明。 */
 export const workspacePickEmptyText = (ws: string) => isPersonalWorkspace(ws)

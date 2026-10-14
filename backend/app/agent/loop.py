@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 from .. import activity, browser_files, command_env, llm_retry, plan, plan_mode, spill, steering, storage, vision
 from ..config import settings
-from ..llm import Reasoning, Turn, stream_turn
+from ..llm import Reasoning, ToolCall, Turn, stream_turn
 from . import approvals, claimed_action, compact, deferred, distill, loop_guard, named_file, next_speaker, owed_delivery, parallel, reply_fix, supersede, text_tool_call, tool_args, tool_mask, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
@@ -355,6 +355,16 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
         assert turn is not None
         spent += turn.tokens
         squeeze.observe(turn.prompt, at)
+        if not turn.tool_calls and not over and "<" in said and (texted_calls := text_tool_call.parse(
+                said, {x.name: x.parameters for x in REGISTRY.values() if x.available(ctx)})):
+            for ev in builder.rollback(mark):  # 工具调用写成了无歧义的标签：直接还原成真调用（text_tool_call.parse），标签不交付
+                yield ev
+            said = text_tool_call.prose(said)
+            for ev in builder.text(said) if said else ():
+                yield ev
+            turn.text = said
+            turn.tool_calls = [ToolCall(f"txt-{uuid.uuid4().hex[:10]}", n, json.dumps(a, ensure_ascii=False))
+                               for n, a in texted_calls]
         if not turn.tool_calls or over:
             if not over and inbox is not None and inbox.pending():  # 正要收尾时用户补了话：再来一圈读它（没读的不会被丢）
                 if said.strip():

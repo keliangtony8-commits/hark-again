@@ -198,7 +198,7 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel> {
     final r = _results;
     if (r == null) return const SizedBox.shrink(key: ValueKey('pending'));
     if (r.isEmpty) {
-      return EmptyHint(key: const ValueKey('none'), icon: Icons.search_off_rounded, title: '没有找到', text: '换个词试试：标题和聊天内容都会搜，空格分开的词都要有');
+      return EmptyHint(key: const ValueKey('none'), icon: Icons.search_off_rounded, title: '没有找到', text: '未找到结果。搜索范围包括标题和聊天内容，多个词以空格分隔');
     }
     return ListView.builder(
       key: ValueKey('results:${_q.toLowerCase()}'),

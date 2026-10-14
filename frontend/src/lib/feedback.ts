@@ -6,7 +6,7 @@ export const FEEDBACK_GOOD = "good";
 export const FEEDBACK_REASONS: { kind: string; label: string }[] = [
   { kind: "wrong", label: "答错了" },
   { kind: "incomplete", label: "没做完" },
-  { kind: "stuck", label: "太慢或卡住了" },
+  { kind: "stuck", label: "响应缓慢或无响应" },
   { kind: "other", label: "别的问题" },
 ];
 

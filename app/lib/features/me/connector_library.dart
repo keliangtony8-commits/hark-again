@@ -79,5 +79,5 @@ const reservedEnvNames = {
 const secretKinds = [
   (kind: 'login', label: '网站登录', desc: '我在云浏览器里替你登录这个网站'),
   (kind: 'api_key', label: 'API Key', desc: '我调用这个服务时按域名带上它'),
-  (kind: 'env', label: '环境变量', desc: '你电脑上跑的程序按名字读取，比如机器人 Token'),
+  (kind: 'env', label: '环境变量', desc: '由你电脑上运行的程序按名称读取，比如机器人 Token'),
 ];

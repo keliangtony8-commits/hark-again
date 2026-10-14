@@ -40,7 +40,7 @@ export default function MemoryScreen() {
     <Page header={<PageHeader title="记忆" back action={
       <button className="icon-btn" onClick={() => setAdding(true)} aria-label="添加"><IconPlus /></button>} />}>
       <PageIntro loading={!mem.loaded} summary={memorySummary(mem.items, notes.items.length)}
-        line="每次对话我都会参考这些。聊天时我会自己记，说错了就改，不想让我记的直接删。" />
+        line="每次对话我都会参考这些内容。聊天中我会自动记录；有误可直接修改，不需要的可删除。" />
       {!mem.loaded ? <Skeleton /> : empty ? (
         <StarterCard title="还没有记忆" text="聊天时说“记住我不吃辣”我就会记下来，也可以先告诉我几件事。">
           {MEMORY_STARTERS.map((s) => (
@@ -62,7 +62,7 @@ export default function MemoryScreen() {
         )}
         {!category && <MemoryNotesSection query={query} />}
         {groups.length === 0 && noteHits.length === 0 && !(mem.items.length === 0 && !query) ? (
-          <Hint icon={<IconSearch size={26} />} title="没有匹配的记忆" text="换个词，或者看看全部分类。"
+          <Hint icon={<IconSearch size={26} />} title="没有匹配的记忆" text="未找到结果，可更换关键词或查看全部分类。"
             action={<button className="btn btn-ghost" onClick={() => { setQuery(""); setFilter(null); }}>清除筛选</button>} />
         ) : groups.map(([cat, items]) => (
           <Section key={cat} title={`${categoryLabel(cat)} · ${items.length}`}>

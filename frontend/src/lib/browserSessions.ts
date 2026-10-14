@@ -11,7 +11,7 @@ export type BrowserSessionList = { sessions: BrowserSession[]; max_open: number 
 
 export const BROWSER_SESSIONS_PATH = "/api/browser/sessions";
 export const BROWSER_SESSIONS_EMPTY = "还没有保存的网站登录";
-export const BROWSER_SESSIONS_EMPTY_LINE = "让我在网页上登录一次，之后的任务都会接着用这个登录。";
+export const BROWSER_SESSIONS_EMPTY_LINE = "在网页上登录一次，之后的任务将沿用该登录状态。";
 
 /** 最近用过的在前，没时间的最后（稳定）。 */
 export function sortBrowserSessions(list: BrowserSession[]): BrowserSession[] {

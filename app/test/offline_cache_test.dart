@@ -36,7 +36,7 @@ class SwitchApi implements Api {
   @override
   Future<dynamic> get(String path) async {
     gets.add(path);
-    if (!online) throw ApiError('连不上服务器');
+    if (!online) throw ApiError('无法连接服务器');
     if (path.startsWith('/api/conversations/')) return {'id': path.split('/').last, 'messages': messages[path.split('/').last]};
     if (path.startsWith('/api/conversations')) return conversations;
     if (path == '/api/projects') return projects;
@@ -113,7 +113,7 @@ void main() {
     await c.read(chatProvider('').notifier).open('c1');
     final s = c.read(chatProvider(''));
     expect(s.messages, isEmpty);
-    expect(s.error, '连不上服务器');
+    expect(s.error, '无法连接服务器');
   });
 
   test('快速切换对话：慢的旧请求不会盖掉新对话', () async {

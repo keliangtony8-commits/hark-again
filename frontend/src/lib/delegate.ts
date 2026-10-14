@@ -4,15 +4,15 @@ import type { AgentBlock, Block, DelegateBlock, DelegateState, DelegateTask } fr
 export const delegateEnded = (t: DelegateTask) => t.state !== "running";
 export const delegateDone = (b: DelegateBlock) => b.tasks.filter((t) => t.state === "done").length;
 
-/** 进行中 “1/3 完成”；全结束且都完成 “3 个都完成了”；全结束有没成的 “完成 2/3”。 */
+/** 进行中与结束有失败的都是 “已完成 2/3”；全部完成 “3 项全部完成”。 */
 export function delegateProgress(b: DelegateBlock): string {
   const n = b.tasks.length, d = delegateDone(b);
-  if (b.tasks.every(delegateEnded)) return d === n ? `${n} 个都完成了` : `完成 ${d}/${n}`;
-  return `${d}/${n} 完成`;
+  if (b.tasks.every(delegateEnded)) return d === n ? `${n} 项全部完成` : `已完成 ${d}/${n}`;
+  return `已完成 ${d}/${n}`;
 }
 
 export const delegateStateLabel = (s: DelegateState) =>
-  ({ running: "在做", done: "完成", partial: "交了半截", failed: "没成", stopped: "被停下" })[s] ?? "在做";
+  ({ running: "进行中", done: "已完成", partial: "部分完成", failed: "失败", stopped: "已停止" })[s] ?? "进行中";
 
 function duration(seconds: number): string {
   if (seconds < 1) return "不到 1 秒";
@@ -40,7 +40,7 @@ function taskLine(t: DelegateTask): string {
     case "failed":
       return t.note || delegateStateLabel(t.state);
     default:
-      return "这一轮被停下了";
+      return "本轮已停止";
   }
 }
 
@@ -57,7 +57,7 @@ export const delegateFollowTitle = (title: string) => `追问「${title}」`;
 export const agentChipLabel = (a: AgentBlock) => (a.target ? `追问 · ${a.title || "子任务"}` : a.name || "子助手");
 
 export const agentChipSemantics = (a: AgentBlock) =>
-  a.target ? `追问子助手 ${a.title ?? ""}${a.gone ? "，它的上下文已经不在了" : ""}` : `交给${a.name || "子助手"}`;
+  a.target ? `追问子助手 ${a.title ?? ""}${a.gone ? "，其上下文已失效" : ""}` : `交给${a.name || "子助手"}`;
 
 /** 消息里的追问标签 → user.message 的 follow / follow_title（服务器以库里的标题为准）。 */
 export function followField(blocks: Block[]): { follow?: string; follow_title?: string } {

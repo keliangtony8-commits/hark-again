@@ -75,7 +75,7 @@ bool luhnOk(String digits) {
 /// 卡号的问题（null = 没问题）。银联放宽 Luhn（有的借记卡不满足），和后端一致。
 String? cardNumberError(String input) {
   final n = cardDigits(input);
-  if (n.length < 12 || n.length > 19) return '卡号位数不对';
+  if (n.length < 12 || n.length > 19) return '卡号位数有误';
   if (cardBrand(n) != 'unionpay' && !luhnOk(n)) return '卡号校验没通过，可能抄错了一位';
   return null;
 }
@@ -96,7 +96,7 @@ String? expiryError(String s, {DateTime? now}) {
   if (e == null) return '有效期写成 月/年，比如 09/28';
   final t = now ?? DateTime.now();
   if (e.$2 < t.year || (e.$2 == t.year && e.$1 < t.month)) return '这张卡已经过期了';
-  if (e.$2 > t.year + 20) return '有效期的年份不对';
+  if (e.$2 > t.year + 20) return '有效期年份有误';
   return null;
 }
 

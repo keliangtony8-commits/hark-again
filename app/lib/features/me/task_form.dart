@@ -30,7 +30,7 @@ Future<Map<String, dynamic>?> showTaskForm(BuildContext context, {ScheduledTask?
     title: task == null ? (isScript ? '新定时脚本' : '新定时任务') : (panel ? '编辑面板' : (isScript ? '编辑脚本' : '编辑任务')),
     subtitle: log
         ? '在聊天里说一句就记一笔（“今天跑了 5 公里”），面板自动算今天、近 7 天和连续天数'
-        : (isScript ? '到点直接在工作区跑这条命令，不调用模型、不花 token' : null),
+        : (isScript ? '到时直接在工作区运行此命令，不调用模型、不消耗 token' : null),
     submit: task == null ? '创建' : '保存',
     fields: [
       FieldSpec('name', panel ? '标题' : '名称', hint: panel ? '上海天气' : '早间简报', initial: task?.name ?? starter?.name ?? ''),

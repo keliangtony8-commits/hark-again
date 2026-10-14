@@ -7,7 +7,7 @@ const feedbackGood = 'good';
 const feedbackReasons = <(String, String)>[
   ('wrong', '答错了'),
   ('incomplete', '没做完'),
-  ('stuck', '太慢或卡住了'),
+  ('stuck', '响应缓慢或无响应'),
   ('other', '别的问题'),
 ];
 

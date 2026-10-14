@@ -22,14 +22,14 @@ export default function HostSection({ enter }: { enter?: number }) {
     if (on && !await confirmDialog({ title: "打开服务器主机模式？", text: HOST_ENABLE_TEXT, action: "打开" })) return;
     setBusy(true);
     try { setS(await http.put<HostStatus>(HOST_PATH, { enabled: on })); }
-    catch (e) { void noticeDialog("没能切换", e instanceof Error ? e.message : undefined); }
+    catch (e) { void noticeDialog("切换失败", e instanceof Error ? e.message : undefined); }
     setBusy(false);
   };
   const remove = async (r: HostRule) => {
     if (!await confirmDialog({ title: "删除这条规则？", text: hostRuleDeleteText(r), action: "删除" })) return;
     setDeleting((d) => new Set(d).add(r.id));
     try { setS(await http.del(`${HOST_PATH}/rules/${encodeURIComponent(r.id)}`) as HostStatus); }
-    catch (e) { void noticeDialog("没能删除", e instanceof Error ? e.message : undefined); }
+    catch (e) { void noticeDialog("删除失败", e instanceof Error ? e.message : undefined); }
     setDeleting((d) => { const n = new Set(d); n.delete(r.id); return n; });
   };
   const hint = hostHint(s);

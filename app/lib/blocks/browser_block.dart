@@ -138,7 +138,7 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
   }
 
   void _answerOnCard(bool done) {
-    if (!_answer(done)) showToast(context, '还没连上，连上后再点一次');
+    if (!_answer(done)) showToast(context, '尚未连接，连接后请重试');
   }
 
   @override
@@ -225,7 +225,7 @@ class _BrowserBlockViewState extends ConsumerState<BrowserBlockView> {
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.play_arrow_rounded, size: 18, color: context.palette.onInk),
                     const SizedBox(width: Sp.x1),
-                    Text('画面已暂停，点一下继续', style: context.text.bodySmall?.copyWith(color: context.palette.onInk)),
+                    Text('画面已暂停，轻点继续', style: context.text.bodySmall?.copyWith(color: context.palette.onInk)),
                   ]),
                 )
               : const SizedBox.shrink(key: ValueKey('live')),

@@ -75,6 +75,7 @@
 .msg-slot { display: flex; flex-direction: column; gap: var(--sp-3); }
 
 .msg { display: flex; flex-direction: column; gap: var(--sp-3); animation: rise 260ms var(--ease); }
+.msg.send-rise { animation: send-rise var(--dur-send) var(--spring-send), fade var(--dur) var(--ease); }  /* §O 刚发出的那条：弹簧上弹 + 淡入 */
 /* 搜索定位：底色向外多出一圈（伪元素，不挤动布局），停一会儿淡出 */
 .msg.flash { position: relative; isolation: isolate; }
 .msg.flash::before { content: ""; position: absolute; inset: calc(var(--sp-2) * -1); z-index: -1; border-radius: var(--r-inner);

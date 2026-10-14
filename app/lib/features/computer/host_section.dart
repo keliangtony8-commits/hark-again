@@ -67,7 +67,7 @@ class _HostSectionState extends ConsumerState<HostSection> {
       await ref.read(hostProvider.notifier).setEnabled(on);
       if (mounted) showToast(context, on ? '主机模式已打开' : '主机模式已关闭');
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能切换' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，切换失败' : e.message);
     } finally {
       if (mounted) setState(() => _toggling = false);
     }
@@ -80,7 +80,7 @@ class _HostSectionState extends ConsumerState<HostSection> {
       await ref.read(hostProvider.notifier).deleteRule(r.id);
       if (mounted) showToast(context, '已删除');
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能删除' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，删除失败' : e.message);
     } finally {
       if (mounted) setState(() => _deleting.remove(r.id));
     }

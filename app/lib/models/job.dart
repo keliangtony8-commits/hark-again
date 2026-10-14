@@ -221,8 +221,8 @@ String jobStateLabel(JobInfo j) => switch (j.state) {
 
 /// v2.25 取消的状态词：你停的 / 助手停的 / 不知道是谁（老任务）。网页版 lib/jobs.ts 同一套。
 String jobStopperLabel(String? by) => switch (by) {
-      'user' => '你停掉了',
-      'agent' => '助手停掉了',
+      'user' => '已由你停止',
+      'agent' => '已由助手停止',
       _ => '已取消',
     };
 

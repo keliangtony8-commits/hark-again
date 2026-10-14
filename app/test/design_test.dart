@@ -35,6 +35,17 @@ void main() {
     expect(bad, isEmpty);
   });
 
+  // v2.88 动效性能（hark-elegant-ui 7a）：模糊半径必须是常量令牌，只淡入模糊层；sigma 里出现 t / animation / value 就是每帧重算模糊。
+  test('动效流畅：ImageFilter.blur 的半径不随动画变', () {
+    final bad = <String>[];
+    for (final f in _dart('lib')) {
+      for (final m in RegExp(r'ImageFilter\.blur\(([^)]*)\)').allMatches(f.readAsStringSync())) {
+        if (RegExp(r'\*|animation|\.value|\bt\b').hasMatch(m.group(1)!)) bad.add('${f.path}: ${m.group(0)}');
+      }
+    }
+    expect(bad, isEmpty);
+  });
+
   test('页面级动作在标题栏：不用 Material 悬浮钮（它不吃设计令牌）', () {
     final bad = [for (final f in _dart('lib')) if (f.readAsStringSync().contains('FloatingActionButton(')) f.path];
     expect(bad, isEmpty);
@@ -58,7 +69,7 @@ void main() {
       'lib/blocks/job_block.dart': 1, // 后台任务运行中脉冲
       'lib/blocks/plan_block.dart': 1, // 计划清单“进行中”那一步的脉冲（v1.47）
       'lib/blocks/delegate_block.dart': 1, // 子助手“在做”的脉冲（v1.48）
-      'lib/features/computer/computer_section.dart': 1, // 电脑里正在跑的后台任务脉冲（v1.25）
+      'lib/features/computer/computer_section.dart': 1, // 电脑里正在运行的后台任务脉冲（v1.25）
       'lib/blocks/basic_blocks.dart': 1, // 前台命令运行中脉冲（v1.24）
       'lib/features/projects/project_files_sheet.dart': 1, // 处理中脉冲
       'lib/features/me/usage_screen.dart': 1, // 预算进度条（未超）

@@ -36,7 +36,7 @@ export function useSaveReply(messageId: string, projectId?: string) {
   const note = done
     ? (isPersonalWorkspace(done.project_id)
       ? <span key={done.path} className="msg-saved fade-in" role="status">{savedReplyText(done.project_name, done.name)}</span>
-      : <Link key={done.path} className="msg-saved fade-in" to={`/projects/${done.project_id}`} title="去项目里看看">
+      : <Link key={done.path} className="msg-saved fade-in" to={`/projects/${done.project_id}`} title="前往项目">
           {savedReplyText(done.project_name, done.name)}
         </Link>)
     : err ? <span key={err} className="msg-saved is-err fade-in" role="status">{err}</span> : null;

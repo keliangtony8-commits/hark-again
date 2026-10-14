@@ -399,15 +399,16 @@ class FrostLayer extends StatelessWidget {
     if (t == 0) return const SizedBox.expand();
     final p = context.palette;
     final solid = GlassMode.solidOf(context);
-    final tint = solid ? p.bg.withValues(alpha: Op.dimmed * t) : p.scrim.withValues(alpha: p.scrim.a * t);
-    final cover = ColoredBox(color: tint, child: const SizedBox.expand());
+    // v2.88 动效性能（hark-elegant-ui 7a）：模糊半径固定，整层只淡入（Opacity 合成层），不再每帧重算 sigma。
+    final cover = ColoredBox(color: solid ? p.bg.withValues(alpha: Op.dimmed) : p.scrim, child: const SizedBox.expand());
+    final layer = solid ? cover : ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: cover));
     return Semantics(
       label: semanticLabel,
       button: semanticLabel != null,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: solid ? cover : ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: blur * t, sigmaY: blur * t), child: cover)),
+        child: RepaintBoundary(child: t >= 1 ? layer : Opacity(opacity: t, child: layer)),
       ),
     );
   }

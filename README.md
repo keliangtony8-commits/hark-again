@@ -354,6 +354,7 @@ postgres ~200M、litellm ~300M、searxng ~150M、backend+worker ~300M、browser 
 - v2.85 我的电脑（home-redesign B）：页头写清这是服务器上隔出来的一块（内存/空间上限）；个人电脑多一行“整台服务器”（核数、负载、内存、磁盘，后端 app/machine.py）；同名同命令的常驻服务合成一行（services.merge，旧的停止记录折成“24 小时内停过 N 次”）。
 - v2.84 聊天手势 §I（对标 Hark）：气泡下不再常驻一排小图标。点哪条消息就在它那侧显示这条的时间，再点收起（各自独立，可同时开几条）；长按（网页悬停“⋯”）出这条的动作菜单：复制、选择文字（仅 App）、朗读、重新生成（最后一条）、存成文件、有用、不好。没发出 / 停下 / 继续 / 正在朗读这些状态行照常显示。
 - v2.87 长按 = 原地聚焦菜单 + 引用回复（§J）：长按（网页“⋯”或右键）时背景整片模糊、那条消息清晰留在原位，旁边一张小菜单（复制 · 选择文字 · 回复…，多于 5 项收进“更多”）；“回复”在输入框上方出引用条，发出后气泡顶上一行原话、点它跳回原消息；后端 messages.reply_to（迁移 0063，app/reply_quote.py），模型这一问看到被引原文。
+- v2.88 专业文案 + 动效流畅：App/网页/后端给用户看的文字统一书面语（运行中/已完成/失败/无法连接服务器…）；模型写成标签的工具调用直接执行、标签不交付；模糊遮罩半径固定只淡入；刚发出的气泡弹簧上弹（App SpringCurve/SendRise = 网页 --spring-send）。
 - v2.75 定时任务 / 面板 / 定时脚本每次运行开的对话不再挤进对话列表（Conversation.task_id；从 Home 报告卡和任务运行记录点开，搜索能搜到）；在里面接话或重答后变普通对话进列表；任务还在跑时删 → 409（修 worker 外键错误）；运行记录裁剪 / 删任务时连带清掉还藏着的运行对话。规则 backend/app/run_conversations.py，迁移 0062，冒烟 tests/smoke_run_conversations.py。另：浏览器 Chromium 加 --disable-gpu（VPS 上 SwiftShader gpu-process 空转吃满一核）
 - v2.76 压缩包不解压就看：read_file 认出 .zip/.tar(.gz/.bz2/.xz)/.tgz/.gz 就列目录（大小带单位、最大的 3 个、文件夹数、加密），member="包里路径" 在内存里读其中一个（文字 UTF-8/GBK、PDF/Office、图片、套一层的包；上限 50 MB 防压缩炸弹），附件同样；GBK 名字的 zip 不乱码；规则只在 app/archives.py。
 - v2.77 交付的文件永远是最终版：display_file 之后同一轮又改了源文件/目录，收尾时按同样规则重拍进原卡（同一路径交两次只留最后一张；源删了就保留原快照），规则 app/deliver.py refresh。GBK 编码的中文文本：read_file 按 GBK 显示并标明、附件提示直接说“是 GBK”（app/file_read.py decode/sniff，压缩包成员同一规则）。“你现在直接打开…/需要的话我可以…”这类提议结尾不再被当成没说完而续一圈（agent/next_speaker.py）。

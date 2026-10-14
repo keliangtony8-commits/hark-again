@@ -95,7 +95,7 @@ export default function SkillsScreen() {
         <>
           {skills.items.length >= SKILL_SEARCH_FROM && <SearchField className="skill-search" value={query} onChange={setQuery} placeholder="搜索技能" />}
           {searching && !mine.length && !builtin.length && (
-            <Hint icon={<IconSearch size={26} />} title="没有匹配的技能" text="换个词试试，名称、用途和步骤都会搜。"
+            <Hint icon={<IconSearch size={26} />} title="没有匹配的技能" text="未找到结果。搜索范围包括名称、用途和步骤。"
               action={<button className="btn btn-ghost" onClick={() => setQuery("")}>清除搜索</button>} />
           )}
           {(!searching || mine.length > 0) && (

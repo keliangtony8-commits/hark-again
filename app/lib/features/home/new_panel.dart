@@ -42,7 +42,7 @@ Future<void> createPanel(BuildContext context, WidgetRef ref) async {
   final v = await showFormSheet(
     context,
     title: '新面板',
-    subtitle: '说说想在主页一眼看到什么，我来找数据、定刷新频率。',
+    subtitle: '描述想在主页查看的内容，我会查找数据并设定刷新频率。',
     submit: '开始做',
     fields: const [FieldSpec('what', '想看什么', hint: '比如：每天早上的天气和课表', lines: 2)],
     extra: Builder(

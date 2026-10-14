@@ -78,8 +78,8 @@ class ConversationFiles {
 
   /// 打包按钮下那一行（不能点时说为什么）。
   String get zipNote {
-    if (available == 0) return '文件都已经不在了，没法打包';
-    if (!canZip) return '一共 ${formatSize(size)}，超过打包上限 ${formatSize(zipMax)}，请挑着单个下载';
+    if (available == 0) return '文件均已删除，无法打包';
+    if (!canZip) return '一共 ${formatSize(size)}，超过打包上限 ${formatSize(zipMax)}，请逐个下载';
     return '$available 个文件 · ${formatSize(size)}';
   }
 }

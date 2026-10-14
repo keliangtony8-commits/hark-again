@@ -214,11 +214,13 @@ Future<T?> showAppDialog<T>(BuildContext context, {required WidgetBuilder builde
       return Stack(children: [
         Positioned.fill(
           child: IgnorePointer(
-            child: AnimatedBuilder(
-              animation: animation,
-              builder: (_, _) => BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: Glass.scrimBlur * animation.value, sigmaY: Glass.scrimBlur * animation.value),
-                child: const SizedBox.expand(),
+            child: FadeTransition( // v2.88：模糊半径固定，只淡入（不每帧重算 sigma）
+              opacity: animation,
+              child: RepaintBoundary(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: Glass.scrimBlur, sigmaY: Glass.scrimBlur),
+                  child: const SizedBox.expand(),
+                ),
               ),
             ),
           ),

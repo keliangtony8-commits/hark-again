@@ -183,7 +183,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
     final onAnswer = widget.onAnswer;
     if (onAnswer == null) return;
     if (!onAnswer(done)) {
-      showToast(context, '还没连上，连上后再点一次');
+      showToast(context, '尚未连接，连接后请重试');
       return;
     }
     Navigator.of(context).maybePop();
@@ -277,7 +277,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
                             errorBuilder: (_, _, _) => Container(
                               color: context.tileFill,
                               alignment: Alignment.center,
-                              child: Text(b.live ? '正在打开…' : '画面还没来，稍等', style: context.text.bodySmall),
+                              child: Text(b.live ? '正在打开…' : '正在载入画面…', style: context.text.bodySmall),
                             ),
                           ),
                         ),

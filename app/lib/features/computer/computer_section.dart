@@ -1,5 +1,5 @@
 // “电脑”一节（v1.25）：工作区背后那台云端 Linux 现在怎样——项目首屏和“我的 → 我的电脑”共用这一块。
-//   [▣] 运行中                               2 个任务在跑
+//   [▣] 运行中                               2 个任务运行中
 //       内存 312 MB / 1 GB · 文件 120 MB
 //       ▬▬▬▬▬▬▬▭▭▭▭▭  （内存条，吃紧变警示色）
 //   ─────────────────────────────────────
@@ -133,7 +133,7 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
       await _ctl.restart();
       if (mounted) showToast(context, '已重启，下次用到时自动开机');
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能重启' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，重启失败' : e.message);
     } finally {
       if (mounted) setState(() => _restarting = false);
     }
@@ -144,7 +144,7 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
     try {
       await _ctl.cancelJob(j.id);
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能取消' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，取消失败' : e.message);
     } finally {
       if (mounted) setState(() => _cancelling.remove(j.id));
     }
@@ -154,9 +154,9 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
     setState(() => _bouncing.add(v.job.id));
     try {
       await _ctl.restartService(v.job.id);
-      if (mounted) showToast(context, '「${v.job.title}」几秒内重新跑起来');
+      if (mounted) showToast(context, '「${v.job.title}」将在几秒内重新启动');
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能重启' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，重启失败' : e.message);
     } finally {
       if (mounted) setState(() => _bouncing.remove(v.job.id));
     }

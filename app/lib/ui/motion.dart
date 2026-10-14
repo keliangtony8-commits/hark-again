@@ -2,6 +2,7 @@
 // 无障碍：系统开了“移除动画”（MediaQuery.disableAnimations）时，这里的每个组件都直接给出终态、
 // 循环动画停住；页面里需要时长的地方用 context.motion(Motion.x)，同样会被归零。
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -67,6 +68,44 @@ class FadeSlideIn extends StatelessWidget {
       builder: (_, v, c) => Opacity(
         opacity: v,
         child: Transform.translate(offset: Offset(0, (1 - v) * offset), child: c),
+      ),
+    );
+  }
+}
+
+/// 欠阻尼弹簧曲线（§O）：0→1，冲过 1 一次再落回；t=1 时余振 < 0.5%。阻尼比来自 Motion.sendDamping。
+class SpringCurve extends Curve {
+  const SpringCurve([this.damping = Motion.sendDamping]);
+  final double damping;
+
+  @override
+  double transformInternal(double t) {
+    const settle = 5.5; // ζ·ωn：e^-5.5 ≈ 0.004，到 t=1 基本静止
+    final wn = settle / damping, wd = wn * math.sqrt(1 - damping * damping);
+    final env = math.exp(-damping * wn * t);
+    return 1 - env * (math.cos(wd * t) + damping / math.sqrt(1 - damping * damping) * math.sin(wd * t));
+  }
+}
+
+/// 刚由本机发出的那条用户气泡：从输入框方向上移 Motion.sendRise、弹簧过冲再落回，同时淡入（§O）。
+/// play=false 时原样画出（同一结构）；只动 transform/opacity；读屏/减弱动效只淡入。
+class SendRise extends StatelessWidget {
+  const SendRise({super.key, required this.play, required this.child});
+  final bool play;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    // 结构始终相同（play 从 true 变 false 时子树不重建、不丢状态）：play=false 时从 1 到 1，等于不动
+    final reduce = context.reduceMotion;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: play ? 0 : 1, end: 1),
+      duration: reduce ? Motion.base : Motion.send,
+      curve: reduce ? Motion.ease : const SpringCurve(),
+      child: child,
+      builder: (_, v, c) => Opacity(
+        opacity: v.clamp(0.0, 1.0),
+        child: Transform.translate(offset: Offset(0, reduce ? 0 : (1 - v) * Motion.sendRise), child: c),
       ),
     );
   }

@@ -339,7 +339,7 @@ class RowHint extends StatelessWidget {
   const RowHint(this.text, {super.key, this.warn = false});
   final String text;
 
-  /// 需要用户注意（磁盘满了之类）：警示色。
+  /// 需要用户注意（磁盘已满之类）：警示色。
   final bool warn;
 
   @override

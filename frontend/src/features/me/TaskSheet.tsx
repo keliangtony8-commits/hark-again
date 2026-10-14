@@ -42,7 +42,7 @@ export default function TaskSheet({ initial, title, onSave, onClose, panel = fal
         <input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="今日简报" /></label>
       {log && <p className="form-note">在聊天里说一句就记一笔（“今天跑了 5 公里”），面板自动算今天、近 7 天和连续天数。</p>}
       {!log && <>
-      {script && <p className="form-note">到点直接在工作区跑这条命令，不调用模型、不花 token。</p>}
+      {script && <p className="form-note">到时直接在工作区运行此命令，不调用模型、不消耗 token。</p>}
       <label className="form-field"><span>{panel ? "每次刷新查什么、怎么展示" : script ? "到点运行的命令" : "要我做什么"}</span>
         <textarea className={script ? "mono" : undefined} value={d.prompt} onChange={(e) => setD({ ...d, prompt: e.target.value })}
           placeholder={script ? "python3 scripts/fetch.py" : "帮我准备今天…"} spellCheck={!script} /></label>

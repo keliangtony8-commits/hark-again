@@ -64,7 +64,7 @@ class _SkillsScreenState extends ConsumerState<SkillsScreen> {
                 EmptyHint(
                   icon: Icons.search_off_rounded,
                   title: '没有匹配的技能',
-                  text: '换个词试试，名称、用途和步骤都会搜。',
+                  text: '未找到结果。搜索范围包括名称、用途和步骤。',
                   action: TextButton(onPressed: () => setState(_query.clear), child: const Text('清除搜索')),
                 ),
               if (!searching || mine.isNotEmpty) ...[

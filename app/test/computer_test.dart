@@ -82,8 +82,8 @@ void main() {
     expect(computerStateLabel(run.state), '运行中');
     expect(computerDetail(run), '内存 300.0 MB / 1 GB · 文件 120.0 MB');
     expect(computerMemoryRatio(run), closeTo(300 / 1024, 1e-9));
-    expect(computerHint(run), '1 个任务在跑');
-    expect(computerRestartText(run), startsWith('会停掉 1 个正在跑的后台任务。'));
+    expect(computerHint(run), '1 个任务运行中');
+    expect(computerRestartText(run), startsWith('将停止 1 个正在运行的后台任务。'));
     expect(run.jobs.single.elapsed, const Duration(seconds: 185));
 
     final idle = ComputerStatus.fromJson(_status(job: false));
@@ -110,12 +110,12 @@ void main() {
     expect(ComputerStatus.fromJson(slept('weird')).stoppedBy, isNull);
 
     final none = ComputerStatus.fromJson(_status(state: 'none', job: false));
-    expect(computerDetail(none), startsWith('第一次跑命令时开机'));
+    expect(computerDetail(none), startsWith('首次运行命令时启动'));
 
     final down = ComputerStatus.fromJson(_status(state: 'unreachable', job: false));
     expect(down.reachable, isFalse);
-    expect(computerStateLabel(down.state), '连不上沙盒');
-    expect(computerSemantics(down), contains('沙盒服务没在跑'));
+    expect(computerStateLabel(down.state), '无法连接沙盒');
+    expect(computerSemantics(down), contains('沙盒服务未运行'));
 
     expect(formatSize(3 << 30), '3 GB');
     expect(formatSize((1.5 * (1 << 30)).round()), '1.5 GB');
@@ -125,7 +125,7 @@ void main() {
     final api = await _pump(tester, _status());
     expect(api.calls.first, 'GET /api/projects/me/computer');
     expect(find.text('运行中'), findsOneWidget);
-    expect(find.text('1 个任务在跑'), findsOneWidget);
+    expect(find.text('1 个任务运行中'), findsOneWidget);
     expect(find.byType(MeterBar), findsOneWidget);
     expect(find.text('训练模型'), findsOneWidget);
     expect(find.text('运行 3 分 05 秒 · \$ python train.py'), findsOneWidget);
@@ -157,7 +157,7 @@ void main() {
     final s = ComputerStatus.fromJson(_status(job: false, services: [_svc('up')]));
     expect(s.liveServices, 1);
     expect(s.busy, isTrue);
-    expect(computerHint(s), '1 个服务在跑');
+    expect(computerHint(s), '1 个服务运行中');
     expect(computerHintWarn(s), isFalse);
     expect(computerRestartText(s), '1 个常驻服务会马上重新拉起。文件和装过的软件都在，下次用到时自动开机。');
     final bad = ComputerStatus.fromJson(_status(services: [_svc('gave_up')]));
@@ -179,7 +179,7 @@ void main() {
     }
     expect(api.calls, containsAllInOrder(['POST /api/jobs/s1/restart', 'GET /api/projects/me/computer']));
     expect(find.text('运行 1 小时 02 分 · 端口 8000 · 已重启 1 次'), findsOneWidget);
-    expect(find.text('1 个服务在跑'), findsOneWidget);
+    expect(find.text('1 个服务运行中'), findsOneWidget);
     expect(find.text('重新启动'), findsNothing);
     await tester.pump(const Duration(seconds: 4)); // 吐司走完
   });
@@ -191,7 +191,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(find.text('重启这台电脑？'), findsOneWidget);
-    expect(find.textContaining('会停掉 1 个'), findsOneWidget);
+    expect(find.textContaining('将停止 1 个'), findsOneWidget);
     await tester.tap(find.descendant(of: find.byType(PillButton), matching: find.text('重启')));
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 100));
@@ -207,9 +207,9 @@ void main() {
     expect(find.byType(MeterBar), findsNothing);
   });
 
-  testWidgets('连不上沙盒', (tester) async {
+  testWidgets('无法连接沙盒', (tester) async {
     await _pump(tester, _status(state: 'unreachable', job: false));
-    expect(find.text('连不上沙盒'), findsOneWidget);
+    expect(find.text('无法连接沙盒'), findsOneWidget);
     expect(find.byIcon(Icons.cloud_off_rounded), findsOneWidget);
     expect(find.text('重启'), findsNothing);
   });

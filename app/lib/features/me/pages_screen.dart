@@ -47,7 +47,7 @@ class PagesScreen extends ConsumerWidget {
           return PullRefresh(
             onRefresh: () => ref.read(pagesProvider.notifier).reload(),
             child: PageBody(children: [
-              PageIntro(summary: pagesSummary(list), line: '行程、邀请函、菜单这类要给别人看的东西，我会做成网页。链接带随机后缀不会被搜到；暂时不想让人看就下线，链接不变。'),
+              PageIntro(summary: pagesSummary(list), line: '行程、邀请函、菜单等需要分享的内容，我会制作成网页。链接含随机后缀，不会被搜索到；可随时下线，链接保持不变。'),
               if (list.isEmpty) const _Starters(),
               if (g.live.isNotEmpty) ...[SectionTitle('在线', count: g.live.length), rows(g.live)],
               if (g.off.isNotEmpty) ...[SectionTitle('已下线', count: g.off.length), rows(g.off)],

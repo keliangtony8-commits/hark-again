@@ -216,7 +216,7 @@ String computerStateLabel(String state) => switch (state) {
       'running' => '运行中',
       'stopped' => '休眠中',
       'none' => '还没开机',
-      _ => '连不上沙盒',
+      _ => '无法连接沙盒',
     };
 
 /// 内存占比（0–1）；不在跑或拿不到 → null（不画条）。
@@ -240,8 +240,8 @@ String computerDetail(ComputerStatus s) {
         disk,
       ].join(' · '),
     'stopped' => '${_sleepReason(s)}用到时自动开机 · $disk',
-    'none' => '第一次跑命令时开机 · $disk',
-    _ => '服务器上的沙盒服务没在跑，命令和后台任务暂时用不了 · $disk',
+    'none' => '首次运行命令时启动 · $disk',
+    _ => '沙盒服务未运行，命令和后台任务暂不可用 · $disk',
   };
 }
 
@@ -256,10 +256,10 @@ bool computerHintWarn(ComputerStatus s) => s.diskFull || s.deadServices > 0;
 
 /// 行尾小字：服务停了先说（v1.82）；有任务在跑说几个；在跑但空闲说“空闲”；镜像更新过说“下次用到时更新”。
 String? computerHint(ComputerStatus s) {
-  if (s.diskFull) return '磁盘满了';
+  if (s.diskFull) return '磁盘已满';
   if (s.deadServices > 0) return '${s.deadServices} 个服务停了';
-  if (s.jobs.isNotEmpty) return '${s.jobs.length} 个任务在跑';
-  if (s.liveServices > 0) return '${s.liveServices} 个服务在跑';
+  if (s.jobs.isNotEmpty) return '${s.jobs.length} 个任务运行中';
+  if (s.liveServices > 0) return '${s.liveServices} 个服务运行中';
   if (s.outdated && s.reachable) return '下次用到时更新';
   if (s.running) return '空闲';
   return null;
@@ -267,14 +267,14 @@ String? computerHint(ComputerStatus s) {
 
 /// 重启确认里的说明。
 String computerRestartText(ComputerStatus s) => [
-      if (s.jobs.isNotEmpty) '会停掉 ${s.jobs.length} 个正在跑的后台任务。',
+      if (s.jobs.isNotEmpty) '将停止 ${s.jobs.length} 个正在运行的后台任务。',
       if (s.liveServices > 0) '${s.liveServices} 个常驻服务会马上重新拉起。',
       '文件和装过的软件都在，下次用到时自动开机。',
     ].join();
 
 /// 读屏一句话。
 String computerSemantics(ComputerStatus s) => '电脑${computerStateLabel(s.state)}，${computerDetail(s)}'
-    '${s.jobs.isEmpty ? '' : '，${s.jobs.length} 个后台任务在跑'}'
+    '${s.jobs.isEmpty ? '' : '，${s.jobs.length} 个后台任务运行中'}'
     '${s.liveServices == 0 ? '' : '，${s.liveServices} 个常驻服务'}${s.deadServices == 0 ? '' : '，${s.deadServices} 个服务停了'}';
 
 /// 内存打满被杀过：状态块里的一行警示。没有 → null。
@@ -297,8 +297,8 @@ String computerDiskLine(ComputerStatus s) =>
 
 /// 快满 / 满了的一句；平时 null。
 String? computerDiskNote(ComputerStatus s) => switch (s.diskLevel) {
-      'full' => '满了：新文件写不进，后台任务会被停下。清理一下，或删掉不要的文件',
-      'tight' => '快满了：满了以后新文件写不进、后台任务会被停下',
+      'full' => '已满：无法写入新文件，后台任务将被停止。请清理空间或删除不需要的文件',
+      'tight' => '空间紧张：写满后将无法写入新文件，后台任务也会停止',
       _ => null,
     };
 
@@ -328,7 +328,7 @@ List<(String, String, String, int)> storageRows(ComputerStorage st) => [
 /// 标题行“清理”按钮的字；没东西可清 → null（不给按钮）。
 String? cleanupLabel(ComputerStorage st) => st.cleanable > 0 ? '清理 ${formatSize(st.cleanable)}' : null;
 
-const cleanupText = '删掉长输出存档、已结束任务的完整日志和下载缓存。文件、装的软件、正在跑的任务都不动；聊天里的任务卡照常能看结论。';
+const cleanupText = '删除长输出存档、已结束任务的完整日志和下载缓存。文件、已安装软件和运行中的任务不受影响；聊天中的任务卡仍可查看结论。';
 
 String cleanupDone(int freed) => freed > 0 ? '腾出了 ${formatSize(freed)}' : '没有可清理的了';
 
@@ -405,8 +405,8 @@ String memoryViewLine(MemoryView v) => '已用 ${formatSize(v.used)}${v.limit !=
 String? memoryTightNote(MemoryView v) {
   if (!v.tight) return null;
   final top = v.rows.isEmpty ? null : v.rows.first;
-  final who = top == null ? '' : '，最大的是「${memoryRowTitle(top)}」（约 ${formatSize(top.memory)}），先停它最管用';
-  return '快满了：再涨系统会强制结束程序（先结束普通后台任务）$who';
+  final who = top == null ? '' : '，占用最多的是「${memoryRowTitle(top)}」（约 ${formatSize(top.memory)}），优先停止它效果最明显';
+  return '内存紧张：继续增长将强制结束程序（优先结束普通后台任务）$who';
 }
 
 String memoryRowTitle(MemoryRow r) => r.owner == MemoryOwner.process ? commandTitle(r.title) : r.title;
@@ -526,6 +526,6 @@ String computerIntro(ComputerStatus? s, {required bool personal}) {
   final what = personal ? '你的云电脑' : '这个项目的云电脑';
   final head = size.isEmpty ? '$what是服务器上隔出来的一块云端 Linux' : '$what是服务器上隔出来的一块云端 Linux（$size）';
   return personal
-      ? '$head：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。'
-      : '$head：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。';
+      ? '$head：我在这里运行代码、安装软件、执行后台任务，产物存入“我的文件”。'
+      : '$head：项目内的对话在这里运行代码、安装软件、执行后台任务，文件即项目文件。';
 }

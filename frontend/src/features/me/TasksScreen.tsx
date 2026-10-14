@@ -68,9 +68,9 @@ export default function TasksScreen() {
             </StarterCard>
           )}
           {g.attention.length > 0 && <Section title={`需要留意 · ${g.attention.length}`}>{rows(g.attention)}</Section>}
-          {g.running.length > 0 && <Section title={`在跑 · ${g.running.length}`}>{rows(g.running)}</Section>}
+          {g.running.length > 0 && <Section title={`运行中 · ${g.running.length}`}>{rows(g.running)}</Section>}
           {g.panels.length > 0 && <Section title={`Home 面板 · ${g.panels.length}`}>{rows(g.panels)}</Section>}
-          {g.idle.length > 0 && <Section title={`已停下 · ${g.idle.length}`}>{rows(g.idle)}</Section>}
+          {g.idle.length > 0 && <Section title={`已停用 · ${g.idle.length}`}>{rows(g.idle)}</Section>}
         </>
       )}
       {creating && <TaskSheet title={creating.kind === "script" ? "新定时脚本" : "新建任务"} initial={creating} onClose={() => setCreating(null)}

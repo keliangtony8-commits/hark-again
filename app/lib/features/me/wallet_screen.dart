@@ -39,7 +39,7 @@ class WalletScreen extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: Sp.x4),
                 child: StarterCard(
                   title: '钱包是空的',
-                  text: '加一张常用的卡，网上买东西、订酒店时就不用每次自己掏卡输号。',
+                  text: '添加常用银行卡，网购和预订酒店时无需重复输入卡号。',
                   starters: [PillButton(label: '添加付款卡', icon: Icons.credit_card_rounded, onTap: () => addCard(context, ref))],
                 ),
               )

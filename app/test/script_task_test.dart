@@ -60,8 +60,8 @@ void main() {
     final t = ScheduledTask.fromJson(scriptJson(notify: 'change'));
     expect([t.isScript, t.notify, t.projectId], [true, 'change', null]);
     expect(taskIcon(t), Icons.terminal_rounded);
-    expect(taskOutputLabel(t), '在我的文件里跑 · 输出变了告诉我');
-    expect(taskOutputLabel(ScheduledTask.fromJson(scriptJson(project: 'p1'))), '在项目工作区里跑 · 失败时告诉我');
+    expect(taskOutputLabel(t), '在我的文件中运行 · 输出变了告诉我');
+    expect(taskOutputLabel(ScheduledTask.fromJson(scriptJson(project: 'p1'))), '在项目工作区中运行 · 失败时告诉我');
     final a = ScheduledTask.fromJson(taskJson());
     expect([a.isScript, a.kind, a.notify], [false, 'agent', 'failure']);
     expect(taskOutputLabel(a), '结果放进 Home 收件箱');
@@ -96,7 +96,7 @@ void main() {
     _size(tester);
     final api = _Api(tasks: [scriptJson()], runs: [{...runJson('r1', 'ok'), 'job_id': 'j1'}]);
     await pump(tester, api, '/me/tasks/t1');
-    expect(find.text('在我的文件里跑 · 失败时告诉我'), findsOneWidget);
+    expect(find.text('在我的文件中运行 · 失败时告诉我'), findsOneWidget);
     expect(find.text('tar czf b.tgz notes'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel(RegExp('点按看日志')));
     await tester.pumpAndSettle();
@@ -112,6 +112,6 @@ void main() {
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(api.patched.single, {'notify': 'always'});
-    expect(find.text('在我的文件里跑 · 每次都告诉我'), findsOneWidget);
+    expect(find.text('在我的文件中运行 · 每次都告诉我'), findsOneWidget);
   });
 }

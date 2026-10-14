@@ -30,8 +30,8 @@ export const fileOriginCounts = (d: ConversationFiles): [string, number][] =>
 export const canZip = (d: ConversationFiles) => d.available > 0 && (!d.zip_max || d.size <= d.zip_max);
 
 export const zipNote = (d: ConversationFiles) => {
-  if (d.available === 0) return "文件都已经不在了，没法打包";
-  if (!canZip(d)) return `一共 ${formatSize(d.size)}，超过打包上限 ${formatSize(d.zip_max ?? 0)}，请挑着单个下载`;
+  if (d.available === 0) return "文件均已删除，无法打包";
+  if (!canZip(d)) return `一共 ${formatSize(d.size)}，超过打包上限 ${formatSize(d.zip_max ?? 0)}，请逐个下载`;
   return `${d.available} 个文件 · ${formatSize(d.size)}`;
 };
 

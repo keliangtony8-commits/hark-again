@@ -12,7 +12,7 @@ export const BROWSER_DOWN_HINT = "是服务器上的浏览器服务出了问题�
 /** 卡头右边的按钮：打开全屏接管页。 */
 export const TAKEOVER_LABEL = "接管";
 /** 电脑端接管页的一句手势说明（第一次操作后收起）。手机 App 是“双指放大，单指滚动，长按拖动”。 */
-export const TAKEOVER_HINT = "点一下就是点网页，滚轮滚动，按住拖动，直接打字";
+export const TAKEOVER_HINT = "单击即点击网页，滚轮滚动，按住拖动，可直接输入";
 export const TAKEOVER_KEYS_HINT = "打字发到网页，空着发送 = 回车";
 /** 浏览器服务视口（browser/service.py VIEW）。 */
 export const BROWSER_VIEW = { width: 1280, height: 800 };
@@ -60,7 +60,7 @@ export const screenShouldPause = (idleMs: number, control: boolean, live: boolea
 
 export function browserScreenLabel(takeover: boolean, paused: boolean, site?: string): string {
   const where = site ? `${site} 的浏览器` : "浏览器";
-  if (paused) return `${where}画面已暂停，点一下继续`;
+  if (paused) return `${where}画面已暂停，轻点继续`;
   return takeover ? `${where}实时画面，已接管，点哪里就点网页哪里` : `${where}实时画面，点开接管`;
 }
 

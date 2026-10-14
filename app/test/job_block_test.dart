@@ -98,13 +98,13 @@ void main() {
   });
 
   test('谁停的：你停掉了 / 助手停掉了 / 老数据已取消（v2.25）', () {
-    expect(jobStateLabel(JobInfo.fromJson({..._wire('cancelled'), 'stopped_by': 'user'})), '你停掉了');
-    expect(jobStateLabel(JobInfo.fromJson({..._wire('cancelled'), 'stopped_by': 'agent'})), '助手停掉了');
+    expect(jobStateLabel(JobInfo.fromJson({..._wire('cancelled'), 'stopped_by': 'user'})), '已由你停止');
+    expect(jobStateLabel(JobInfo.fromJson({..._wire('cancelled'), 'stopped_by': 'agent'})), '已由助手停止');
     expect(jobStateLabel(JobInfo.fromJson({..._wire('cancelled'), 'stopped_by': 'x'})), '已取消');
     final guard = JobInfo.fromJson({..._wire('cancelled'), 'stopped_by': 'guard', 'stop_reason': '卡住'});
     expect(jobStateLabel(guard), '已自动停止');
     final b = Block.fromJson({'type': 'job', 'id': 'j', 'title': 't', 'command': 'c', 'state': 'cancelled', 'stopped_by': 'user'}) as JobBlock;
-    expect(jobStateLabel(JobInfo.fromBlock(b).withElapsed(const Duration(seconds: 2))), '你停掉了');
+    expect(jobStateLabel(JobInfo.fromBlock(b).withElapsed(const Duration(seconds: 2))), '已由你停止');
   });
 
   testWidgets('运行中轮询 → 结束 → 等接着说完 → 刷新对话一次', (tester) async {

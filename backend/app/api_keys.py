@@ -144,7 +144,7 @@ async def verify(url: str, value: str, scheme: Scheme) -> tuple[bool | None, str
     except web_guard.Blocked as e:
         return None, str(e)
     except Exception as e:  # noqa: BLE001 —— 网络错误只影响“验证没做成”
-        return None, f"验证地址连不上（{type(e).__name__}）"
+        return None, f"无法连接验证地址（{type(e).__name__}）"
     if r.status_code in (401, 403):
         return False, f"对方回了 HTTP {r.status_code}"
     if r.status_code < 400:

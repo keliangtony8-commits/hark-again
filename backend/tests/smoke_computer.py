@@ -171,7 +171,7 @@ up["ok"] = False
 j = c.get("/api/projects/me/computer").json()
 assert j["sandbox"] == {"state": "unreachable"} and len(j["running_jobs"]) == 1 and j["disk_used"] > 150, j
 r = c.post("/api/projects/me/computer/restart")
-assert r.status_code == 503 and "连不上" in r.json()["detail"], r.text
+assert r.status_code == 503 and "无法连接" in r.json()["detail"], r.text
 assert procs[jid].poll() is None and restarted == []  # 任务没被动
 up["ok"] = True
 

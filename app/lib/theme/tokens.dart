@@ -190,6 +190,11 @@ abstract final class Motion {
   static const focusLift = 0.02; // 长按聚焦（§J）：被按的那条先放大 2% 再落回
   static const menuFrom = 0.96; // 聚焦菜单卡从 96% 长到 100%
   static const theme = slow; // 浅/深色切换的整屏渐变
+  // §O 刚发出的那条气泡往上弹一下（App/网页同一条弹簧：从下方 28px 上移，冲过终点约 5px 再落回，一次过冲不来回抖）
+  static const send = Duration(milliseconds: 460);
+  static const sendRise = 28.0;
+  static const sendDamping = 0.45; // 阻尼比：过冲 ≈ e^(-πζ/√(1-ζ²)) ≈ 20%
+  static const sendFresh = Duration(seconds: 1); // 发出 1 秒内首次画出才弹（滚出屏幕再回来、重连同步都不弹）
   // 循环动画的一圈
   static const shimmer = Duration(milliseconds: 1300); // 骨架闪光
   static const typing = Duration(milliseconds: 1100); // 思考中的三个点

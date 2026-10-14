@@ -44,7 +44,7 @@ class _ActivitySummaryState extends State<ActivitySummary> {
     final muted = context.text.labelMedium?.copyWith(color: p.text3);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
       Pressable(
-        semanticLabel: '$label${bad > 0 ? '，$bad 步没成' : ''}，${_open ? '收起' : '展开每一步'}',
+        semanticLabel: '$label${bad > 0 ? '，$bad 项失败' : ''}，${_open ? '收起' : '展开步骤'}',
         onTap: () => setState(() => _open = !_open),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: A11y.minTap),
@@ -57,7 +57,7 @@ class _ActivitySummaryState extends State<ActivitySummary> {
               Flexible(child: SwapSwitcher(child: Text(label, key: ValueKey(label), maxLines: 1, overflow: TextOverflow.ellipsis, style: muted))),
               if (bad > 0) ...[
                 Text(' · ', style: muted),
-                Text('$bad 步没成', style: muted?.copyWith(color: p.warning)),
+                Text('$bad 项失败', style: muted?.copyWith(color: p.warning)),
               ],
               const SizedBox(width: Sp.x1),
               TurnIcon(open: _open, child: Icon(Icons.chevron_right_rounded, size: 18, color: p.text3)),

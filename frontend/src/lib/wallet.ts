@@ -49,7 +49,7 @@ export function luhnOk(input: string): boolean {
 
 export function cardNumberError(input: string): string | null {
   const n = cardDigits(input);
-  if (n.length < 12 || n.length > 19) return "卡号位数不对";
+  if (n.length < 12 || n.length > 19) return "卡号位数有误";
   if (cardBrand(n) !== "unionpay" && !luhnOk(n)) return "卡号校验没通过，可能抄错了一位";
   return null;
 }
@@ -68,7 +68,7 @@ export function expiryError(s: string, now = new Date()): string | null {
   if (!e) return "有效期写成 月/年，比如 09/28";
   const y = now.getFullYear(), m = now.getMonth() + 1;
   if (e[1] < y || (e[1] === y && e[0] < m)) return "这张卡已经过期了";
-  if (e[1] > y + 20) return "有效期的年份不对";
+  if (e[1] > y + 20) return "有效期年份有误";
   return null;
 }
 

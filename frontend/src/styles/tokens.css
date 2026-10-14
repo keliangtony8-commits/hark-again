@@ -114,6 +114,10 @@
   --dur-spin: 1000ms; /* 刷新图标转一圈，与 App Motion.spin 一致 */
   --dur-count: 700ms; /* 面板关键数字滚到新值，与 App Motion.count 一致（ui/CountUp.tsx 读它） */
   --dur-pulse: 1200ms; /* 闪烁小点（朗读准备中），与 App Motion.pulse 一致 */
+  /* §O 刚发出的气泡上弹：与 App Motion.send / sendRise / SpringCurve(ζ=0.45) 同一条弹簧（24 段采样） */
+  --dur-send: 460ms;
+  --send-rise: 28px;
+  --spring-send: linear(0, 0.11, 0.36, 0.649, 0.903, 1.083, 1.18, 1.205, 1.179, 1.126, 1.067, 1.016, 0.98, 0.962, 0.958, 0.964, 0.975, 0.987, 0.998, 1.005, 1.008, 1.009, 1.007, 1.005, 1);
   --dur-flash: 1600ms; /* 搜索命中的消息闪一下：先停住再淡出，与 App Motion.flash 一致 */
 }
 

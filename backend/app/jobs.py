@@ -55,6 +55,7 @@ KEEP_TAIL = 1500        # 结束时存进库/卡片的日志尾巴（字符）
 TAIL_CHARS = 4000       # 接口默认给客户端的日志尾巴
 LOST_GRACE = 20         # 启动后多少秒内不判“丢失”（沙盒可能还在拉起容器）
 FOLLOWUP_WAIT = 600     # 原对话里还有一轮没答完时，最多等多久再接着说
+STOP_SETTLE_POLLS = 15  # stop() 杀完后最多等 1.5 秒看进程退出；还活着就交给 tick 结算
 STOPPERS = ("user", "agent", "guard")  # v2.25 .jobs/<id>/cancelled 里写的是谁停的；结算时记进 jobs.stopped_by
 USER_STOP = "已被用户手动停止（这是用户的决定：除非用户再要求，不要重新启动它，也不要换个方式再跑）"
 LABELS = {"running": "运行中", "done": "已完成", "failed": "失败", "timed_out": "超时被终止",
@@ -644,10 +645,14 @@ async def stop(db: AsyncSession, job: Job, by: str, reason: str | None = None) -
     if reason:
         job.stop_reason = reason[:120]
         await db.commit()
-    if (obs := observe(job)) is not None:
-        await settle(db, job, *obs)
-    elif not await _alive_or_unknown(job):
-        await settle(db, job, "cancelled", None)
+    for _ in range(STOP_SETTLE_POLLS):  # v2.88 整组杀之后进程要一小会儿才真正退出：短等几下再结算，免得这一轮的卡片停在“运行中”
+        if (obs := observe(job)) is not None:
+            await settle(db, job, *obs)
+            return
+        if not await _alive_or_unknown(job):
+            await settle(db, job, "cancelled", None)
+            return
+        await asyncio.sleep(0.1)
 
 
 async def _alive_or_unknown(job: Job) -> bool:

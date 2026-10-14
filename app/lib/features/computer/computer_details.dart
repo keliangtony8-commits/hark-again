@@ -295,7 +295,7 @@ class _PortsSectionState extends ConsumerState<PortsSection> {
         await openUrl(url);
       }
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器' : e.message);
     } finally {
       if (mounted) setState(() => _busy = null);
     }
@@ -369,7 +369,7 @@ class _StorageSectionState extends ConsumerState<StorageSection> {
       final freed = await ref.read(computerProvider(widget.ws).notifier).cleanup();
       if (mounted) showToast(context, cleanupDone(freed));
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能清理' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，清理失败' : e.message);
     } finally {
       if (mounted) setState(() => _cleaning = false);
     }

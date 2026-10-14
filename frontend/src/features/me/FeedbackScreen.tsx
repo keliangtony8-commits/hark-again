@@ -25,7 +25,7 @@ export default function FeedbackScreen() {
     const note = writing?.trim();
     if (!note) return;
     try { await http.post(FEEDBACK_PATH, { note }); setWriting(null); setError(null); await load(); }
-    catch (e) { setError(e instanceof Error ? e.message : "没能提交"); }
+    catch (e) { setError(e instanceof Error ? e.message : "提交失败"); }
   };
   const items = list?.items ?? [];
   const g = groupFeedback(items);
@@ -63,7 +63,7 @@ export default function FeedbackScreen() {
           <button className="btn btn-ghost" onClick={() => setWriting(null)}>取消</button>
           <button className="btn btn-primary" disabled={!writing.trim()} onClick={() => void submit()}>提交</button>
         </>}>
-          <p className="desc">哪里不对、怎么出现的，写清楚一点下次好查。</p>
+          <p className="desc">请描述问题及出现步骤，便于排查。</p>
           <label className="form-field"><span>遇到了什么问题</span>
             <textarea rows={4} autoFocus value={writing} placeholder="比如：首页卡片一直不刷新" onChange={(e) => setWriting(e.target.value)} /></label>
         </Sheet>

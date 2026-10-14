@@ -98,6 +98,9 @@ export default function MessageView(props: Props) {
   return props.message.role === "user" ? <UserView {...props} /> : <AssistantView {...props} />;
 }
 
+/** 发出后多久内首次挂上才弹（= App Motion.sendFresh） */
+const SEND_FRESH_MS = 1000;
+
 function UserView({ message, showTime, onResend, onDiscard, onEdit, editing, onQuote, onJumpQuote }: Props) {
   const text = message.blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
   const files = message.blocks.filter((b) => b.type === "file");
@@ -109,8 +112,10 @@ function UserView({ message, showTime, onResend, onDiscard, onEdit, editing, onQ
     ...(onEdit ? [{ label: "编辑", icon: <IconEdit />, onSelect: onEdit }] : []),
   ], { alignEnd: true, label: "这条消息的操作" });
   const canMenu = !message.outbox && !editing;
+  // §O 本机刚发出的那条（local id、1 秒内挂上）往上弹一下；只在挂载时判定一次，历史/同步/别的设备发来的不弹
+  const [fresh] = useState(() => message.id.startsWith("local-") && !!message.created_at && Date.now() - Date.parse(message.created_at) < SEND_FRESH_MS);
   return (
-    <div className={`msg user ${message.outbox ?? ""} ${editing ? "editing" : ""}`} data-msg-id={message.id}>
+    <div className={`msg user ${message.outbox ?? ""} ${editing ? "editing" : ""} ${fresh ? "send-rise" : ""}`} data-msg-id={message.id}>
       {message.quote && <QuoteLine quote={message.quote} onJump={onJumpQuote} />}
       {skills.length > 0 && <div className="msg-skills"><BlockRenderer blocks={skills} /></div>}
       {files.length > 0 && <div className="msg-files"><BlockRenderer blocks={files} /></div>}

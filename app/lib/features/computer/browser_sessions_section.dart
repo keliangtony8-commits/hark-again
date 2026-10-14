@@ -63,7 +63,7 @@ class _BrowserSessionsSectionState extends ConsumerState<BrowserSessionsSection>
       await ref.read(browserSessionsProvider.notifier).signOut(s.name);
       if (mounted) showToast(context, '已退出 ${s.label}');
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能退出' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，退出失败' : e.message);
     } finally {
       if (mounted) setState(() => _busy.remove(s.name));
     }

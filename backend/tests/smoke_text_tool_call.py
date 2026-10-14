@@ -73,4 +73,20 @@ script.extend(['<display_file><args><paths>["a.txt"]</paths></args></display_fil
 asyncio.run(seed())
 seen.clear(); reply = asyncio.run(turn())
 assert len(seen) == 2, len(seen)
+texts = "".join(b.get("text", "") for b in reply.blocks if b.get("type") == "text")
+assert "<display_file>" not in texts and "<args>" not in texts and texts.strip(), reply.blocks  # v2.87：残留标签去掉，不交给用户
+# v2.87 用户截图：<tool_call><function=…><parameter=…> 这种无歧义写法直接还原成真调用（不提醒、不多花一次模型调用）
+S = '<tool_call> <function=show_draft> <parameter=body> Subject: 请假\n\n尊敬的老师：</parameter> <parameter nametitle">请假邮件 </parameter> </function> </tool_call>'
+assert ttc.parse(S, {"show_draft": {"properties": {"body": {"type": "string"}}}}) == [("show_draft", {"body": "Subject: 请假\n\n尊敬的老师：", "title": "请假邮件"})]
+assert ttc.parse('<function=zzz><parameter=a>1</parameter></function>', {"show_draft": {}}) is None
+assert ttc.parse("普通回复", {"show_draft": {}}) is None
+assert ttc.scrub("普通回复") == ("普通回复", [])
+script.extend(['好的。\n<tool_call>\n<function=display_file>\n<parameter=paths>\n["/workspace/a.txt"]\n</parameter>\n</function>\n</tool_call>', "发给你了。"])
+asyncio.run(seed())
+seen.clear(); reply = asyncio.run(turn())
+assert len(seen) == 2, len(seen)
+assert seen[1][-1]["role"] == "tool", seen[1][-1]
+texts = "".join(b.get("text", "") for b in reply.blocks if b.get("type") == "text")
+assert "<tool_call>" not in texts and "<function" not in texts and "发给你了" in texts, reply.blocks
+assert any(b.get("type") == "file" for b in reply.blocks), reply.blocks
 print("smoke_text_tool_call OK")

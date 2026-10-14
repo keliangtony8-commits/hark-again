@@ -53,7 +53,7 @@ class HostStatus {
 
 const hostSectionTitle = '服务器主机';
 const hostInstallHint = '在服务器上运行 sudo bash deploy/install.sh --host-agent 装好主机代理，再回来打开。';
-const hostEnableText = '打开后，我能在这台 VPS 本机以 root 跑命令：装系统软件、管服务、看系统日志、改配置。'
+const hostEnableText = '打开后，我可在这台 VPS 本机以 root 运行命令：装系统软件、管服务、看系统日志、改配置。'
     '每条命令都会先弹卡等你批准；你点过“以后都允许”的那类除外。随时可以在这里关掉。';
 const hostRulesEmpty = '还没有“以后都允许”的命令';
 const hostRulesEmptyLine = '在审批卡上选“以后都允许…”，那类命令以后就不再问你，定时任务也能用。';
@@ -64,14 +64,14 @@ String hostToggleTitle(HostStatus s) => s.enabled ? '主机模式已打开' : '�
 /// 开关那一行的说明：机器 + 系统；没装 / 连不上说清楚。
 String hostDetail(HostStatus s) {
   if (!s.installed) return '还没装主机代理';
-  if (!s.reachable) return '连不上主机代理';
+  if (!s.reachable) return '无法连接主机代理';
   final parts = [if (s.hostname != null) s.hostname!, if (s.os != null) s.os!];
   if (s.uptimeSeconds != null) parts.add('已开机 ${hostUptime(s.uptimeSeconds!)}');
   return parts.isEmpty ? '主机代理在线' : parts.join(' · ');
 }
 
 /// 只在出问题时给行尾一句（RowHint warn）。
-String? hostHint(HostStatus s) => s.installed && !s.reachable ? '连不上' : null;
+String? hostHint(HostStatus s) => s.installed && !s.reachable ? '无法连接' : null;
 
 String hostUptime(int seconds) {
   final d = seconds ~/ 86400, h = seconds % 86400 ~/ 3600, m = seconds % 3600 ~/ 60;

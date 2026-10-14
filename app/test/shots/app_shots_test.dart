@@ -188,7 +188,7 @@ void main() {
     await tester.runAsync(() => _container.read(chatProvider('').notifier).open('c2'));
     await _settle(tester);
     await _shot(tester, 'chat-steps-light');
-    await tester.tap(find.textContaining('做了 3 步'));
+    await tester.tap(find.textContaining('3 个步骤'));
     await _settle(tester);
     await _shot(tester, 'chat-steps-open-light');
     await tester.drag(find.byType(ListView).first, const Offset(0, 700));

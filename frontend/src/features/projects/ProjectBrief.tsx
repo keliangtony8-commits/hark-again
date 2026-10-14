@@ -57,7 +57,7 @@ export default function ProjectBrief({ project, onSaved, onClose }: { project: P
         )}
       </div>
       {error && <p className="brief-error">{error}</p>}
-      <p className="brief-note">这是我在这个项目里的长期记忆：目标、定下的决定、重要文件、固定做法。我学到新东西会自己更新，你也可以直接改。</p>
+      <p className="brief-note">这是我在此项目中的长期记忆：目标、已定决策、重要文件与固定流程。我会随工作自动更新，你也可以直接编辑。</p>
     </Sheet>
   );
 }

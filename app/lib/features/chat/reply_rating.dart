@@ -30,7 +30,7 @@ Future<void> _send(BuildContext context, RateReply onRate, String? kind, {String
     await onRate(kind, note: note);
     if (context.mounted) showToast(context, feedbackToast(kind));
   } on ApiError catch (e) {
-    if (context.mounted) showToast(context, e.isNetwork ? '没连上服务器，评价没记下' : e.message);
+    if (context.mounted) showToast(context, e.isNetwork ? '无法连接服务器，评价未保存' : e.message);
   }
 }
 

@@ -109,7 +109,7 @@ def _refused(e: Exception) -> str | None:
     if isinstance(e, httpx.HTTPStatusError):
         return f"授权被 {e.response.status_code} 拒绝" if e.response.status_code < 500 else None
     if isinstance(e, RuntimeError):
-        return f"刷新授权没成功：{str(e)[:60]}"
+        return f"刷新授权失败：{str(e)[:60]}"
     return None
 
 

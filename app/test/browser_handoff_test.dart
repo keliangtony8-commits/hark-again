@@ -86,7 +86,7 @@ void main() {
     expect(screenShouldPause(idle: long, control: false, live: false, pending: true), isFalse);
     expect(browserScreenSemantics(takeover: true, paused: false, site: 'taobao.com'), 'taobao.com 的浏览器实时画面，已接管，点哪里就点网页哪里');
     expect(browserScreenSemantics(takeover: false, paused: false), '浏览器实时画面，点开接管');
-    expect(browserScreenSemantics(takeover: false, paused: true), '浏览器画面已暂停，点一下继续');
+    expect(browserScreenSemantics(takeover: false, paused: true), '浏览器画面已暂停，轻点继续');
   });
 
   test('接管页坐标：contain 留边、放大平移后换算、留边处不点、平移夹边、滚动比例', () {
@@ -252,15 +252,15 @@ void main() {
 
   testWidgets('只是看着超过 2 分钟 → 暂停；点一下继续', (tester) async {
     await pump(tester, card(), onForm: (_, _, _) => true);
-    expect(find.text('画面已暂停，点一下继续'), findsNothing);
+    expect(find.text('画面已暂停，轻点继续'), findsNothing);
     for (var i = 0; i < 90; i++) {
       await tester.pump(Timing.screenIdle);
     }
     await frames(tester);
-    expect(find.text('画面已暂停，点一下继续'), findsOneWidget);
-    await tester.tap(find.text('画面已暂停，点一下继续'));
+    expect(find.text('画面已暂停，轻点继续'), findsOneWidget);
+    await tester.tap(find.text('画面已暂停，轻点继续'));
     await frames(tester);
-    expect(find.text('画面已暂停，点一下继续'), findsNothing);
+    expect(find.text('画面已暂停，轻点继续'), findsNothing);
     await unmount(tester);
   });
 }

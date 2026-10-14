@@ -9,7 +9,7 @@ import 'task_labels.dart';
 
 const _hints = {
   'failure': '成功了不打扰；失败时结果进 Home 收件箱。',
-  'always': '每次跑完都把输出放进 Home 收件箱。',
+  'always': '每次运行后将输出放入主页收件箱。',
   'change': '输出和上次不一样才告诉你，适合盯网页、价格、库存。',
 };
 

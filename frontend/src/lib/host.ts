@@ -9,7 +9,7 @@ export type HostStatus = { installed: boolean; enabled: boolean; reachable: bool
 
 export const HOST_SECTION_TITLE = "服务器主机";
 export const HOST_INSTALL_HINT = "在服务器上运行 sudo bash deploy/install.sh --host-agent 装好主机代理，再回来打开。";
-export const HOST_ENABLE_TEXT = "打开后，我能在这台 VPS 本机以 root 跑命令：装系统软件、管服务、看系统日志、改配置。"
+export const HOST_ENABLE_TEXT = "打开后，我可在这台 VPS 本机以 root 运行命令：装系统软件、管服务、看系统日志、改配置。"
   + "每条命令都会先弹卡等你批准；你点过“以后都允许”的那类除外。随时可以在这里关掉。";
 export const HOST_RULES_EMPTY = "还没有“以后都允许”的命令";
 export const HOST_RULES_EMPTY_LINE = "在审批卡上选“以后都允许…”，那类命令以后就不再问你，定时任务也能用。";
@@ -26,14 +26,14 @@ export function hostUptime(seconds: number): string {
 
 export function hostDetail(s: HostStatus): string {
   if (!s.installed) return "还没装主机代理";
-  if (!s.reachable) return "连不上主机代理";
+  if (!s.reachable) return "无法连接主机代理";
   const h = s.host ?? {};
   const parts = [h.hostname, h.os].filter((x): x is string => !!x);
   if (h.uptime_seconds != null) parts.push(`已开机 ${hostUptime(h.uptime_seconds)}`);
   return parts.length ? parts.join(" · ") : "主机代理在线";
 }
 
-export const hostHint = (s: HostStatus) => (s.installed && !s.reachable ? "连不上" : null);
+export const hostHint = (s: HostStatus) => (s.installed && !s.reachable ? "无法连接" : null);
 
 export function hostRuleDetail(r: HostRule, now?: Date): string {
   if (!r.uses) return r.created_at ? `${formatAgo(r.created_at, now)}加的，还没用过` : "还没用过";

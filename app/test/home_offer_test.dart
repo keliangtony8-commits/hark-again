@@ -51,7 +51,7 @@ void main() {
     final opened = <(String, String?)>[];
     final fake = FakeApi()..startReply = {'conversation_id': 'c9', 'prompt': '去续费校园网一个月', 'started': false};
     final api = await pump(tester, offerJson(conversation: 'c9'), opened: opened, fake: fake);
-    expect(find.text('已交给助手 · 看看进展'), findsOneWidget);
+    expect(find.text('已交给助手 · 查看进展'), findsOneWidget);
     expect(find.text('帮我续费'), findsNothing);
     await tester.tap(find.text('查看对话'));
     await tester.pumpAndSettle();

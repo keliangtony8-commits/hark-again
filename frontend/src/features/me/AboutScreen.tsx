@@ -17,7 +17,7 @@ export default function AboutScreen() {
   );
   return (
     <Page header={<PageHeader title="关于" back />}>
-      <p className="desc sub-line enter">{appName} 是你自己的私人助手：跑在你自己的服务器上，用你自己的模型密钥，数据只在那里。</p>
+      <p className="desc sub-line enter">{appName} 是你自己的私人助手：运行在你自己的服务器上，用你自己的模型密钥，数据只在那里。</p>
       <div className="list enter" style={stagger(1)}>
         {row("版本", clientVersionLabel(sv))}
         {row("服务器", host)}

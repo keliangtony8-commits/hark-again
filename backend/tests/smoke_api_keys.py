@@ -117,7 +117,7 @@ async def rules():
                              verify_url="https://api.notes.test/missing")
         assert n.verified is None and "404" in n.verify_note and "还没确认能用" in AK.connected_text(n)
         d = await AK.connect(db, "Down", KEY, ["down.example.com"], verify_url="https://down.example.com/x")
-        assert d.verified is None and "连不上" in d.verify_note
+        assert d.verified is None and "无法连接" in d.verify_note
         nv = await AK.connect(db, "Plain", "plainkey1", ["plain.test"])
         assert nv.verified is None and "没给验证地址" in nv.verify_note
         # 同服务再接：原地换

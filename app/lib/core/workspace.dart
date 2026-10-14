@@ -14,8 +14,8 @@ String workspaceFilesTitle(String ws) => isPersonalWorkspace(ws) ? '我的文件
 
 /// 文件夹是空的时的说明。
 String workspaceEmptyText(String ws) => isPersonalWorkspace(ws)
-    ? '上传资料后，在主聊天里我可以直接读它们，也能在云端电脑上跑代码处理；我生成的文件也会放在这里。'
-    : '上传资料后，在这个项目里聊天时我可以直接读它们，也能在沙箱里跑代码处理。';
+    ? '上传资料后，我可以在主聊天中直接读取，也能在云端电脑上运行代码处理；我生成的文件也会存放在这里。'
+    : '上传资料后，我可以在此项目的对话中直接读取，也能在沙箱中运行代码处理。';
 
 /// 引用选择器里文件夹是空的时的说明。
 String workspacePickEmptyText(String ws) =>

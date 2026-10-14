@@ -70,10 +70,10 @@ export const ENV_VALUE_MIN = 6;
 export const SECRET_KINDS = [
   { kind: "login", label: "网站登录", desc: "我在云浏览器里替你登录这个网站" },
   { kind: "api_key", label: "API Key", desc: "我调用这个服务时按域名带上它" },
-  { kind: "env", label: "环境变量", desc: "你电脑上跑的程序按名字读取，比如机器人 Token" },
+  { kind: "env", label: "环境变量", desc: "由你电脑上运行的程序按名称读取，比如机器人 Token" },
 ] as const;
 
 /** MCP 服务器行上的问题；不认识的值当没有（与 App McpServerItem.problemText 同一规则）。 */
 export function mcpProblemText(s: McpServerInfo): string | null {
-  return s.problem === "auth" ? "令牌被拒绝" : s.problem === "down" ? "连不上" : null;
+  return s.problem === "auth" ? "令牌被拒绝" : s.problem === "down" ? "无法连接" : null;
 }

@@ -139,7 +139,7 @@ export function PortsSection({ ws, ctl, enter }: { ws: string; ctl: ComputerCtl;
       else if (tab) { tab.opener = null; tab.location.href = r.url; }
     } catch (e) {
       tab?.close();
-      void noticeDialog("没能打开预览", e instanceof Error ? e.message : undefined);
+      void noticeDialog("打开预览失败", e instanceof Error ? e.message : undefined);
     }
     setBusy(null);
   };
@@ -202,7 +202,7 @@ export function StorageSection({ ws, ctl, enter, onFiles }: { ws: string; ctl: C
     try {
       const r = await http.post<CleanupResult>(`${computerPath(ws)}/cleanup`, {});
       ctl.set(r.status); setDone(cleanupDone(r.freed));
-    } catch (e) { void noticeDialog("没能清理", e instanceof Error ? e.message : undefined); }
+    } catch (e) { void noticeDialog("清理失败", e instanceof Error ? e.message : undefined); }
     setCleaning(false);
   };
   const all = s.tools ?? [];

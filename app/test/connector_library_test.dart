@@ -99,7 +99,7 @@ void main() {
   test('MCP 服务器问题：auth / down / 不认识 / 老服务器不给', () {
     McpServerItem m(Object? problem) => McpServerItem.fromJson({'id': 'm', 'name': 'm', 'url': 'https://m.dev/mcp', 'problem': ?problem});
     expect(m('auth').problemText, '令牌被拒绝');
-    expect(m('down').problemText, '连不上');
+    expect(m('down').problemText, '无法连接');
     expect(m('weird').problemText, isNull);
     expect(m(null).problemText, isNull);
     expect(connectorSummary(const [], [m('down'), m(null)]), '2 个 MCP 服务器 · 1 个需要处理');
@@ -119,7 +119,7 @@ void main() {
     });
     // 有问题的排最前
     expect(tester.getTopLeft(find.text('notes')).dy, lessThan(tester.getTopLeft(find.text('calc')).dy));
-    expect(find.text('连不上 · notes.dev'), findsOneWidget);
+    expect(find.text('无法连接 · notes.dev'), findsOneWidget);
     expect(find.text('calc.dev'), findsOneWidget);
     expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
     expect(find.text('带令牌'), findsOneWidget); // 有问题的那行不再显示“带令牌”

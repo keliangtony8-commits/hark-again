@@ -35,10 +35,10 @@ export function activitySpanMs(steps: ActivityStep[]): number | null {
 }
 
 export function activitySummary(steps: ActivityStep[], pending = false): string {
-  if (pending) return `已做 ${steps.length} 步`;
+  if (pending) return `执行中 · ${steps.length} 个步骤`;
   const span = activitySpanMs(steps);
   const d = span == null ? null : stepDuration(span);
-  return d == null ? `做了 ${steps.length} 步` : `做了 ${steps.length} 步 · ${d}`;
+  return d == null ? `${steps.length} 个步骤` : `${steps.length} 个步骤 · ${d}`;
 }
 
 /** 时间线自己展开：一轮结束时最后一步是出错的（没补救回来）。其余默认收成一行（与 App activityOpensItself 同款）。 */
@@ -46,7 +46,7 @@ export const activityOpensItself = (steps: ActivityStep[], pending = false) =>
   !pending && steps.length > 0 && steps[steps.length - 1].state === "error";
 
 export const STEP_STATE_LABEL: Record<ActivityStep["state"], string> = {
-  running: "进行中", done: "完成", error: "没成功", denied: "没执行", stopped: "被停止",
+  running: "进行中", done: "已完成", error: "失败", denied: "未执行", stopped: "已停止",
 };
 
 /** 读屏：“新建，增加 3 行” / “增加 2 行，删除 1 行”（与 App FileChange.semantics 同款）。 */

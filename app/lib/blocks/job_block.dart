@@ -103,7 +103,7 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
     try {
       _apply(JobInfo.fromJson(await _api.post('/api/jobs/${widget.block.id}/cancel') as Map<String, dynamic>));
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能取消' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，取消失败' : e.message);
     } finally {
       if (mounted) setState(() => _cancelling = false);
     }
@@ -116,7 +116,7 @@ class _JobBlockViewState extends ConsumerState<JobBlockView> {
       if (mounted) setState(() => _job = j);
       return null;
     } on ApiError catch (e) {
-      return e.isNetwork ? '连不上服务器，稍后再试' : e.message;
+      return e.isNetwork ? '无法连接服务器，请稍后重试' : e.message;
     }
   }
 

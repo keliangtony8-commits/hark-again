@@ -65,7 +65,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         });
         WidgetsBinding.instance.addPostFrameCallback((_) => _codeFocus.requestFocus());
       } else {
-        setState(() => _error = e is ApiError ? e.message : '连不上这个服务器，检查一下地址');
+        setState(() => _error = e is ApiError ? e.message : '无法连接该服务器，请检查地址');
       }
     } finally {
       if (mounted) setState(() => _busy = false);

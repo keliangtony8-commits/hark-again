@@ -759,7 +759,7 @@ class ChatController extends Notifier<ChatState> {
       unawaited(_persist(cid));
       return null;
     } on ApiError catch (e) {
-      return e.isNetwork ? '连不上服务器，稍后再试' : e.message;
+      return e.isNetwork ? '无法连接服务器，请稍后重试' : e.message;
     }
   }
 
@@ -825,7 +825,7 @@ class ChatController extends Notifier<ChatState> {
     } on ApiError catch (e) {
       if (!e.isNetwork) rethrow;
       raw = await _cache.messages(id);
-      if (raw == null) throw ApiError('没连上服务器，这段对话也没有离线副本');
+      if (raw == null) throw ApiError('无法连接服务器，且此对话没有离线副本');
     }
     return conversationMarkdown(title, _messages(raw));
   }

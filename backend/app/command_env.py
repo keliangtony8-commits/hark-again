@@ -50,7 +50,7 @@ def check_value(value: str) -> str:
     if "\x00" in value or "\n" in value or "\r" in value:
         raise ValueError("值不能有换行")
     if len(value) < VALUE_MIN:
-        raise ValueError(f"值至少 {VALUE_MIN} 个字符（太短没法在输出里可靠地打码）")
+        raise ValueError(f"值至少 {VALUE_MIN} 个字符（过短时无法在输出中可靠打码）")
     if len(value) > VALUE_MAX:
         raise ValueError(f"值最多 {VALUE_MAX} 个字符")
     return value

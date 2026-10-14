@@ -57,7 +57,7 @@ void main() {
     expect(retryNoticeText(f), '刚才模型服务器出错了，这一轮改用「快速」');
     expect(retryNoticeText(const RetryNotice(attempt: 0, max: 5, delayMs: 0, reason: 'x', fallback: 'fast')), contains('「fast」'));
     final bad = RetryNotice.fromJson({'attempt': 'x', 'reason': '  ', 'fallback': ''});
-    expect((bad.attempt, bad.max, bad.reason, bad.isFallback), (0, 0, '模型调用出错了', false));
+    expect((bad.attempt, bad.max, bad.reason, bad.isFallback), (0, 0, '模型调用失败', false));
     final ok = RetryNotice.fromJson({'attempt': 1, 'max': 3, 'delay_ms': 500, 'reason': '模型太久没回应', 'code': 'TIMEOUT'});
     expect((ok.attempt, ok.max, ok.delayMs, ok.code), (1, 3, 500, 'TIMEOUT'));
   });

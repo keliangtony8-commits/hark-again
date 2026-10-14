@@ -25,7 +25,7 @@ export default function BrowserSessionsSection({ enter }: { enter?: number }) {
     try {
       await http.del(`${BROWSER_SESSIONS_PATH}/${encodeURIComponent(s.name)}`);
       setList((l) => (l ?? []).filter((x) => x.name !== s.name));
-    } catch (e) { void noticeDialog("没能退出", e instanceof Error ? e.message : undefined); }
+    } catch (e) { void noticeDialog("退出失败", e instanceof Error ? e.message : undefined); }
     setBusy((b) => { const n = new Set(b); n.delete(s.name); return n; });
   };
 

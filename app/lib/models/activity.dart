@@ -176,10 +176,10 @@ int failedSteps(List<ActivityStep> steps) => steps.where((s) => s.failed).length
 /// 回复上方那一行：“做了 4 步 · 12 秒”；生成中 “已做 2 步”。
 String activitySummary(List<ActivityStep> steps, {bool pending = false}) {
   final n = steps.length;
-  if (pending) return '已做 $n 步';
+  if (pending) return '执行中 · $n 个步骤';
   final span = activitySpanMs(steps);
   final d = span == null ? null : stepDuration(span);
-  return d == null ? '做了 $n 步' : '做了 $n 步 · $d';
+  return d == null ? '$n 个步骤' : '$n 个步骤 · $d';
 }
 
 /// 时间线要不要自己展开：一轮结束时最后一步是出错的（没有后续步骤把它补救回来）——用户该看看哪里卡住了。
@@ -190,10 +190,10 @@ bool activityOpensItself(List<ActivityStep> steps, {bool pending = false}) =>
 /// 一步的状态字（读屏、没成时行尾的原因前缀）。
 String stepStateLabel(ActivityState s) => switch (s) {
       ActivityState.running => '进行中',
-      ActivityState.done => '完成',
-      ActivityState.error => '没成功',
-      ActivityState.denied => '没执行',
-      ActivityState.stopped => '被停止',
+      ActivityState.done => '已完成',
+      ActivityState.error => '失败',
+      ActivityState.denied => '未执行',
+      ActivityState.stopped => '已停止',
     };
 
 /// 一步的读屏文案：“运行命令 ls -la，完成，用时 3 秒”。

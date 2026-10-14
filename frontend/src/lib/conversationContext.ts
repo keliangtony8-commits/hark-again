@@ -60,9 +60,9 @@ export const rulesEnabled = (c: ConversationContext) => (c.instructions?.budget 
 export const ruleCut = (r: WorkspaceRule) => r.status !== "full";
 
 export function ruleStatus(r: WorkspaceRule): string {
-  if (r.status === "truncated") return `超出上限，只读了 ${formatSize(r.used)} / ${formatSize(r.bytes)}`;
-  if (r.status === "omitted") return "超出上限，没有读";
+  if (r.status === "truncated") return `超出上限，仅读取 ${formatSize(r.used)} / ${formatSize(r.bytes)}`;
+  if (r.status === "omitted") return "超出上限，未读取";
   return formatSize(r.bytes);
 }
 
-export const RULES_HINT = "在工作区根目录放 AGENTS.md，写上约定（怎么跑测试、代码风格、别动哪些文件），助手每轮都会先读";
+export const RULES_HINT = "在工作区根目录放 AGENTS.md，写上约定（如何运行测试、代码风格、别动哪些文件），助手每轮都会先读";

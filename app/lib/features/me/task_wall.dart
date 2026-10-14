@@ -18,7 +18,7 @@ import '../home/action_card.dart' show cardTargets;
 String wallHint(ScheduledTask t) {
   if (t.wallRetrying) return '已经在重新运行，成功后这条会自动收起。';
   if (!t.wallFixable) return '不用你管，下次会自动再试。';
-  return t.isPanel ? '面板先显示上一次的内容。处理好后会自动重跑，也可以点“重试”。' : '处理好后会自动重跑，也可以点“重试”。';
+  return t.isPanel ? '面板先显示上一次的内容。处理完成后将自动重新运行，也可以点“重试”。' : '处理完成后将自动重新运行，也可以点“重试”。';
 }
 
 /// v2.19 存登录 / 连连接器之后的那条提示：服务端给了“已重新运行”那句就接在后面。

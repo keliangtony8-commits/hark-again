@@ -33,14 +33,14 @@ import '../../ui/format.dart';
 /// 停下了、不需要用户做什么：手动暂停或一次性已完成（自动暂停的算“需要留意”，不变淡）。
 bool taskIdle(ScheduledTask t) => !t.autoPaused && (!t.active || t.done);
 
-/// 页头小标签：“6 个任务 · 4 个在跑 · 1 个需要留意”；空列表是一句引导。
+/// 页头小标签：“6 个任务 · 4 个运行中 · 1 个需要留意”；空列表是一句引导。
 String taskSummary(List<ScheduledTask> list) {
   if (list.isEmpty) return '到点我自己去做的事';
   final g = groupTasks(list);
   final live = list.where((t) => t.active && !t.done).length;
   return [
     '${list.length} 个任务',
-    live == list.length ? '全部在跑' : '$live 个在跑',
+    live == list.length ? '全部运行中' : '$live 个运行中',
     if (g.attention.isNotEmpty) '${g.attention.length} 个需要留意',
   ].join(' · ');
 }

@@ -16,7 +16,7 @@ class RetryNotice {
       attempt: n(j['attempt']),
       max: n(j['max']),
       delayMs: n(j['delay_ms']),
-      reason: reason is String && reason.trim().isNotEmpty ? reason.trim() : '模型调用出错了',
+      reason: reason is String && reason.trim().isNotEmpty ? reason.trim() : '模型调用失败',
       code: code is String ? code : '',
       fallback: fb is String && fb.isNotEmpty ? fb : null,
       fallbackLabel: label is String && label.isNotEmpty ? label : null,

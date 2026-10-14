@@ -18,7 +18,7 @@ export default function LoginSessions({ enter, reloadKey, onNote }: { enter?: nu
 
   const run = async (key: string, job: () => Promise<void>) => {
     setBusy((b) => new Set(b).add(key));
-    try { await job(); } catch (e) { void noticeDialog("没能退出", e instanceof Error ? e.message : undefined); }
+    try { await job(); } catch (e) { void noticeDialog("退出失败", e instanceof Error ? e.message : undefined); }
     setBusy((b) => { const n = new Set(b); n.delete(key); return n; });
   };
 

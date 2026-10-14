@@ -240,7 +240,7 @@ class _MemoryNoteScreenState extends ConsumerState<MemoryNoteScreen> {
             body: !_isNew && n == null
                 ? (ref.watch(memoryNotesProvider).isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : const EmptyHint(icon: Icons.description_outlined, title: '这篇笔记不在了', text: '可能已经被删掉或改了名字。'))
+                    : const EmptyHint(icon: Icons.description_outlined, title: '该笔记已删除', text: '可能已经被删掉或改了名字。'))
                 : PageBody(children: [FadeSwitcher(child: _editing ? _editor(context) : _reading(context, n!))]),
           ),
         );

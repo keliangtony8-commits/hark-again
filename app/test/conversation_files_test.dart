@@ -90,7 +90,7 @@ void main() {
     final big = ConversationFiles.fromJson({..._body(), 'size': 300 * 1024 * 1024});
     expect(big.canZip, isFalse);
     expect(big.zipNote, contains('超过打包上限'));
-    expect(ConversationFiles.fromJson({..._body(), 'available': 0}).zipNote, contains('都已经不在'));
+    expect(ConversationFiles.fromJson({..._body(), 'available': 0}).zipNote, contains('均已删除'));
     expect(ConversationFiles.fromJson({'files': []}).files, isEmpty);
     expect(conversationFileSemantics(gone), contains('已不在，打不开'));
     expect(conversationZipPath('c1'), '/api/conversations/c1/files.zip');

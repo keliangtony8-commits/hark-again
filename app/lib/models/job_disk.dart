@@ -58,7 +58,7 @@ String jobDiskDetail(JobDisk d) {
   final groups = d.top.map((t) => '${jobDiskGroupName(t.path)} ${formatSize(t.size)}').join('、');
   final notes = [
     if (d.partial) '文件太多只数了一部分',
-    if (d.overlap > 0) '同时段还有 ${d.overlap} 个任务在跑，可能含它们写的',
+    if (d.overlap > 0) '同时段另有 ${d.overlap} 个任务运行，可能包含它们写入的内容',
   ];
   final head = d.files > 0 ? '运行期间新写或改过 ${d.files} 个文件，共 ${formatSize(d.written)}${groups.isEmpty ? '' : '：$groups'}' : '运行期间没有新写文件';
   return '$head；日志 ${formatSize(d.log)}${notes.isEmpty ? '' : '（${notes.join('；')}）'}';

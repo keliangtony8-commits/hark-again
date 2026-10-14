@@ -36,7 +36,7 @@ String taskStateLabel(ScheduledTask t, {DateTime? now}) {
 
 /// 详情页的提示条：只有被自动暂停时才有，告诉用户怎么恢复。
 String? autoPauseNote(ScheduledTask t) => t.autoPaused
-    ? '连着失败了 ${t.failStreak} 次，我先把它停了，免得一直白跑。改好后打开开关恢复；也可以先“立即运行”试一次，成功了会自动恢复。'
+    ? '已连续失败 ${t.failStreak} 次，已自动暂停。修改后打开开关即可恢复；也可先“立即运行”测试，成功后自动恢复。'
     : null;
 
 /// 行首/详情图标：面板 / 定时脚本（终端）/ 一次性（闹钟）/ 重复（时钟）。
@@ -56,7 +56,7 @@ String taskOutputLabel(ScheduledTask t) {
   if (t.isLog) return '记录面板 · 不调用模型';
   if (t.isPanel) return '刷新 Home 上的面板';
   if (!t.isScript) return '结果放进 Home 收件箱';
-  return '${t.projectId == null ? '在我的文件里跑' : '在项目工作区里跑'} · ${notifyLabels[t.notify] ?? t.notify}';
+  return '${t.projectId == null ? '在我的文件中运行' : '在项目工作区中运行'} · ${notifyLabels[t.notify] ?? t.notify}';
 }
 
 /// 跳过下一次后，详情页“下次”下面的一行：跳过了 明天 08:00 那次。

@@ -67,7 +67,7 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen> {
           return PullRefresh(
             onRefresh: () => Future.wait([ref.read(memoriesProvider.notifier).reload(), ref.read(memoryNotesProvider.notifier).reload()]),
             child: PageBody(children: [
-              PageIntro(summary: memorySummary(list, notes: notes.length), line: '每次对话我都会参考这些。聊天时我会自己记，说错了就改，不想让我记的直接删。'),
+              PageIntro(summary: memorySummary(list, notes: notes.length), line: '每次对话我都会参考这些内容。聊天中我会自动记录；有误可直接修改，不需要的可删除。'),
               if (empty)
                 Padding(
                   padding: const EdgeInsets.only(top: Sp.x4),
@@ -97,7 +97,7 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen> {
                   EmptyHint(
                     icon: Icons.search_off_rounded,
                     title: '没有匹配的记忆',
-                    text: '换个词，或者看看全部分类。',
+                    text: '未找到结果，可更换关键词或查看全部分类。',
                     action: TextButton(onPressed: _clearFilters, child: const Text('清除筛选')),
                   ),
                 for (final (cat, items) in groups) ...[

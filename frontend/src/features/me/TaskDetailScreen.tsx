@@ -38,7 +38,7 @@ export default function TaskDetailScreen() {
   if (!task) {
     return (
       <Page header={<PageHeader title="定时任务" back />}>
-        {tasks.loading ? <Skeleton /> : <Hint icon={<IconClock size={26} />} title="这个任务已经不在了" text="可能已在别的设备上删除。" />}
+        {tasks.loading ? <Skeleton /> : <Hint icon={<IconClock size={26} />} title="该任务已删除" text="可能已在别的设备上删除。" />}
       </Page>
     );
   }

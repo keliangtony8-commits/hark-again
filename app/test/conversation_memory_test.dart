@@ -128,8 +128,8 @@ void main() {
     expect(c.rules.enabled, isTrue);
     expect(c.rules.files.map((f) => f.path), ['AGENTS.md', 'AGENTS.local.md', 'CLAUDE.md']);
     expect(ruleStatus(c.rules.files[0]), '2 KB');
-    expect(ruleStatus(c.rules.files[1]), '超出上限，只读了 12 KB / 39 KB');
-    expect(ruleStatus(c.rules.files[2]), '超出上限，没有读');
+    expect(ruleStatus(c.rules.files[1]), '超出上限，仅读取 12 KB / 39 KB');
+    expect(ruleStatus(c.rules.files[2]), '超出上限，未读取');
     expect([for (final f in c.rules.files) f.cut], [false, true, true]);
     // 老后端没有这个字段 / 字段乱了 / 预算 0 = 关
     expect(ConversationContext.fromJson(state()).rules.enabled, isFalse);
@@ -153,7 +153,7 @@ void main() {
     await pump(tester, api);
     expect(find.text('工作区规则'), findsOneWidget);
     expect(find.text('AGENTS.md'), findsOneWidget);
-    expect(find.text('超出上限，只读了 12 KB / 39 KB'), findsOneWidget);
+    expect(find.text('超出上限，仅读取 12 KB / 39 KB'), findsOneWidget);
     expect(find.bySemanticsLabel('规则文件 AGENTS.md，2 KB'), findsOneWidget);
     expect(find.text(rulesHint), findsNothing);
   });

@@ -39,20 +39,20 @@ void main() {
     expect(m.steps[2].state, ActivityState.error);
     expect(m.steps[2].failed, isTrue);
     expect(activitySpanMs(m.steps), 12000); // 05:00:00 → 05:00:05 + 7 秒
-    expect(activitySummary(m.steps), '做了 3 步 · 12 秒');
-    expect(activitySummary(m.steps.take(2).toList(), pending: true), '已做 2 步');
+    expect(activitySummary(m.steps), '3 个步骤 · 12 秒');
+    expect(activitySummary(m.steps.take(2).toList(), pending: true), '执行中 · 2 个步骤');
     expect(failedSteps(m.steps), 1);
     expect(stepDuration(400), isNull); // 不到 1 秒不写（10-14 16:01 满屏 0.0 秒）
     expect(stepDuration(3400), '3 秒');
     expect(stepDuration(65000), '1 分 5 秒');
-    expect(stepSemantics(m.steps[2]), '运行命令 false，没成功，退出码 1，用时 7 秒');
+    expect(stepSemantics(m.steps[2]), '运行命令 false，失败，退出码 1，用时 7 秒');
     final old = ActivityStep.fromStatus({'id': 'x', 'name': 'web_search', 'label': '正在搜索', 'state': 'running'});
     expect((old.title, old.running), ('搜索', true));
     var list = mergeStep(const [], old);
     list = mergeStep(list, ActivityStep.fromStatus({'id': 'x', 'state': 'done', 'step': _step('x', '搜索', '天气', 'done', '2026-10-12T05:00:00+00:00', 900)}));
     expect(list.single.detail, '天气');
     expect(list.single.running, isFalse);
-    expect(activitySummary([const ActivityStep(id: 'z', title: '搜索', state: ActivityState.done)]), '做了 1 步'); // 没时间不报用时
+    expect(activitySummary([const ActivityStep(id: 'z', title: '搜索', state: ActivityState.done)]), '1 个步骤'); // 没时间不报用时
     expect(Message.fromJson({'id': 'u', 'role': 'user', 'blocks': []}).steps, isEmpty);
   });
 
@@ -61,16 +61,16 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(Message.fromJson(_json)));
     await tester.pumpAndSettle();
-    expect(find.text('做了 3 步 · 12 秒'), findsOneWidget);
-    expect(find.text('1 步没成'), findsOneWidget);
+    expect(find.text('3 个步骤 · 12 秒'), findsOneWidget);
+    expect(find.text('1 项失败'), findsOneWidget);
     expect(find.byType(StepRow), findsNWidgets(3)); // 停在出错的一步：自己展开（v2.79）
-    final row = find.text('做了 3 步 · 12 秒');
+    final row = find.text('3 个步骤 · 12 秒');
     expect(tester.getTopLeft(row).dy, lessThan(tester.getTopLeft(find.text('整理好了。')).dy)); // 在回复上方
     expect(find.text('ls -la'), findsOneWidget);
     expect(find.text('退出码 1'), findsOneWidget);
     expect(find.textContaining('0.4'), findsNothing);
     expect(find.text('7 秒'), findsOneWidget);
-    expect(find.bySemanticsLabel('运行命令 ls -la，完成'), findsOneWidget);
+    expect(find.bySemanticsLabel('运行命令 ls -la，已完成'), findsOneWidget);
     await tester.tap(row);
     await tester.pumpAndSettle();
     expect(find.byType(StepRow), findsNothing);
@@ -96,7 +96,7 @@ void main() {
     final steps = [..._json['steps'] as List];
     await tester.pumpWidget(_host(Message.fromJson({..._json, 'steps': [steps[2], steps[0]]})));
     await tester.pumpAndSettle();
-    expect(find.text('1 步没成'), findsOneWidget);
+    expect(find.text('1 项失败'), findsOneWidget);
     expect(find.byType(StepRow), findsNothing);
   });
 
@@ -117,6 +117,6 @@ void main() {
     const done = ActivityStep(id: 'd', title: '读文件', detail: 'a.txt', state: ActivityState.done, ms: 30);
     await tester.pumpWidget(_host(const Message(id: 'pending', role: 'assistant', pending: true, blocks: [], steps: [done, running])));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('已做 2 步'), findsOneWidget);
+    expect(find.text('执行中 · 2 个步骤'), findsOneWidget);
   });
 }

@@ -159,7 +159,7 @@ function ConfirmSheet({ kind, onClose, onDone }: { kind: "disable" | "recovery";
   const submit = async () => {
     setBusy(true); setErr(null);
     try { onDone(await http.post<Result>(disable ? "/api/auth/2fa/disable" : "/api/auth/2fa/recovery", { password, code: cleanCode(code) })); }
-    catch (e) { setErr(e instanceof Error ? e.message : "没成功"); }
+    catch (e) { setErr(e instanceof Error ? e.message : "操作失败"); }
     finally { setBusy(false); }
   };
   return (

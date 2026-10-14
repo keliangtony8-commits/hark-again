@@ -65,7 +65,7 @@ export default function WalletScreen() {
         line="结账时我在云浏览器里替你填卡，付款前一定先在订单卡上问你。卡号加密存在你自己的服务器上，之后只显示尾号。" />
       {saved && <div className="notice ok" role="status" onClick={() => setSaved(null)}>{saved}</div>}
       {cards.loading ? <Skeleton /> : cards.items.length === 0 ? (
-        <StarterCard title="钱包是空的" text="加一张常用的卡，网上买东西、订酒店时就不用每次自己掏卡输号。">
+        <StarterCard title="钱包是空的" text="添加常用银行卡，网购和预订酒店时无需重复输入卡号。">
           <button className="btn btn-ghost" onClick={open}><IconCard size={16} />添加付款卡</button>
         </StarterCard>
       ) : (

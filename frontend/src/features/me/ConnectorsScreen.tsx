@@ -56,7 +56,7 @@ export default function ConnectorsScreen() {
   const showTools = async (server: McpServerInfo) => {
     setTools({ server, list: null });
     try { setTools({ server, list: await http.get(`/api/connectors/mcp/${server.id}/tools`) }); }
-    catch (e) { setTools({ server, list: [], err: e instanceof Error ? e.message : "连不上" }); }
+    catch (e) { setTools({ server, list: [], err: e instanceof Error ? e.message : "无法连接" }); }
     finally { void servers.reload(); } // 打开工具列表 = 一次体检（后端据此放 / 收主页提醒），刷新这一行的状态
   };
   const addMcp = async () => {

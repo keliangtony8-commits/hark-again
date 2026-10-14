@@ -1,4 +1,4 @@
-// 磁盘配额（v1.31）：规则（比例、标题、快满 / 满了的后果）+ 磁盘一节的配额行 + 状态块“磁盘满了”。
+// 磁盘配额（v1.31）：规则（比例、标题、快满 / 满了的后果）+ 磁盘一节的配额行 + 状态块“磁盘已满”。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/computer/computer_details.dart';
 import 'package:assistant/features/computer/computer_section.dart';
@@ -64,12 +64,12 @@ void main() {
     final tight = ComputerStatus.fromJson(_status(used: (2.7 * (1 << 30)).round(), level: 'tight'));
     expect(tight.diskTight, isTrue);
     expect(tight.diskFull, isFalse);
-    expect(computerDiskNote(tight), startsWith('快满了'));
+    expect(computerDiskNote(tight), startsWith('空间紧张'));
 
     final full = ComputerStatus.fromJson(_status(used: 4 << 30, level: 'full'));
     expect(computerDiskRatio(full), 1.0);
-    expect(computerDiskNote(full), contains('新文件写不进'));
-    expect(computerHint(full), '磁盘满了');
+    expect(computerDiskNote(full), contains('无法写入新文件'));
+    expect(computerHint(full), '磁盘已满');
 
     final off = ComputerStatus.fromJson(_status(limit: null, level: 'off'));
     expect(computerDiskRatio(off), isNull);
@@ -83,9 +83,9 @@ void main() {
   testWidgets('quota row shows usage; full warns in both sections', (tester) async {
     await _pump(tester, _status(used: 4 << 30, level: 'full'));
     expect(find.text('已用 4 GB，上限 3 GB'), findsOneWidget);
-    expect(find.textContaining('满了：新文件写不进'), findsOneWidget);
+    expect(find.textContaining('已满：无法写入新文件'), findsOneWidget);
     expect(find.byType(MeterBar), findsOneWidget);
-    final hint = tester.widget<RowHint>(find.widgetWithText(RowHint, '磁盘满了'));
+    final hint = tester.widget<RowHint>(find.widgetWithText(RowHint, '磁盘已满'));
     expect(hint.warn, isTrue);
   });
 

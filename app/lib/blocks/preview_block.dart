@@ -57,7 +57,7 @@ class PreviewBlockView extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.only(top: Sp.x3),
             child: expired
-                ? Text('链接已过期。服务还在跑的话，让我重新生成一条。', style: context.text.bodySmall)
+                ? Text('链接已过期。服务仍在运行时，可让我重新生成。', style: context.text.bodySmall)
                 : Row(children: [
                     Expanded(
                       child: FilledButton.icon(

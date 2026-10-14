@@ -11,7 +11,7 @@ const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.
 
 /** 字段缺失 / 类型不对时给保守值。 */
 export function retryNotice(e: Record<string, unknown>): RetryNotice {
-  const reason = typeof e.reason === "string" && e.reason.trim() ? e.reason.trim() : "模型调用出错了";
+  const reason = typeof e.reason === "string" && e.reason.trim() ? e.reason.trim() : "模型调用失败";
   const fb = typeof e.fallback === "string" && e.fallback ? e.fallback : null;
   const label = typeof e.fallback_label === "string" && e.fallback_label ? e.fallback_label : null;
   return { attempt: num(e.attempt), max: num(e.max), delay_ms: num(e.delay_ms), reason, code: typeof e.code === "string" ? e.code : "", fallback: fb, fallback_label: label };

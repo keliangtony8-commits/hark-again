@@ -56,7 +56,7 @@ class _LoginSessionsSectionState extends ConsumerState<LoginSessionsSection> {
     try {
       await job();
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器，没能退出' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器，退出失败' : e.message);
     } finally {
       if (mounted) setState(() => _busy.remove(key));
     }

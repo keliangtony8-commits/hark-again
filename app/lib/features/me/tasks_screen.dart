@@ -55,9 +55,9 @@ class TasksScreen extends ConsumerWidget {
               PageIntro(summary: taskSummary(list), line: _nextLine(nextUp(list))),
               if (list.isEmpty) const _Starters(),
               if (g.attention.isNotEmpty) ...[SectionTitle('需要留意', count: g.attention.length), rows(g.attention)],
-              if (g.running.isNotEmpty) ...[SectionTitle('在跑', count: g.running.length), rows(g.running)],
+              if (g.running.isNotEmpty) ...[SectionTitle('运行中', count: g.running.length), rows(g.running)],
               if (g.panels.isNotEmpty) ...[SectionTitle('Home 面板', count: g.panels.length), rows(g.panels)],
-              if (g.idle.isNotEmpty) ...[SectionTitle('已停下', count: g.idle.length), rows(g.idle)],
+              if (g.idle.isNotEmpty) ...[SectionTitle('已停用', count: g.idle.length), rows(g.idle)],
             ]),
           );
         },

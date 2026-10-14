@@ -179,6 +179,6 @@ void main() {
   testWidgets('missing task', (tester) async {
     final gone = FakeApi(tasks: [], runs: []);
     await pump(tester, gone, '/me/tasks/t1');
-    expect(find.text('这个任务已经不在了'), findsOneWidget);
+    expect(find.text('该任务已删除'), findsOneWidget);
   });
 }

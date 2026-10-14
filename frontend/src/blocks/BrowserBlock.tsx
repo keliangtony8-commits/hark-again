@@ -97,7 +97,7 @@ export default function BrowserBlock({ block }: { block: T }) {
         ) : (
           <img className="blk-browser-screen" alt="" src={src} onError={() => setBroken(true)} onLoad={() => setBroken(false)} />
         )}
-        {paused && <div className="blk-browser-paused">画面已暂停，点一下继续</div>}
+        {paused && <div className="blk-browser-paused">画面已暂停，轻点继续</div>}
       </div>}
       {!!block.files?.length && block.workspace && (
         <ul className="blk-browser-files">

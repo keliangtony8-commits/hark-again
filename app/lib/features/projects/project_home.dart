@@ -4,7 +4,7 @@
 //   → “最近的对话”最多 3 条（点开续聊；更多 → 打开项目对话抽屉）——双栏时历史已常驻左侧，不重复画
 //   → “文件”（v1.11）：最近改过的 3 个项目文件（我和沙箱共用的文件夹），点开就看；全部/管理 → 文件抽屉；
 //     空文件夹给一行“放点资料进来”——双栏也显示（文件不像历史那样常驻）
-//   → “电脑”（v1.25）：项目沙盒的运行状态、内存、磁盘、正在跑的后台任务（features/computer/computer_section.dart）；
+//   → “电脑”（v1.25）：项目沙盒的运行状态、内存、磁盘、正在运行的后台任务（features/computer/computer_section.dart）；
 //   → 起步建议（新开一段）。
 // 版式靠左、从让位线下往下排（不居中漂浮），和主页/项目列表同一套层级；入场 FadeSlideIn 错峰。
 // 规则（取哪几条、副标题）是纯函数 projectRecent / projectLine，测试直接测。
@@ -173,7 +173,7 @@ class ProjectHome extends ConsumerWidget {
                     ),
               ])),
             ],
-            // 电脑（v1.25）：这个项目的沙盒在不在跑、在忙什么；加载中/连不上服务器时整节不画。点状态块进详情页（v1.27）
+            // 电脑（v1.25）：这个项目的沙盒在不在跑、在忙什么；加载中/无法连接服务器时整节不画。点状态块进详情页（v1.27）
             ComputerSection(
                 ws: projectId, delay: Motion.stagger(i++), onOpen: () => context.push('/projects/$projectId/computer')),
             if (suggestions.isNotEmpty) ...[

@@ -65,12 +65,12 @@ void main() {
     expect(b.tasks[0].round, 2);
     expect(b.tasks[2].round, 1);
     expect(delegateTaskLine(b.tasks[0]), '第 2 轮 · 2 步 · 5 秒');
-    expect(delegateTaskLine(b.tasks[1]), '这一轮被停下了');
+    expect(delegateTaskLine(b.tasks[1]), '本轮已停止');
     expect([for (final t in b.tasks) delegateCanFollow(b, t)], [true, true, false, false]);
     expect([for (final t in b.tasks) delegateCanOpen(b, t)], [true, true, true, false]); // 被停的没结论也能展开（只有追问）
     final live = _d([{'id': 'sa_1a2b3c', 'title': 'a', 'state': 'done', 'result': 'x'}], live: true);
     expect(delegateCanFollow(live, live.tasks[0]), isFalse); // 这一轮还没结束
-    expect(delegateSemantics(_d([{'id': 'sa_1a2b3c', 'title': 'a', 'state': 'done', 'steps': 1}])), '子助手，1 个都完成了；a，完成，1 步，可以追问');
+    expect(delegateSemantics(_d([{'id': 'sa_1a2b3c', 'title': 'a', 'state': 'done', 'steps': 1}])), '子助手，1 项全部完成；a，已完成，1 步，可以追问');
     expect(delegateFollowTitle('查价格'), '追问「查价格」');
 
     final a = Block.fromJson({'type': 'agent', 'name': '子助手', 'target': 'sa_1a2b3c', 'title': '查价格'}) as AgentBlock;
@@ -79,7 +79,7 @@ void main() {
     expect(agentChipSemantics(a), '追问子助手 查价格');
     final g = Block.fromJson({'type': 'agent', 'target': 'sa_1a2b3c', 'gone': true}) as AgentBlock;
     expect(agentChipLabel(g), '追问 · 子任务');
-    expect(agentChipSemantics(g), contains('不在了'));
+    expect(agentChipSemantics(g), contains('已失效'));
     const plain = AgentBlock();
     expect(agentChipLabel(plain), '子助手');
     expect(agentChipSemantics(plain), '交给子助手');

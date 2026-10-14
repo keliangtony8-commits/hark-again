@@ -15,7 +15,7 @@ export default function EmptyState({ onPick, subtitle }: { onPick: (t: string) =
       <div className="empty-inner">
         <BrandMark />
         <h1>{greet}</h1>
-        <p>{subtitle ?? "今天想先搞定哪件事？"}</p>
+        <p>{subtitle ?? "今天想先处理哪件事？"}</p>
         <div className="suggestions">
           {SUGGESTIONS.map((s) => (
             <button key={s.title} className="suggestion" onClick={() => onPick(s.title)}>

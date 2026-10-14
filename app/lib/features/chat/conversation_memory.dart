@@ -26,13 +26,13 @@ String? summaryLine(ConversationContext c) => c.summarized > 0 ? '更早的 ${c.
 
 /// 工作区规则一行的右侧：整份读 → 大小；截断 / 省掉 → 说清超了上限（警示色）。
 String ruleStatus(WorkspaceRule r) => switch (r.status) {
-      'truncated' => '超出上限，只读了 ${formatSize(r.used)} / ${formatSize(r.bytes)}',
-      'omitted' => '超出上限，没有读',
+      'truncated' => '超出上限，仅读取 ${formatSize(r.used)} / ${formatSize(r.bytes)}',
+      'omitted' => '超出上限，未读取',
       _ => formatSize(r.bytes),
     };
 
 /// 还没有规则文件时的一句引导。
-const rulesHint = '在工作区根目录放 AGENTS.md，写上约定（怎么跑测试、代码风格、别动哪些文件），助手每轮都会先读';
+const rulesHint = '在工作区根目录放 AGENTS.md，写上约定（如何运行测试、代码风格、别动哪些文件），助手每轮都会先读';
 
 /// 整理完的提示条。[before] = 整理前的状态（算这次并进去几条）。
 String compactToast(ConversationContext before, CompactResult r) => switch (r.status) {

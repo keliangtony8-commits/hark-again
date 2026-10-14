@@ -8,7 +8,7 @@ export function HandoffBar({ reason, offline, onAnswer }: { reason: string; offl
     <div className="blk-handoff" role="status">
       <IconHand size={18} />
       <div className="blk-handoff-text"><b>{HANDOFF_TITLE}</b><span>{reason}</span>
-        {offline && <span className="blk-handoff-warn">还没连上，连上后再点一次</span>}</div>
+        {offline && <span className="blk-handoff-warn">尚未连接，连接后请重试</span>}</div>
       {onAnswer && (
         <div className="blk-handoff-actions">
           <button className="btn btn-sm btn-ghost" onClick={() => onAnswer(false)}>{HANDOFF_CANCEL}</button>

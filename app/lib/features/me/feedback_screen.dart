@@ -66,7 +66,7 @@ final feedbackDetailProvider = FutureProvider.autoDispose.family<FeedbackItem, S
 Future<void> reportProblem(BuildContext context, WidgetRef ref) async {
   final v = await showFormSheet(context,
       title: '报告问题',
-      subtitle: '哪里不对、怎么出现的，写清楚一点下次好查。',
+      subtitle: '请描述问题及出现步骤，便于排查。',
       submit: '提交',
       fields: const [FieldSpec('note', '遇到了什么问题', hint: '比如：安卓上按住说话没反应', lines: 4)]);
   if (v == null || !context.mounted) return;
@@ -74,7 +74,7 @@ Future<void> reportProblem(BuildContext context, WidgetRef ref) async {
     await ref.read(feedbackProvider.notifier).report(v['note']!);
     if (context.mounted) showToast(context, '已记下');
   } on ApiError catch (e) {
-    if (context.mounted) showToast(context, e.isNetwork ? '没连上服务器，没能提交' : e.message);
+    if (context.mounted) showToast(context, e.isNetwork ? '无法连接服务器，提交失败' : e.message);
   }
 }
 
@@ -169,7 +169,7 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
     try {
       await job();
     } on ApiError catch (e) {
-      if (mounted) showToast(context, e.isNetwork ? '没连上服务器' : e.message);
+      if (mounted) showToast(context, e.isNetwork ? '无法连接服务器' : e.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

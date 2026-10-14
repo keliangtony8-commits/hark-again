@@ -28,7 +28,7 @@ export default function ActivitySummary({ steps, pending }: { steps: ActivitySte
     <div className="thought-sum activity">
       <button className={`thought-toggle ${open ? "open" : ""}`} aria-expanded={open} onClick={() => setOpen(!open)}>
         <IconHistory size={14} />{label}
-        {bad > 0 && <span className="activity-bad">· {bad} 步没成</span>}
+        {bad > 0 && <span className="activity-bad">· {bad} 项失败</span>}
         <IconChevron size={14} />
       </button>
       {open && (

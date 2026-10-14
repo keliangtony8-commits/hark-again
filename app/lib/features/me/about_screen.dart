@@ -24,7 +24,7 @@ class AboutScreen extends ConsumerWidget {
     return SubPage(
       title: const Text('关于'),
       body: PageBody(children: [
-        const SubPageLine('$appName 是你自己的私人助手：跑在你自己的服务器上，用你自己的模型密钥，数据只在那里。'),
+        const SubPageLine('$appName 是你自己的私人助手：运行在你自己的服务器上，用你自己的模型密钥，数据只在那里。'),
         FadeSlideIn(
           delay: Motion.stagger(1),
           child: GlassGroup(children: [

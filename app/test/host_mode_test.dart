@@ -103,7 +103,7 @@ void main() {
     expect(hostHint(s), isNull);
     expect(hostDetail(HostStatus.fromJson(_status(installed: false, reachable: false))), '还没装主机代理');
     final down = HostStatus.fromJson(_status(reachable: false));
-    expect((hostDetail(down), hostHint(down)), ('连不上主机代理', '连不上'));
+    expect((hostDetail(down), hostHint(down)), ('无法连接主机代理', '无法连接'));
     expect(HostStatus.fromJson(_status(installed: false, reachable: false)).canToggle, isFalse);
     expect(hostUptime(59), '1 分钟');
     expect(hostUptime(3 * 3600), '3 小时');
@@ -178,7 +178,7 @@ void main() {
 
   testWidgets('装了但连不上：行尾警示，不提示安装', (tester) async {
     await _pumpSection(tester, _Api(_status(reachable: false)));
-    expect(find.text('连不上'), findsOneWidget);
+    expect(find.text('无法连接'), findsOneWidget);
     expect(find.text(hostInstallHint), findsNothing);
   });
 }
