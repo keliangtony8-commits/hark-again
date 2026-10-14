@@ -55,6 +55,11 @@ _SOFT = re.compile(r"^(?:要|用)")
 _QUESTION = re.compile(r"[?？]|吗|呢|怎么|多少|哪个|哪儿|哪里|什么时候|为什么|如何|要不要|是不是|好不好|行不行|问下|问一下|问问")
 # 指向别的对象：问的/说的不是手上这件事（“另外那个项目进度怎么样”不是在问这一轮）。
 _ELSEWHERE = re.compile(r"另外|另一个|别的|其他|那个项目|上次那个|刚才那个|隔壁")
+# 用户自己标了“这是另一件事”：“顺便问一下 / 顺带问下 …” → 并行一路（不劳判官）。只认“问”，不认“顺便说一句”（那常是补充）。
+_BYTHEWAY = re.compile(r"^(?:顺便|顺带|另外|顺嘴|随口)(?:问|问一下|问下|问问)")
+# 整句只是客气话（长一点的“真的太感谢你了，帮了我大忙”以前要问判官，判官答成新问题就白开一路）。
+_COURTESY = re.compile(r"^(?:真的?|太|非常|很|十分)*(?:谢谢|多谢|感谢|辛苦)(?:你|您)?(?:了|啦|啊)?[\s，,。.!！~～]*"
+                       r"(?:帮(?:了)?我(?:的)?大?忙)?[\s，,。.!！~～]*$")
 
 
 @dataclass
@@ -91,10 +96,11 @@ def set_handlers(side: SideFn, pending: SideFn) -> None:
 def rule(text: str, files: bool = False) -> str | None:
     """确定性规则：这句话是什么（None = 拿不准，交给 judge）。带附件的只可能是补充或新问题。
 
-    v2.90.3 起多两道闸，都是评测（tests/smoke_intake_eval.py）里抓出来的真误判：
+    v2.90.4 起多几道闸，都是评测（tests/smoke_intake_eval.py）里抓出来的真误判：
     问句形状（“要多少钱”“用哪个好”“要不要加个总结”）不再被 _SUPPLEMENT 的软前缀（要 / 用）当成补充；
-    指向别的对象的（“另外那个项目进度怎么样”）不再被当成问这一轮的进度。两处都改成交给判官，
-    不违背“宁少勿多”（判官拿不准仍按补充），只是不让规则替用户下结论。
+    指向别的对象的（“另外那个项目进度怎么样”）不再被当成问这一轮的进度；带附件又问别的也不再当成补充。
+    这些改成交给判官，不违背“宁少勿多”（判官拿不准仍按补充），只是不让规则替用户下结论。
+    反过来，用户自己标了“顺便问一下”的直接算另一件事，整句只是客气话的直接算附和——这两类不用问判官。
     """
     t = (text or "").strip()
     if files:
@@ -105,6 +111,10 @@ def rule(text: str, files: bool = False) -> str | None:
     if not t:
         return RIDE
     if len(t) <= 12 and _ACK.match(t):
+        return RIDE
+    if _BYTHEWAY.match(t):
+        return NEW
+    if _COURTESY.match(t):
         return RIDE
     if _ELSEWHERE.search(t):
         return None
@@ -117,7 +127,7 @@ def rule(text: str, files: bool = False) -> str | None:
 
 
 JUDGE_PROMPT = """助手正在做一件事时，用户又发来了消息。判断这些新消息是对正在做的事的补充/修改（SUPPLEMENT），还是一个无关的新问题（NEW）。
-拿不准就答 SUPPLEMENT。只输出一个词。
+拿不准就答 SUPPLEMENT；但要是和正在做的事明显不是一回事（问的东西、目的都不同，例如顺口问天气、问汇率、让你推荐别的），答 NEW。只输出一个词。
 
 正在做的事（用户原话）：{task}
 

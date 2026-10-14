@@ -48,7 +48,7 @@ def decide(m: dict) -> str:
 
 
 def check_grouping(case: dict) -> list[str]:
-    """顺带查分流装配：同类的合成一件、顺序固定、带引用一定进 NEW。"""
+    """顺带查分流装配：同类的合成一件、顺序固定、规则定得下来的消息落在对应桶、带引用一定进 NEW。"""
     bad: list[str] = []
     items = [mi.Arrival(f"{case['id']}-{i}", m.get("text", ""), m.get("text", ""), at=None,  # type: ignore[arg-type]
                         reply_to="q" if m.get("reply_to") else None, files=bool(m.get("files")))
@@ -61,8 +61,14 @@ def check_grouping(case: dict) -> list[str]:
     if total != len(items):
         bad.append(f"{case['id']}: 分流里少了消息 {total} != {len(items)}")
     for kind, group in got:
-        if kind == mi.NEW and any(a.reply_to is None and mi.rule(a.text, a.files) is not None for a in group):
-            bad.append(f"{case['id']}: 规则能定的消息被塞进并行路")
+        for a in group:
+            if a.reply_to is not None:
+                if kind != mi.NEW:
+                    bad.append(f"{case['id']}: 带引用的消息没进并行路")
+                continue
+            r = mi.rule(a.text, a.files)
+            if r is not None and r != kind:
+                bad.append(f"{case['id']}: 规则说 {r} 的消息被分到了 {kind}｜{a.text[:20]}")
     return bad
 
 

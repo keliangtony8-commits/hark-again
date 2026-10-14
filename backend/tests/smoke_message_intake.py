@@ -48,10 +48,13 @@ async def fake_complete(messages, model=None, kind="summary", **kw):
     if kind != "intake":
         return ""
     body = messages[0]["content"]
-    judged.append([l[2:] for l in body.splitlines() if l.startswith("- ")])
-    if "炸" in body:
+    # 只看“新消息”那几行判：判官提示词本身也会出现“天气/汇率”这些例子，读整段会被自己带偏（v2.90.5 踩过）
+    lines = [l[2:] for l in body.splitlines() if l.startswith("- ")]
+    judged.append(lines)
+    if "炸" in " ".join(lines):
         raise RuntimeError("网关挂了")
-    return "NEW" if "天气" in body or "汇率" in body or "翻译" in body else "SUPPLEMENT"
+    said = " ".join(lines)
+    return "NEW" if "天气" in said or "汇率" in said or "翻译" in said else "SUPPLEMENT"
 llm.complete = fake_complete
 
 

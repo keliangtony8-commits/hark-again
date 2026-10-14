@@ -21,8 +21,8 @@
 {"id":"c21","task":"写报告","why":"带引用 + 改成……：引用优先，算另一件事","messages":[{"text":"改成这样","expect":"new","reply_to":true}]}
 {"id":"c22","task":"装依赖","why":"带引用","messages":[{"text":"这段删掉","expect":"new","reply_to":true}]}
 {"id":"c23","task":"写周计划","why":"“要多少钱”是问题形状，不是补充（^要 别乱认）","messages":[{"text":"要多少钱","expect":"new"}]}
-{"id":"c24","task":"帮我选个键盘","why":"“用哪个好？”是问题形状，不是补充（^用 别乱认）","messages":[{"text":"用哪个好？","expect":"new"}]}
-{"id":"c25","task":"写周计划","why":"“要不要……”是在问，不是在下要求","messages":[{"text":"要不要加个总结","expect":"new"}]}
+{"id":"c24","task":"帮我选个键盘","why":"“用哪个好？”这句和任务同话题（首选判官觉得该并进去），所以换成明确无关的另一件事再测规则","messages":[{"text":"用哪个 App 记笔记比较好？","expect":"new"}]}
+{"id":"c25","task":"写周计划","why":"“要不要加个总结”和任务同话题（判官答并进去是对的），换成明确无关的另一件事再测规则","messages":[{"text":"要不要买个新键盘？","expect":"new"}]}
 {"id":"c26","task":"帮我改简历","why":"“注意”是硬补充前缀","messages":[{"text":"注意排版","expect":"steer"}]}
 {"id":"c27","task":"写周计划","why":"“比如”是在补例子","messages":[{"text":"比如周三休息","expect":"steer"}]}
 {"id":"c28","task":"查一下资料","why":"“等等/先别”是叫停 + 改要求","messages":[{"text":"等等，先别发","expect":"steer"}]}

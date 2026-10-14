@@ -41,10 +41,11 @@ for rel, needle in [("app/android/app/src/main/AndroidManifest.xml", f'android:l
     assert needle in open(os.path.join(repo, rel), encoding="utf-8").read(), rel
 
 # tag 与 VERSION 一致：指向 HEAD 的 tag 对 HEAD 里提交的 VERSION（工作区改了还没提交时不算；没有 git 或老提交没有 VERSION 时跳过）
+# v2.90.5：补丁版从 v2.90.1 起就打全版本号（scripts/check_version.sh 两种都收），这里原来只认 vX.Y，打补丁 tag 后必红。
 t = subprocess.run(["git", "tag", "--points-at", "HEAD"], cwd=repo, capture_output=True, text=True)
 committed = subprocess.run(["git", "show", "HEAD:VERSION"], cwd=repo, capture_output=True, text=True)
 if t.returncode == 0 and committed.returncode == 0:
-    cm, cn, _ = committed.stdout.strip().split(".")
+    cm, cn, cp = committed.stdout.strip().split(".")
     for tag in t.stdout.split():
-        assert tag == f"v{cm}.{cn}", f"tag {tag} 与提交里的 VERSION {committed.stdout.strip()} 不一致"
+        assert tag in (f"v{cm}.{cn}", f"v{cm}.{cn}.{cp}"), f"tag {tag} 与提交里的 VERSION {committed.stdout.strip()} 不一致"
 print("smoke_version OK")

@@ -1,11 +1,11 @@
 {
   "name": "assistant-web",
   "private": true,
-  "version": "2.91.0",
+  "version": "2.91.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-arch.mjs && tsc -b && vite build",
+    "build": "node scripts/check-arch.mjs && node scripts/check-contrast.mjs && tsc -b && vite build",
     "preview": "vite preview",
     "android:init": "npx cap add android",
     "android:sync": "npm run build && npx cap sync android",
