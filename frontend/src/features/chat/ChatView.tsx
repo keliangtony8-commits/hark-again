@@ -3,7 +3,7 @@ import { workspaceOf } from "../../lib/workspace";
 import type { LinkStatus } from "../../lib/socket";
 import { formatDay, startsNewDay } from "../../lib/format";
 import type { Message, MessageQuote, OutgoingFile } from "../../lib/types";
-import { quotable, quoteOf } from "../../lib/quote";
+import { quotable, quoteOf, showsQuote } from "../../lib/quote";
 import { FloatingFooter } from "../../ui/kit";
 import { IconArrowDown } from "../../ui/icons";
 import { useStickToBottom } from "./useStickToBottom";
@@ -72,7 +72,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
   const seen = useRef<{ first?: string; last?: string }>({});
   // 滚到某条中间闪一下（.flash 动画，结束自己摘掉，重复定位能再闪），不再被贴底拉走：搜索定位、点引用行都走这里
   const reveal = (id: string) => {
-    const el = thread.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`);
+    const el = thread.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"], [data-server-id="${CSS.escape(id)}"]`);
     if (!el) return false;
     stick.release();
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -119,7 +119,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
                   onRegenerate={m === last && m.role === "assistant" && canRegenerate ? onRegenerate : undefined}
                   onContinue={m === last && m.role === "assistant" && canRegenerate && continuable(m) ? () => onSend(CONTINUE_TEXT) : undefined}
                   onEdit={m.id === editableId ? startEdit : undefined} editing={m.id === editing?.id} projectId={projectId}
-                  onQuote={quotable(m) ? () => { setDraft(null); setQuoting(quoteOf(m)); } : undefined} onJumpQuote={reveal} />
+                  onQuote={quotable(m) ? () => { setDraft(null); setQuoting(quoteOf(m)); } : undefined} onJumpQuote={reveal} showQuote={showsQuote(messages, i)} />
               </div>
             ))}
             {error && (

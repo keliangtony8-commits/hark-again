@@ -1,15 +1,13 @@
 import { mentionsAgent } from "./mentions";
 import { slashOf } from "./slash";
 /**
- * 回答途中补充（v1.83，服务器 steering.py；对应 App models/message.dart 的 steer / beforePending）。
+ * 生成中发的消息（v1.83 steering → v2.90 服务器 message_intake.py 判断补充还是另一件事；对应 App models/message.dart 的 steer / beforePending）。不另标字，只决定位置。
  * 生成中再发文字或附件（v1.93）= 补充给正在进行的这一轮：user.message 带 steer + client_id；气泡插在生成中那条前面，
  * 和服务器落库的顺序（提问 → 补充 → 回复）一致。服务器收下回 turn.steered；插不进就排成下一轮（message.start 带回 client_id）。
  */
 import type { Message } from "./types";
 
 export const STEER_STATUS = "steer";
-export const STEER_LABEL = "回答途中补充";
-export const STEER_HINT = "补充或纠正，会并进这次回答";
 
 /** 用户消息：途中补充进那一轮的（本机乐观气泡也标 status=steer）。 */
 export const isSteer = (m: Message) => m.role === "user" && m.status === STEER_STATUS;

@@ -51,9 +51,6 @@ class EditDraft {
   final bool hasFiles;
 }
 
-/// 生成中输入框的提示：这时发出去的话会并进正在进行的回答（后端 steering）。
-const steerHint = '补充或纠正，会并进这次回答';
-
 class Composer extends ConsumerStatefulWidget {
   const Composer(
       {super.key,
@@ -207,7 +204,7 @@ class _ComposerState extends ConsumerState<Composer> {
     return (!widget.busy || _steering) && !_uploading && _hasContent;
   }
 
-  /// 生成中有字或附件：发出去是补充给这一轮（v1.93 附件也行；不是命令 / 不在编辑），否则仍只能停止。
+  /// 生成中有字或附件：照常能发（v2.90 服务器 message_intake 判断是补充还是另一件事，每件事都回）；没内容时这个位置是停止。
   bool get _steering =>
       widget.streaming && widget.canSteer && !_editing && !_shell && _command == null && _hasContent &&
       !mentionsAgent(_c.text); // 点名子助手是一件新的事：排成下一轮（服务器同样不插队）
@@ -468,7 +465,7 @@ class _ComposerState extends ConsumerState<Composer> {
             onChanged: (_) => setState(() {}),
             style: context.text.bodyLarge,
             decoration: InputDecoration(
-              hintText: widget.streaming && widget.canSteer && !_editing ? steerHint : widget.hint,
+              hintText: widget.hint,
               filled: false,
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
@@ -495,7 +492,7 @@ class _ComposerState extends ConsumerState<Composer> {
                   icon: _shell ? Icons.terminal_rounded : (_local ? Icons.keyboard_return_rounded : Icons.arrow_upward_rounded),
                   label: _editing
                       ? '保存并重新回答'
-                      : (_shell ? '在电脑上运行' : (_steering ? '补充给正在进行的回答' : (_local ? '执行 ${_command!.command.token}' : '发送'))),
+                      : (_shell ? '在电脑上运行' : (_steering ? '发送' : (_local ? '执行 ${_command!.command.token}' : '发送'))),
                   filled: _canSend,
                   onTap: _canSend ? _send : null,
                 )

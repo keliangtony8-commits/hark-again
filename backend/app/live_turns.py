@@ -21,6 +21,7 @@
 import asyncio
 import contextlib
 import copy
+import time
 import uuid
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -90,6 +91,7 @@ class Turn:
     def __init__(self, key: str):
         self.id = uuid.uuid4().hex
         self.key = key
+        self.started = time.monotonic()  # 问进度时算“已经做了多久”（message_intake.progress_text）
         self.conv_id: str | None = None
         self.seq = 0
         self.log: deque[dict] = deque(maxlen=LOG_MAX)
@@ -120,6 +122,7 @@ class Turn:
                 self.conv_id = e.get("conversation_id")
                 if self.conv_id:
                     _by_conv[self.conv_id] = self
+                    _watch.setdefault(self.conv_id, set()).update(c for c in self.subs if not c.closed)  # 发起的连接也在看这个对话
                     # 新对话的第一轮：之后同一对话的请求要排在它后面
                     t = _tails.get(self.conv_id)
                     if self.task is not None and t is not self.task and (t is None or t.done()):
@@ -162,6 +165,8 @@ class Turn:
 _turns: dict[str, Turn] = {}
 _by_conv: dict[str, Turn] = {}
 _tails: dict[str, asyncio.Task] = {}
+_watch: dict[str, set[Conn]] = {}  # v2.90 正在看这个对话的连接（turn.resume 带 conversation_id 时登记）：message.added 推给它们
+SIDE = "#side"  # v2.90 并行一路的排队键后缀：同一对话最多 1 主 + 1 并行，再来的排在并行路后面（message_intake）
 
 Handler = Callable[[Callable[[dict], Awaitable[None]], dict, asyncio.Event], Awaitable[None]]
 
@@ -184,6 +189,29 @@ def follow(conversation_id: str, handler: Handler, event: dict) -> Turn:
         if minutes > 0:
             turn._orphan = asyncio.get_running_loop().call_later(minutes * 60, _halt, turn)
     return turn
+
+
+def side(conversation_id: str, handler: Handler, event: dict) -> Turn:
+    """并行一路（message_intake：运行中来了无关的新问题）：和主路同时跑，彼此不等；不推流（看不见的路不弹审批），
+    结果由 handler 落库后用 publish 推 message.added。"""
+    return _enqueue(conversation_id + SIDE, handler, event, set())
+
+
+def publish(conversation_id: str, event: dict) -> int:
+    """不属于任何一轮的对话级事件（message.added）：推给正在看这个对话的连接 + 这个对话当前那一轮的订阅者。
+    不编号、不进日志：客户端按消息 id 去重，错过了 GET 里也有。返回推给了几条连接。"""
+    conns = set(_watch.get(conversation_id, ()))
+    if (cur := _by_conv.get(conversation_id)) is not None:
+        conns |= cur.subs
+    for c in conns:
+        c.put(event)
+    return len(conns)
+
+
+def running(conversation_id: str) -> Turn | None:
+    """这个对话主路正在跑的那一轮（问进度从它的步骤答）；没有 → None。"""
+    t = _by_conv.get(conversation_id)
+    return t if t is not None and t.running and not t.ended else None
 
 
 async def note(conversation_id: str, event: dict) -> bool:
@@ -239,8 +267,8 @@ def stop(conn: Conn, conversation_id: str | None) -> None:
     for turn in list(_turns.values()):
         if not turn.running or turn.stop.is_set() or turn.task is None:
             continue
-        if conversation_id:
-            hit = turn.conv_id == conversation_id or (turn.conv_id is None and turn.key == conversation_id)
+        if conversation_id:  # 停 = 这个对话的主路和并行路一起停
+            hit = turn.conv_id == conversation_id or (turn.conv_id is None and turn.key in (conversation_id, conversation_id + SIDE))
         else:
             hit = conn in turn.subs
         if hit:
@@ -256,6 +284,8 @@ def resume(conn: Conn, event: dict) -> None:
     tid, cid = event.get("turn_id"), event.get("conversation_id")
     tid = tid if isinstance(tid, str) else None
     cid = cid if isinstance(cid, str) and cid else None
+    if cid:
+        _watch.setdefault(cid, set()).add(conn)
     turn = _turns.get(tid) if tid else None
     if turn is None and cid:
         turn = _by_conv.get(cid)
@@ -296,7 +326,11 @@ def _attach(turn: Turn, conn: Conn) -> None:
 
 
 def detach(conn: Conn) -> None:
-    """连接断了：从所有轮次退订；没人看着的轮次开始计时（turn_offline_minutes；0 = 立刻按停止收尾）。"""
+    """连接断了：从所有轮次、对话旁观表退订；没人看着的轮次开始计时（turn_offline_minutes；0 = 立刻按停止收尾）。"""
+    for cid in [c for c, s in _watch.items() if conn in s]:
+        _watch[cid].discard(conn)
+        if not _watch[cid]:
+            _watch.pop(cid, None)
     for turn in list(_turns.values()):
         if conn not in turn.subs:
             continue

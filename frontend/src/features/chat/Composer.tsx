@@ -14,7 +14,7 @@ import { AGENT_MENTION, MENTION_MAX, agentMatches, applyMention, mentionAt, rank
 import type { ProjectFile, Skill } from "../../lib/types";
 import { projectFileLine } from "../projects/projectHome";
 import MentionList, { type MentionItem } from "./MentionList";
-import { STEER_HINT, steerable } from "../../lib/steer";
+import { steerable } from "../../lib/steer";
 import {
   applySlash, rankSlash, slashBarText, slashBlocked, slashOf, slashQueryAt, slashSubtitle, slashToken, SLASH_COMMANDS,
   type SlashCall, type SlashIcon,
@@ -272,7 +272,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
                 ]} />
               : <button className="icon-btn" onClick={() => picker.current?.click()} disabled={!!editing} aria-label="添加附件"><IconClip /></button>}
             <input ref={picker} type="file" multiple hidden onChange={(e) => pick(e.target.files)} />
-            <textarea ref={ref} rows={1} value={text} placeholder={voiceBusy ? "正在识别…" : streaming && canSteer && !editing ? STEER_HINT : placeholder}
+            <textarea ref={ref} rows={1} value={text} placeholder={voiceBusy ? "正在识别…" : placeholder}
               onChange={(e) => { setText(e.target.value); track(e.target); setActive(0); if (closedAt !== null && !"@$/".includes(e.target.value[closedAt] ?? "x")) setClosedAt(null); }}
               onSelect={(e) => track(e.currentTarget)}
               onPaste={(e) => !editing && e.clipboardData.files.length && pick(e.clipboardData.files)}
@@ -295,7 +295,7 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
               ? <button key="stop" className="send-btn stop" onClick={onStop} disabled={!onStop} aria-label="停止生成" title="停止生成（Esc）"><IconStop /></button>
               : canSend || !mic.supported
               ? <button key={steering ? "steer" : shell ? "run" : local ? "slash" : "send"} className="send-btn" onClick={submit} disabled={!canSend}
-                  aria-label={editing ? "保存并重新回答" : shell ? "在电脑上运行" : steering ? "补充给正在进行的回答" : local ? `执行 ${slashToken(command!.command)}` : "发送"}
+                  aria-label={editing ? "保存并重新回答" : shell ? "在电脑上运行" : local ? `执行 ${slashToken(command!.command)}` : "发送"}
                   title={shell ? "在电脑上运行（Enter）" : local ? "执行（Enter）" : undefined}>
                   {shell ? <IconTerminal /> : local ? <IconCheck /> : <IconSend />}</button>
               : <button className="send-btn ghost" onClick={startVoice} disabled={disabled || voiceBusy} aria-label="说话"><IconMic /></button>}

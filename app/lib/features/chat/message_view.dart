@@ -4,8 +4,8 @@
 // - 长按 = 原地聚焦菜单（§J，ui/focus_menu.dart）：用户气泡（复制、回复，最后一条另有“编辑”）；
 //   回复（复制、选择文字、回复，再往后 朗读、重新生成、存成文件、有用 / 不好——超过 5 项收进“更多”）。
 //   回复正文不原地可选（ProseScope），选字走菜单里的“选择文字”。
-// - 引用回复：用户气泡顶上一行 QuoteLine（quote_line.dart），点一下回到原消息（onJumpQuote）。
-// - 照常显示的状态行：待发送 / 发送失败、补充给这一轮、没正常说完（ReplyEnd.label）、“继续”、正在朗读（点了停止）。
+// - 引用：用户气泡 / 不紧挨着原话的回复顶上一行 QuoteLine（quote_line.dart），点一下回到原消息（onJumpQuote）。
+// - 照常显示的状态行：待发送 / 发送失败、没正常说完（ReplyEnd.label）、“继续”、正在朗读（点了停止）。
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -47,6 +47,7 @@ class MessageView extends StatelessWidget {
       this.onRate,
       this.onQuote,
       this.onJumpQuote,
+      this.showQuote = true,
       this.showTime = false});
   final Message message;
 
@@ -69,6 +70,9 @@ class MessageView extends StatelessWidget {
 
   /// 菜单里的“回复”（§J 引用回复）；ChatView 只给已落库、生成完的消息。
   final VoidCallback? onQuote;
+
+  /// 顶上画不画引用行（ChatView 按 [showsQuote] 算：助手回复紧挨着原话时不画）。
+  final bool showQuote;
 
   /// 点气泡顶上的引用行：回到被引用的那条（ChatView._reveal）。
   final void Function(String id)? onJumpQuote;
@@ -118,7 +122,7 @@ class MessageView extends StatelessWidget {
     ]);
     // 长按 = 聚焦菜单（代替文字选择，两者手势冲突）；没发出的消息走状态行上的菜单
     final pressable = FocusPressable(enabled: !message.unsent, alignEnd: true, actions: () => _userActions(context, text), child: bubble);
-    final quote = message.quote;
+    final quote = showQuote ? message.quote : null;
     return Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
       if (quote != null) QuoteLine(quote, alignEnd: true, onTap: onJumpQuote == null ? null : () => onJumpQuote!(quote.id)),
       // 待发送时气泡变淡，发出后渐变回实色
@@ -135,8 +139,6 @@ class MessageView extends StatelessWidget {
         child: AnimatedSwitcher(
           duration: context.motion(Motion.fast),
           child: switch (message.outbox) {
-            Outbox.sent when message.steer =>
-              _OutboxStatus(key: const ValueKey('s'), icon: Icons.call_merge_rounded, label: Message.steerLabel, color: p.text3),
             Outbox.sent => const SizedBox.shrink(),
             Outbox.queued => _OutboxStatus(key: const ValueKey('q'), icon: Icons.schedule_rounded, label: '待发送', color: p.text3),
             Outbox.failed => _OutboxStatus(
@@ -267,7 +269,10 @@ class MessageView extends StatelessWidget {
     final summary = !thinking && message.thought.trim().isNotEmpty;
     // 活动时间线（v1.28）：用过工具就在回复上方多一行“做了 N 步”，生成中有完成的步骤时就出现（“已做 N 步”）
     final activity = message.steps.isNotEmpty && (!message.pending || message.steps.any((s) => !s.running));
+    final quote = showQuote ? message.quote : null;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // §C：回复不紧挨着它回应的那句时，顶上一行连接线 + 原话（和用户引用同一个 QuoteLine）
+      if (quote != null) QuoteLine(quote, onTap: onJumpQuote == null ? null : () => onJumpQuote!(quote.id)),
       ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: RiseSwitcher(child: summary ? ThoughtSummary(key: const ValueKey('summary'), message: message) : null),

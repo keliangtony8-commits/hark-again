@@ -23,7 +23,8 @@ class Message {
       this.thinkTo,
       this.retry,
       this.feedback,
-      this.quote});
+      this.quote,
+      this.serverId});
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
       id: j['id'] as String,
@@ -46,10 +47,10 @@ class Message {
   /// 这一轮怎么结束的（服务器 status，models/reply_end.dart）：停止 / 被打断 / 预算用完 / 原地打转。
   final ReplyEnd end;
 
-  /// 用户消息：助手回答途中补充进那一轮的（服务器 status = steer，后端 steering.py）。气泡下标一句 [steerLabel]。
+  /// 用户消息：助手回答途中发来的（服务器 status = steer，后端 message_intake.py 决定并进这一轮还是另回）。
+  /// 只影响位置（插在生成中那条前面），不另标字：v2.90 起服务器自己判断是补充还是另一件事，用户不用管。
   final bool steer;
   static const steerStatus = 'steer';
-  static const steerLabel = '回答途中补充';
 
   bool get stopped => end == ReplyEnd.stopped;
   bool get interrupted => end == ReplyEnd.interrupted;
@@ -79,8 +80,15 @@ class Message {
   /// 用户对这条回复的评价（v2.64，models/feedback.dart）：good = 👍，其余是 👎 的原因；null = 没评。
   final String? feedback;
 
-  /// 引用回复（§J，后端 app/reply_quote.py）：这条用户消息回的是哪条；null = 没引用。气泡顶上画一行 QuoteLine。
+  /// 引用（§J / §C，后端 app/reply_quote.py）：用户消息 = 用户点“回复”引用的那条；助手消息 = 它回应的那句（v2.90 每条回复都带）。
+  /// 画不画由 [showsQuote] 决定。
   final MessageQuote? quote;
+
+  /// 本机发出的消息被服务器认领后的服务器 id（本地 id 不换，免得列表重建）：回复的引用 / 跳回原话按它对得上（[isId]）。
+  final String? serverId;
+
+  /// 这条是不是 [other]：本地 id 或认领后的服务器 id。
+  bool isId(String? other) => other != null && (id == other || serverId == other);
 
   /// 追加一段思考，超长只留尾部（思考可能有几万字，界面只看最近的）。[at] = 到达时间（测试可注入）。
   Message think(String delta, {DateTime? at}) {
@@ -110,7 +118,8 @@ class Message {
           DateTime? thinkFrom,
           DateTime? thinkTo,
           RetryNotice? Function()? retry,
-          String? Function()? feedback}) =>
+          String? Function()? feedback,
+          String? serverId}) =>
       Message(
       id: id,
       role: role,
@@ -126,7 +135,8 @@ class Message {
       thinkTo: thinkTo ?? this.thinkTo,
       retry: retry != null ? retry() : this.retry,
       feedback: feedback != null ? feedback() : this.feedback,
-      quote: quote);
+      quote: quote,
+      serverId: serverId ?? this.serverId);
 }
 
 /// 被引用的那条：id + 角色 + 一行原文（服务器截断，≤120 字）；missing = 原消息已删除（不报错，显示“原消息已删除”）。
@@ -164,6 +174,18 @@ class MessageQuote {
 List<Message> beforePending(List<Message> ms, Message m) {
   final i = ms.lastIndexWhere((x) => x.pending);
   return i < 0 ? [...ms, m] : [...ms.sublist(0, i), m, ...ms.sublist(i)];
+}
+
+/// 第 i 条消息顶上画不画引用行（§C）：用户自己引用的一定画；助手回复只在原话不“紧挨着”时画——
+/// 往上一串连续的用户消息（一口气发的、途中补充的）里有原话 = 紧挨着，不画；中间隔了别的回复（问进度、并行回答）才画。
+bool showsQuote(List<Message> ms, int i) {
+  final q = ms[i].quote;
+  if (q == null) return false;
+  if (ms[i].isUser) return true;
+  for (var j = i - 1; j >= 0 && ms[j].isUser; j--) {
+    if (ms[j].isId(q.id)) return false;
+  }
+  return true;
 }
 
 /// 第 i 条消息前要不要画日期分隔：第一条有时间的消息、或与上一条有时间的消息不在同一个本地日。

@@ -210,7 +210,6 @@ button.skill-chip { border: 0; font: inherit; font-size: var(--fs-xs); cursor: p
 .msg.user.queued .bubble, .msg.user.queued .msg-files { opacity: .6; }
 .msg-status { display: flex; align-items: center; gap: var(--sp-1); margin-top: calc(-1 * var(--sp-2)); font-size: var(--fs-xs); color: var(--text-3); animation: rise 200ms var(--ease); }
 .msg-status.err { color: var(--danger); }
-.msg-status.steer { justify-content: flex-end; }   /* 回答途中补充（v1.83）：和待发送同一套淡色 + rise 入场 */
 .msg-status-btn { color: inherit; font-weight: var(--fw-title); padding: var(--sp-1) var(--sp-2); border-radius: var(--r-full); transition: background var(--dur) var(--ease); }
 .msg-status-btn:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .msg-status .icon-btn { color: var(--text-3); }

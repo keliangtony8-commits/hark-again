@@ -69,6 +69,8 @@ class Message(Base):
     feedback: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # v2.87 引用回复（§J/§C）：这条用户消息回的是哪条（同对话的消息 id；规则在 app/reply_quote.py）。不建外键：原消息删了这里照留，显示“原消息已删除”
     reply_to: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # v2.90 欠回复账本（§C）：用户消息被哪条回复结清（app/message_intake.py 写；None = 还欠着）。助手消息不用
+    answered_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
 

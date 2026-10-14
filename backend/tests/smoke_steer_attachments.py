@@ -15,13 +15,25 @@ subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=root, c
 
 from PIL import Image
 from sqlalchemy import select
-from app import live_turns, llm, steering, storage, workspaces
+from app import live_turns, llm, message_intake, steering, storage, workspaces
 from app.agent import loop
 from app.config import settings
 from app.db import SessionLocal
 from app.llm import Turn
 from app.models import Message
 from app.routes import ws as rws
+
+# v2.90：运行中的消息先落库再由 message_intake 分流——测试里不等 1.5 秒静默、不调 lite 模型，_intake 返回前分流完
+message_intake.QUIET_S = 0
+async def _judge_steer(task, texts):
+    return message_intake.STEER
+message_intake.judge = _judge_steer
+_intake_raw = rws._intake
+async def _intake_settled(ev):
+    ok = await _intake_raw(ev)
+    await message_intake.settle_all()
+    return ok
+rws._intake = _intake_settled
 
 calls: list[list[dict]] = []
 gate: dict[str, asyncio.Event] = {}
@@ -109,7 +121,7 @@ async def main():
 
     # 1) 能看图的模型：文字 + 文本附件 + 原图一起插进这一轮
     a, t, cid = await running("帮我整理清单")
-    ok = await rws._steer({"conversation_id": cid, "text": "参考这两个", "attachments": [img["id"], note["id"]],
+    ok = await rws._intake({"conversation_id": cid, "text": "参考这两个", "attachments": [img["id"], note["id"]],
                            "steer": True, "client_id": "local-9"})
     assert ok
     await finish(a, t)
@@ -132,7 +144,7 @@ async def main():
     # 2) 不能看图的模型：只发一张图（没字）也能插，图先写成描述
     b, t2, cid2 = await running("看看", model="smart")
     assert steering.model_of(cid2) == "smart"
-    assert await rws._steer({"conversation_id": cid2, "text": "", "attachments": [img["id"]], "steer": True})
+    assert await rws._intake({"conversation_id": cid2, "text": "", "attachments": [img["id"]], "steer": True})
     await finish(b, t2)
     last = user_contents(calls[1])[-1]
     assert isinstance(last, str) and "一张红色方块的测试图" in last and "红.png" in last, last
@@ -145,7 +157,7 @@ async def main():
     (root_dir / "plan.md").write_text("周一跑步\n周三游泳", encoding="utf-8")
     (root_dir / "budget.csv").write_text("项目,金额\n房租,2000", encoding="utf-8")
     c3, t3, cid3 = await running("排个计划")
-    assert await rws._steer({"conversation_id": cid3, "text": "按 @plan.md 来", "project_files": ["budget.csv"], "steer": True})
+    assert await rws._intake({"conversation_id": cid3, "text": "按 @plan.md 来", "project_files": ["budget.csv"], "steer": True})
     await finish(c3, t3)
     last = user_contents(calls[1])[-1]
     text = last if isinstance(last, str) else last[0]["text"]
@@ -154,11 +166,11 @@ async def main():
 
     # 4) 不插：假附件且没字、@子助手（排队成下一轮）
     d, t4, cid4 = await running("慢慢想")
-    assert not await rws._steer({"conversation_id": cid4, "text": "", "attachments": ["nope"], "steer": True})
-    assert not await rws._steer({"conversation_id": cid4, "text": "", "steer": True})
+    assert not await rws._intake({"conversation_id": cid4, "text": "", "attachments": ["nope"], "steer": True})
+    assert not await rws._intake({"conversation_id": cid4, "text": "", "steer": True})
     if settings.subagent_max_tasks > 0:
-        assert not await rws._steer({"conversation_id": cid4, "text": "@子助手 去查一下", "steer": True})
-    assert not await rws._steer({"conversation_id": cid4, "text": "/init", "steer": True})
+        assert not await rws._intake({"conversation_id": cid4, "text": "@子助手 去查一下", "steer": True})
+    assert not await rws._intake({"conversation_id": cid4, "text": "/init", "steer": True})
     await finish(d, t4)
     assert len(calls) == 1, "没插进去：不再来一圈"
     print("ok: 不插的照常排队")

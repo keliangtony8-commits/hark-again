@@ -8,8 +8,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 import logging
 
-from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, project_relay, reply_quote, run_conversations, skill_mentions, steering, user_shell, workspaces
+from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, message_intake, project_relay, reply_quote, run_conversations, skill_mentions, steering, user_shell, workspaces
 from ..agent import approvals, context
+from ..agent.tools import deny_all, nobody
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
 from ..blocks import FileBlock, text_to_blocks
@@ -39,8 +40,9 @@ async def ws_endpoint(ws: WebSocket):
             event = await ws.receive_json()
             match event.get("type"):
                 case "user.message":
-                    # 回答途中补充（steering）：插得进正在跑的那一轮就插，插不进（已收尾 / 插满 / !命令、@子助手）照常排队成下一轮
-                    if not (event.get("steer") and await _steer(event)):
+                    # 运行中来的消息（message_intake）：落库认领后由它分流（补充 / 附和 / 问进度 / 新问题）；
+                    # 没在跑 / !命令、/init、@子助手 / 太长 → 照常排队成下一轮
+                    if not (event.get("steer") and await _intake(event)):
                         live_turns.enqueue(_handle_user_message, event, conn)
                 case "message.regenerate":
                     live_turns.enqueue(_handle_regenerate, event, conn)
@@ -103,14 +105,13 @@ def _client_id(event: dict) -> dict:
     return {"client_id": c} if isinstance(c, str) and c and len(c) <= 64 else {}
 
 
-async def _steer(event: dict) -> bool:
-    """回答途中补充：文字、附件、@文件、$技能都能插（steering.reason；!命令、/init、@子助手 排队），交给正在跑的那一轮
-    （steering.offer，模型看到的内容按“当前这一问”渲染：context.render_now），存成 status=steer 的用户消息
-    （块和普通提问一样；created_at = 收下那一刻，早于这一轮的回复），在这一轮的事件流里推 turn.steered。
-    返回 False = 没插进去，调用方照常排队。"""
+async def _intake(event: dict) -> bool:
+    """运行中来的一条消息：文字、附件、@文件、$技能、引用回复都收（!命令、/init、@子助手、超长 → False，调用方排队）。
+    先落库成 status=steer 的用户消息（created_at = 收下那一刻，早于这一轮的回复）、在这一轮的事件流里推 turn.steered
+    认领气泡，再交给 message_intake 静默后分流（并进这一轮 / 附和 / 问进度一句答 / 并行一路）。"""
     cid, text = event.get("conversation_id"), (event.get("text") or "").strip()
-    if not isinstance(cid, str) or not steering.active(cid) or event.get("reply_to"):
-        return False  # 引用回复是新的一件事：排成下一轮（模型要在那一轮的开头看到被引原文）
+    if not isinstance(cid, str) or not steering.active(cid):
+        return False
     ids, picked = event.get("attachments") or [], event.get("project_files") or []
     ids, picked = (ids if isinstance(ids, list) else []), (picked if isinstance(picked, list) else [])
     if steering.reason(text, files=len(ids) + len(picked), agent=bool(_agents(text) or event.get("follow")),
@@ -127,29 +128,60 @@ async def _steer(event: dict) -> bool:
         blocks = (text_to_blocks(text) if text else []) + files + _skills(text)
         rich = any(b.get("type") != "text" for b in blocks)
         content = await context.render_now(blocks, steering.model_of(cid)) if rich else text
-        msg = Message(id=uuid.uuid4().hex, conversation_id=cid, role="user", blocks=blocks, status=steering.STEER)
-        if (item := steering.offer(cid, text, msg.id, content)) is None:  # 不 await 地收下：模型下一次调用前就能读到
-            return False
-        msg.created_at = item.at
+        msg = Message(id=uuid.uuid4().hex, conversation_id=cid, role="user", blocks=blocks, status=steering.STEER,
+                      reply_to=await reply_quote.valid(db, cid, event.get("reply_to")))
         db.add(msg)
-        try:
-            await db.commit()
-        except Exception:  # 模型已经读到了；只是历史里少这一句
-            logging.getLogger(__name__).exception("saving steer message failed")
-            return True
-    await live_turns.note(cid, {"type": "turn.steered", "conversation_id": cid, "message": msg.to_wire(), **_client_id(event)})
+        await db.commit()
+        wire = await reply_quote.wire_one(db, msg)
+    await live_turns.note(cid, {"type": "turn.steered", "conversation_id": cid, "message": wire, **_client_id(event)})
+    message_intake.arrive(cid, message_intake.Arrival(msg.id, text, content, msg.created_at, msg.reply_to, bool(files)))
     return True
 
 
 async def _handle_pending(emit, event: dict, stop: asyncio.Event) -> None:
-    """上一轮收尾时还没读到的补充：另起一轮回答它（消息已在库里，不再新建）。"""
+    """上一轮收尾时还没读到的那一批（补充 / 别的项目转交来的）：另起一轮一起回答（消息已在库里，不再新建）。
+    message_ids = 这一批（回复结清全部，reply_to 挂第一条）；老调用只给 message_id。"""
+    ids = [i for i in (event.get("message_ids") or [event.get("message_id")]) if isinstance(i, str)]
     async with SessionLocal() as db:
         conv = await db.get(Conversation, event.get("conversation_id"))
-        msg = await db.get(Message, event.get("message_id")) if conv is not None else None
+        msg = await db.get(Message, ids[-1]) if conv is not None and ids else None
         if conv is None or msg is None or msg.conversation_id != conv.id:
             return
         await emit({"type": "message.start", "conversation_id": conv.id, "user_message_id": msg.id, "title": conv.title})
-        await _answer(db, conv, msg, emit, stop)
+        await _answer(db, conv, msg, emit, stop, batch=ids)
+
+
+async def _handle_side(emit, event: dict, stop: asyncio.Event) -> None:
+    """并行一路（message_intake：运行中来了无关的新问题）：同一对话、同一个 run_turn，不推流、不弹审批 / 表单；
+    回复落库后结清这一批、推 message.added（整条，Hark 本来就整条发）。失败也回一句，账本不留空。"""
+    cid, ids = event.get("conversation_id"), [i for i in event.get("message_ids") or [] if isinstance(i, str)]
+    errors: list[str] = []
+
+    async def quiet(e: dict) -> None:
+        if e.get("type") == "error":
+            errors.append(str(e.get("message") or ""))
+
+    async with SessionLocal() as db:
+        conv = await db.get(Conversation, cid)
+        if conv is None or not ids:
+            return
+        others = set(await message_intake.owed(db, cid)) - set(ids)  # 主路那件还没回复的事：并行路看不到（E2E：不藏就会去答它）
+        reply = await run_turn(db, conv, emit=quiet, approve=deny_all, stop=stop, ask=nobody,
+                               brief=message_intake.SIDE_BRIEF, answers=ids[0], hide=others)
+        if reply is None:
+            if stop.is_set():
+                return
+            await message_intake.reply(cid, f"这个问题没答上来：{errors[-1] if errors else '模型没有给出回复'}。等手上的事做完我再试一次。", ids)
+            return
+        await message_intake.settle(db, ids, reply.id)
+        await db.commit()
+        wire = await reply_quote.wire_one(db, reply)
+    live_turns.publish(cid, {"type": "message.added", "conversation_id": cid, "message": wire})
+
+
+message_intake.set_handlers(
+    side=lambda cid, ids: live_turns.side(cid, _handle_side, {"conversation_id": cid, "message_ids": ids}),
+    pending=lambda cid, ids: live_turns.follow(cid, _handle_pending, {"conversation_id": cid, "message_ids": ids}))
 
 
 # 别的项目转交来的消息（project_relay.send 已落库）：和“补充的话另起一轮”同一条路——有人看着就实时推，审批卡照常弹
@@ -180,8 +212,8 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
         await _answer(db, conv, user_msg, emit, stop)
 
 
-async def _answer(db, conv: Conversation, user_msg: Message, emit, stop: asyncio.Event) -> None:
-    """回答一条用户消息：`!命令` 直接在工作区电脑上跑（user_shell，不调模型；重新生成 = 再跑一次），
+async def _answer(db, conv: Conversation, user_msg: Message, emit, stop: asyncio.Event, batch: list[str] | None = None) -> None:
+    """回答一条用户消息（batch = 一起回答的那一批，默认就这一条）：`!命令` 直接在工作区电脑上跑（user_shell，不调模型；重新生成 = 再跑一次），
     其余交给模型（run_turn）。停掉的半截不起名，下一轮再试；第一轮失败后点“重试”也起一次。"""
     if (command := user_shell.command_of(user_msg.blocks)) is not None:
         await user_shell.run(db, conv.id, conv.project_id, command, emit, stop)
@@ -189,14 +221,18 @@ async def _answer(db, conv: Conversation, user_msg: Message, emit, stop: asyncio
     if init_command.of(user_msg.blocks) is not None and init_command.existing(workspaces.of(conv.project_id)):
         await _say(db, conv.id, init_command.DECLINE, emit)  # Gemini：已有就不调模型，直接回一句
         return
-    cid = conv.id
+    cid, batch = conv.id, batch or [user_msg.id]
     inbox = steering.open_inbox(cid)  # 这一轮跑模型期间，用户补充的话插得进来（steering.py）
     try:
-        reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask, inbox=inbox)
+        reply = await run_turn(db, conv, emit=emit, approve=_approve, stop=stop, ask=_ask, inbox=inbox, answers=batch[0])
     finally:
         left = steering.close(inbox)
-    if left and not stop.is_set():  # 模型已经收尾 / 预算到头才到的补充：紧接着另起一轮回答（用户点了停止就不自动接）
-        live_turns.follow(cid, _handle_pending, {"conversation_id": cid, "message_id": left[-1].message_id})
+        riders = message_intake.riders(cid)
+    if reply is not None:  # 账本（message_intake）：这条回复结清提问 + 模型读到的补充 + 挂着的附和
+        await message_intake.settle(db, [*batch, *inbox.taken_ids, *riders], reply.id)
+        await db.commit()
+    if left and not stop.is_set():  # 模型已经收尾 / 预算到头才到的补充：紧接着另起一轮一起回答（用户点了停止就不自动接）
+        live_turns.follow(cid, _handle_pending, {"conversation_id": cid, "message_ids": [i.message_id for i in left]})
     if reply is not None and reply.status != "stopped":
         conversation_title.schedule(cid, emit)  # 后台起标题，不挡排队的下一轮
 

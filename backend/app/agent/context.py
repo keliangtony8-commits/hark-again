@@ -249,8 +249,9 @@ def _sizes(snap: "_Snapshot") -> list[int]:
     return [len(snap.plain[i]) + tool_trace.size(t) if t else len(snap.texts[i]) for i, t in enumerate(snap.traces)]
 
 
-async def build_history(db: AsyncSession, conversation_id: str, model: str | None = None) -> History:
+async def build_history(db: AsyncSession, conversation_id: str, model: str | None = None, hide: set[str] | None = None) -> History:
     """预算内的最近原文 + 更早内容的摘要。model = 这一轮用的别名（决定当前这一问的图片发原图还是发描述）。
+    hide = 这一轮不给模型看的消息 id（v2.90 并行一路：另一件还没回复的事由主路处理，并行路看不到它，免得答错题；只影响这一轮的请求，不进摘要）。
 
     不变式：最后一条用户消息（当前这一问）及其后的内容永远是原文，所以重答/编辑只动原文区，摘要不受影响。
     原文超预算时，把摘要之后、窗口之前的消息折叠进摘要（压到 FOLD_TARGET，留余量），用便宜模型一次调用。
@@ -292,7 +293,7 @@ async def build_history(db: AsyncSession, conversation_id: str, model: str | Non
             texts[i] = plain[i] + snap.digests[i]
     out: list[dict] = []
     for i in range(first, n):
-        if snap.skip[i]:
+        if snap.skip[i] or (hide and ids[i] in hide):
             continue
         if traces[i]:  # 最近几条回复：工具调用 + 结果原样放回，接着是回复文字
             out += tool_trace.replay(traces[i], plain[i])

@@ -29,7 +29,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import update, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db import SessionLocal
@@ -149,9 +149,14 @@ async def recover(db: AsyncSession, conversation_id: str | None = None, now: dat
     from . import jobs
     for r in rows:
         trace = r.trace if tool_trace.valid(r.trace) else []  # 坏的/老行没有 → 退回步骤摘要（context 的 digest）
-        db.add(Message(conversation_id=r.conversation_id, role="assistant", status="interrupted",
-                       blocks=await jobs.current_blocks(db, settle_blocks(r.blocks or [])), steps=interrupted_steps(r.steps or []), trace=trace,
-                       created_at=_aware(r.started_at) or _now()))
+        m = Message(conversation_id=r.conversation_id, role="assistant", status="interrupted",
+                    blocks=await jobs.current_blocks(db, settle_blocks(r.blocks or [])), steps=interrupted_steps(r.steps or []), trace=trace,
+                    created_at=_aware(r.started_at) or _now())
+        db.add(m)
+        await db.flush()
+        # 账本（message_intake）：被打断的这一轮还欠着的消息由这条结清（客户端给“继续”；不自动重跑 = 重启后不重发）
+        await db.execute(update(Message).where(Message.conversation_id == r.conversation_id, Message.role == "user",
+                                               Message.answered_by.is_(None)).values(answered_by=m.id))
         await db.delete(r)
     if rows:
         await db.commit()

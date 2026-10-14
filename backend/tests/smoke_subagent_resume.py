@@ -226,8 +226,8 @@ with c.websocket_connect(f"/ws?token={token}") as ws:
 # 回答途中补充带 follow：不插队
 inbox = steering.open_inbox(cid)
 inbox.start()
-assert asyncio.run(rws._steer({"conversation_id": cid, "text": "运费", "follow": sid})) is False
-assert asyncio.run(rws._steer({"conversation_id": cid, "text": "运费"})) is True
+assert asyncio.run(rws._intake({"conversation_id": cid, "text": "运费", "follow": sid})) is False
+assert asyncio.run(rws._intake({"conversation_id": cid, "text": "运费"})) is True
 steering.close(inbox)
 print("ok: steer refuses follow")
 

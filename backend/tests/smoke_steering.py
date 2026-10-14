@@ -12,13 +12,25 @@ sys.path.insert(0, root)
 subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=root, check=True, capture_output=True)
 
 from sqlalchemy import select
-from app import live_turns, steering
+from app import live_turns, message_intake, steering
 from app.agent import loop
 from app.config import settings
 from app.db import SessionLocal
 from app.llm import Turn
 from app.models import Message
 from app.routes import ws as rws
+
+# v2.90：运行中的消息先落库再由 message_intake 分流——测试里不等 1.5 秒静默、不调 lite 模型，_intake 返回前分流完
+message_intake.QUIET_S = 0
+async def _judge_steer(task, texts):
+    return message_intake.STEER
+message_intake.judge = _judge_steer
+_intake_raw = rws._intake
+async def _intake_settled(ev):
+    ok = await _intake_raw(ev)
+    await message_intake.settle_all()
+    return ok
+rws._intake = _intake_settled
 
 calls: list[list[dict]] = []
 gate: dict[str, asyncio.Event] = {}
@@ -86,7 +98,7 @@ async def main():
     t = live_turns.enqueue(rws._handle_user_message, {"type": "user.message", "text": "写个计划"}, a.conn)
     await asyncio.wait_for(entered.wait(), 5)
     cid = next(e for e in a.events if e["type"] == "message.start")["conversation_id"]
-    ok = await rws._steer({"type": "user.message", "conversation_id": cid, "text": "对了，要按周排", "steer": True, "client_id": "local-1"})
+    ok = await rws._intake({"type": "user.message", "conversation_id": cid, "text": "对了，要按周排", "steer": True, "client_id": "local-1"})
     assert ok
     gate["g1"].set()
     await a.until(count("message.done"))
@@ -104,14 +116,14 @@ async def main():
     print("ok: 途中补充并进这一轮 + 库里顺序 + turn.steered")
 
     # 2) 插不进：没在答 / 附件 / !命令 / $技能 / 太长
-    assert not await rws._steer({"conversation_id": cid, "text": "现在没在答", "steer": True})
+    assert not await rws._intake({"conversation_id": cid, "text": "现在没在答", "steer": True})
     gate["g3"] = asyncio.Event()
     entered.clear()
     b = Client()
     t2 = live_turns.enqueue(rws._handle_user_message, {"type": "user.message", "conversation_id": cid, "text": "再来"}, b.conn)
     await asyncio.wait_for(entered.wait(), 5)
     for bad in ({"text": "!ls"}, {"text": "/init"}, {"text": "x" * (steering.STEER_CHARS + 1)}):
-        assert not await rws._steer({"conversation_id": cid, "steer": True, **bad}), bad
+        assert not await rws._intake({"conversation_id": cid, "steer": True, **bad}), bad
     # 插不进的照常排队：message.start 带回 client_id
     c = Client()
     t3 = live_turns.enqueue(rws._handle_user_message, {"type": "user.message", "conversation_id": cid, "text": "!echo hi",
@@ -134,7 +146,7 @@ async def main():
     t4 = live_turns.enqueue(rws._handle_user_message, {"type": "user.message", "text": "一步就好"}, d.conn)
     await asyncio.wait_for(entered.wait(), 5)
     cid2 = next(e for e in d.events if e["type"] == "message.start")["conversation_id"]
-    assert await rws._steer({"conversation_id": cid2, "text": "顺便说下天气", "steer": True})
+    assert await rws._intake({"conversation_id": cid2, "text": "顺便说下天气", "steer": True})
     gate["g1"].set()
     await d.until(lambda es: count("message.done")(es) >= 2, timeout=10)
     settings.agent_max_steps = old
@@ -146,7 +158,7 @@ async def main():
     assert users(calls[-1])[-2:] == ["一步就好", "顺便说下天气"], users(calls[-1])
     print("ok: 没读到的另起一轮")
 
-    # 4) 点了停止：补充留在库里，不自动接
+    # 4) 点了停止：补充留在库里，不自动接；插满后再来的那句（v2.90 照样收下）另起一轮回答
     calls.clear()
     gate.clear()
     gate["g1"] = asyncio.Event()
@@ -156,17 +168,20 @@ async def main():
     await asyncio.wait_for(entered.wait(), 5)
     cid3 = next(e for e in e5.events if e["type"] == "message.start")["conversation_id"]
     for i in range(steering.STEER_MAX):
-        assert await rws._steer({"conversation_id": cid3, "text": f"补{i}", "steer": True})
-    assert not await rws._steer({"conversation_id": cid3, "text": "太多了", "steer": True}), "一轮最多 STEER_MAX 句"
+        assert await rws._intake({"conversation_id": cid3, "text": f"补{i}", "steer": True})
+    assert await rws._intake({"conversation_id": cid3, "text": "太多了", "steer": True}), "插满了也收下，交给下一轮"
     live_turns.stop(e5.conn, cid3)
     await asyncio.wait_for(asyncio.shield(t5.task), 5)
-    await asyncio.sleep(0.2)
+    await live_turns.drain()
     r = await rows(cid3)
-    assert [x[1] for x in r if x[0] == "user"] == ["done"] + ["steer"] * steering.STEER_MAX, r
-    assert not [x for x in r if x[0] == "assistant" and x[1] == "done"], r
+    assert [x[1] for x in r if x[0] == "user"] == ["done"] + ["steer"] * (steering.STEER_MAX + 1), r
+    assert [x for x in r if x[0] == "assistant"] == [("assistant", "done", f"第{len(calls)}次")], r
     assert not steering.active(cid3)
-    assert sum(e["type"] == "message.start" for e in e5.events) == 1
-    print("ok: 停止后不自动接 + 上限")
+    assert sum(e["type"] == "message.start" for e in e5.events) == 2
+    async with SessionLocal() as db:
+        owed = await message_intake.owed(db, cid3)
+    assert len(owed) == steering.STEER_MAX + 1, "停下的那一轮没结清；接着的一轮只结清“太多了”"
+    print("ok: 停止后不自动接 + 插满的另起一轮")
 
     # 5) 下一轮历史里有这句（普通用户消息）
     calls.clear()

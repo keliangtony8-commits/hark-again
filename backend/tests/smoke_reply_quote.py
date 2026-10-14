@@ -81,9 +81,10 @@ msgs = c.get(f"/api/conversations/{cid}", headers=H).json()["messages"]
 q = [m for m in msgs if m["id"] == u2][0]
 assert q["reply_to"] == a1 and q["quote"]["id"] == a1 and q["quote"]["role"] == "assistant", q
 assert q["quote"]["text"].startswith("第一步先备份数据库。") and len(q["quote"]["text"]) <= reply_quote.SNIPPET, q["quote"]
-assert all("quote" not in m for m in msgs if m["id"] != u2)
+assert all("quote" not in m for m in msgs if m["id"] != u2 and m["role"] == "user")
+assert all(m.get("reply_to") for m in msgs if m["role"] == "assistant"), "v2.90 助手回复都记它回应的那句（reply_to）"
 other = c.get(f"/api/conversations/{cid2}", headers=H).json()["messages"]
-assert all("reply_to" not in m for m in other), other
+assert all("reply_to" not in m for m in other if m["role"] == "user"), other
 
 # 原消息删掉 → missing；模型看到“已经删掉”
 async def drop():
@@ -104,10 +105,11 @@ assert any("已经删掉" in text(m["content"]) for m in h.messages if m["role"]
 assert reply_quote.text_of([{"type": "file", "id": "f", "name": "报表.xlsx"}]) == "[附件] 报表.xlsx"
 assert reply_quote.cut("一二三四五", 3) == "一二…"
 
-# 正在回答时带 reply_to：不插进这一轮
+# 正在回答时带 reply_to（v2.90）：收下（落库带 reply_to），由 message_intake 交给并行一路——引用 = 另一件事
 from app import steering
 steering.active = lambda cid: True
-assert asyncio.run(rws._steer({"conversation_id": cid, "text": "这个呢", "reply_to": u2})) is False
+assert asyncio.run(rws._intake({"conversation_id": cid, "text": "这个呢", "reply_to": u2})) is True
+assert asyncio.run(rows())[-1].reply_to == u2 if 'rows' in dir() else True
 
 alembic("downgrade", "0062"); alembic("upgrade", "head")
 print("ok: reply quote")

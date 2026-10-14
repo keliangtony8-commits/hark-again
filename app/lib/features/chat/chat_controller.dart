@@ -287,7 +287,11 @@ class ChatController extends Notifier<ChatState> {
         // 想插进上一轮却排成了新一轮的那句（client_id）：挪到末尾、不再标“补充”
         if (e['client_id'] case final String local) {
           final i = ms.indexWhere((m) => m.id == local);
-          if (i >= 0) ms.add(ms.removeAt(i).copyWith(steer: false, outbox: Outbox.sent));
+          if (i >= 0) ms.add(ms.removeAt(i).copyWith(steer: false, outbox: Outbox.sent, serverId: e['user_message_id'] as String?));
+        } else if (e['user_message_id'] case final String sid) {
+          // 普通发送：最后一条还没认领的本机用户消息 = 这一轮的提问（回复的引用按服务器 id 对得上，§C）
+          final i = ms.lastIndexWhere((m) => m.isUser && m.serverId == null && m.id.startsWith(localPrefix));
+          if (i >= 0 && !ms.any((m) => m.isId(sid))) ms[i] = ms[i].copyWith(serverId: sid);
         }
         // 编辑：用服务器规整后的版本覆盖本地乐观改写（保留本地 id，气泡不重建）
         if (e['user_message'] case final Map<String, dynamic> um) {
@@ -326,11 +330,17 @@ class ChatController extends Notifier<ChatState> {
         final ms = [...state.messages];
         final i = e['client_id'] is String ? ms.indexWhere((x) => x.id == e['client_id']) : -1;
         if (i >= 0) {
-          ms[i] = ms[i].copyWith(steer: true, outbox: Outbox.sent); // 本机发的：认领（保留本地 id，气泡不重建）
+          ms[i] = ms[i].copyWith(steer: true, outbox: Outbox.sent, serverId: m.id); // 本机发的：认领（保留本地 id，气泡不重建）
           state = state.copyWith(messages: ms);
         } else if (!ms.any((x) => x.id == m.id)) {
           state = state.copyWith(messages: beforePending(ms, m)); // 别的设备补充的
         }
+      case 'message.added':
+        // §C 不属于正在写的那一轮的整条回复（问进度的一句话、并行一路的回答）：插在生成中那条前面，按 id 去重
+        if (state.activeId == null || state.activeId != e['conversation_id'] || e['message'] is! Map<String, dynamic>) return;
+        final m = Message.fromJson(e['message'] as Map<String, dynamic>);
+        if (state.messages.any((x) => x.isId(m.id))) return;
+        state = state.copyWith(messages: beforePending(state.messages, m));
       case 'block.start' || 'block.update':
         final block = Block.fromJson(e['block'] as Map<String, dynamic>);
         _patchPending((m) => m.copyWith(blocks: _setAt(m.blocks, e['index'] as int, block)));

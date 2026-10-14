@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { http } from "../lib/api";
+import { isId } from "../lib/quote";
 import { memoryStore } from "../lib/memoryStore";
 import { OUTBOX_GIVE_UP_MS, outbox } from "../lib/outbox";
 import { STEER_STATUS, beforePending, isSteer } from "../lib/steer";
@@ -130,7 +131,12 @@ export function useChat(projectId?: string) {
           const ms = t.messages.filter((x) => !x.pending && !replaced.has(x.id));
           // 想插进上一轮却排成了新一轮的那句（client_id）：挪到末尾、不再标补充
           const k = e.client_id ? ms.findIndex((x) => x.id === e.client_id) : -1;
-          if (k >= 0) { const [m] = ms.splice(k, 1); ms.push({ ...m, status: undefined, outbox: undefined }); }
+          if (k >= 0) { const [m] = ms.splice(k, 1); ms.push({ ...m, status: undefined, outbox: undefined, serverId: e.user_message_id }); }
+          else if (e.user_message_id && !ms.some((x) => isId(x, e.user_message_id))) {
+            // 普通发送：最后一条还没认领的本机用户消息 = 这一轮的提问（回复的引用按服务器 id 对得上，§C）
+            const j = ms.map((x) => x.role === "user" && !x.serverId && x.id.startsWith("local-")).lastIndexOf(true);
+            if (j >= 0) ms[j] = { ...ms[j], serverId: e.user_message_id };
+          }
           const i = ms.map((x) => x.role).lastIndexOf("user");
           if (um && i >= 0) ms[i] = { ...ms[i], blocks: um.blocks };
           return { id: e.conversation_id, messages: [...ms, { id: "pending", role: "assistant", blocks: [], steps: [], pending: true }] };
@@ -142,9 +148,15 @@ export function useChat(projectId?: string) {
         if (cur && e.conversation_id && cur !== e.conversation_id) return;
         setMessages((ms) => {
           const k = e.client_id ? ms.findIndex((x) => x.id === e.client_id) : -1;
-          if (k >= 0) return ms.map((x, j) => (j === k ? { ...x, status: STEER_STATUS, outbox: undefined } : x));   // 本机发的：认领
+          if (k >= 0) return ms.map((x, j) => (j === k ? { ...x, status: STEER_STATUS, outbox: undefined, serverId: e.message.id } : x));   // 本机发的：认领
           return ms.some((x) => x.id === e.message.id) ? ms : beforePending(ms, e.message);   // 别的设备补充的
         });
+        break;
+      }
+      case "message.added": {
+        // §C 不属于正在写的那一轮的整条回复（问进度的一句话、并行一路的回答）：插在生成中那条前面，按 id 去重
+        if (threadRef.current.id !== e.conversation_id) return;
+        setMessages((ms) => (ms.some((x) => isId(x, e.message.id)) ? ms : beforePending(ms, e.message)));
         break;
       }
       case "block.start":

@@ -213,7 +213,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                             final idx = chat.messages.length - 1 - i;
                             final m = chat.messages[idx];
                             final regen = i == 0 && !m.isUser && chat.canRegenerate; // 只有最后一条回复能重新生成
-                            final target = m.id == _target;
+                            final target = m.isId(_target);
                             // 点这条（气泡 / 回复正文 / 卡片空白处）= 这条的时间开关；卡片里的按钮 / 链接是更内层的手势，照旧先赢
                             final row = FlashHighlight(
                               key: target ? _anchor : ValueKey(m.id),
@@ -229,6 +229,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   onSave: m.isUser || m.pending ? null : () => saveReplyToProject(context, ref, messageId: m.id, projectId: widget.projectId),
                                   onRate: m.isUser || m.pending ? null : (kind, {note}) => ctl.rate(m.id, kind, note: note),
                                   showTime: _timesShown.contains(m.id),
+                                  showQuote: showsQuote(chat.messages, idx),
                                   // 回复这条：已落库（有服务器 id）、生成完的消息才能引用
                                   onQuote: m.pending || m.unsent || m.id.startsWith(ChatController.localPrefix)
                                       ? null

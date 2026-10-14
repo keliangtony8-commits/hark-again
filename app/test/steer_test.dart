@@ -1,12 +1,11 @@
-// 回答途中补充（v1.83，服务器 steering）：生成中发纯文字 = user.message 带 steer + client_id，气泡插在生成中那条前面；
-// turn.steered 认领本地气泡（标“回答途中补充”）；别的设备补充的按 id 补上；插不进排成下一轮时 message.start 带回 client_id → 挪到末尾；
-// 快照以服务器为准；线不通标失败；界面：生成中有字时停止钮换成“补充”钮，清空后回到停止钮。
+// 生成中发消息（v1.83 steering → v2.90 message_intake）：生成中照常发 = user.message 带 steer + client_id，气泡插在生成中那条前面；
+// turn.steered 认领本地气泡（不再另标字）；别的设备发的按 id 补上；排成下一轮时 message.start 带回 client_id → 挪到末尾；
+// 快照以服务器为准；线不通标失败；界面：生成中有字时停止钮换成发送钮，清空后回到停止钮。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/chat_view.dart';
-import 'package:assistant/features/chat/composer.dart' show steerHint;
 import 'package:assistant/models/block.dart';
 import 'package:assistant/models/message.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -184,7 +183,7 @@ void main() {
     expect(m.steer, false);
   });
 
-  testWidgets('界面：生成中有字 → “补充”钮；清空 → 停止钮；补充的气泡标“回答途中补充”', (tester) async {
+  testWidgets('界面：生成中有字 → 发送钮；清空 → 停止钮；途中发的气泡不另标字', (tester) async {
     final socket = FakeSocket();
     final container = ProviderContainer(overrides: [
       chatSocketProvider.overrideWithValue(socket),
@@ -204,21 +203,19 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.bySemanticsLabel('停止生成'), findsOneWidget);
-    expect(find.text(steerHint), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '按周排');
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.bySemanticsLabel('停止生成'), findsNothing);
-    expect(find.bySemanticsLabel('补充给正在进行的回答'), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('补充给正在进行的回答'));
+    expect(find.bySemanticsLabel('发送'), findsOneWidget, reason: 'v2.90 生成中照常发送，服务器判断是补充还是另一件事');
+    await tester.tap(find.bySemanticsLabel('发送'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(socket.sent.last['steer'], true);
     expect(find.bySemanticsLabel('停止生成'), findsOneWidget, reason: '发出后输入框清空，回到停止钮');
-    expect(find.text(Message.steerLabel), findsOneWidget);
+    expect(find.text('回答途中补充'), findsNothing, reason: 'v2.90 不再给途中发的消息另标字');
 
     socket.ctl.add({'type': 'message.done', 'turn_id': 'T', 'seq': 3, 'message': _msg('a2', 'assistant', '好的')});
     await tester.pumpAndSettle();
-    expect(find.text(steerHint), findsNothing);
   });
 }

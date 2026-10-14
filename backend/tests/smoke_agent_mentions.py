@@ -129,7 +129,7 @@ with c.websocket_connect(f"/ws?token={token}") as ws:
 # 6) 回答途中补充：带 @子助手 不插进去（照常排队成新一轮）
 inbox = steering.open_inbox(cid)
 inbox.start()
-assert asyncio.run(rws._steer({"conversation_id": cid, "text": "@子助手 顺便查一下"})) is False
-assert asyncio.run(rws._steer({"conversation_id": cid, "text": "顺便查一下"})) is True
+assert asyncio.run(rws._intake({"conversation_id": cid, "text": "@子助手 顺便查一下"})) is False
+assert asyncio.run(rws._intake({"conversation_id": cid, "text": "顺便查一下"})) is True
 steering.close(inbox)
 print("smoke_agent_mentions OK")

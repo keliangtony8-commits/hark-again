@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import deliver, host_mode, jobs, reply_language, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
+from .. import deliver, host_mode, reply_quote, jobs, reply_language, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -101,6 +101,8 @@ async def rewind(db: AsyncSession, conversation_id: str, message_id: str | None,
         conv.summary, conv.summary_upto = "", None
     for m in trailing:
         await db.delete(m)
+    if trailing:  # 账本（message_intake）：被删的回复结清过的消息重新算欠着，重答的回复再结清
+        await db.execute(update(Message).where(Message.answered_by.in_([m.id for m in trailing])).values(answered_by=None))
     await db.commit()
     return conv, user_msg, [m.id for m in trailing]
 
@@ -108,20 +110,24 @@ async def rewind(db: AsyncSession, conversation_id: str, message_id: str | None,
 async def run_turn(db: AsyncSession, conv: Conversation, emit: Emit = _silent,
                    approve: Approver = deny_all, stop: asyncio.Event | None = None,
                    ask: Asker = nobody, task_id: str | None = None, notice: str | None = None,
-                   inbox: steering.Inbox | None = None, brief: str | None = None) -> Message | None:
-    """brief：定时任务这次运行的“做法 + 观察 + 最近几次”（app/task_brief.py），放系统提示易变段，不落库。
+                   inbox: steering.Inbox | None = None, brief: str | None = None, answers: str | None = None,
+                   hide: set[str] | None = None) -> Message | None:
+    """hide：这一轮不给模型看的消息（context.build_history；并行一路藏起主路那件还没回复的事）。
+    answers：这条回复回应的用户消息 id（v2.90 §C：存进回复的 reply_to，客户端不紧挨着时画引用；message_intake 账本）。
+    brief：定时任务这次运行的“做法 + 观察 + 最近几次”（app/task_brief.py），放系统提示易变段，不落库。
     inbox：用户回答途中补充的话（steering.py；调用方开、关，这里只交给 loop）。
     task_id：worker 跑定时任务时传入，工具从 ToolContext.task_id 知道“这是哪个任务在跑”。
     notice：没有用户发言、由系统事件触发的一轮（后台任务结束，见 jobs.follow_ups）——作为最后一条“用户”消息
     交给模型，但不落库、不显示；回复照常存为助手消息。"""
     with usage.scope(conv.id):  # 这一轮里所有模型调用（含摘要、记忆向量）都记在这个对话上
-        return await _run_turn(db, conv, emit, approve, stop, ask, task_id, notice, inbox, brief)
+        return await _run_turn(db, conv, emit, approve, stop, ask, task_id, notice, inbox, brief, answers, hide)
 
 
 async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
                     approve: Approver, stop: asyncio.Event | None, ask: Asker = nobody,
                     task_id: str | None = None, notice: str | None = None,
-                    inbox: steering.Inbox | None = None, brief: str | None = None) -> Message | None:
+                    inbox: steering.Inbox | None = None, brief: str | None = None, answers: str | None = None,
+                    hide: set[str] | None = None) -> Message | None:
     """跑一轮并落库。被取消时不丢已生成的内容：半截回复以 status=stopped 存下，照常发 message.done；
     一个块都还没有就发 message.stopped。
     stop = 调用方在 cancel 前 set() 的信号：是用户点了停止 → 吞掉取消、正常返回（连接上的下一轮照跑）；
@@ -129,7 +135,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     cid, project_id, choice, effort, previous = conv.id, conv.project_id, chat_model(conv.model), conv.reasoning, conv.routed_model
     mode, seen, plan_path = plan_mode.normalize(conv.mode), conv.mode_seen, conv.plan_path  # 都在 build_history 之前读：摘要折叠的回滚会让 conv 过期
     await turn_journal.recover(db, cid)  # 别的进程崩掉留下的半截回答先转成 interrupted 消息，排在历史里
-    hist = await build_history(db, cid, model_router.view(choice))
+    hist = await build_history(db, cid, model_router.view(choice), hide)
     history = hist.messages
     if notice:
         history = [*history, {"role": "user", "content": notice}]
@@ -165,7 +171,7 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
     try:
         with usage.routing(tier):  # 自动轮的调用打上档位（router_stats 算省了多少）
             return await _drive(db, cid, project_id, system, history, builder, journal, emit, approve, stop, ask, task_id, host, model,
-                                effort, plan_mode.State(active=mode == plan_mode.PLAN), inbox)
+                                effort, plan_mode.State(active=mode == plan_mode.PLAN), inbox, answers)
     finally:
         await journal.close()  # 走到这里结果已由 _drive 落库（或出错/没内容）；只有进程死掉才会留下检查点
 
@@ -192,7 +198,7 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
                  journal: turn_journal.Journal, emit: Emit, approve: Approver, stop: asyncio.Event | None,
                  ask: Asker, task_id: str | None, host: bool, model: str,
                  effort: str | None = None, plan: plan_mode.State | None = None,
-                 inbox: steering.Inbox | None = None) -> Message | None:
+                 inbox: steering.Inbox | None = None, answers: str | None = None) -> Message | None:
     status = "done"
     interrupted = False
     ctx = ToolContext(db=db, project_id=project_id, approve=approve, conversation_id=cid, ask=ask, task_id=task_id, host=host, effort=effort,
@@ -225,17 +231,25 @@ async def _drive(db: AsyncSession, cid: str, project_id: str | None, system: str
     reply = None
     if blocks:
         reply = Message(conversation_id=cid, role="assistant", blocks=blocks, status=status,
-                        steps=builder.steps(stopped=status == "stopped"), trace=builder.trace())
+                        steps=builder.steps(stopped=status == "stopped"), trace=builder.trace(), reply_to=answers)
         db.add(reply)
         await journal.drop(db)  # 同一个事务：回复落库 = 检查点消失
         await db.commit()
         journal.dropped()
-        await _try_emit(emit, {"type": "message.done", "message": reply.to_wire()})
+        await _try_emit(emit, {"type": "message.done", "message": await _wire(db, reply)})
     elif status == "stopped":
         await _try_emit(emit, {"type": "message.stopped", "conversation_id": cid})
     if interrupted:
         raise asyncio.CancelledError
     return reply
+
+
+async def _wire(db: AsyncSession, reply: Message) -> dict:
+    """message.done 的消息形状：带 reply_to 时附引用的一行原文（reply_quote）；查不到也照发。"""
+    try:
+        return await reply_quote.wire_one(db, reply)
+    except Exception:  # noqa: BLE001
+        return reply.to_wire()
 
 
 async def _try_emit(emit: Emit, event: dict) -> None:

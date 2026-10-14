@@ -169,7 +169,9 @@ export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopp
   /** v2.64 用户对这条回复的评价（good / wrong / incomplete / stuck / other，lib/feedback.ts）；没评就没有。 */
   feedback?: string | null;
   /** v2.87 引用回复（§J，后端 app/reply_quote.py）：这条用户消息回的是哪条 + 那条的一行原文（lib/quote.ts）。 */
-  reply_to?: string; quote?: MessageQuote };
+  reply_to?: string; quote?: MessageQuote;
+  /** v2.90 本机发的消息被服务器认领后的服务器 id（本地 id 不换，列表不重建）：回复的引用 / 跳回按它对得上（lib/quote.ts isId）。 */
+  serverId?: string };
 /** 被引用的那条：一行原文（服务器截断 ≤120 字）；missing = 原消息已删除。 */
 export type MessageQuote = { id: string; role?: Role; text?: string; missing?: boolean };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
@@ -181,6 +183,7 @@ export type ServerEvent = TurnCursor & (
   | { type: "message.start"; conversation_id: string; user_message_id: string; title: string; replaced?: string[]; user_message?: Message; client_id?: string }
   /** 回答途中补充（v1.83 steering）：服务器收下了一句，并进正在跑的这一轮；client_id = 发起那台设备的本地 id。 */
   | { type: "turn.steered"; conversation_id: string; message: Message; client_id?: string }
+  | { type: "message.added"; conversation_id: string; message: Message }
   | { type: "block.start"; index: number; block: Block }
   | { type: "block.update"; index: number; block: Block }
   | { type: "block.delta"; index: number; text: string }

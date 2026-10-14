@@ -6,6 +6,7 @@
 并进这一轮（模型看到的就是一条新的用户消息），模型本来要收尾了也会再来一圈把它读进去。
 
 唯一入口：只有本模块决定“一句话能不能插进正在跑的一轮”、插进去的话什么时候被读走。
+- v2.90：一句话该不该进收件箱由 app/message_intake.py 决定（补充 / 改要求 / 附和才进；问进度、新问题另走），这里只管“怎么进”。
 - 收件箱按对话登记：调用方（routes/ws._answer）登记（open_inbox），runner 拼好历史、开跑模型的那一刻才开始收
   （start；早了会和刚落库的历史重复），收尾时关上（close）。关上那一刻还没被读走的
   （模型已经交代完、或预算到头 / 被叫停）交还给调用方，由它另起一轮回答（routes/ws._answer）。
@@ -36,6 +37,7 @@ class Inbox:
     conversation_id: str
     live: bool = False  # 正在收：runner 开跑模型时 start()，close() 关
     taken: int = 0
+    taken_ids: list[str] = field(default_factory=list)  # 模型已读到的补充：这一轮的回复一起结清它们（message_intake 账本）
     items: list[Item] = field(default_factory=list)
     model: str | None = None  # 这一轮实际用的别名（带图的补充按它决定给原图还是描述）
 
@@ -49,6 +51,7 @@ class Inbox:
         """loop 在每次调模型前取走：每句变成一条用户消息。"""
         out, self.items = self.items, []
         self.taken += len(out)
+        self.taken_ids += [i.message_id for i in out]
         return out
 
 
@@ -69,7 +72,8 @@ def close(box: Inbox | None) -> list[Item]:
     box.live = False
     if _open.get(box.conversation_id) is box:
         _open.pop(box.conversation_id, None)
-    return box.take()
+    out, box.items = box.items, []
+    return out
 
 
 def reason(text: str, *, files: int = 0, command: bool = False, agent: bool = False) -> str | None:
@@ -83,13 +87,14 @@ def reason(text: str, *, files: int = 0, command: bool = False, agent: bool = Fa
     return None
 
 
-def offer(conversation_id: str | None, text: str, message_id: str, content: str | list | None = None) -> Item | None:
+def offer(conversation_id: str | None, text: str, message_id: str, content: str | list | None = None,
+          at: datetime | None = None) -> Item | None:
     """把一句话交给正在跑的那一轮；没在跑 / 已收尾 / 这一轮插满了 → None（调用方排队成下一轮）。
-    content = 模型看到的内容（None = 就是这句文字）。"""
+    content = 模型看到的内容（None = 就是这句文字）；at = 消息落库的时间（message_intake 先落库后分流）。"""
     box = _open.get(conversation_id or "")
     if box is None or not box.live or box.taken + len(box.items) >= STEER_MAX:
         return None
-    item = Item(text.strip(), message_id, datetime.now(timezone.utc), text.strip() if content is None else content)
+    item = Item(text.strip(), message_id, at or datetime.now(timezone.utc), text.strip() if content is None else content)
     box.items.append(item)
     return item
 

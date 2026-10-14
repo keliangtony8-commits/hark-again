@@ -15,9 +15,8 @@ import { useReplyRating } from "./useReplyRating";
 import type { MenuItem } from "../../ui/kit";
 import { useFocusMenu } from "../../ui/FocusMenu";
 import { quoteLine } from "../../lib/quote";
-import { IconAlert, IconClock, IconClose, IconCloudOff, IconCopy, IconEdit, IconMerge, IconMore, IconPlay, IconQuoteArrow, IconRefresh, IconReply, IconSaveTo, IconSpeaker, IconStop } from "../../ui/icons";
+import { IconAlert, IconClock, IconClose, IconCloudOff, IconCopy, IconEdit, IconMore, IconPlay, IconQuoteArrow, IconRefresh, IconReply, IconSaveTo, IconSpeaker, IconStop } from "../../ui/icons";
 import { CONTINUE_TEXT, continueHint, endLabel, endWarns } from "../../lib/messageStatus";
-import { STEER_LABEL, isSteer } from "../../lib/steer";
 
 export type OutboxActions = { onResend: (id: string) => void; onDiscard: (id: string) => void };
 
@@ -77,6 +76,8 @@ type Props = OutboxActions & {
   onEdit?: () => void; editing?: boolean;
   /** 菜单里的“回复”（§J 引用回复）：只给已落库、生成完的消息。onJumpQuote = 点气泡顶上的引用行，回到原消息。 */
   onQuote?: () => void; onJumpQuote?: (id: string) => void;
+  /** 顶上画不画引用行（ChatView 按 lib/quote showsQuote 算：助手回复紧挨着原话时不画）。 */
+  showQuote?: boolean;
 };
 
 /** 气泡顶上的引用行（= App QuoteLine）：折线连接符 + 一行原文；点一下回到原消息并闪一下；原消息已删 = 灰字斜体、点不了。 */
@@ -101,7 +102,7 @@ export default function MessageView(props: Props) {
 /** 发出后多久内首次挂上才弹（= App Motion.sendFresh） */
 const SEND_FRESH_MS = 1000;
 
-function UserView({ message, showTime, onResend, onDiscard, onEdit, editing, onQuote, onJumpQuote }: Props) {
+function UserView({ message, showTime, onResend, onDiscard, onEdit, editing, onQuote, onJumpQuote, showQuote }: Props) {
   const text = message.blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
   const files = message.blocks.filter((b) => b.type === "file");
   const skills = ["origin", "agent", "skill"].flatMap((t) => message.blocks.filter((b) => b.type === t)); // 来自 X、@子助手、$技能 依次
@@ -115,8 +116,8 @@ function UserView({ message, showTime, onResend, onDiscard, onEdit, editing, onQ
   // §O 本机刚发出的那条（local id、1 秒内挂上）往上弹一下；只在挂载时判定一次，历史/同步/别的设备发来的不弹
   const [fresh] = useState(() => message.id.startsWith("local-") && !!message.created_at && Date.now() - Date.parse(message.created_at) < SEND_FRESH_MS);
   return (
-    <div className={`msg user ${message.outbox ?? ""} ${editing ? "editing" : ""} ${fresh ? "send-rise" : ""}`} data-msg-id={message.id}>
-      {message.quote && <QuoteLine quote={message.quote} onJump={onJumpQuote} />}
+    <div className={`msg user ${message.outbox ?? ""} ${editing ? "editing" : ""} ${fresh ? "send-rise" : ""}`} data-msg-id={message.id} data-server-id={message.serverId}>
+      {showQuote !== false && message.quote && <QuoteLine quote={message.quote} onJump={onJumpQuote} />}
       {skills.length > 0 && <div className="msg-skills"><BlockRenderer blocks={skills} /></div>}
       {files.length > 0 && <div className="msg-files"><BlockRenderer blocks={files} /></div>}
       {/* 气泡左边悬停才出现的“⋯”、或右键气泡（= App 长按）：复制 · 回复；最后一条另有“编辑”（键盘：输入框为空时按 ↑） */}
@@ -132,13 +133,12 @@ function UserView({ message, showTime, onResend, onDiscard, onEdit, editing, onQ
       )}
       {menu.node}
       {message.outbox && <OutboxStatus message={message} onResend={onResend} onDiscard={onDiscard} />}
-      {!message.outbox && isSteer(message) && <div className="msg-status steer"><IconMerge size={14} />{STEER_LABEL}</div>}
       <TimeLine message={message} show={showTime} />
     </div>
   );
 }
 
-function AssistantView({ message, showTime, onRegenerate, onContinue, projectId, onQuote }: Props) {
+function AssistantView({ message, showTime, onRegenerate, onContinue, projectId, onQuote, onJumpQuote, showQuote = true }: Props) {
   const menu = useReplyMenu(message, onRegenerate, projectId, onQuote);
   const body = useRef<HTMLDivElement>(null);
   const focus = useFocusMenu(() => menu.items, { label: "这条回复的操作" });
@@ -153,6 +153,8 @@ function AssistantView({ message, showTime, onRegenerate, onContinue, projectId,
   if (tools.length && (!segments.length || segments[segments.length - 1].card)) segments.push({ card: false, blocks: [] });
   return (
     <div className="msg assistant" data-msg-id={message.id}>
+      {/* §C 回复不紧挨着它回应的那句时：顶上一行连接线 + 原话（和用户引用同一个 QuoteLine） */}
+      {showQuote && message.quote && <QuoteLine quote={message.quote} onJump={onJumpQuote} />}
       {!empty && message.thought?.trim() && <ThoughtSummary message={message} />}
       {/* 活动时间线（v1.28）：用过工具就多一行“做了 N 步”，生成中有完成的步骤就出现 */}
       {steps.length > 0 && (!message.pending || steps.some((t) => t.state !== "running")) && <ActivitySummary steps={steps} pending={message.pending} />}

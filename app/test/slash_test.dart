@@ -1,5 +1,5 @@
 // 输入框 /命令（v1.85，models/slash.dart；服务器 app/init_command.py）：规则（何时弹、候选、补全、/init 认法和服务器一致）
-// + 输入框开头打 / 出候选、点一下补成 `/init `、顶部提示条（带补充要求）、句中 / 不弹、生成中不能当补充发。
+// + 输入框开头打 / 出候选、点一下补成 `/init `、顶部提示条（带补充要求）、句中 / 不弹、生成中不能途中发。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/chat/composer.dart';
 import 'package:assistant/features/chat/mentions.dart';
@@ -119,12 +119,12 @@ void main() {
     expect(find.byType(MentionList), findsNothing);
   });
 
-  testWidgets('生成中：/init 不能当补充发（按钮不是“补充”）', (tester) async {
+  testWidgets('生成中：/init 不能途中发（按钮不是“发送”），普通文字可以', (tester) async {
     await _pump(tester, busy: true);
     await _type(tester, '/init');
-    expect(find.bySemanticsLabel('补充给正在进行的回答'), findsNothing);
+    expect(find.bySemanticsLabel('发送'), findsNothing);
     await _type(tester, '再短一点');
-    expect(find.bySemanticsLabel('补充给正在进行的回答'), findsOneWidget);
+    expect(find.bySemanticsLabel('发送'), findsOneWidget);
   });
 
   test('本机命令认法（Codex：不接话的命令后面带了字 = 普通文字）', () {

@@ -15,5 +15,18 @@ export function quoteOf(m: Message): MessageQuote {
 
 export const quoteLine = (q: MessageQuote) => (q.missing ? QUOTE_MISSING : q.text ?? "");
 
+/** 这条是不是 id：本地 id 或认领后的服务器 id。 */
+export const isId = (m: Message, id?: string | null) => !!id && (m.id === id || m.serverId === id);
+
+/** 第 i 条顶上画不画引用行（§C，= App showsQuote）：用户自己引用的一定画；助手回复只在原话不“紧挨着”时画——
+ *  往上一串连续用户消息（一口气发的、途中发的）里有原话 = 紧挨着，不画；中间隔了别的回复（问进度、并行回答）才画。 */
+export function showsQuote(ms: Message[], i: number): boolean {
+  const q = ms[i].quote;
+  if (!q) return false;
+  if (ms[i].role === "user") return true;
+  for (let j = i - 1; j >= 0 && ms[j].role === "user"; j--) if (isId(ms[j], q.id)) return false;
+  return true;
+}
+
 /** 已落库（有服务器 id）、生成完的消息才能被引用：本机 id 服务器不认。 */
 export const quotable = (m: Message) => !m.pending && !m.outbox && !m.id.startsWith("local-") && m.id !== "pending";
