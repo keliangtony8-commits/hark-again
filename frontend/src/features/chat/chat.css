@@ -31,14 +31,17 @@
 /* 历史面板：宽屏是左侧一张玻璃卡（顶部让出浮动顶栏），窄屏是从左滑出的玻璃抽屉 */
 .convs { width: var(--sidebar-w); flex: none; display: flex; flex-direction: column; margin: var(--shell-top) 0 var(--sp-4) var(--gutter);
   overflow: hidden; animation: rise var(--dur) var(--ease) both; }
-.convs-head { display: flex; align-items: center; justify-content: space-between; height: var(--topbar-h); padding: 0 var(--sp-3) 0 var(--sp-4); }
+.convs-head { display: flex; align-items: center; justify-content: space-between; height: var(--topbar-h); padding: 0 var(--sp-2) 0 var(--sp-3); }
 .convs-title { font-weight: var(--fw-strong); letter-spacing: var(--display-tracking); }
-.new-chat { margin: 0 var(--sp-3) var(--sp-3); height: 44px; padding: 0 var(--sp-4); display: flex; align-items: center; justify-content: center; gap: var(--sp-2);
-  background: var(--pill-on); color: var(--on-pill-on); border-radius: var(--r-full); font-size: var(--fs-sm); font-weight: var(--fw-title); transition: transform var(--dur) var(--ease); }
+/* v2.86.1（用户 18:44“这么割裂”）：宽屏历史栏不再是一整块黑卡 + 白胶囊——直接落在背景上，和聊天区同一个平面；
+   “新对话”是一行安静的 tile（和列表项同宽同圆角），白色只留给顶部导航的当前项。窄屏抽屉仍是浮起的玻璃。 */
+.new-chat { margin: 0 var(--sp-2) var(--sp-2); height: 40px; padding: 0 var(--sp-3); display: flex; align-items: center; gap: var(--sp-2);
+  background: var(--tile); color: var(--text); border-radius: var(--r-inner); font-size: var(--fs-sm); font-weight: var(--fw-title); transition: background var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.new-chat:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
 .new-chat:active { transform: scale(0.98); }
 .conv-list { flex: 1; overflow-y: auto; padding: 0 var(--sp-2) var(--sp-4); }
 .conv-label { font-size: var(--fs-xs); color: var(--text-3); padding: var(--sp-3) var(--sp-3) var(--sp-1); }
-.conv-search { margin: 0 var(--sp-3) var(--sp-2); }
+.conv-search { margin: 0 var(--sp-2) var(--sp-2); }
 .conv-item { display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: var(--sp-2) var(--sp-1) var(--sp-2) var(--sp-3); border-radius: var(--r-inner); font-size: var(--fs-sm); color: var(--text-2); cursor: pointer;
   animation: rise 220ms var(--ease) both; }
 .conv-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -54,6 +57,7 @@
 .conv-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scrim { display: none; }
 
+@media (min-width: 861px) { .convs.glass-drawer { background: transparent; border-color: transparent; box-shadow: none; } }
 @media (max-width: 860px) {
   .convs { position: fixed; inset: var(--sp-2) auto var(--sp-2) var(--sp-2); margin: 0; z-index: 30; width: min(84vw, 320px); transform: translateX(calc(-100% - var(--sp-3)));
     transition: transform 240ms var(--ease); animation: none; } /* 材质（投影 + 模糊）由 .glass-drawer 管 */
@@ -139,7 +143,7 @@
 }
 .composer:focus-within { border-color: color-mix(in srgb, var(--text) 22%, var(--glass-border)); }
 .composer-lead { width: 56px; height: 56px; animation: pop var(--dur) var(--ease) both; }
-.composer textarea { flex: 1; border: 0; outline: 0; background: none; resize: none; max-height: 200px; padding: var(--sp-2) 0; line-height: 1.5; }
+.composer textarea { flex: 1; border: 0; outline: 0; background: none; resize: none; max-height: 200px; padding: var(--sp-2) 0; line-height: 24px; min-height: 40px; }
 .composer textarea::placeholder { color: var(--text-3); }
 
 
@@ -148,7 +152,12 @@
 .tool-run { display: inline-flex; align-self: flex-start; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--text-2); background: var(--tile); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-full); animation: rise 200ms var(--ease); }
 .tool-spin { width: 12px; height: 12px; border-radius: var(--r-full); border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 
+/* v2.86.1 一行对齐（用户 18:44“排版怎么回事”）：行内每个控件都是 40px 高、贴底对齐——一行字时全部同一条中线，多行时按钮留在最后一行旁边。
+   回形针（项目里是菜单）、思考/模型小胶囊（30px，下边距 5px 垫齐）、说话/发送圆钮同一基准。 */
 .composer-row { display: flex; align-items: flex-end; gap: var(--sp-1); }
+.composer-row > .icon-btn, .composer-row > .menu:not(:has(.model-chip)), .composer-row > .menu:not(:has(.model-chip)) .menu-trigger { width: 40px; height: 40px; flex: none; }
+.composer-row > .model-chip, .composer-row > .menu:has(.model-chip) { align-self: flex-end; margin-bottom: 5px; }
+.composer-row > .menu:has(.model-chip) > .model-chip { margin: 0 var(--sp-1); }
 .composer-row .icon-btn { color: var(--text-3); }
 .attach-row { display: flex; gap: var(--sp-2); overflow-x: auto; padding: var(--sp-1) var(--sp-3) 0 var(--sp-1); scrollbar-width: none;
   /* v1.16：名片多了往右滚——右缘最后 sp-3（= 右内边距）渐隐，不被输入框边硬切；没溢出时内容到不了这一截（App EdgeFadeEnd 同款） */
@@ -274,7 +283,7 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .attach-ext { position: relative; }
 .attach-from { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: var(--r-full); display: grid; place-items: center;
   background: var(--glass-sheet); color: var(--text-2); box-shadow: 0 0 0 1px var(--glass-border); }
-.composer-row .menu-trigger { width: 40px; height: 40px; color: var(--text-2); }
+.composer-row .menu-trigger { color: var(--text-2); }
 
 /* v1.14 附件名片：类型徽标 + 名字 + 一行来源/大小（App 托盘同规则），两个 PDF 一眼分得清 */
 .attach { padding: var(--sp-2) var(--sp-1) var(--sp-2) var(--sp-2); min-width: 168px; }

@@ -40,7 +40,7 @@ export default function ConversationList({ title, list, activeId, onOpen, onDele
         <button className="icon-btn mobile-only" onClick={onClose} aria-label="关闭"><IconClose /></button>
       </div>
       <button className="new-chat" onClick={() => onOpen(null)}><IconPlus />新对话</button>
-      <SearchField className="conv-search" value={list.query} onChange={list.setQuery} placeholder="搜索标题和内容（空格分开多个词）" />
+      <SearchField className="conv-search" value={list.query} onChange={list.setQuery} placeholder="搜索对话" />
       <nav className="conv-list">
         {groups.map((g) => (
           <div key={g.label} className="conv-group">
