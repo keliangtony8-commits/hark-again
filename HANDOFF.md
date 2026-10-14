@@ -46,7 +46,12 @@
    - 在 VPS 注册 GitHub OAuth App、Google OAuth（测试模式，把用户自己加为测试用户），回调地址 `https://toyuis.itsllm.com/...`（看 oauth.py），填进 `.env` 后重启，真机走通 GitHub、Gmail 一键授权。
    - 没配置的提供方，按钮不能“看起来能点、点了失败”：只显示已配置的；全没配时普通用户不显示，管理员显示“服务器还差一步：配置 Google 授权”并进引导页。
    - “我 → 连接的账号”统一：OAuth、MCP、API Key、网站登录在同一页分区（连接器 + 保险箱合并，home-redesign B/§连接器）。
-3. **连发分组准确率重评**（用户 20:48）：现在的 70% 是拿 Hark“空闲时逐条回”的历史当答案，不是真准确率。按 §C 定稿规则重新标注 57 组（`work/e2e-harness/intake_cases.jsonl`），重跑 `eval_intake.py`，只修真误判，报告真实准确率与修了哪些类。
+3. ~~**连发分组准确率重评**（用户 20:48）~~ 2026-10-15 做完，但**不是原地重标**：`work/e2e-harness/intake_cases.jsonl`、`eval_intake.py`、`docs/home-redesign.md`（§C 定义所在）**从没提交进 git**，只在旧沙盒里，旧的那个 70% 不可复现。改成把评测搬进仓库当唯一真源：
+   - 标注集 `backend/tests/intake_cases.jsonl`（**57 组 / 74 条**，每组带 `why` 说明标注依据，可复核）；评测器 `backend/tests/smoke_intake_eval.py`（`python tests/smoke_intake_eval.py -v`；`EVAL_JUDGE=1` 加跑真模型判官层）。
+   - 量出来的真实数字（v2.90.4）：**规则层误判 0**、62.2% 的条数靠规则直接定、37.8% 交给便宜模型；57 组里 30 组纯靠规则、27 组要问一次 ≈200 token 的便宜模型（`SUMMARY_MODEL=lite`）；判官答对即 100%。
+   - 修掉的真实误判（全是“另一件事被当成补充/进度”这一类）：问句形状的“要多少钱”“用哪个好”“要不要加个总结”（软前缀 要/用 + 问句 → 交给判官）、指向别的对象的“另外那个项目进度怎么样”（→ 交给判官）、带附件又问别的（→ 交给判官）。
+   - 没动的取向：拿不准仍按补充（宁少勿多）；判官失败/超时仍按补充。
+   - 判官层的真模型分数见下面「接手记录二」里的实测一节。
 4. **v2.91 §N 项目页**（home-redesign §N）：项目对话左钮“≡”↔“+”（三条线旋转成十字 ~280ms）；项目列表带状态胶囊（进行中/等你回复/已完成）；进场浮出项目名药丸（下滑 8px+淡入，轻微回弹 ≤4%）；**往上滑看历史 >24px 也浮出**，下滑/停 1.5 秒/回到底部收起；App 用 ValueNotifier+RepaintBoundary 不整页 setState，Web 用 passive scroll+rAF；药丸显示**总结标题**（唯一来源 conversation_title，名词短语 ≤14 字、无标点口语，话题变了每约 10 条重总结），列表/药丸共用；`first_title` 只作生成前占位。要“细腻，不粗糙”。
 5. **v2.92 §P 名字与头像**：首次进对话由助手**在聊天里**问称呼和是否给助手取名（不做表单引导页）；不取名默认叫 Toyuis；`users.display_name`、`users.avatar`、`app_settings.assistant_name`；头像可上传，无图=纯色圆+首字母（复用 Avatar）；“我”页点名字/头像可改；助手名进系统提示词。**语气**：正式、不开玩笑，但初次打招呼可亲切。定稿开场：“你好，我是 Toyuis，很高兴为你服务。请问我该如何称呼你？如果你愿意，也可以为我取一个名字；不取的话，我就继续叫 Toyuis。”
 6. home-redesign 剩余：E1 收尾（ListRow/ListGroup/PageHeader 统一、附件弹层高度）、E4 ImageStack + 震动反馈、主页内置天气卡去重（天气面板同一报告重复 3 次的 bug）、连接器按钮诚实化 + OAuth 指南、“我的”页底部搜索、电脑端主页排版割裂/左半屏空（`work/vps/README.md` 顶部 bug）、Composer 遮住最后一张面板。

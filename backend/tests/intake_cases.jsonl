@@ -1,0 +1,57 @@
+{"id":"c01","task":"帮我写个周计划","why":"一口气发的两条都是对同一件事的补充/约束，最后一条是纯附和","messages":[{"text":"对了，按周排","expect":"steer"},{"text":"每天别超过一小时","expect":"steer"},{"text":"好的","expect":"ride"}]}
+{"id":"c02","task":"把这份报告整理成 Markdown","why":"改要求 + 约束 + 附和，都挂在同一件事上","messages":[{"text":"改成英文","expect":"steer"},{"text":"不要加表情","expect":"steer"},{"text":"嗯嗯","expect":"ride"}]}
+{"id":"c03","task":"帮我查一下去上海的高铁","why":"换目标 + 补条件 + 附和","messages":[{"text":"改成周五出发","expect":"steer"},{"text":"二等座就行","expect":"steer"},{"text":"收到","expect":"ride"}]}
+{"id":"c04","task":"写个抓天气的脚本","why":"补要求 + 让停一下 + 附和","messages":[{"text":"记得加日志","expect":"steer"},{"text":"等一下","expect":"steer"},{"text":"就是这种","expect":"ride"}]}
+{"id":"c05","task":"整理下载文件夹","why":"两条补充（一条有“顺便”、一条没前缀）+ 附和","messages":[{"text":"顺便把重复的删掉","expect":"steer"},{"text":"按时间排","expect":"steer"},{"text":"👍","expect":"ride"}]}
+{"id":"c06","task":"帮我改简历","why":"没有补充前缀，但显然是对这份简历的要求 → 判官该答补充","messages":[{"text":"重点放在第三点","expect":"steer"},{"text":"篇幅控制在一页","expect":"steer"}]}
+{"id":"c07","task":"分析这份销售数据","why":"“再算一下”是补充动作，没有前缀 → 判官","messages":[{"text":"再算一下中位数","expect":"steer"},{"text":"好的","expect":"ride"}]}
+{"id":"c08","task":"装一下这个依赖","why":"条件式补充，开头是“如果” → 判官","messages":[{"text":"如果装不上就换镜像源","expect":"steer"}]}
+{"id":"c09","task":"写周报","why":"三连问进度，都不该调模型","messages":[{"text":"怎么样了","expect":"progress"},{"text":"好了没","expect":"progress"},{"text":"还要多久","expect":"progress"}]}
+{"id":"c10","task":"跑一下测试","why":"问进度 + 问是不是卡住","messages":[{"text":"到哪了","expect":"progress"},{"text":"是不是又停了","expect":"progress"}]}
+{"id":"c11","task":"下载这个视频","why":"问结果 + 问在不在","messages":[{"text":"有结果了吗","expect":"progress"},{"text":"在吗","expect":"progress"}]}
+{"id":"c12","task":"生成一张图","why":"一句里问了状态和时长","messages":[{"text":"怎么样了，还要多久","expect":"progress"}]}
+{"id":"c13","task":"做一份 PPT","why":"问进度 + 附和","messages":[{"text":"进度如何","expect":"progress"},{"text":"OK","expect":"ride"}]}
+{"id":"c14","task":"写周计划","why":"“顺带问下”一件与周计划无关的事 → 另一件事","messages":[{"text":"顺带问下明天天气","expect":"new"}]}
+{"id":"c15","task":"修一下这个 bug","why":"无关的汇率问题 → 另一件事","messages":[{"text":"顺便问一下，美元汇率多少","expect":"new"}]}
+{"id":"c16","task":"写个方案","why":"翻译是另一件事，不是对方案的补充","messages":[{"text":"帮我把这句翻译成英文：你好","expect":"new"}]}
+{"id":"c17","task":"写周计划","why":"推荐播客与周计划无关","messages":[{"text":"推荐几个播客","expect":"new"}]}
+{"id":"c18","task":"整理照片","why":"问的是“另外那个项目”的进度，不是手上这件事 → 另一件事（规则别看到“进度”就答 progress）","messages":[{"text":"另外那个项目进度怎么样","expect":"new"}]}
+{"id":"c19","task":"写周计划","why":"带引用回复 = 用户明确在说另一件事","messages":[{"text":"这个要多久","expect":"new","reply_to":true}]}
+{"id":"c20","task":"跑测试","why":"带引用回复","messages":[{"text":"这句什么意思","expect":"new","reply_to":true}]}
+{"id":"c21","task":"写报告","why":"带引用 + 改成……：引用优先，算另一件事","messages":[{"text":"改成这样","expect":"new","reply_to":true}]}
+{"id":"c22","task":"装依赖","why":"带引用","messages":[{"text":"这段删掉","expect":"new","reply_to":true}]}
+{"id":"c23","task":"写周计划","why":"“要多少钱”是问题形状，不是补充（^要 别乱认）","messages":[{"text":"要多少钱","expect":"new"}]}
+{"id":"c24","task":"帮我选个键盘","why":"“用哪个好？”是问题形状，不是补充（^用 别乱认）","messages":[{"text":"用哪个好？","expect":"new"}]}
+{"id":"c25","task":"写周计划","why":"“要不要……”是在问，不是在下要求","messages":[{"text":"要不要加个总结","expect":"new"}]}
+{"id":"c26","task":"帮我改简历","why":"“注意”是硬补充前缀","messages":[{"text":"注意排版","expect":"steer"}]}
+{"id":"c27","task":"写周计划","why":"“比如”是在补例子","messages":[{"text":"比如周三休息","expect":"steer"}]}
+{"id":"c28","task":"查一下资料","why":"“等等/先别”是叫停 + 改要求","messages":[{"text":"等等，先别发","expect":"steer"}]}
+{"id":"c29","task":"写方案","why":"否定 + 换方案","messages":[{"text":"不对，是 B 方案","expect":"steer"}]}
+{"id":"c30","task":"写周计划","why":"澄清自己的意思","messages":[{"text":"我是说每天两小时","expect":"steer"}]}
+{"id":"c31","task":"写周计划","why":"“最好”是软要求，仍是对这件事的要求","messages":[{"text":"最好放在早上","expect":"steer"}]}
+{"id":"c32","task":"写周计划","why":"“顺便把”是补充前缀","messages":[{"text":"顺便把周末也排上","expect":"steer"}]}
+{"id":"c33","task":"跑脚本","why":"叫停这一轮","messages":[{"text":"停","expect":"steer"}]}
+{"id":"c34","task":"写周计划","why":"纯附和","messages":[{"text":"可以","expect":"ride"}]}
+{"id":"c35","task":"写周计划","why":"纯附和（口语）","messages":[{"text":"行吧","expect":"ride"}]}
+{"id":"c36","task":"写周计划","why":"纯附和（道谢）","messages":[{"text":"谢谢！","expect":"ride"}]}
+{"id":"c37","task":"写周计划","why":"纯附和（道辛苦）","messages":[{"text":"辛苦了","expect":"ride"}]}
+{"id":"c38","task":"写周计划","why":"纯附和","messages":[{"text":"没问题","expect":"ride"}]}
+{"id":"c39","task":"写周计划","why":"纯附和","messages":[{"text":"懂了","expect":"ride"}]}
+{"id":"c40","task":"写周计划","why":"附和后面接了一条要求，整句不是附和 → 判官","messages":[{"text":"好的，那顺便把标题也改一下","expect":"steer"}]}
+{"id":"c41","task":"写周计划","why":"附和 + 补充，整句按补充 → 判官","messages":[{"text":"嗯，还有一点：周末不要排","expect":"steer"}]}
+{"id":"c42","task":"写周计划","why":"长道谢，超过 12 字就不是纯附和了 → 判官；但意图仍是附和","messages":[{"text":"真的太感谢你了，帮了我大忙","expect":"ride"}]}
+{"id":"c43","task":"整理文件","why":"只发了一个附件、没有正文 → 附件是对这件事的补充","messages":[{"text":"","expect":"steer","files":true}]}
+{"id":"c44","task":"整理文件","why":"带附件的“好的”不是在附和，是把文件交给了这件事","messages":[{"text":"好的","expect":"steer","files":true}]}
+{"id":"c45","task":"整理文件","why":"带附件但同时问了无关的事 → 判官；意图是另一件事","messages":[{"text":"顺带问下明天天气","expect":"new","files":true}]}
+{"id":"c46","task":"整理文件","why":"带附件 + 一条短要求，仍是补充","messages":[{"text":"把这份也归档","expect":"steer","files":true}]}
+{"id":"c47","task":"写周计划","why":"“重来一遍”是对这件事的改要求，没有前缀 → 判官","messages":[{"text":"重来一遍","expect":"steer"}]}
+{"id":"c48","task":"写周计划","why":"问的是手上这份安排合不合理 → 补充/追问（判官答补充合理）","messages":[{"text":"你觉得这样安排合理吗？","expect":"steer"}]}
+{"id":"c49","task":"写周计划","why":"用户看没动静，问怎么了 = 问进度，但不在固定说法里 → 判官","messages":[{"text":"怎么了","expect":"progress"}]}
+{"id":"c50","task":"写周计划","why":"问时长，说法不固定 → 判官","messages":[{"text":"多久能好","expect":"progress"}]}
+{"id":"c51","task":"写周计划","why":"“你还在吗”在固定说法里（还在吗），后面那句只是抱怨时长","messages":[{"text":"你还在吗？都半小时了","expect":"progress"}]}
+{"id":"c52","task":"写周计划","why":"“怎么还没反应”= 问进度，说法不固定 → 判官","messages":[{"text":"怎么还没反应","expect":"progress"}]}
+{"id":"c53","task":"写周计划","why":"含糊的口语附和，不是精确的“嗯” → 判官；意图仍是附和","messages":[{"text":"嗯嗯 好","expect":"ride"}]}
+{"id":"c54","task":"写周计划","why":"单字附和","messages":[{"text":"好","expect":"ride"}]}
+{"id":"c55","task":"写周计划","why":"“别用表格”是硬约束","messages":[{"text":"别用表格","expect":"steer"}]}
+{"id":"c56","task":"写周计划","why":"“表格换成列表”是补充，但“换成”不在句首 → 判官","messages":[{"text":"表格换成列表","expect":"steer"}]}
+{"id":"c57","task":"查明天北京到上海的高铁","why":"补一个出发地的条件，没有前缀 → 判官","messages":[{"text":"北京出发","expect":"steer"}]}

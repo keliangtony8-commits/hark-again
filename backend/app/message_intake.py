@@ -8,6 +8,9 @@
   - 问进度（“怎么样了”）→ 不调模型，从 live_turns 这一轮的步骤一句话答（progress_text）；
   - 无关的新问题、带引用回复的 → 并行一路（live_turns.side，同一对话最多 1 主 + 1 并行），整条回复推 message.added。
   判断：先确定性规则（rule），剩下拿不准的整批只问一次 lite 模型（judge，≈200 token）；失败 / 超时 → 补充。
+  规则只认“明确”的形状（命令 / 否定 / 改口 / 纯附和 / 固定的问进度说法）；**问句形状、指向别的对象的，一律交给判官**，
+  不替用户下结论——这几类正是评测（tests/smoke_intake_eval.py）里抓到的真误判。
+  准确率评测：标注集 backend/tests/intake_cases.jsonl + 评测器 tests/smoke_intake_eval.py（规则层免费跑，判官层要真模型）。
 - 账本：messages.answered_by = 结清它的回复 id（settle）。主路回复结清提问 + 读走的补充 + 附和；没读走的另起一轮一起结清；
   服务器重启时 turn_journal 的 interrupted 回复结清那一轮还欠着的（不自动重跑 = 不重发）。
 """
@@ -43,8 +46,15 @@ _ACK = re.compile(r"^(?:好的?|好滴|好嘞|嗯+|恩+|哦+|噢+|ok|okay|k|行|
 _PROGRESS = re.compile(r"^(?:那个|还有|那|所以)?\S{0,8}?(?:现在|目前)?(?:怎么样了|咋样了|弄得怎么样|做得怎么样|好了没|好没|好了吗|做完了吗|完成了吗|进度|到哪了|做到哪|"
                        r"还要多久|还在吗|在吗|还在做吗|在干嘛|在做什么|在忙什么|是不是(?:又)?(?:停|卡)|卡住了|停了吗|停下来了|怎么没反应|有结果了吗|"
                        r"status|how'?s it going)", re.I)
+# 补充/改要求的开头。硬前缀（命令、否定、改口）几乎不可能是问句；软前缀（要 / 用 / 对了）后面见 _QUESTION 就交给判官。
 _SUPPLEMENT = re.compile(r"^(?:对了|另外记得|记得|别忘了|要|不要|别|不用|改成|换成|改为|用|只要|最好|顺便把|再加|加上|去掉|"
                          r"算了|等等|等一下|停|不对|错了|我是说|我的意思是|也就是|就是说|比如|例如|注意|必须|一定要)")
+# 软前缀：单独出现时可能只是在问（“要多少钱”“用哪个好”），配上 _QUESTION 就交给判官。
+_SOFT = re.compile(r"^(?:要|用)")
+# 问句形状：这种话规则不硬判（“要多少钱”“用哪个好”“要不要加个总结”以前被当成补充，是误判）。
+_QUESTION = re.compile(r"[?？]|吗|呢|怎么|多少|哪个|哪儿|哪里|什么时候|为什么|如何|要不要|是不是|好不好|行不行|问下|问一下|问问")
+# 指向别的对象：问的/说的不是手上这件事（“另外那个项目进度怎么样”不是在问这一轮）。
+_ELSEWHERE = re.compile(r"另外|另一个|别的|其他|那个项目|上次那个|刚才那个|隔壁")
 
 
 @dataclass
@@ -79,18 +89,30 @@ def set_handlers(side: SideFn, pending: SideFn) -> None:
 
 
 def rule(text: str, files: bool = False) -> str | None:
-    """确定性规则：这句话是什么（None = 拿不准，交给 judge）。带附件的只可能是补充或新问题。"""
+    """确定性规则：这句话是什么（None = 拿不准，交给 judge）。带附件的只可能是补充或新问题。
+
+    v2.90.3 起多两道闸，都是评测（tests/smoke_intake_eval.py）里抓出来的真误判：
+    问句形状（“要多少钱”“用哪个好”“要不要加个总结”）不再被 _SUPPLEMENT 的软前缀（要 / 用）当成补充；
+    指向别的对象的（“另外那个项目进度怎么样”）不再被当成问这一轮的进度。两处都改成交给判官，
+    不违背“宁少勿多”（判官拿不准仍按补充），只是不让规则替用户下结论。
+    """
     t = (text or "").strip()
     if files:
-        return STEER if not t or _ACK.match(t) or _SUPPLEMENT.match(t) or len(t) <= 12 else None
+        # 附件本身就是交给这件事的：空正文 / 附和 / 补充前缀 / 短的命令句都算补充；带附件又问别的 → 判官
+        if not t or (len(t) <= 12 and _ACK.match(t)) or _SUPPLEMENT.match(t) or (len(t) <= 12 and not _QUESTION.search(t)):
+            return STEER
+        return None
     if not t:
         return RIDE
     if len(t) <= 12 and _ACK.match(t):
         return RIDE
+    if _ELSEWHERE.search(t):
+        return None
     if len(t) <= 24 and _PROGRESS.match(t):
         return PROGRESS
     if _SUPPLEMENT.match(t):
-        return STEER
+        # 软前缀（要 / 用）配上问句形状 = 在问，不是在要求 → 交给判官（硬前缀“不要”“改成”“注意”不受影响）
+        return None if _SOFT.match(t) and _QUESTION.search(t) else STEER
     return None
 
 
