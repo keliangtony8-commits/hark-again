@@ -3,13 +3,16 @@
 // 规则：
 //   1. 对比度（WCAG 相对亮度）：正文/气泡字/按钮字/警示·出错·成功小字 ≥ 4.5；最次要信息（--text-3）≥ 3（token 里就这么写的）。
 //   2. 两端同源：上面这些关键色，浅/深两套都必须和 App lib/theme/tokens.dart 同值（改了颜色忘了改另一边 = 失败）。
-import { readFileSync } from "node:fs";
+//      这条只读得到完整仓库时才查：网页镜像里只有 frontend/（构建上下文就是它），那时跳过并说一声——
+//      对比度那半永远查，因为只需要 tokens.css。
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontend = fileURLToPath(new URL("..", import.meta.url));
 const css = readFileSync(join(frontend, "src/styles/tokens.css"), "utf8");
-const dart = readFileSync(join(frontend, "../app/lib/theme/tokens.dart"), "utf8");
+const dartPath = process.env.TOKENS_DART ?? join(frontend, "../app/lib/theme/tokens.dart");
+const dart = existsSync(dartPath) ? readFileSync(dartPath, "utf8") : null;
 
 /** 取 tokens.css 里某个选择器块的所有 --变量。 */
 const cssTheme = (selector) => {
@@ -69,10 +72,14 @@ const ratio = (a, b) => {
 const bad = [];
 for (const [themeName, selector, dartName] of [["浅色", ":root", "light"], ["深色", ':root[data-theme="dark"]', "dark"]]) {
   const web = cssTheme(selector);
-  const app = dartTheme(dartName);
-  for (const [webName, appName] of Object.entries(SAME)) {
-    if (!web[webName] || !app[appName]) bad.push(`${themeName}：${webName} / ${appName} 有一边没有`);
-    else if (web[webName] !== app[appName]) bad.push(`${themeName}：--${webName} ${web[webName]} ≠ App ${appName} ${app[appName]}`);
+  const app = dart ? dartTheme(dartName) : null;
+  if (!app) {
+    if (dartName === "light") console.log(`（这次没查两端同值：读不到 ${dartPath}——网页镜像里只有 frontend/，属正常）`);
+  } else {
+    for (const [webName, appName] of Object.entries(SAME)) {
+      if (!web[webName] || !app[appName]) bad.push(`${themeName}：${webName} / ${appName} 有一边没有`);
+      else if (web[webName] !== app[appName]) bad.push(`${themeName}：--${webName} ${web[webName]} ≠ App ${appName} ${app[appName]}`);
+    }
   }
   for (const [what, fg, bg, min] of PAIRS) {
     const r = ratio(web[fg], web[bg]);
@@ -84,4 +91,4 @@ if (bad.length) {
   console.error("配色守门失败：\n" + bad.join("\n"));
   process.exit(1);
 }
-console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题，且与 App tokens.dart 同值）`);
+console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题${dart ? "，且与 App tokens.dart 同值" : ""}）`);
