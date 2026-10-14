@@ -8,6 +8,7 @@
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .config import settings
 from .models import Project
 
 # 容器里的环境（与 sandbox/image/Dockerfile 预装清单 + workspace-env.sh 同步）：模型据此知道什么装得上、装了留不留得住
@@ -16,6 +17,7 @@ HOME_DIR = ".home"  # 工作区里的家目录（隐藏）：pip/npm 用户级�
 ENVIRONMENT = (f"沙盒是非 root 的 Debian（没有 sudo/apt），已预装：{PREINSTALLED}。"
                "Python 包直接 pip install、Node 命令行工具 npm i -g：都装进工作区（~/.local），以后的对话和后台任务都能接着用，"
                "容器重建也不丢，不用每次重装；项目自己的依赖照常用 .venv / node_modules。"
+               f"命令的时钟是用户时区 {settings.timezone}（环境变量 TZ）：date、ls -l、datetime.now() 都已是用户本地时间，别再自己换算时区。"
                "缺系统软件就换 pip/npm 上的替代品，实在没有就告诉用户需要往沙盒镜像里加什么。"
                "找文件用 glob、搜内容用 grep（比 run_command find/grep 快，不唤醒沙盒），改一处用 edit_file，多个文件 / 多处 / 新建删除改名用 apply_patch（一份补丁，全成或全不动）。"
                "报告、简历这类要交给用户读的文档写成 Markdown/HTML 后用 render_document 排成 PDF（或长图），别直接给 .md。"

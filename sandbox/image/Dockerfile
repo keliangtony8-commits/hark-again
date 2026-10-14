@@ -4,7 +4,7 @@
 FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git nodejs npm curl ca-certificates build-essential procps \
-        jq ripgrep zip unzip sqlite3 poppler-utils imagemagick fonts-noto-cjk \
+        jq ripgrep zip unzip sqlite3 poppler-utils imagemagick fonts-noto-cjk tzdata \
     && rm -rf /var/lib/apt/lists/* && useradd -m -u 1000 dev
 COPY workspace-env.sh /etc/profile.d/workspace.sh
 COPY matplotlibrc /etc/matplotlibrc

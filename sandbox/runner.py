@@ -58,6 +58,17 @@ HOST_RESERVE = os.environ.get("SANDBOX_HOST_RESERVE", "256m")  # 开新容器时
 MEMINFO = "/proc/meminfo"
 ROOM_GRACE_S = 60  # 这么久之内用过的不让位：两条命令之间、预览页刚刷新过都算在用
 MAX_OUTPUT = 12000
+
+
+def clock_zone(raw: str | None) -> str:
+    """容器里命令的时区（TZ）= 用户时区，和后端 settings.timezone 同一个 TIMEZONE 配置（v2.66 B35：
+    以前容器是 UTC，“每 3 秒写一行当前时间”写出来比北京时间晚 8 小时，ls -l 的时间也对不上）。
+    只认 IANA 名字（Asia/Shanghai、UTC）这种安全字符；不像就退回 Asia/Shanghai。用户自己在命令环境里设 TZ 则以用户的为准。"""
+    raw = (raw or "").strip()
+    return raw if re.fullmatch(r"[A-Za-z][A-Za-z0-9_+\-]*(?:/[A-Za-z0-9_+\-]+){0,2}", raw) else "Asia/Shanghai"
+
+
+TZ = clock_zone(os.environ.get("SANDBOX_TZ") or os.environ.get("TIMEZONE"))
 SPILL_MARK = "\n…（中间省略）…\n"  # 与 backend/app/spill.py MARK 相同
 PROJECTS_ROOT = "/projects"  # 本服务容器里挂载的全部工作区
 SPILL_KEEP = 50
@@ -338,7 +349,7 @@ def _open(pid: str):
             volumes={host_dir: {"bind": "/workspace", "mode": "rw"}},
             mem_limit=MEM, nano_cpus=int(CPUS * 1e9), pids_limit=256,
             cap_drop=["ALL"], security_opt=["no-new-privileges"],
-            labels={"assistant.sandbox": "1"}, **extra,
+            labels={"assistant.sandbox": "1"}, environment={"TZ": TZ}, **extra,
         )
 
 
@@ -631,7 +642,7 @@ def _run(pid: str, command: str, timeout: int, stdin: str | None, tok: str | Non
         oom_seen[pid] = _oom_count(c) or 0
     oom_before = oom_seen.get(pid, 0)
     tok = tok or os.urandom(6).hex()
-    env = dict(env_vars or {})  # 用户变量先放，出网代理、STDIN_B64 后写（Codex exec_env：运行时注入的最后写、赢）
+    env = {"TZ": TZ, **(env_vars or {})}  # 时区最先放（用户自己设 TZ 就盖过它），用户变量其次，出网代理、STDIN_B64 后写（Codex exec_env：运行时注入的最后写、赢）
     kind, tag = ("j", promote[0]) if promote else ("e", tok)  # 转后台的命令一开始就用任务的账号：转过去之后被拦的也算它的
     env.update(egress_env(pid, kind, tag))
     if stdin is not None:
@@ -995,7 +1006,7 @@ async def exec_stream(body: ExecIn):
 @app.post("/jobs/start", dependencies=[Depends(auth)])
 async def job_start(body: JobIn):
     jid = _check_job(body.job_id)
-    env = {**check_env(body.env), **egress_env(body.project_id, "j", jid)} or None
+    env = {"TZ": TZ, **check_env(body.env), **egress_env(body.project_id, "j", jid)}
 
     def go():
         c = _container(body.project_id)

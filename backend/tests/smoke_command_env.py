@@ -295,12 +295,18 @@ res = runner._exec("p1", "echo hi", 10, "in", None, None, {"TG": "v1"})
 env = captured["exec_create"]["environment"]
 assert env["TG"] == "v1" and "STDIN_B64" in env, env
 runner._exec("p1", "echo hi", 10, None, None, None, {})
-assert captured["exec_create"]["environment"] is None
+assert captured["exec_create"]["environment"] == {"TZ": runner.TZ}  # v2.66 B35：命令时钟 = 用户时区
+assert runner.TZ == "Asia/Shanghai"
+runner._exec("p1", "echo hi", 10, None, None, None, {"TZ": "America/New_York"})
+assert captured["exec_create"]["environment"]["TZ"] == "America/New_York"  # 用户自己设的 TZ 赢
+assert runner.clock_zone("Europe/Berlin") == "Europe/Berlin" and runner.clock_zone("UTC") == "UTC"
+for bad in ["", None, "../etc/passwd", "Asia/Shanghai; rm -rf /", "$(id)", "a b"]:
+    assert runner.clock_zone(bad) == "Asia/Shanghai", bad
 tc = TestClient(runner.app)
 rr = tc.post("/jobs/start", json={"project_id": "p1", "job_id": "jabcdef12", "env": {"TG": "v2"}}, headers={"Authorization": "Bearer t"})
 assert rr.status_code == 200, rr.text
 start_call = [x for x in captured["exec_run"] if x[0][:2] == ["setsid", "-f"]][-1]
-assert start_call[1]["environment"] == {"TG": "v2"}, start_call
+assert start_call[1]["environment"] == {"TZ": runner.TZ, "TG": "v2"}, start_call
 rr = tc.post("/jobs/start", json={"project_id": "p1", "job_id": "jabcdef12", "env": {"PATH": "/x"}}, headers={"Authorization": "Bearer t"})
 assert rr.status_code == 400
 rr = tc.post("/exec", json={"project_id": "p1", "command": "x", "env": {"HOME": "/x"}}, headers={"Authorization": "Bearer t"})

@@ -203,6 +203,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - v2.61 登录设备（我的 → 安全 → 登录设备）：看哪些手机/电脑/浏览器登着（设备名、最近活动、登录日期），退出某一台或一键“退出其他所有设备”，立刻生效（REST、文件链接、WebSocket 都认）；“退出登录”会让服务器作废本机 token；打开两步验证顺手退出其他设备。升级前登录的设备不用重登，但一键退出也会踢掉它们。规则 backend/app/login_sessions.py，迁移 0059，冒烟 tests/smoke_login_sessions.py
 - v2.64 反馈（回复下 👍 / 👎 + 我的 → 反馈）：👎 选原因（答错了 / 没做完 / 太慢或卡住了 / 别的问题）+ 一句补充，就存一份能复现的报告：提问、回复、每一步做了什么、工具轨迹（截短、打码）、用的模型/思考强度/模式、回复怎么结束的；对话删了报告还在。“我的 → 反馈”里报告问题、回看、一键复制成 Markdown 贴给要修它的人、标已解决。规则 backend/app/feedback.py，迁移 0060，冒烟 tests/smoke_feedback.py
 - v2.65 表格交付不乱码：让助手做的 CSV 发到手机/电脑后用 Excel 直接打开，中文不再变乱码（交付时自动加 UTF-8 BOM，打包文件夹里的 CSV 也一样；工作区原文件不动，真 GBK 文件不碰）。规则 backend/app/csv_bom.py，冒烟 tests/smoke_csv_bom.py
+- v2.66 工作区时钟 = 你的时区：助手在云电脑里跑的脚本写“当前时间”、ls -l 看文件时间，都是你的本地时间（以前是 UTC 晚 8 小时）。.env 的 TIMEZONE 一处配置，提醒和工作区共用；规则 sandbox/runner.py clock_zone，冒烟 tests/smoke_round14.py + smoke_command_env.py
 - 工具参数猜错时第一次就把真正的参数表给模型（v2.38，tool_args.Streak.signature_once），省一次 describe；排版把输出名写成源文件时点名已有的 .md（doc_render.output_mixup）
 - 云浏览器拦截所有内网/回环地址；付款、下单、发送类按钮需审批；密码和验证码由你在实时画面里自己输
 - Pages 用 CSP sandbox 提供，页面脚本拿不到 App 登录信息；元数据（含 published 下线状态）只经 pages_store 读写，公开访问只走 public_html（下线与不存在同一个 404），改内容保留发布状态

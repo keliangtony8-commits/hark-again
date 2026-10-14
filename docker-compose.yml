@@ -42,6 +42,7 @@ services:
     build: ./sandbox
     environment:
       SANDBOX_TOKEN: ${SANDBOX_TOKEN}
+      SANDBOX_TZ: ${TIMEZONE:-Asia/Shanghai}   # 工作区命令的时区 = 用户时区
       HOST_PROJECTS_DIR: ${HOST_DATA_DIR}/projects
       SANDBOX_MEM: ${SANDBOX_MEM:-1g}
       SANDBOX_IDLE_MINUTES: ${SANDBOX_IDLE_MINUTES:-30}
