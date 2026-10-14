@@ -62,6 +62,19 @@ Future<void> _settle(WidgetTester tester) async {
 bool _barShown(WidgetTester tester) => tester.widget<FloatAway>(find.ancestor(of: find.byType(FloatingTopBar), matching: find.byType(FloatAway))).visible;
 
 void main() {
+  testWidgets('聊天历史抽屉打开时浮动顶栏让位，关上回来（v2.78 用户 15:30“还叠在一起”）', (tester) async {
+    final router = await _pump(tester);
+    router.go('/chat');
+    await _settle(tester);
+    expect(_barShown(tester), isTrue);
+    await tester.tap(find.byTooltip('历史').first);
+    await _settle(tester);
+    expect(_barShown(tester), isFalse);
+    await tester.tapAt(const Offset(390, 400)); // 点遮罩关抽屉
+    await _settle(tester);
+    expect(_barShown(tester), isTrue);
+  });
+
   testWidgets('顶栏：一级页面显示、子页面隐藏；左侧按钮随 Tab 变', (tester) async {
     final router = await _pump(tester);
     expect(find.byType(FloatingTopBar), findsOneWidget);

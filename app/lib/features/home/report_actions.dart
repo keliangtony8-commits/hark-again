@@ -1,5 +1,5 @@
 // 收件箱的一行报告 + 它的操作（v1.09，对标 Hark 收件箱条目可以“稍后再看”/收起）。
-// 唯一入口：Home“收件箱”段的每一行都是 InboxRow；操作只在 showReportActions 里——
+// 唯一入口：Home“收件箱”卡（InboxCard，v2.78 卡片栈里的一张）的每一行都是 InboxRow；操作只在 showReportActions 里——
 // - 稍后再看 → card_snooze.dart showSnoozeSheet（同一张快捷时刻表；到点服务端放回并重新未读，横幅再弹一次）
 // - 标为已读（只在未读时给）→ inboxProvider.markRead([id])
 // - 收起 → PATCH dismissed（报告只是隐藏，对话还在“对话”里）
@@ -17,6 +17,7 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'card_snooze.dart';
 import 'inbox.dart';
+import 'stack_card.dart';
 
 enum ReportAction { snooze, read, dismiss }
 
@@ -80,6 +81,34 @@ class InboxRow extends ConsumerWidget {
         onTap: onOpen,
         onLongPress: more,
       ),
+    );
+  }
+}
+
+/// 主页“收件箱”卡：最近几条报告（新的在前），卡头“全部已读”只在有未读时出现。没有报告就整张不画。
+class InboxCard extends ConsumerWidget {
+  const InboxCard({super.key, required this.reports, required this.onOpen});
+  final List<HomeCard> reports;
+  final void Function(HomeCard) onOpen;
+
+  static String _hm(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(inboxProvider.select((s) => s.unread));
+    return RiseSwitcher(
+      child: reports.isEmpty
+          ? const SizedBox.shrink(key: ValueKey('none'))
+          : StackCard(
+              key: const ValueKey('inbox'),
+              title: '收件箱',
+              trailing: FadeSwitcher(
+                child: unread > 0
+                    ? TextButton(key: const ValueKey('read'), onPressed: () => ref.read(inboxProvider.notifier).markRead(), child: const Text('全部已读'))
+                    : const SizedBox.shrink(key: ValueKey('none')),
+              ),
+              rows: [for (final r in reports) InboxRow(key: ValueKey(r.id), card: r, time: _hm(r.updatedAt), onOpen: () => onOpen(r))],
+            ),
     );
   }
 }

@@ -6,29 +6,32 @@ import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { HomeCard, ScheduledTask } from "../../lib/types";
 import { cardEyebrow, cardRoute, cardTarget, type CardTarget } from "../../lib/cardTargets";
-import { formatDate } from "../../lib/format";
 import LaunchComposer, { useAskInNewChat } from "../../shell/LaunchComposer";
 import { ShellLead } from "../../shell/ShellLead";
 import { WidePill } from "../../ui/glass";
-import { IconChat, IconChevron, IconClock, IconEdit, IconHistory, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconSun, IconTrash } from "../../ui/icons";
-import { Menu, Page, Section, Skeleton, stagger } from "../../ui/kit";
+import { IconChat, IconEdit, IconHistory, IconMore, IconPlug, IconPlus, IconRefresh, IconSpark, IconTrash } from "../../ui/icons";
+import { Menu, Page, Skeleton, stagger } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf, EMPTY_TASK } from "../me/TaskSheet";
 import WallNotice from "../me/WallNotice";
-import NewPanelSheet, { newPanelPrompt, panelIdeas } from "./NewPanelSheet";
+import NewPanelSheet from "./NewPanelSheet";
+import StackCard from "./StackCard";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
-import { RemovedRow, removedPanels, removePanel as removeCard, revivePanel } from "./RemovedPanels";
+import { removedPanels, removePanel as removeCard, revivePanel } from "./RemovedPanels";
 import { InboxRow } from "./InboxRow";
 import { OfferImage, OfferSource } from "./OfferMedia";
-import { agendaDetail, agendaHint, agendaNowAt, clockOf, agendaProblem, agendaSummary, briefTaskOf, MORNING_BRIEF, PREP_DAY_LABEL, PREP_DAY_PROMPT, SCHEDULE_BRIEF_LABEL, todayAgenda } from "./todayAgenda";
+import { agendaDetail, agendaHint, agendaNowAt, clockOf, agendaProblem, agendaSummary, briefTaskOf, MORNING_BRIEF, PREP_DAY_PROMPT, todayAgenda } from "./todayAgenda";
 import "./home.css";
 
 /** 错峰入场第 i 拍（.enter 读 --i；超过 10 拍不再加，= App Motion.stagger）。 */
 const nth = stagger;
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 
-/** Home：今天要紧的事一屏看完（设计 v2）。从上到下按“要我处理 → 一眼看 → 结果 → 安排”排：
- *  问候、为你准备（主动建议 + 稍后提醒一行 / 都没有时是连接引导卡）、面板（+ 创建一个新面板）、收件箱、今天。
- *  输入在底部的浮动胶囊（LaunchComposer），顶栏左侧的 + = 新面板。 */
+/** 主页输入框聚焦时的建议，= App home_screen.dart homePrompts：第一个是“帮我准备今天”。 */
+const HOME_PROMPTS = [PREP_DAY_PROMPT, "查一下今天的新闻", "帮我规划这周的学习", "把这段话翻译成英文"];
+
+/** Home（v2.78 重做，docs/home-redesign.md，= App home_screen.dart）：居中一列同款卡，没有小节标题、问候、空状态。
+ *  顺序：要你处理的建议卡（全无时一张连接引导卡）→ 今天（仅有任务时）→ 面板们 → 收件箱 → 一行稍后 → 创建一个新面板。
+ *  起点 / 早间简报 / 找回移除的面板都在新面板弹层里。输入在底部浮动胶囊，顶栏左侧 + = 新面板。 */
 export default function HomeScreen() {
   const nav = useNavigate();
   const cards = useResource<HomeCard>("/api/cards");
@@ -66,15 +69,10 @@ export default function HomeScreen() {
   // 稍后提醒：推迟会清未读（服务端），所以同样刷新角标
   const snooze: Snooze = async (c, at) => { await cards.update(c.id, { snoozed_until: at ? at.toISOString() : null }); inbox.refresh(); };
 
-  const now = new Date();
-  const hour = now.getHours();
-  const greet = hour < 6 ? "夜深了" : hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
-  const date = formatDate(now);
-
   const ask = (text: string) => text.trim() && askNew(text.trim());
   const live = cards.items.filter((c) => !c.dismissed && !c.snoozed_until);
-  const snoozed = cards.items.filter((c) => c.kind === "action" && !c.dismissed && !!c.snoozed_until);
-  const later = cards.items.filter((c) => c.kind === "report" && !c.dismissed && !!c.snoozed_until); // 稍后再看中
+  // 稍后提醒（建议卡）与稍后再看（报告）合成栈末一行
+  const snoozed = cards.items.filter((c) => (c.kind === "action" || c.kind === "report") && !c.dismissed && !!c.snoozed_until);
   const actions = live.filter((c) => c.kind === "action");
   const panels = live.filter((c) => c.kind === "panel");
   const reports = live.filter((c) => c.kind === "report").slice(0, 5);
@@ -101,33 +99,29 @@ export default function HomeScreen() {
   const todaySummary = agendaSummary(today);
   const nowAt = agendaNowAt(today);
 
+  // 卡片栈（= App home_screen.dart 同一顺序）：每张卡错峰浮上来；加载中整栈一块骨架
+  let n = 0;
   return (
-    <Page wide footer={<LaunchComposer />}>
+    <Page footer={<LaunchComposer suggestions={HOME_PROMPTS} />}>
       <ShellLead>
         <button className="glass-btn glass" onClick={() => setNewPanel(true)} aria-label="新面板" title="新面板"><IconPlus /></button>
       </ShellLead>
-      <div className="page-hero">
-        <span className="page-hero-label">{date}</span>
-        <h1>{greet}</h1>
-      </div>
 
-      {/* 宽屏：左主列“为你准备”（要你动手的），右栏面板 / 收件箱 / 今天（扫一眼的）；窄屏按原顺序一列 */}
-      <div className="home-grid">
-      <div className="home-main">
-      <Section title="为你准备">
-        {cards.loading ? <Skeleton rows={2} /> : actions.length === 0 && snoozed.length === 0 ? (
-          <div className="glass-card onboarding enter">
-            <h3 className="glass-title">连接邮箱和日历，我会主动提醒你</h3>
-            <p className="glass-sub">要回的邮件、快到的截止日期、明天的课，都会出现在这里。</p>
-            <div className="pills"><Link className="pill primary" to="/me/connectors"><IconPlug size={18} />去连接</Link></div>
-          </div>
-        ) : actions.map((c, i) => {
+      {cards.loading ? <Skeleton rows={3} /> : <div className="home-stack">
+        {actions.length === 0 && (
+          <StackCard style={nth(n++)} className="onboarding">
+            <h3 className="glass-title">我还能做更多</h3>
+            <p className="glass-sub">连接邮箱和日历后，我会在这里主动提醒你要处理的事。</p>
+            <div className="pills"><Link className="pill" to="/me/connectors"><IconPlug size={18} />去连接</Link></div>
+          </StackCard>
+        )}
+        {actions.map((c) => {
           const target = cardTarget(c.target);
           const started = c.origin === "agent" && !!c.conversation_id;
           const eyebrow = cardEyebrow(c, target);
           const Icon = target?.Icon ?? (started ? IconChat : IconSpark);
           return (
-            <div key={c.id} className="glass-card action-card enter" style={nth(i)}>
+            <div key={c.id} className="glass-card action-card enter" style={nth(n++)}>
               <OfferImage card={c} />
               <div className="action-card-head">
                 <span className="row-icon icon-pop" key={String(started)}><Icon /></span>
@@ -152,71 +146,11 @@ export default function HomeScreen() {
             </div>
           );
         })}
-        {!cards.loading && <SnoozedRow cards={snoozed} onSnooze={snooze} />}
-      </Section>
-      </div>
 
-      <aside className="home-rail">
-      <Section title="面板">
-        {cards.loading ? <Skeleton rows={1} /> : panels.length === 0 ? (
-          // 还没有面板：一句话 + 几个起点胶囊（点了开新对话去搭），下面仍是“创建一个新面板”
-          <div className="panel-ideas enter">
-            <p>面板会按时替你盯着一件事，打开主页一眼就看到。</p>
-            <div className="panel-idea-list">
-              {panelIdeas.map((idea, i) => <button key={idea} className="panel-idea enter" style={nth(i + 1)} onClick={() => ask(newPanelPrompt(idea))}>{idea}</button>)}
-            </div>
-          </div>
-        ) : panels.map((p, i) => {
-          const busy = !!p.task_id && refreshing.has(p.task_id);
-          const time = busy ? "刷新中…" : timeOf(p.updated_at);
-          return (
-            <div key={p.id} className={`glass-card panel enter ${busy ? "busy" : ""}`} style={nth(i)}>
-              <div className="panel-head">
-                <span className="panel-title">{p.title}</span>
-                {/* 换字时 key 变 → 新字浮上来（刷完那一下看得见“更新了”）；内容里的关键数字由 CountUp 从旧值滚到新值 */}
-                <span key={time} className="panel-time enter">{time}</span>
-                {p.task_id && <button className="icon-btn sm" onClick={() => refreshPanel(p.task_id!)} disabled={busy} aria-label="刷新"><IconRefresh /></button>}
-                <Menu trigger={<IconMore />} items={[
-                  ...(taskOf(p) ? [
-                    { label: "编辑面板", icon: <IconEdit />, onSelect: () => setEditing(taskOf(p)) },
-                    { label: "刷新记录", icon: <IconHistory />, onSelect: () => nav(`/me/tasks/${p.task_id}`) },
-                  ] : []),
-                  { label: "移除", icon: <IconTrash />, danger: true, onSelect: () => removePanel(p) },
-                ]} />
-              </div>
-              {/* v2.15 碰壁：内容还是上一次的，上面一条说清卡在哪、要不要你处理 */}
-              {taskOf(p) && <WallNotice task={taskOf(p)!} onRetry={() => refreshPanel(p.task_id!)} busy={busy} />}
-              <div className="panel-body"><BlockRenderer blocks={p.blocks} /></div>
-            </div>
-          );
-        })}
-        {!cards.loading && <RemovedRow cards={removed} onRevive={revive} />}
-        <div className="enter" style={nth(panels.length)}><WidePill label="创建一个新面板" onClick={() => setNewPanel(true)} /></div>
-      </Section>
-
-      {(reports.length > 0 || later.length > 0) && (
-        <Section title="收件箱" action={inbox.summary.unread > 0 ? <button className="btn btn-ghost btn-sm" onClick={() => inbox.markRead()}>全部已读</button> : undefined}>
-          {reports.length > 0 && (
-            <div className="list enter" style={nth(1)}>
-              {reports.map((r) => (
-                <InboxRow key={r.id} card={r} time={timeOf(r.updated_at)} onOpen={openReport}
-                  snooze={snooze} read={(c) => inbox.markRead([c.id])} dismiss={dismiss} />
-              ))}
-            </div>
-          )}
-          <SnoozedRow cards={later} onSnooze={snooze} noun="稍后再看" />
-        </Section>
-      )}
-
-      {/* 今天：按钟点一行一件（todayAgenda.ts 定规则）；下一个加重、过去的变淡、失败/暂停只染那两个字；点行进任务详情 */}
-      <Section title="今天" action={tasks.loading ? undefined : <span key={todaySummary} className="section-note fade-in">{todaySummary}</span>}>
-        {tasks.loading ? <Skeleton rows={1} /> : (
-          <div className="list">
-            {today.length === 0 ? (
-              <Link className="row" to="/me/tasks"><span className="row-icon"><IconClock /></span>
-                <div className="row-body"><div className="row-title">今天没有排定的任务</div>
-                  <div className="row-sub">每天的简报、提醒放进定时任务，会排在这里</div></div><IconChevron /></Link>
-            ) : today.map((it, i) => {
+        {/* 今天：只在今天真有任务时出现（todayAgenda.ts 定规则）；下一个加重、过去的变淡、失败/暂停只染那两个字；点行进任务详情 */}
+        {!tasks.loading && today.length > 0 && (
+          <StackCard title="今天" rows style={nth(n++)} trailing={<span key={todaySummary} className="stack-note fade-in">{todaySummary}</span>}>
+            {today.map((it, i) => {
               const problem = agendaProblem(it);
               const hint = agendaHint(it);
               return (
@@ -231,18 +165,48 @@ export default function HomeScreen() {
                 </Fragment>
               );
             })}
-          </div>
+          </StackCard>
         )}
-        {!tasks.loading && <div className="enter" style={nth(today.length + 1)}>
-          <WidePill label={PREP_DAY_LABEL} icon={<IconSun size={18} />} onClick={() => ask(PREP_DAY_PROMPT)} />
-          {!briefTaskOf(tasks.items) && <div className="today-schedule fade-in">
-            <button className="btn btn-ghost btn-sm" onClick={() => setSchedulingBrief(true)}><IconClock size={16} />{SCHEDULE_BRIEF_LABEL}</button></div>}
-        </div>}
-      </Section>
-      </aside>
-      </div>
 
-      {newPanel && <NewPanelSheet onClose={() => setNewPanel(false)} />}
+        {panels.map((p) => {
+          const busy = !!p.task_id && refreshing.has(p.task_id);
+          const time = busy ? "刷新中…" : timeOf(p.updated_at);
+          return (
+            <StackCard key={p.id} title={p.title} className={`panel ${busy ? "busy" : ""}`} style={nth(n++)} trailing={<span className="panel-tools">
+              {/* 换字时 key 变 → 新字浮上来（刷完那一下看得见“更新了”）；内容里的关键数字由 CountUp 从旧值滚到新值 */}
+              <span key={time} className="stack-note enter">{time}</span>
+              {p.task_id && <button className="icon-btn sm" onClick={() => refreshPanel(p.task_id!)} disabled={busy} aria-label="刷新"><IconRefresh /></button>}
+              <Menu trigger={<IconMore />} items={[
+                ...(taskOf(p) ? [
+                  { label: "编辑面板", icon: <IconEdit />, onSelect: () => setEditing(taskOf(p)) },
+                  { label: "刷新记录", icon: <IconHistory />, onSelect: () => nav(`/me/tasks/${p.task_id}`) },
+                ] : []),
+                { label: "移除", icon: <IconTrash />, danger: true, onSelect: () => removePanel(p) },
+              ]} />
+            </span>}>
+              {/* v2.15 碰壁：内容还是上一次的，上面一条说清卡在哪、要不要你处理 */}
+              {taskOf(p) && <WallNotice task={taskOf(p)!} onRetry={() => refreshPanel(p.task_id!)} busy={busy} />}
+              <div className="panel-body"><BlockRenderer blocks={p.blocks} /></div>
+            </StackCard>
+          );
+        })}
+
+        {reports.length > 0 && (
+          <StackCard title="收件箱" rows style={nth(n++)}
+            trailing={inbox.summary.unread > 0 ? <button className="btn btn-ghost btn-sm" onClick={() => inbox.markRead()}>全部已读</button> : undefined}>
+            {reports.map((r) => (
+              <InboxRow key={r.id} card={r} time={timeOf(r.updated_at)} onOpen={openReport}
+                snooze={snooze} read={(c) => inbox.markRead([c.id])} dismiss={dismiss} />
+            ))}
+          </StackCard>
+        )}
+
+        <SnoozedRow cards={snoozed} onSnooze={snooze} />
+        <div className="enter" style={nth(n++)}><WidePill label="创建一个新面板" onClick={() => setNewPanel(true)} /></div>
+      </div>}
+
+      {newPanel && <NewPanelSheet onClose={() => setNewPanel(false)} briefMissing={!briefTaskOf(tasks.items)} removed={removed}
+        onBrief={() => setSchedulingBrief(true)} onRevive={revive} />}
       {schedulingBrief && <TaskSheet title="早间简报" initial={{ ...EMPTY_TASK, ...MORNING_BRIEF }} onClose={() => setSchedulingBrief(false)}
         onSave={async (d) => { await tasks.create(d); }} />}
       {editing && <TaskSheet title="编辑面板" panel initial={draftOf(editing)} onClose={() => setEditing(null)}

@@ -1,40 +1,53 @@
-/* 主页（设计 v2）：衬线问候 + 一列玻璃卡。节奏只用令牌：左右 --gutter，卡片间 --card-gap */
+/* 主页（v2.78 重做，= App stack_card.dart）：居中一列同款卡，没有小节标题。节奏只用令牌：左右 --gutter，卡片间 --card-gap */
+.home-stack { display: flex; flex-direction: column; gap: var(--card-gap); }
+.home-stack > .glass-card + .glass-card { margin-top: 0; }
+.stack-card { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); box-shadow: var(--elev-card); overflow: hidden; }
+.stack-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; padding: var(--sp-2) var(--sp-2) 0 calc(var(--sp-4) + 4px); }
+.stack-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-title); }
+.stack-note { font-size: var(--fs-xs); color: var(--text-3); padding-right: var(--sp-2); }
+.stack-body { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-1) calc(var(--sp-4) + 4px) calc(var(--sp-4) + 4px); }
+.stack-card:not(:has(.stack-head)) > .stack-body { padding-top: calc(var(--sp-4) + 4px); }
+.stack-rows { padding: 0 4px var(--sp-1); }
+.stack-rows > .row + .row { border-top-color: var(--glass-border); }
+@media (min-width: 720px) { .home-stack .offer-img { aspect-ratio: 5 / 2; } } /* 电脑上 640 宽：配图压扁一点，别一张图占半屏 */
+.panel-tools { display: inline-flex; align-items: center; }
+.panel-tools .icon-btn, .panel-tools .menu-trigger { color: var(--text-3); }
 
 .action-card-head { display: flex; align-items: flex-start; gap: var(--sp-3); }
 .action-card-title { flex: 1; font-weight: var(--fw-title); line-height: 1.45; }
 .action-card-eyebrow { display: block; font-size: var(--fs-xs); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); color: var(--text-3); line-height: 1.4; }
 .onboarding .pills { max-width: 240px; }
 
-.panel { min-height: 120px; }
-.panel-head { display: flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); font-weight: var(--fw-title); margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-2)) 0 0; }
-.panel-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-head .icon-btn { color: var(--text-3); }
-.panel.busy .panel-head .icon-btn:first-of-type svg { animation: spin var(--dur-spin) linear infinite; }
+.panel.busy .panel-tools .icon-btn:first-of-type svg { animation: spin var(--dur-spin) linear infinite; }
 .panel-body { display: flex; flex-direction: column; gap: var(--sp-3); transition: opacity var(--dur) var(--ease); }
 .panel.busy .panel-body { opacity: var(--op-dimmed); }
-.panel-time { font-size: var(--fs-xs); color: var(--text-3); }
 
-/* 还没有面板：说明一句 + 起点胶囊（假玻璃，和对话页建议同一材质） */
-.panel-ideas p { margin: 0 var(--sp-1) var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); }
-.panel-idea-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--card-gap); }
+/* 新面板弹层里的起点胶囊（假玻璃，和对话页建议同一材质）+ 最近移除的面板 */
+.panel-idea-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .panel-idea { min-height: 44px; padding: 0 var(--sp-4); border-radius: var(--r-full); background: var(--glass); border: 1px solid var(--glass-border);
   box-shadow: var(--elev-card); font-size: var(--fs-sm); color: var(--text);
   transition: transform var(--dur-fast) var(--ease), border-color var(--dur) var(--ease); }
 .panel-idea:hover { border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
 .panel-idea:active { transform: scale(.97); }
 
+.removed-list { display: flex; flex-direction: column; margin-top: var(--sp-4); }
+.removed-label { font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); margin-bottom: var(--sp-1); }
+.removed-item { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; padding: 0 var(--sp-1); border-radius: var(--r-tile);
+  color: var(--text); font-size: var(--fs-sm); text-align: left; transition: background var(--dur-fast) var(--ease); }
+.removed-item:hover { background: var(--tile); }
+.removed-item svg { color: var(--text-3); flex: none; }
+.removed-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.removed-time { color: var(--text-3); font-size: var(--fs-xs); }
+
 .today-row { display: flex; gap: var(--sp-3); align-items: center; }
 .today-time { font-size: var(--fs-sm); color: var(--text-2); width: 48px; flex: none; font-variant-numeric: tabular-nums; } /* = App Layout.agendaTime */
 /* “现在”标记（v1.04，同 App _NowLine）：替掉两行之间的分隔线——钟点列写“现在”，标题边起小点 + 细线到行尾。
    只用 text-2/text-3，不用强调色、不循环闪：它是方位不是提醒。 */
-.today-schedule { display: flex; justify-content: center; margin-top: var(--sp-2); }
-.today-schedule .btn { color: var(--text-2); }
 .today-now { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-1) var(--sp-4); }
 .today-now > span { width: 48px; flex: none; font-size: var(--fs-xs); color: var(--text-2); font-weight: var(--fw-title); letter-spacing: var(--label-tracking); }
 .today-now > i { flex: 1; height: 1px; background: var(--text-3); position: relative; }
 .today-now > i::before { content: ""; position: absolute; left: 0; top: -2.5px; width: 6px; height: 6px; border-radius: 50%; background: var(--text-2); }
 .today-next .today-time { color: var(--text); font-weight: var(--fw-title); }
-.section-note { color: var(--text-3); } /* 区块标题行尾的一句摘要，和标题同一小字层级 */
 
 /* 未读报告：图标右上角强调色小点 */
 /* 收件箱行：左边整块是“打开”按钮，行尾时间 + 更多菜单（菜单不能嵌在按钮里） */
@@ -61,7 +74,7 @@ a.offer-img:hover img.ok { transform: scale(1.02); }
 @media (prefers-reduced-motion: reduce) { .offer-img img, .offer-source svg { transition: none; } }
 .action-card-head .menu { margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-2)) 0 0; }
 .action-card-head .menu-trigger { color: var(--text-3); }
-.snoozed { margin-top: calc(-1 * var(--sp-1)); }
+.snoozed { margin-top: calc(-1 * var(--sp-1)); } /* 栈末一行，紧贴上一张卡 */
 .snoozed-head { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-1);
   color: var(--text-2); font-size: var(--fs-sm); border-radius: var(--r-tile); transition: background var(--dur-fast) var(--ease); }
 .snoozed-head:hover { background: var(--tile); }
@@ -74,13 +87,3 @@ a.offer-img:hover img.ok { transform: scale(1.02); }
 .snoozed-item { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); }
 .snoozed-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snoozed-time { color: var(--text-3); }
-
-/* 宽屏两栏（≥1100px，和 .page-inner.wide 同一断点）：主列放要你动手的卡，右栏放扫一眼的面板 / 收件箱 / 今天。
-   窄屏两块按原顺序叠成一列，右栏第一个区块照常隔一个 --section-gap。 */
-.home-rail > .section:first-child { margin-top: var(--section-gap); }
-@media (min-width: 1100px) {
-  .home-grid { display: grid; grid-template-columns: minmax(0, 1fr) var(--rail-w); gap: var(--sp-6); align-items: start; }
-  .home-rail > .section:first-child { margin-top: 0; }
-  /* 主列约 600 宽：配图压到 5:2，别让一张图占掉半屏 */
-  .home-main .offer-img { aspect-ratio: 5 / 2; }
-}

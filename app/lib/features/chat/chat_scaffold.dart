@@ -11,6 +11,9 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../shell/app_shell.dart' show ShellCover, shellCoverProvider;
 import '../../shell/shell_page.dart';
 import '../../ui/adaptive.dart';
 import '../../ui/glass.dart';
@@ -45,6 +48,22 @@ class ChatScaffold extends StatefulWidget {
 }
 
 class _ChatScaffoldState extends State<ChatScaffold> {
+  ShellCover? _cover; // 抽屉开着 → 外壳顶栏让位；离开页面时（抽屉可能还开着）复位
+  bool _drawerOpen = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _cover = ProviderScope.containerOf(context, listen: false).read(shellCoverProvider.notifier);
+  }
+
+  @override
+  void dispose() {
+    final cover = _cover;
+    if (cover != null && _drawerOpen) Future.microtask(() => cover.set(false)); // 抽屉开着离开才复位；不在拆树途中改状态
+    super.dispose();
+  }
+
   bool _paneOpen = true; // 双栏时用户可收起历史栏
   bool? _wasTwoPane;
   bool _animatePane = false;
@@ -118,6 +137,10 @@ class _ChatScaffoldState extends State<ChatScaffold> {
     return Scaffold(
       backgroundColor: Colors.transparent, // 透出外壳的壁纸
       drawer: drawer,
+      onDrawerChanged: (open) {
+        _drawerOpen = open;
+        _cover?.set(open);
+      }, // 抽屉开着时浮动顶栏让位
       body: ShellPage(
         lead: lead,
         headerHeight: Layout.chatTitle,

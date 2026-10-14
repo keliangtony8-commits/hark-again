@@ -1,6 +1,6 @@
 // Home 卡片的“稍后提醒”（规则在 backend app/card_snooze.py；App features/home/card_snooze.dart 同规则）：
 // - SnoozeMenu：建议卡标题右边的小钮 → 快捷时刻（与一次性任务同一张表 lib/timeShortcuts.ts）
-// - SnoozedRow：“为你准备”/“收件箱”底部一行“N 条稍后提醒|稍后再看 · 最早 …”，展开后每条可现在放回（报告的行内菜单在 InboxRow.tsx）
+// - SnoozedRow：v2.78 主页卡片栈末尾一行“N 条稍后提醒 · 最早 …”（建议卡与报告合一），展开后每条可现在放回（报告的行内菜单在 InboxRow.tsx）
 // 客户端只看 snoozed_until 是否为空来藏卡，不比本机时钟。
 import { useState } from "react";
 import { formatWhen } from "../../lib/format";

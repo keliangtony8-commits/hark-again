@@ -1,38 +1,33 @@
-// Home：一屏看完今天要紧的事。从上到下：问候 → 为你准备（+ 稍后提醒一行）→ 面板（+ 创建一个新面板）→ 收件箱 → 今天（日程）。输入在底部全局胶囊。
-// 全部是玻璃卡（ui/glass.dart），卡间距 Layout.cardGap，左右留白 Layout.gutter。
-// 与网页版 HomeScreen 同一套信息架构。
+// Home（v2.78 重做，docs/home-redesign.md）：一列同款卡，没有小节标题、解释文字、空状态和问候。
+// 本文件只排顺序，每种卡一个文件：要你处理的建议卡（action_card.dart；一张都没有时是连接引导卡 ConnectCard）
+// → 今天（today_card.dart，仅当今天有任务）→ 面板们（panel_card.dart）→ 收件箱（report_actions.dart InboxCard）
+// → 一行“N 条稍后提醒”（card_snooze.dart，仅有时）→ “创建一个新面板”胶囊（new_panel.dart，起点/早间简报/找回都在弹层里）。
+// 输入在底部全局胶囊（LaunchComposer），聚焦时第一个建议是“帮我准备今天”。网页版 HomeScreen.tsx 同一顺序。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../blocks/block_view.dart';
-import '../../core/api.dart';
 import '../../core/resource.dart';
 import '../../models/resources.dart';
-import '../../theme/app_theme.dart';
+import '../../shell/launch_composer.dart';
 import '../../theme/tokens.dart';
-import '../../ui/kit.dart';
-import '../../ui/motion.dart';
-import '../../ui/sheets.dart';
 import '../../shell/shell_page.dart';
 import '../../ui/glass.dart';
-import '../../ui/format.dart';
-import '../../shell/launch_composer.dart';
+import '../../ui/kit.dart';
+import '../../ui/motion.dart';
 import '../chat/open_conversation.dart';
 import 'action_card.dart';
 import 'card_snooze.dart';
 import 'inbox.dart';
-import 'report_actions.dart';
-import '../me/task_form.dart';
-import '../me/task_wall.dart';
-import '../me/tasks_screen.dart' show createTask;
 import 'new_panel.dart';
-import 'removed_panels.dart';
-import 'today_agenda.dart';
+import 'panel_card.dart';
+import 'report_actions.dart';
+import 'today_agenda.dart' show prepDayPrompt;
+import 'today_card.dart';
 
-String hm(DateTime? t) => t == null ? '' : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+/// 主页输入框聚焦时的建议：第一个是“帮我准备今天”（原来主页上的一颗胶囊，本来就是一句话，属于输入框）。
+const homePrompts = [prepDayPrompt, '查一下今天的新闻', '帮我规划这周的学习', '把这段话翻译成英文'];
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -85,333 +80,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncPolling(refreshing.isNotEmpty));
 
     final all = (cards.value ?? const <HomeCard>[]).where((c) => !c.dismissed);
-    final snoozed = all.where((c) => c.snoozed && c.kind == 'action').toList(); // 稍后提醒中：只显示一行入口
-    final later = all.where((c) => c.snoozed && c.kind == 'report').toList(); // 稍后再看中：收件箱底部一行
+    final snoozed = all.where((c) => c.snoozed && (c.kind == 'action' || c.kind == 'report')).toList(); // 稍后提醒/稍后再看：合成一行
     final items = all.where((c) => !c.snoozed).toList();
     final actions = items.where((c) => c.kind == 'action').toList();
     final panels = items.where((c) => c.kind == 'panel').toList();
     final reports = items.where((c) => c.kind == 'report').take(5).toList();
-    final removed = removedPanels(cards.value ?? const <HomeCard>[]); // v2.17 最近移除、还能找回的面板
-    final unread = ref.watch(inboxProvider.select((s) => s.unread));
+
+    // 卡片栈：每张卡错峰浮上来；加载中整栈一块骨架（换成内容时交叉淡化），不再每段各自一块
+    final stack = <Widget>[
+      if (actions.isEmpty) const ConnectCard(),
+      for (final a in actions) ActionCard(card: a, onDo: _send, onOpen: _openOffer),
+      TodayCard(tasks: tasks),
+      for (final p in panels)
+        PanelCard(
+            card: p,
+            task: tasks.where((t) => t.id == p.taskId).firstOrNull,
+            refreshing: p.taskId != null && refreshing.contains(p.taskId)),
+      InboxCard(reports: reports, onOpen: _openReport),
+      SnoozedCards(cards: snoozed),
+      WidePill(icon: Icons.add_rounded, label: '创建一个新面板', onTap: () => createPanel(context, ref)),
+    ];
 
     return Scaffold(
       backgroundColor: Colors.transparent, // 透出外壳的壁纸
       body: ShellPage(
         lead: GlassIconButton(icon: Icons.add_rounded, tooltip: '新建面板', onTap: () => createPanel(context, ref)),
-        // 底部输入胶囊（设计 v2）代替了原来问候下面的输入框
         child: LaunchComposer(
+          suggestions: homePrompts,
           child: PullRefresh(
-          onRefresh: _refreshAll,
-          child: PageBody(children: [
-            const _Hero(),
-            const SectionTitle('为你准备'),
-            // 每一段都是“骨架 → 内容 / 空状态”交叉淡化（FadeSwitcher），同一态里的更新不再过渡；卡片错峰浮上来
-            FadeSwitcher(
-              child: cards.isLoading
-                  ? const SkeletonList(key: ValueKey('loading'), rows: 2)
-                  : actions.isEmpty && snoozed.isEmpty
-                      ? const _Onboarding(key: ValueKey('empty'))
-                      : Column(key: const ValueKey('list'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                          for (var i = 0; i < actions.length; i++)
-                            FadeSlideIn(delay: Motion.stagger(i), child: ActionCard(card: actions[i], onDo: _send, onOpen: _openOffer)),
-                        ]),
-            ),
-            SnoozedCards(cards: snoozed, noun: snoozeNoun('action')),
-            const SectionTitle('面板'),
-            FadeSwitcher(
-              child: cards.isLoading
-                  ? const SkeletonList(key: ValueKey('loading'), rows: 1)
-                  : panels.isEmpty
-                      ? _PanelIdeas(key: const ValueKey('empty'), onPick: (idea) => _send(newPanelPrompt(idea)))
-                      : Column(key: const ValueKey('list'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                          for (var i = 0; i < panels.length; i++)
-                            FadeSlideIn(
-                              delay: Motion.stagger(i),
-                              child: _PanelCard(
-                                  card: panels[i],
-                                  task: tasks.where((t) => t.id == panels[i].taskId).firstOrNull,
-                                  refreshing: panels[i].taskId != null && refreshing.contains(panels[i].taskId)),
-                            ),
-                        ]),
-            ),
-            RemovedPanels(cards: removed),
-            FadeSlideIn(
-              delay: Motion.stagger(panels.length),
-              child: WidePill(icon: Icons.add_rounded, label: '创建一个新面板', onTap: () => createPanel(context, ref)),
-            ),
-            if (reports.isNotEmpty || later.isNotEmpty) ...[
-              SectionTitle('收件箱',
-                  trailing: unread > 0
-                      ? TextButton(onPressed: () => ref.read(inboxProvider.notifier).markRead(), child: const Text('全部已读'))
-                      : null),
+            onRefresh: _refreshAll,
+            child: PageBody(children: [
               FadeSwitcher(
-                child: reports.isEmpty
-                    ? const SizedBox(key: ValueKey('none'), width: double.infinity)
-                    : FadeSlideIn(
-                        key: const ValueKey('list'),
-                        delay: Motion.stagger(1),
-                        child: GlassGroup(children: [
-                          for (final r in reports) InboxRow(key: ValueKey(r.id), card: r, time: hm(r.updatedAt), onOpen: () => _openReport(r)),
-                        ]),
-                      ),
+                child: cards.isLoading
+                    ? const SkeletonList(key: ValueKey('loading'), rows: 3)
+                    : Column(key: const ValueKey('stack'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        for (var i = 0; i < stack.length; i++) FadeSlideIn(delay: Motion.stagger(i), child: stack[i]),
+                      ]),
               ),
-              SnoozedCards(cards: later, noun: snoozeNoun('report')),
-            ],
-            TodaySection(tasks: tasks, loading: ref.watch(tasksProvider).isLoading, onPrep: () => _send(prepDayPrompt),
-                onSchedule: () => createTask(context, ref, starter: morningBrief)),
-          ]),
+            ]),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// “今天”：今天排着的任务按钟点一行一件（today_agenda.dart 定规则）。行首等宽钟点列，下一个用正文色加粗、
-/// 跑完的整行变淡（失败不淡）；失败/暂停只把那两个字染警示色；点行进任务详情。没有任务时一行引导去定时任务页。
-/// 段末一颗宽胶囊“帮我准备今天”（onPrep）：与“创建一个新面板”同一种入口，交给助手出当日简报卡。
-/// 还没排早间简报时胶囊下再给一颗小胶囊“每天早上自动准备”（onSchedule → 预填好的任务表单）；排好后它淡出，
-/// 简报任务自己成了日程里的一行。
-class TodaySection extends StatelessWidget {
-  const TodaySection({super.key, required this.tasks, required this.loading, this.onPrep, this.onSchedule});
-  final List<ScheduledTask> tasks;
-  final bool loading;
-  final VoidCallback? onPrep, onSchedule;
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final items = todayAgenda(tasks, now);
-    final nowAt = agendaNowAt(items, now);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SectionTitle('今天',
-          trailing: loading ? null : SwapSwitcher(child: Text(agendaSummary(items), key: ValueKey(agendaSummary(items)), style: context.text.labelSmall))),
-      FadeSwitcher(
-        child: loading
-            ? const SkeletonList(key: ValueKey('loading'), rows: 1)
-            : items.isEmpty
-                ? GlassGroup(key: const ValueKey('empty'), children: [
-                    RowTile(
-                        icon: Icons.event_available_outlined,
-                        title: '今天没有排定的任务',
-                        subtitle: '每天的简报、提醒放进定时任务，会排在这里',
-                        onTap: () => context.push('/me/tasks')),
-                  ])
-                : GlassGroup(
-                    key: const ValueKey('list'),
-                    // 细线对齐标题边（行首是钟点列不是图标）；“现在”那一格换成 _NowLine，替掉细线而不是多插一行。
-                    separator: (i) => i == nowAt
-                        ? FadeSlideIn(delay: Motion.stagger(i, from: 1), child: _NowLine(at: now))
-                        : Divider(indent: Sp.x4 + Layout.agendaTime + Sp.x4, endIndent: 0, color: context.hairline),
-                    children: [
-                      for (var i = 0; i < items.length; i++)
-                        FadeSlideIn(delay: Motion.stagger(i, from: 1), child: _AgendaRow(item: items[i])),
-                    ],
-                  ),
-      ),
-      if (onPrep != null && !loading) ...[
-        const SizedBox(height: Layout.cardGap),
-        FadeSlideIn(
-          delay: Motion.stagger(items.length, from: 1),
-          child: WidePill(icon: Icons.wb_twilight_outlined, label: prepDayLabel, onTap: onPrep!),
-        ),
-        if (onSchedule != null)
-          FadeSwitcher(
-            child: briefTaskOf(tasks) == null
-                ? Padding(
-                    key: const ValueKey('schedule-brief'),
-                    padding: const EdgeInsets.only(top: Sp.x2),
-                    child: Center(
-                      child: PillButton(dense: true, icon: Icons.schedule_rounded, label: scheduleBriefLabel, onTap: onSchedule),
-                    ),
-                  )
-                : const SizedBox(key: ValueKey('brief-scheduled'), width: double.infinity),
-          ),
-      ],
-    ]);
-  }
-}
-
-class _AgendaRow extends StatelessWidget {
-  const _AgendaRow({required this.item});
-  final AgendaItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final next = item.state == AgendaState.next;
-    final hint = agendaHint(item);
-    return RowTile(
-        dimmed: item.faded,
-        leading: SizedBox(
-          width: Layout.agendaTime,
-          child: Text(item.time,
-              style: context.text.titleSmall?.copyWith(color: next ? p.text : p.text2, fontWeight: next ? Weights.title : null)),
-        ),
-        title: item.task.name,
-        subtitle: agendaDetail(item),
-        problem: agendaProblem(item),
-        trailing: hint.isEmpty ? const SizedBox.shrink() : SwapSwitcher(child: RowHint(hint, key: ValueKey(hint))),
-        onTap: () => context.push('/me/tasks/${item.task.id}'),
-    );
-  }
-}
-
-/// 日程里“此刻”的位置：钟点列写“现在”，标题边起一颗小点 + 一条细线延到行尾。只用正文二级/三级色，
-/// 不用强调色、不循环闪——它是方位，不是提醒。读屏念“现在 HH:MM”。
-class _NowLine extends StatelessWidget {
-  const _NowLine({required this.at});
-  final DateTime at;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Semantics(
-      label: '现在 ${clockOf(at)}',
-      excludeSemantics: true,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x1),
-        child: Row(children: [
-          SizedBox(
-            width: Layout.agendaTime,
-            child: Text('现在', style: context.text.labelSmall?.copyWith(color: p.text2, fontWeight: Weights.title)),
-          ),
-          const SizedBox(width: Sp.x4),
-          Container(width: Layout.nowDot, height: Layout.nowDot, decoration: BoxDecoration(color: p.text2, shape: BoxShape.circle)),
-          Expanded(child: Container(height: 1, color: p.text3)),
-        ]),
-      ),
-    );
-  }
-}
-
-/// 问候：日期 + 早上好。输入框在底部的全局胶囊里（LaunchComposer）。
-class _Hero extends StatelessWidget {
-  const _Hero();
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final greet = now.hour < 6 ? '夜深了' : now.hour < 12 ? '早上好' : now.hour < 18 ? '下午好' : '晚上好';
-    return FadeSlideIn(
-      child: Padding(
-        padding: const EdgeInsets.only(top: Layout.headTop - Sp.x3), // 内容让位线已含顶栏下 12
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(formatDate(now), style: context.text.labelSmall),
-          const SizedBox(height: Sp.x2),
-          Text(greet, style: context.text.displayMedium),
-        ]),
-      ),
-    );
-  }
-}
-
-/// 还没有要处理的事时的引导卡：衬线大标题 + 一句话 + 去连接（设计 v2：引导卡标题用衬线点缀）。
-class _Onboarding extends StatelessWidget {
-  const _Onboarding({super.key});
-
-  @override
-  Widget build(BuildContext context) => GlassCard(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('我还能做更多', style: context.text.headlineMedium),
-          const SizedBox(height: Sp.x1),
-          Text('连接邮箱和日历后，我会在这里主动提醒你要处理的事。', style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
-          const SizedBox(height: Sp.x4),
-          PillButton(label: '去连接', icon: Icons.hub_outlined, onTap: () => context.push('/me/connectors')),
-        ]),
-      );
-}
-
-/// 还没有面板：一句话说清面板是什么 + 几个起点胶囊（点了就开新对话去搭），下面仍是“创建一个新面板”。
-class _PanelIdeas extends StatelessWidget {
-  const _PanelIdeas({super.key, required this.onPick});
-  final ValueChanged<String> onPick;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: Layout.cardGap),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Sp.x1),
-            child: Text('面板会按时替你盯着一件事，打开主页一眼就看到。',
-                style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
-          ),
-          const SizedBox(height: Sp.x3),
-          Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [
-            for (var i = 0; i < panelIdeas.length; i++)
-              FadeSlideIn(delay: Motion.stagger(i, from: 1), child: GlassChip(label: panelIdeas[i], onTap: () => onPick(panelIdeas[i]))),
-          ]),
-        ]),
-      );
-}
-
-class _PanelCard extends ConsumerWidget {
-  const _PanelCard({required this.card, required this.task, required this.refreshing});
-  final HomeCard card;
-
-  /// 面板背后的任务（碰壁条读它）；任务列表还没到 = null。
-  final ScheduledTask? task;
-  final bool refreshing;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final p = context.palette;
-    Future<void> refresh() async {
-      await ref.read(apiProvider).post('/api/tasks/${card.taskId}/run');
-      await ref.read(tasksProvider.notifier).reload();
-    }
-
-    // v2.17 移除可以撤销 / 30 天内找回，所以不再弹危险确认（removed_panels.dart）
-    Future<void> remove() => removePanel(context, ref, card);
-
-    // 改标题/刷新指令/频率：和任务详情同一张表单；改名由服务端同步到卡片，所以之后重拉一次卡片
-    Future<void> edit() async {
-      final task = ref.read(tasksProvider).value?.where((t) => t.id == card.taskId).firstOrNull;
-      if (task == null) return;
-      final changes = await showTaskForm(context, task: task);
-      if (changes == null || changes.isEmpty) return;
-      await ref.read(tasksProvider.notifier).patch(task.id, changes);
-      await ref.read(cardsProvider.notifier).reload();
-    }
-
-    void menu() => showActionSheet<void>(context, title: card.title, actions: [
-          if (card.taskId != null) ...[
-            SheetAction(Icons.edit_outlined, '编辑面板', onTap: edit),
-            SheetAction(Icons.history_rounded, '刷新记录', onTap: () => context.push('/me/tasks/${card.taskId}')),
-          ],
-          SheetAction(Icons.delete_outline_rounded, '移除', onTap: remove, danger: true),
-        ]);
-
-    // 内容区刷完从 Dimmed 恢复，关键数字（ValueTile → CountUp）从旧值滚到新值。
-    // 头一行：标题 + 更新时间 + 刷新/更多（编辑、刷新记录、移除；小图标，可点区域仍 ≥ A11y.minTap）；下面是内容块（关键数字是一块块 ValueTile）
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Layout.cardGap),
-      child: GlassCard(
-        padding: const EdgeInsets.fromLTRB(Layout.cardPad, Sp.x2, Sp.x2, Layout.cardPad),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Row(children: [
-            Expanded(child: Text(card.title, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis)),
-            // 刷新中 ↔ 新时间：旧字上滑淡出、新字浮上来（刷完那一下看得见“更新了”）
-            SwapSwitcher(child: Text(refreshing ? '刷新中…' : hm(card.updatedAt), key: ValueKey(refreshing ? '' : hm(card.updatedAt)), style: context.text.labelSmall)),
-            if (card.taskId != null)
-              IconButton(
-                onPressed: refreshing ? null : refresh,
-                tooltip: '刷新',
-                icon: AnimatedRotation(
-                  turns: refreshing ? 1 : 0,
-                  duration: refreshing ? context.motion(Motion.spin) : Duration.zero,
-                  child: Icon(Icons.refresh_rounded, size: Fs.lg, color: p.text3),
-                ),
-              ),
-            IconButton(onPressed: menu, tooltip: '更多', icon: Icon(Icons.more_horiz_rounded, size: Fs.lg, color: p.text3)),
-          ]),
-          // v2.15 碰壁：内容还是上一次的，上面一条说清卡在哪、要不要你处理（task_wall.dart）
-          if (task != null) WallNotice(task: task!, onRetry: refreshing ? null : refresh, padding: const EdgeInsets.fromLTRB(0, 0, Sp.x2, Sp.x3)),
-          Padding(
-            padding: const EdgeInsets.only(right: Sp.x2),
-            child: Dimmed(dimmed: refreshing, child: BlockList(card.blocks)),
-          ),
-        ]),
       ),
     );
   }

@@ -16,6 +16,19 @@ import 'top_bar.dart';
 /// 一级页面的路径，顺序 = 分支顺序 = 顶栏分段顺序。
 const shellRoots = ['/home', '/chat', '/projects'];
 
+/// 一级页面上盖了东西（v2.78：聊天的历史抽屉打开）→ 浮动顶栏淡出让位，不再画在抽屉上面（用户 15:30 截图“还叠在一起”）。
+/// 弹层（ui/sheets.dart）走根导航器，本来就盖在外壳之上，不经这里。
+class ShellCover extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool covered) {
+    if (ref.mounted && state != covered) state = covered; // 页面拆掉时外壳可能已先销毁
+  }
+}
+
+final shellCoverProvider = NotifierProvider<ShellCover, bool>(ShellCover.new);
+
 class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.shell, required this.location});
   final StatefulNavigationShell shell;
@@ -25,6 +38,7 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final unread = ref.watch(inboxProvider.select((s) => s.unread));
     final avatar = ref.watch(lookProvider.select((l) => l.value?.avatar));
+    final covered = ref.watch(shellCoverProvider);
     return Scaffold(
       backgroundColor: Colors.transparent,
       // 横幅浮在最上层（盖住顶栏，像系统通知）：InboxWatcher 包整层，而不是只包内容——
@@ -38,7 +52,7 @@ class AppShell extends ConsumerWidget {
           left: 0,
           right: 0,
           child: FloatAway(
-            visible: shellRoots.contains(location),
+            visible: shellRoots.contains(location) && !covered,
             child: FloatingTopBar(
               index: shell.currentIndex,
               onSelect: (i) => shell.goBranch(i, initialLocation: i == shell.currentIndex),

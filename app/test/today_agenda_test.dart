@@ -1,8 +1,10 @@
 // 主页“今天”（v1.01）：cron 今天的时刻、一次性任务只算今天的；面板与手动停的不进；自动暂停的进且标“已暂停”；
+// v2.78 TodayCard：没有任务整张不画；“每天早上的简报”在新面板弹层里。
 // 跑过的看结果（完成/失败），到点没跑 = 进行中，之后第一个 = 下一个；摘要；行：问题字、过去的变淡、点行进详情。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cron.dart';
-import 'package:assistant/features/home/home_screen.dart';
+import 'package:assistant/features/home/new_panel.dart';
+import 'package:assistant/features/home/today_card.dart';
 import 'package:assistant/features/home/today_agenda.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -75,14 +77,13 @@ void main() {
     expect(todayAgenda([task('q', '0 20 * * *', requested: true)], now).single.state, AgendaState.running);
   });
 
-  Future<List<String>> pumpToday(WidgetTester tester, List<ScheduledTask> tasks,
-      {VoidCallback? onPrep, VoidCallback? onSchedule, bool loading = false}) async {
+  Future<List<String>> pumpToday(WidgetTester tester, List<ScheduledTask> tasks) async {
     final pushed = <String>[];
     final router = GoRouter(initialLocation: '/home', routes: [
       GoRoute(
           path: '/home',
           builder: (_, _) =>
-              Scaffold(body: SingleChildScrollView(child: TodaySection(tasks: tasks, loading: loading, onPrep: onPrep, onSchedule: onSchedule)))),
+              Scaffold(body: SingleChildScrollView(child: TodayCard(tasks: tasks)))),
       GoRoute(path: '/me/tasks', builder: (_, _) { pushed.add('/me/tasks'); return const Text('TASKS'); }, routes: [
         GoRoute(path: ':id', builder: (_, s) { pushed.add('/me/tasks/${s.pathParameters['id']}'); return const Text('DETAIL'); }),
       ]),
@@ -91,30 +92,20 @@ void main() {
       overrides: [apiProvider.overrideWith((_) => throw UnimplementedError())],
       child: MaterialApp.router(theme: buildTheme(Brightness.light), routerConfig: router),
     ));
-    loading ? await tester.pump(const Duration(seconds: 1)) : await tester.pumpAndSettle(); // 骨架微光一直在动
+    await tester.pumpAndSettle();
     return pushed;
   }
 
-  testWidgets('空：一行引导，点了去定时任务页', (tester) async {
-    final pushed = await pumpToday(tester, const []);
-    expect(find.text('今天没有排定的任务'), findsWidgets); // 标题旁摘要 + 引导行
-    await tester.tap(find.text('每天的简报、提醒放进定时任务，会排在这里'));
-    await tester.pumpAndSettle();
-    expect(pushed, ['/me/tasks']);
+  testWidgets('空：整张卡不画（没有空状态、没有重复摘要）', (tester) async {
+    await pumpToday(tester, const []);
+    expect(find.text('今天'), findsNothing);
+    expect(find.text('今天没有排定的任务'), findsNothing);
   });
 
-  testWidgets('段末“帮我准备今天”：点了交给助手；没给回调或加载中不出', (tester) async {
-    var asked = 0;
-    await pumpToday(tester, const [], onPrep: () => asked++);
-    expect(find.bySemanticsLabel(prepDayLabel), findsOneWidget);
-    await tester.tap(find.text(prepDayLabel));
-    await tester.pumpAndSettle();
-    expect(asked, 1);
-    expect(prepDayPrompt, contains('准备今天'));
-    await pumpToday(tester, const []);
-    expect(find.text(prepDayLabel), findsNothing);
-    await pumpToday(tester, const [], onPrep: () {}, loading: true);
-    expect(find.text(prepDayLabel), findsNothing);
+  testWidgets('有任务：卡头“今天” + 摘要', (tester) async {
+    await pumpToday(tester, [task('b', '59 23 * * *')]);
+    expect(find.text('今天'), findsOneWidget);
+    expect(find.textContaining('还剩 1 件'), findsOneWidget);
   });
 
   test('早间简报：哪些算已经排了', () {
@@ -129,18 +120,20 @@ void main() {
     expect(briefTaskOf([task('once', '', prompt: '帮我准备今天', runAt: now)]), isNull);
   });
 
-  testWidgets('“每天早上自动准备”：没排时出、点了交给表单；排好后不出', (tester) async {
+  testWidgets('新面板弹层：“每天早上的简报”没排时出、点了回调；排好后不出', (tester) async {
     var scheduled = 0;
-    await pumpToday(tester, const [], onPrep: () {}, onSchedule: () => scheduled++);
-    expect(find.text(scheduleBriefLabel), findsOneWidget);
-    await tester.tap(find.text(scheduleBriefLabel));
+    Future<void> pumpExtras(bool missing) => tester.pumpWidget(MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: Scaffold(
+            body: NewPanelExtras(
+                briefMissing: missing, removed: const [], onIdea: (_) {}, onBrief: () => scheduled++, onRevive: (_) {}))));
+    await pumpExtras(true);
     await tester.pumpAndSettle();
+    await tester.tap(find.text(briefIdeaLabel));
     expect(scheduled, 1);
-    await pumpToday(tester, [task('b', '0 7 * * *', prompt: prepDayPrompt)], onPrep: () {}, onSchedule: () => scheduled++);
-    expect(find.text(scheduleBriefLabel), findsNothing);
-    expect(find.text(prepDayLabel), findsOneWidget, reason: '随时手动准备仍在');
-    await pumpToday(tester, const [], onPrep: () {}, onSchedule: () {}, loading: true);
-    expect(find.text(scheduleBriefLabel), findsNothing);
+    await pumpExtras(false);
+    await tester.pumpAndSettle();
+    expect(find.text(briefIdeaLabel), findsNothing);
   });
 
   test('只有跑完的变淡，失败的不淡（警示字要看得见）', () {

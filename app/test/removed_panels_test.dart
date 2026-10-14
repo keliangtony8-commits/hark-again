@@ -1,7 +1,8 @@
 // v2.17 移除的面板可以找回：removed_at / revivable 解析（老服务端没有 = 不可找回）；removedPanels 只留可找回的、新的在前；
-// RemovedPanels 没有就不占位，有则“N 个最近移除的面板”，点开选一个 → POST revive + 提示；
+// v2.78 找回在新面板弹层（NewPanelExtras）：没有就不出那一段，有则列出、点一个 → onRevive；revivePanel → POST revive + 提示；
 // removePanel → POST remove + “已移除 · 撤销”，点撤销 → POST revive。
 import 'package:assistant/core/api.dart';
+import 'package:assistant/features/home/new_panel.dart';
 import 'package:assistant/features/home/removed_panels.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -69,20 +70,33 @@ void main() {
     expect(out.map((c) => c.id), ['b', 'a']);
   });
 
-  testWidgets('RemovedPanels: hidden when empty', (tester) async {
-    await pump(tester, (_) => const RemovedPanels(cards: []));
+  testWidgets('NewPanelExtras: no removed → no section', (tester) async {
+    await pump(tester, (_) => NewPanelExtras(briefMissing: false, removed: const [], onIdea: (_) {}, onBrief: () {}, onRevive: (_) {}));
     expect(find.textContaining('最近移除'), findsNothing);
+    expect(find.text(panelIdeas.first), findsOneWidget);
   });
 
-  testWidgets('RemovedPanels: count, tap one → revive', (tester) async {
+  testWidgets('NewPanelExtras: removed listed, tap → onRevive; idea → onIdea', (tester) async {
     final now = DateTime(2026, 10, 13, 15);
     final cards = [panel('p1', '上海天气', removedAt: DateTime(2026, 10, 13, 9))];
-    final api = await pump(tester, (_) => RemovedPanels(cards: cards, now: now));
-    expect(find.text('1 个最近移除的面板 · 30 天内可找回'), findsOneWidget);
-    await tester.tap(find.text('1 个最近移除的面板 · 30 天内可找回'));
-    await tester.pumpAndSettle();
-    expect(find.text('点一个，放回主页'), findsOneWidget);
-    await tester.tap(find.text('上海天气 · 移除于 今天 09:00'));
+    HomeCard? revived;
+    String? idea;
+    await pump(tester, (_) => NewPanelExtras(
+        briefMissing: false, removed: cards, now: now, onIdea: (w) => idea = w, onBrief: () {}, onRevive: (c) => revived = c));
+    expect(find.text('最近移除 · 30 天内可放回'), findsOneWidget);
+    expect(find.text('移除于 今天 09:00'), findsOneWidget);
+    await tester.tap(find.text('上海天气'));
+    expect(revived?.id, 'p1');
+    await tester.tap(find.text(panelIdeas[1]));
+    expect(idea, panelIdeas[1]);
+    expect(newPanelPrompt(idea!), '帮我在主页做一个面板：${panelIdeas[1]}');
+  });
+
+  testWidgets('revivePanel → POST revive + toast', (tester) async {
+    final card = panel('p1', '上海天气', removedAt: DateTime(2026, 10, 13, 9));
+    final api = await pump(
+        tester, (ref) => Builder(builder: (ctx) => TextButton(onPressed: () => revivePanel(ctx, ref, card), child: const Text('放回'))));
+    await tester.tap(find.text('放回'));
     await tester.pumpAndSettle();
     expect(api.calls, containsAllInOrder(['POST /api/cards/p1/revive', 'GET /api/cards']));
     expect(find.text('「上海天气」放回来了，正在重新取数据'), findsOneWidget);

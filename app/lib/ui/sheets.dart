@@ -14,8 +14,11 @@ import '../theme/tokens.dart';
 import 'glass.dart';
 import 'motion.dart';
 
+// 弹层一律开在根导航器上（v2.78）：盖住外壳的浮动顶栏和底部输入胶囊，遮罩也盖住它们——以前开在 Tab 自己的导航器里，
+// 顶栏浮在遮罩上面“叠在一起”。
 Future<T?> showAppSheet<T>(BuildContext context, {required WidgetBuilder builder}) => showModalBottomSheet<T>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true, // 让表单能随键盘长高；高度仍随内容
       builder: (ctx) => GlassSheet(child: builder(ctx)),
     );
@@ -30,6 +33,7 @@ Future<T?> showAppScrollSheet<T>(
 }) =>
     showModalBottomSheet<T>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       builder: (ctx) => ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * max),
