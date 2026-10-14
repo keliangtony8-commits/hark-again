@@ -4,10 +4,11 @@ import { auth, http, notifyUnauthorized, server } from "../../lib/api";
 import { setSolid, useLook } from "../../lib/look";
 import { outbox } from "../../lib/outbox";
 import { APPEARANCES, setAppearance, useAppearance } from "../../lib/theme";
+import { feedbackRowSubtitle, type FeedbackList } from "../../lib/feedback";
 import { twoFactorRowSubtitle, type TwoFactorStatus } from "../../lib/twoFactor";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, type UsageReport } from "../../lib/usage";
 import { Avatar } from "../../ui/glass";
-import { IconBack, IconBrain, IconChevron, IconClock, IconComputer, IconLayout, IconLock, IconPlug, IconShield, IconSpark } from "../../ui/icons";
+import { IconBack, IconBrain, IconChevron, IconClock, IconComputer, IconFeedback, IconLayout, IconLock, IconPlug, IconShield, IconSpark } from "../../ui/icons";
 import { Section, Segmented, Toggle, stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
 import AvatarColorPop from "./AvatarColorPop";
@@ -27,6 +28,7 @@ const GROUPS = [
   ] },
   { title: "安全", items: [
     { to: "/me/security", icon: IconLock, title: "两步验证", sub: "" }, // 副标题按状态（twoFactorRowSubtitle）
+    { to: "/me/feedback", icon: IconFeedback, title: "反馈", sub: "" }, // 副标题按未解决条数（feedbackRowSubtitle）
   ] },
 ];
 
@@ -87,6 +89,8 @@ export default function MeScreen() {
   const root = !((window.history.state as { idx?: number } | null)?.idx);
   const [tf, setTf] = useState<TwoFactorStatus | null>(null);
   useEffect(() => { http.get<TwoFactorStatus>("/api/auth/2fa").then(setTf).catch(() => setTf(null)); }, []);
+  const [fb, setFb] = useState<FeedbackList | null>(null);
+  useEffect(() => { http.get<FeedbackList>("/api/feedback").then(setFb).catch(() => setFb(null)); }, []);
   // v2.61：先让服务器作废这个 token（登录设备里就没了这台），失败不拦
   const logout = async () => { await http.post("/api/auth/logout", {}).catch(() => {}); auth.clear(); outbox.clear(); notifyUnauthorized(); };
   return (
@@ -108,7 +112,7 @@ export default function MeScreen() {
               {g.items.map(({ to, icon: Icon, title, sub }) => {
                 const inner = <>
                   <span className="row-icon"><Icon /></span>
-                  <div className="row-body"><div className="row-title">{title}</div><div className="row-sub">{to === "/me/security" ? twoFactorRowSubtitle(tf) : sub}</div></div>
+                  <div className="row-body"><div className="row-title">{title}</div><div className="row-sub">{to === "/me/security" ? twoFactorRowSubtitle(tf) : to === "/me/feedback" ? feedbackRowSubtitle(fb) : sub}</div></div>
                   <span className="row-trail"><IconChevron /></span>
                 </>;
                 return <Link key={to} to={to} className="row">{inner}</Link>;

@@ -1,0 +1,73 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { http } from "../../lib/api";
+import { formatWhen } from "../../lib/format";
+import { FEEDBACK_GOOD, groupFeedback, type FeedbackItem, type FeedbackList } from "../../lib/feedback";
+import { IconChevron, IconFeedback, IconThumbDown, IconThumbUp } from "../../ui/icons";
+import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+
+export const FEEDBACK_PATH = "/api/feedback";
+
+export const feedbackIcon = (f: FeedbackItem) =>
+  f.kind === FEEDBACK_GOOD ? <IconThumbUp size={20} /> : f.kind === "problem" ? <IconFeedback /> : <IconThumbDown size={20} />;
+
+/** 反馈（v2.64，= App features/me/feedback_screen.dart；对标 Hark 设置 → Feedback）：
+ *  “报告问题” + 回看在回复下点过 👍 / 👎 的报告。版式同 Pages：页头摘要 → 空时起步卡 → 待处理 / 有用的回复 / 已解决（带数量）。
+ *  点一行进详情（FeedbackDetail，删除在那里）。报告里存什么只在后端 app/feedback.py。 */
+export default function FeedbackScreen() {
+  const [list, setList] = useState<FeedbackList | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [writing, setWriting] = useState<string | null>(null);
+  const load = useCallback(() => http.get<FeedbackList>(FEEDBACK_PATH).then(setList).catch((e) => setError(e instanceof Error ? e.message : "加载失败")), []);
+  useEffect(() => { void load(); }, [load]);
+
+  const submit = async () => {
+    const note = writing?.trim();
+    if (!note) return;
+    try { await http.post(FEEDBACK_PATH, { note }); setWriting(null); setError(null); await load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "没能提交"); }
+  };
+  const items = list?.items ?? [];
+  const g = groupFeedback(items);
+  let n = 0;
+  const rows = (fs: FeedbackItem[]) => (
+    <div className="list">
+      {fs.map((f) => (
+        <Link key={f.id} to={`/me/feedback/${f.id}`} className={`row enter ${f.status === "resolved" ? "row-off" : ""}`} style={stagger(++n)}>
+          <span className="row-icon">{feedbackIcon(f)}</span>
+          <div className="row-body"><div className="row-title">{f.excerpt || f.kind_label}</div>
+            <div className="row-sub">{[f.kind_label, formatWhen(f.created_at), f.status === "resolved" ? "已解决" : ""].filter(Boolean).join(" · ")}</div></div>
+          <span className="row-trail"><IconChevron /></span>
+        </Link>
+      ))}
+    </div>
+  );
+
+  return (
+    <Page header={<PageHeader title="反馈" back action={<button className="btn btn-ghost btn-sm" onClick={() => setWriting("")}><IconFeedback size={16} />报告问题</button>} />}>
+      <PageIntro loading={!list && !error} summary={g.todo.length ? `${g.todo.length} 条待处理` : "没有待处理的"}
+        line="回复下点 👎 会连同提问、回复和每一步记录存一份报告；在这里回看、复制给要修它的人，修好了标成已解决。" />
+      {error && <p className="desc" role="alert">{error}</p>}
+      {!list && !error ? <Skeleton /> : (<>
+        {items.length === 0 && (
+          <StarterCard title="还没有反馈" text="哪里用着不顺，直接告诉我；对某条回复不满意，就在它下面点 👎。">
+            <button className="btn btn-primary" onClick={() => setWriting("")}><IconFeedback size={16} />报告问题</button>
+          </StarterCard>
+        )}
+        {g.todo.length > 0 && <Section title={`待处理 · ${g.todo.length}`}>{rows(g.todo)}</Section>}
+        {g.good.length > 0 && <Section title={`有用的回复 · ${g.good.length}`}>{rows(g.good)}</Section>}
+        {g.done.length > 0 && <Section title={`已解决 · ${g.done.length}`}>{rows(g.done)}</Section>}
+      </>)}
+      {writing !== null && (
+        <Sheet title="报告问题" onClose={() => setWriting(null)} actions={<>
+          <button className="btn btn-ghost" onClick={() => setWriting(null)}>取消</button>
+          <button className="btn btn-primary" disabled={!writing.trim()} onClick={() => void submit()}>提交</button>
+        </>}>
+          <p className="desc">哪里不对、怎么出现的，写清楚一点下次好查。</p>
+          <label className="form-field"><span>遇到了什么问题</span>
+            <textarea rows={4} autoFocus value={writing} placeholder="比如：首页卡片一直不刷新" onChange={(e) => setWriting(e.target.value)} /></label>
+        </Sheet>
+      )}
+    </Page>
+  );
+}

@@ -42,3 +42,6 @@
 .row-sub.wrap { white-space: normal; margin: 0 0 var(--sp-2); }
 .warn-text { color: var(--warning); font-weight: var(--fw-title); }
 @media (prefers-reduced-motion: reduce) { .tf-qr, .tf-codes code { animation: none; } }
+
+/* v2.64 反馈详情：整份报告一张卡 */
+.feedback-report { padding: var(--sp-4); margin-top: var(--sp-4); }

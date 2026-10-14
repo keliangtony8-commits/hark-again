@@ -12,6 +12,8 @@ import TaskDetailScreen from "./features/me/TaskDetailScreen";
 import TasksScreen from "./features/me/TasksScreen";
 import VaultScreen from "./features/me/VaultScreen";
 import SecurityScreen from "./features/me/SecurityScreen";
+import FeedbackScreen from "./features/me/FeedbackScreen";
+import FeedbackDetail from "./features/me/FeedbackDetail";
 import PagesScreen from "./features/me/PagesScreen";
 import UsageScreen from "./features/me/UsageScreen";
 import ProjectScreen from "./features/projects/ProjectScreen";
@@ -45,6 +47,8 @@ export default function App() {
           <Route path="me/connectors" element={<ConnectorsScreen />} />
           <Route path="me/vault" element={<VaultScreen />} />
           <Route path="me/security" element={<SecurityScreen />} />
+          <Route path="me/feedback" element={<FeedbackScreen />} />
+          <Route path="me/feedback/:id" element={<FeedbackDetail />} />
           <Route path="me/computer" element={<ComputerScreen />} />
           <Route path="me/pages" element={<PagesScreen />} />
           <Route path="me/usage" element={<UsageScreen />} />

@@ -1,6 +1,6 @@
 // 设计 v2：用户 = 右侧强调色胶囊；助手 = 左侧玻璃卡（假玻璃，不模糊），两者最宽 Layout.bubbleMax（按聊天区宽，不按屏宽——平板双栏也对）。
 // 一条消息：用户 = 右侧气泡（没发出的带“待发送/发送失败”状态行；长按出菜单：复制，最后一条另有“编辑”）；助手 = 全宽块列表 + 工具进度 + 思考动画，
-// 生成完的回复下方一行操作（复制、朗读、存成文件；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
+// 生成完的回复下方一行操作（复制、朗读、存成文件、👍 / 👎；最后一条另有“重新生成”，由 ChatView 决定给不给 onRegenerate）。
 // 没正常说完的最后一条（停止 / 被打断 / 步数用完 / 原地打转）操作行下再给一颗“继续”（v1.56，发出去就是一句“继续”）。
 // 操作行只常驻在最后一条（和没正常说完的回复）上；更早的回复点一下卡片才露出来（v1.17，ChatView 记住露出的是哪条，同时只露一条）。
 import 'dart:math' as math;
@@ -26,11 +26,12 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../projects/save_reply.dart';
 import 'activity_view.dart';
+import 'reply_rating.dart';
 import 'retry_line.dart';
 import 'thought_view.dart';
 
 class MessageView extends StatelessWidget {
-  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onContinue, this.onEdit, this.onSave, this.last = false, this.revealed = false, this.onReveal});
+  const MessageView(this.message, {super.key, this.onResend, this.onDiscard, this.onRegenerate, this.onContinue, this.onEdit, this.onSave, this.onRate, this.last = false, this.revealed = false, this.onReveal});
   final Message message;
 
   /// 是不是对话里最后一条回复：只有它常驻“复制 / 重新生成”一排小图标（版面更干净）。
@@ -52,6 +53,9 @@ class MessageView extends StatelessWidget {
 
   /// 存成文件（features/projects/save_reply.dart）；ChatView 给已落库的回复。
   final VoidCallback? onSave;
+
+  /// 👍 / 👎（features/chat/reply_rating.dart）；ChatView 只给已落库的回复。
+  final RateReply? onRate;
 
   @override
   Widget build(BuildContext context) => FadeSlideIn(
@@ -246,6 +250,8 @@ class MessageView extends StatelessWidget {
                 end: message.end,
                 onRegenerate: onRegenerate,
                 onSave: onSave,
+                feedback: message.feedback,
+                onRate: onRate,
               )
             : null,
       ),
@@ -321,7 +327,7 @@ class _OutboxStatus extends StatelessWidget {
 /// 回复下方的操作行：低调的小图标（kit QuietAction，不抢内容）。回复完成时逐个错峰浮现；
 /// 复制 → 对勾、朗读 → 停止都是原地 PopSwitcher；“重新生成”随可用状态淡入淡出。
 class _ReplyActions extends StatelessWidget {
-  const _ReplyActions({super.key, required this.id, required this.text, required this.spoken, this.end = ReplyEnd.done, this.onRegenerate, this.onSave});
+  const _ReplyActions({super.key, required this.id, required this.text, required this.spoken, this.end = ReplyEnd.done, this.onRegenerate, this.onSave, this.feedback, this.onRate});
   final String id;
   final String text;
   final String spoken; // 只含正文，没有就不给朗读键
@@ -329,6 +335,8 @@ class _ReplyActions extends StatelessWidget {
 
   final VoidCallback? onRegenerate;
   final VoidCallback? onSave; // 存成文件：有可复制的内容才给
+  final String? feedback;
+  final RateReply? onRate; // 👍 / 👎：排在最后（评价是看完之后的事），和网页同序
 
   @override
   Widget build(BuildContext context) {
@@ -350,6 +358,7 @@ class _ReplyActions extends StatelessWidget {
       // 把回复带走（存成文件）排在“就地重来”之后，和网页同序：复制 · 朗读 · 重新生成 · 存成文件（v1.16）
       if (text.isNotEmpty && onSave != null)
         QuietAction(icon: const Icon(Icons.drive_folder_upload_outlined), tooltip: saveReplyLabel, onPressed: onSave),
+      if (onRate != null) ReplyRating(current: feedback, onRate: onRate!),
     ];
     final label = end.label;
     // 和卡片里的正文左缘对齐：图标键自带 8px 内边距，再补一点。说明文字占剩下的宽，窄屏省略不溢出

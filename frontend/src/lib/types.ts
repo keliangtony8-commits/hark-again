@@ -165,7 +165,9 @@ export type Outbox = "queued" | "failed";
  *  thinkFrom/thinkTo：第一段 / 最近一段思考到达的本机时间（ms），算“已思考 N 秒”。 */
 export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopped" | "interrupted" | "wrapped" | "looped" | "steer"; pending?: boolean; steps?: ActivityStep[]; outbox?: Outbox; created_at?: string; thought?: string; thinkFrom?: number; thinkTo?: number;
   /** 模型调用失败在自动重试 / 已换备用模型（v1.50 turn.retry，lib/retry.ts）：只在生成中的占位消息上。 */
-  retry?: RetryNotice };
+  retry?: RetryNotice;
+  /** v2.64 用户对这条回复的评价（good / wrong / incomplete / stuck / other，lib/feedback.ts）；没评就没有。 */
+  feedback?: string | null };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
 export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; routed_model?: string | null; mode?: string | null; updated_at: string; snippet?: string; message_id?: string };
 

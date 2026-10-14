@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/session.dart';
+import '../../models/feedback.dart';
 import '../../models/two_factor.dart';
 import '../../models/usage.dart';
 import '../../theme/app_theme.dart';
@@ -19,6 +20,7 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'avatar_color_sheet.dart';
+import 'feedback_screen.dart';
 import 'security_screen.dart';
 import 'usage_screen.dart';
 
@@ -134,6 +136,12 @@ class _MeBody extends ConsumerWidget {
             title: '两步验证',
             subtitle: twoFactorRowSubtitle(ref.watch(twoFactorProvider).value),
             onTap: () => context.push('/me/security'),
+          ),
+          RowTile(
+            icon: Icons.feedback_outlined,
+            title: '反馈',
+            subtitle: feedbackRowSubtitle(ref.watch(feedbackProvider).value),
+            onTap: () => context.push('/me/feedback'),
           ),
         ]),
       ),

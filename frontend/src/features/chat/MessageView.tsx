@@ -9,13 +9,14 @@ import ActivitySummary from "./Activity";
 import RetryLine from "./RetryLine";
 import CopyButton from "../../ui/CopyButton";
 import SaveReplyButton from "../projects/SaveReplyButton";
+import ReplyRating from "./ReplyRating";
 import { IconAlert, IconCheck, IconClock, IconClose, IconCloudOff, IconCopy, IconEdit, IconMerge, IconPlay, IconRefresh, IconSpeaker, IconStop } from "../../ui/icons";
 import { CONTINUE_TEXT, continueHint, endLabel, endWarns } from "../../lib/messageStatus";
 import { STEER_LABEL, isSteer } from "../../lib/steer";
 
 export type OutboxActions = { onResend: (id: string) => void; onDiscard: (id: string) => void };
 
-/** 回复下方的操作条：复制、朗读、存到项目文件；最后一条另有“重新生成”（由 ChatView 决定给不给）。回复生成完才出现，避免流式时跳动。 */
+/** 回复下方的操作条：复制、朗读、存到项目文件、👍 / 👎；最后一条另有“重新生成”（由 ChatView 决定给不给）。回复生成完才出现，避免流式时跳动。 */
 function MessageActions({ message, onRegenerate, projectId }: { message: Message; onRegenerate?: () => void; projectId?: string }) {
   const phase = useSpeechPhase(message.id);
   useEffect(() => () => stopIfSpeaking(message.id), [message.id]);
@@ -36,6 +37,8 @@ function MessageActions({ message, onRegenerate, projectId }: { message: Message
       )}
       {/* 存到项目文件（v1.15）：有内容才给；项目对话直接存本项目，主聊天先选项目 */}
       {md && <SaveReplyButton messageId={message.id} projectId={projectId} />}
+      {/* 👍 / 👎（v2.64）：排在最后（评价是看完之后的事），和 App 同序；只给已落库的回复 */}
+      {!message.pending && message.id !== "pending" && <ReplyRating messageId={message.id} initial={message.feedback} />}
       {/* 没正常说完：停止 / 被打断 / 步数用完 / 原地打转，行尾一句说明 */}
       {endLabel(message) && (
         <span className={`msg-stopped${endWarns(message) ? " is-interrupted" : ""}`}>

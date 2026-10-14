@@ -667,6 +667,25 @@ class ChatController extends Notifier<ChatState> {
   /// 重新生成最后一条回复；最后一条是用户消息时 = 重试（不带 message_id）。
   void regenerate() => _rewind();
 
+  /// 评价一条回复（v2.64，规则在后端 app/feedback.py）：[kind] = good / 👎 的原因，null = 取消。
+  /// 先在本机换上（图标立刻变实心），服务器没收下就换回原样再抛出，由界面提示。
+  Future<void> rate(String id, String? kind, {String? note}) async {
+    final old = state.messages.where((m) => m.id == id).firstOrNull;
+    if (old == null) return;
+    void put(String? k) => state = state.copyWith(messages: [for (final m in state.messages) m.id == id ? m.copyWith(feedback: () => k) : m]);
+    put(kind);
+    try {
+      if (kind == null) {
+        await _api.delete('/api/messages/$id/feedback');
+      } else {
+        await _api.post('/api/messages/$id/feedback', {'kind': kind, if (note != null && note.isNotEmpty) 'note': note});
+      }
+    } catch (_) {
+      put(old.feedback);
+      rethrow;
+    }
+  }
+
   /// 改写最后一条用户消息并重答。附件、“追问”标签保留（服务器 runner.rewind 同规则）；文字清空且没有附件 = 不发。
   void edit(String text) {
     final id = state.editableId;

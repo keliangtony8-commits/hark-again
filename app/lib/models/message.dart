@@ -21,7 +21,8 @@ class Message {
       this.thought = '',
       this.thinkFrom,
       this.thinkTo,
-      this.retry});
+      this.retry,
+      this.feedback});
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
       id: j['id'] as String,
@@ -30,7 +31,8 @@ class Message {
       steps: stepsFrom(j['steps']),
       end: ReplyEnd.parse(j['status']),
       steer: j['role'] == 'user' && j['status'] == steerStatus,
-      createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal());
+      createdAt: DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal(),
+      feedback: j['feedback'] as String?);
 
   final String id, role;
   final List<Block> blocks;
@@ -72,6 +74,9 @@ class Message {
 
   bool get isUser => role == 'user';
 
+  /// 用户对这条回复的评价（v2.64，models/feedback.dart）：good = 👍，其余是 👎 的原因；null = 没评。
+  final String? feedback;
+
   /// 追加一段思考，超长只留尾部（思考可能有几万字，界面只看最近的）。[at] = 到达时间（测试可注入）。
   Message think(String delta, {DateTime? at}) {
     final t = thought + delta;
@@ -99,7 +104,8 @@ class Message {
           String? thought,
           DateTime? thinkFrom,
           DateTime? thinkTo,
-          RetryNotice? Function()? retry}) =>
+          RetryNotice? Function()? retry,
+          String? Function()? feedback}) =>
       Message(
       id: id,
       role: role,
@@ -113,7 +119,8 @@ class Message {
       thought: thought ?? this.thought,
       thinkFrom: thinkFrom ?? this.thinkFrom,
       thinkTo: thinkTo ?? this.thinkTo,
-      retry: retry != null ? retry() : this.retry);
+      retry: retry != null ? retry() : this.retry,
+      feedback: feedback != null ? feedback() : this.feedback);
 }
 
 /// 把 [m] 放到生成中的那条前面（没有生成中的就接在末尾）：回答途中补充的话排在这一轮回复之前，

@@ -185,6 +185,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   onRegenerate: regen ? ctl.regenerate : null,
                                   onContinue: regen && m.end.continuable ? () => ctl.send(continueText) : null,
                                   onSave: m.isUser || m.pending ? null : () => saveReplyToProject(context, ref, messageId: m.id, projectId: widget.projectId),
+                                  onRate: m.isUser || m.pending ? null : (kind, {note}) => ctl.rate(m.id, kind, note: note),
                                   last: i == 0 && !m.isUser,
                                   revealed: m.id == _revealed,
                                   onReveal: i == 0 || m.isUser || m.pending ? null : () => setState(() => _revealed = _revealed == m.id ? null : m.id),

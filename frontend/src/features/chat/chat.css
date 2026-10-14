@@ -216,6 +216,11 @@ button.skill-chip { border: 0; font: inherit; font-size: var(--fs-xs); cursor: p
 .msg-saved { display: inline-flex; align-items: center; min-width: 0; padding: 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .msg-saved.is-err { color: var(--danger); }
+/* v2.64 👍 / 👎：评过的那颗实心、墨色（不占强调色） */
+.rate-btn.is-on { color: var(--ink); }
+.rate-btn.is-on svg path { fill: currentColor; }
+.rate-reasons { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
+.rate-reasons .chip { height: 32px; padding: 0 var(--sp-3); font-size: var(--fs-sm); border: 0; cursor: pointer; }
 .msg-stopped { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2); font-size: var(--fs-xs); color: var(--text-3); }
 .msg-stopped.is-interrupted svg { color: var(--warning); }
 /* “继续”（v1.56）：最后一条没正常说完的回复下的小号胶囊，跟操作条之后浮现 */

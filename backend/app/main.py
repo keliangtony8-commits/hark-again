@@ -9,7 +9,7 @@ from .preview import PREFIX as PREVIEW_PREFIX
 from . import command_env, turn_journal
 from .db import SessionLocal
 from .agent.tools import load_builtin
-from .routes import auth, browser, catalog, connectors, conversations, files, home, host, inbox, jobs, memory_digest, memory_notes, pages, preview, resources, tasks, usage, vault, voice, ws
+from .routes import auth, browser, catalog, connectors, conversations, feedback, files, home, host, inbox, jobs, memory_digest, memory_notes, pages, preview, resources, tasks, usage, vault, voice, ws
 
 
 @asynccontextmanager
@@ -56,6 +56,7 @@ app.include_router(host.router)
 app.include_router(usage.router)
 app.include_router(memory_digest.router)
 app.include_router(memory_notes.router)
+app.include_router(feedback.router)
 for r in resources.routers:
     app.include_router(r)
 

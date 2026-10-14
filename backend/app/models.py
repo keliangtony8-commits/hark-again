@@ -63,6 +63,8 @@ class Message(Base):
     trace: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     # 纯文本副本，只给搜索用（JSON 里的中文可能被转义，直接 LIKE 不可靠）；由下方监听器自动维护，调用方不用管
     search_text: Mapped[str] = mapped_column(Text, default="", server_default="")
+    # v2.64 用户对这条回复的评价（good / wrong / incomplete / stuck / other，规则在 app/feedback.py）；None = 没评
+    feedback: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
 
@@ -76,6 +78,8 @@ class Message(Base):
             out["status"] = self.status
         if self.steps:
             out["steps"] = self.steps
+        if self.feedback:
+            out["feedback"] = self.feedback
         return out
 
 
@@ -237,6 +241,21 @@ class LoginSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Feedback(Base):
+    """v2.64 一份反馈：回复下的 👍 / 👎（message_id 有值，一条回复一份）或设置页的问题报告（kind=problem）。
+    snapshot 是当时的提问 / 回复 / 步骤 / 轨迹快照，对话删了也还在（所以 message_id 不做外键）。规则只在 app/feedback.py。"""
+    __tablename__ = "feedback"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    message_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    conversation_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    note: Mapped[str] = mapped_column(Text, default="", server_default="")
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(16), default="open", server_default="open")  # open | resolved
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class HomeCard(Base):
