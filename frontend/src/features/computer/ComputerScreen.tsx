@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { computerStateLabel } from "../../lib/computer";
+import { computerIntro, computerStateLabel } from "../../lib/computer";
 import { PERSONAL_WORKSPACE, isPersonalWorkspace } from "../../lib/workspace";
 import { IconLayout } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, stagger } from "../../ui/kit";
@@ -25,8 +25,7 @@ export default function ComputerScreen() {
   return (
     <Page header={<PageHeader title={personal ? "我的电脑" : "项目的电脑"} back />}>
       <PageIntro loading={s === undefined} summary={s ? computerStateLabel(s.sandbox.state) : "暂时看不到状态"}
-        line={personal ? "主聊天和定时任务用的云端 Linux：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。"
-          : "这个项目专用的云端 Linux：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。"} />
+        line={computerIntro(s, personal)} />
       <ComputerSection ws={ws} title="状态" enter={1} ctl={ctl} />
       <PortsSection ws={ws} ctl={ctl} enter={2} />
       <MemorySection ctl={ctl} enter={3} />

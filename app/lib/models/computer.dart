@@ -7,7 +7,7 @@ import 'preview.dart';
 class ComputerStatus {
   const ComputerStatus({required this.workspace, required this.state, this.memoryUsed, this.memoryLimit, this.startedAt,
       this.idleMinutes, this.outdated = false, this.diskUsed = 0, this.diskPartial = false, this.jobs = const [],
-      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy, this.services = const [], this.memory, this.diskJobs = const []});
+      this.cpuPercent, this.oomKills = 0, this.processes = const [], this.storage = ComputerStorage.empty, this.tools = const [], this.ports = const [], this.diskLimit, this.diskLevel = 'off', this.stoppedBy, this.services = const [], this.memory, this.diskJobs = const [], this.machine});
 
   factory ComputerStatus.fromJson(Map<String, dynamic> j) {
     final sb = (j['sandbox'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -49,6 +49,7 @@ class ComputerStatus {
         for (final x in (j['disk_jobs'] as List? ?? const []))
           if (x is Map) ?DiskJob.tryParse(x.cast<String, dynamic>())
       ],
+      machine: j['machine'] is Map ? MachineInfo.fromJson((j['machine'] as Map).cast<String, dynamic>()) : null,
     );
   }
 
@@ -89,6 +90,9 @@ class ComputerStatus {
 
   /// v1.98 最近 7 天谁写得最多（服务器 job_disk.leaders）：从大到小，最多 5 个；不用开机。
   final List<DiskJob> diskJobs;
+
+  /// v2.85 整台服务器（后端 app/machine.py）：只在个人工作区有；项目的电脑 null。
+  final MachineInfo? machine;
   bool get diskFull => diskLevel == 'full';
   bool get diskTight => diskLevel == 'tight' || diskFull;
 
@@ -108,14 +112,18 @@ enum ServiceHealth { up, restarting, gaveUp }
 
 /// 一个常驻服务（keep_alive 后台任务）：任务本身 + 健康、本次运行多久、它在监听的端口。
 class ServiceInfo {
-  const ServiceInfo({required this.job, required this.health, this.ports = const [], this.uptime});
+  const ServiceInfo({required this.job, required this.health, this.ports = const [], this.uptime, this.earlierStops = 0});
   factory ServiceInfo.fromJson(Map<String, dynamic> j) => ServiceInfo(
         job: JobInfo.fromJson(j),
         health: switch (j['health']) { 'up' => ServiceHealth.up, 'restarting' => ServiceHealth.restarting, _ => ServiceHealth.gaveUp },
         ports: [for (final x in (j['ports'] as List? ?? const [])) if (x is num) x.toInt()],
         uptime: j['uptime'] is num ? Duration(seconds: (j['uptime'] as num).toInt()) : null,
+        earlierStops: (j['earlier_stops'] as num?)?.toInt() ?? 0,
       );
   final JobInfo job;
+
+  /// v2.85 同名同命令的旧停止记录合进这一行（后端 services.merge）：24 小时内之前意外停过几次。
+  final int earlierStops;
   final ServiceHealth health;
   final List<int> ports;
   final Duration? uptime;
@@ -131,6 +139,7 @@ String serviceLine(ServiceInfo v, {DateTime? now}) {
         if (v.ports.isNotEmpty) '端口 ${v.ports.join('、')}',
         if (j.usage != null) jobUsageLabel(j.usage!),
         ?restarted,
+        ?_earlier(v),
       ].join(' · '),
     ServiceHealth.restarting => [
         _restartIn(j.restartAt, now ?? DateTime.now()),
@@ -141,6 +150,8 @@ String serviceLine(ServiceInfo v, {DateTime? now}) {
       (j.stopReason ?? '').isNotEmpty ? j.stopReason! : '意外退出${j.exitCode != null ? '（退出码 ${j.exitCode}）' : ''}',
   };
 }
+
+String? _earlier(ServiceInfo v) => v.earlierStops > 0 ? '24 小时内停过 ${v.earlierStops} 次' : null;
 
 String _restartIn(DateTime? at, DateTime now) {
   final s = at == null ? 0 : at.difference(now).inSeconds;
@@ -480,3 +491,41 @@ String diskJobsSemantics(ComputerStatus s, {DateTime? now}) => [
       diskJobsTitle,
       for (final r in diskJobRows(s)) '${r.job.title}，${diskJobSize(r)}，${diskJobLine(r, now: now)}',
     ].join('；');
+
+/// 整台服务器（v2.85，后端 app/machine.py）：字节；读不到的为 null。
+class MachineInfo {
+  const MachineInfo({this.cpus, this.load1, this.memoryTotal, this.memoryUsed, this.diskTotal, this.diskUsed});
+  factory MachineInfo.fromJson(Map<String, dynamic> j) => MachineInfo(
+        cpus: (j['cpus'] as num?)?.toInt(),
+        load1: (j['load1'] as num?)?.toDouble(),
+        memoryTotal: (j['memory_total'] as num?)?.toInt(),
+        memoryUsed: (j['memory_used'] as num?)?.toInt(),
+        diskTotal: (j['disk_total'] as num?)?.toInt(),
+        diskUsed: (j['disk_used'] as num?)?.toInt(),
+      );
+  final int? cpus, memoryTotal, memoryUsed, diskTotal, diskUsed;
+  final double? load1;
+}
+
+/// “整台服务器”一行的副标题：4 核 · 内存 1.2 GB / 3.8 GB · 磁盘 12 GB / 40 GB。全读不到 → null（整行不画）。
+String? machineLine(MachineInfo m) {
+  final parts = [
+    if (m.cpus != null) '${m.cpus} 核${m.load1 != null ? '（负载 ${m.load1!.toStringAsFixed(1)}）' : ''}',
+    if (m.memoryTotal != null) '内存 ${m.memoryUsed != null ? '${formatSize(m.memoryUsed!)} / ' : ''}${formatSize(m.memoryTotal!)}',
+    if (m.diskTotal != null) '磁盘 ${m.diskUsed != null ? '${formatSize(m.diskUsed!)} / ' : ''}${formatSize(m.diskTotal!)}',
+  ];
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+/// 电脑页页头的说明（v2.85，用户 16:03“对不上 VPS 面板”）：先说清这是服务器上隔出来的一块、各有多大，再说用途。
+String computerIntro(ComputerStatus? s, {required bool personal}) {
+  final size = [
+    if (s?.memoryLimit != null) '内存 ${formatSize(s!.memoryLimit!)}',
+    if (s?.diskLimit != null) '空间 ${formatSize(s!.diskLimit!)}',
+  ].join(' · ');
+  final what = personal ? '你的云电脑' : '这个项目的云电脑';
+  final head = size.isEmpty ? '$what是服务器上隔出来的一块云端 Linux' : '$what是服务器上隔出来的一块云端 Linux（$size）';
+  return personal
+      ? '$head：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。'
+      : '$head：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。';
+}

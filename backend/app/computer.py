@@ -27,7 +27,8 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import job_disk, job_usage, jobs, memory_view, preview, quota, sandbox_client, services, workspaces
+from .config import settings
+from . import job_disk, job_usage, jobs, machine, memory_view, preview, quota, sandbox_client, services, workspaces
 from .models import Job
 from .storage import project_dir
 from .wire_time import iso
@@ -169,7 +170,9 @@ async def status(db: AsyncSession, ws: str) -> dict:
             "services": await services.listing(db, ws, running, ports, usage),
             "memory": memory_view.build(raw, running, usage),  # v1.94 内存去哪了（memory_view.py）
             # v1.98 谁写得最多：任务本身（disk 带结算账）+ log_kept 日志还在（一键清理能腾出那份）
-            "disk_jobs": [{**jobs.wire(j, chars=200), "log_kept": kept} for j, kept in await job_disk.leaders(db, ws)]}
+            "disk_jobs": [{**jobs.wire(j, chars=200), "log_kept": kept} for j, kept in await job_disk.leaders(db, ws)],
+            # v2.85 整台服务器一行（machine.py）：只在个人工作区给，项目的电脑页不重复
+            "machine": await asyncio.to_thread(machine.read, settings.data_dir) if workspaces.is_personal(ws) else None}
 
 
 def _remove(p: Path) -> int:

@@ -3,12 +3,12 @@ import { Link } from "react-router-dom";
 import { JobLog } from "../../blocks/JobBlock";
 import { http } from "../../lib/api";
 import { COMPUTER_MEMORY_TIGHT, type ComputerStatus, type ServiceInfo, computerDetail, computerHint, computerHintWarn, computerMemoryRatio,
-  computerOomNote, computerPath, computerRestartText, computerSemantics, computerStateLabel, serviceAction, serviceLine,
+  computerOomNote, computerPath, machineLine, computerRestartText, computerSemantics, computerStateLabel, serviceAction, serviceLine,
   serviceSemantics } from "../../lib/computer";
 import { jobDuration, jobRowSubtitle } from "../../lib/jobs";
 import type { JobInfo } from "../../lib/types";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
-import { IconChevron, IconCloudOff, IconComputer } from "../../ui/icons";
+import { IconChevron, IconCloudOff, IconComputer, IconServer } from "../../ui/icons";
 import { Section } from "../../ui/kit";
 import "./computer.css";
 import { type ComputerCtl, useComputer } from "./useComputer";
@@ -69,6 +69,7 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
     </>
   );
   const label = [computerSemantics(s), oom].filter(Boolean).join("，");
+  const machine = s.machine ? machineLine(s.machine) : null;
   return (
     <Section title={title} enter={enter}
       action={s.sandbox.state === "running" && <button className="btn btn-ghost btn-sm" disabled={restarting} onClick={restart}>{restarting ? "正在重启" : "重启"}</button>}>
@@ -76,6 +77,10 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
         {to
           ? <Link to={to} className={`row computer-status${down ? " is-down" : ""}`} aria-label={label}>{status}</Link>
           : <div className={`row computer-status${down ? " is-down" : ""}`} role="group" aria-label={label}>{status}</div>}
+        {machine && ( // v2.85 整台服务器（只有个人工作区给）
+          <div className="row"><span className="row-icon"><IconServer /></span>
+            <div className="row-body"><div className="row-title">整台服务器</div><div className="row-sub">{machine}</div></div></div>
+        )}
         {(s.services ?? []).map((v) => (
           <div key={v.id} className={`row computer-job computer-svc is-${v.health}`}>
             <button className="computer-job-open" onClick={() => setLog(v)} aria-label={`${serviceSemantics(v)}，看日志`}>

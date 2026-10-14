@@ -1,6 +1,7 @@
 """常驻服务（keep_alive 后台任务，v1.80）的“健康”视图和手动重启（v1.82）——唯一入口：
   - health(job)：up 在跑 / restarting 进程退出了、等自动重启 / gave_up 连续崩溃放弃了（或别的意外结束）。
   - listing(db, ws, ports)：“这台电脑”里的常驻服务一节：在跑的 + 最近 GONE_HOURS 小时里意外结束的（放弃了不能悄悄消失），
+    同名同命令的合成一行（merge，v2.85：旧的停止记录折成 earlier_stops 次数），
     每个带本次运行多久、它在监听哪些端口（端口的进程组 = run.sh 记下的 pid，即 timeout 那个组长）。
   - restart(db, job)：在跑 → 整组杀掉后马上重新起（改了代码/配置要生效）；等重启中 → 不等了现在起；
     已结束 → 重新拉起（清掉崩溃计数，像 systemctl reset-failed + start）。不算崩溃、不通知助手。
@@ -58,7 +59,25 @@ async def listing(db: AsyncSession, ws: str, running: list[Job], ports: list[dic
                                                Job.state.in_(GONE_STATES), Job.finished_at >= since)
                              .order_by(Job.finished_at.desc()).limit(LIST_MAX))).all()
     rows = [j for j in running if j.keep_alive] + list(gone)
-    return [wire(j, ports, usage=(usage or {}).get(j.id)) for j in rows[:LIST_MAX]]
+    return [{**wire(j, ports, usage=(usage or {}).get(j.id)), "earlier_stops": n} for j, n in merge(rows)[:LIST_MAX]]
+
+
+def same_service(job: Job) -> tuple[str, str]:
+    """“同一个服务”的唯一判断（v2.85）：同名 + 同命令。重新让助手起一次服务会是一条新任务，旧的那条意外结束记录还在 24 小时窗口里。"""
+    return ((job.title or "").strip(), (job.command or "").strip())
+
+
+def merge(rows: list[Job]) -> list[tuple[Job, int]]:
+    """同一个服务只出一行（用户 2026-10-14 16:03：一个运行中、一个已停止的旧记录并排）：rows 已按“在跑在前、新的在前”排好，
+    每组留第一条（在跑的那条，或最近一次结束的），其余意外结束的折成次数 earlier_stops，点行看到的日志是留下那条的。"""
+    kept: dict[tuple[str, str], list] = {}
+    for j in rows:
+        k = same_service(j)
+        if k in kept and j.state in GONE_STATES:  # 两个同样的都在跑 = 真有两个进程，各出一行
+            kept[k][1] += 1
+        else:
+            kept[k if k not in kept else (*k, j.id)] = [j, 0]
+    return [(j, n) for j, n in kept.values()]
 
 
 async def restart(db: AsyncSession, job: Job) -> Job:

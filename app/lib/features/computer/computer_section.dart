@@ -178,6 +178,8 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
                         : null),
                 GlassGroup(children: [
                   _StatusTile(s, onOpen: widget.onOpen),
+                  if (s.machine != null && machineLine(s.machine!) != null) // v2.85 整台服务器（只有个人工作区给）
+                    RowTile(icon: Icons.dns_rounded, title: '整台服务器', subtitle: machineLine(s.machine!)),
                   for (final v in s.services)
                     _ServiceRow(
                       key: ValueKey('svc-${v.job.id}'),

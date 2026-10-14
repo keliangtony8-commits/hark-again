@@ -23,11 +23,16 @@ export type ComputerStatus = {
   disk_limit?: number | null; disk_level?: DiskLevel;
   memory?: MemoryView | null; // v1.94 内存去哪了（服务器 app/memory_view.py，只在运行中有）
   disk_jobs?: (JobInfo & { log_kept?: boolean })[]; // v1.98 最近 7 天谁写得最多（服务器 job_disk.leaders，不用开机）
+  machine?: MachineInfo | null; // v2.85 整台服务器（服务器 app/machine.py）：只在个人工作区有
 };
+/** 整台服务器（v2.85）：字节；读不到的为 null。 */
+export type MachineInfo = { cpus: number | null; load1: number | null; memory_total: number | null; memory_used: number | null;
+  disk_total: number | null; disk_used: number | null };
 export type DiskLevel = "ok" | "tight" | "full" | "off";
 /** 常驻服务的健康：up 在跑 / restarting 进程退出了、等自动重启 / gave_up 已停止自动重启（或别的意外结束）。 */
 export type ServiceHealth = "up" | "restarting" | "gave_up";
-export type ServiceInfo = JobInfo & { health: ServiceHealth; ports: number[]; uptime: number | null };
+export type ServiceInfo = JobInfo & { health: ServiceHealth; ports: number[]; uptime: number | null;
+  earlier_stops?: number }; // v2.85 同名同命令的旧停止记录合进这一行（服务器 services.merge）
 export type ComputerProcess = { pid: number; cpu: number; memory: number; elapsed: number; command: string };
 export type ComputerStorage = { files: number; installed: number; logs: number; spill: number; cache: number; cleanable: number };
 export type InstalledTool = { kind: "pip" | "npm" | string; name: string; version: string };
@@ -123,8 +128,8 @@ export function serviceLine(v: ServiceInfo, now = Date.now()): string {
     case "up":
     {
       const u = jobUsage(v.usage);
-      return [`运行 ${jobDuration(v.uptime ?? v.elapsed)}`, v.ports.length ? `端口 ${v.ports.join("、")}` : "", u ? jobUsageLabel(u) : "", restarted]
-        .filter(Boolean).join(" · ");
+      return [`运行 ${jobDuration(v.uptime ?? v.elapsed)}`, v.ports.length ? `端口 ${v.ports.join("、")}` : "", u ? jobUsageLabel(u) : "", restarted,
+        v.earlier_stops ? `24 小时内停过 ${v.earlier_stops} 次` : ""].filter(Boolean).join(" · ");
     }
     case "restarting": {
       const s = v.restart_at ? Math.floor((Date.parse(v.restart_at) - now) / 1000) : 0;
@@ -252,4 +257,23 @@ export const diskJobSize = (r: DiskJob) => `${formatSize(r.total)}${r.disk.parti
 export function diskJobsNote(s: ComputerStatus): string {
   const logs = diskJobRows(s).filter((r) => r.logKept).reduce((a, r) => a + r.disk.log, 0);
   return `按任务结束时数的账；写下的文件不会被清理，要腾地方得删它们${logs > 0 ? `，日志共 ${formatSize(logs)} 可以清` : ""}`;
+}
+
+/** “整台服务器”一行的副标题（= App machineLine）：4 核（负载 0.3） · 内存 1 GB / 4 GB · 磁盘 12 GB / 40 GB；全读不到 → null。 */
+export function machineLine(m: MachineInfo): string | null {
+  const parts = [
+    m.cpus != null ? `${m.cpus} 核${m.load1 != null ? `（负载 ${m.load1.toFixed(1)}）` : ""}` : "",
+    m.memory_total != null ? `内存 ${m.memory_used != null ? `${formatSize(m.memory_used)} / ` : ""}${formatSize(m.memory_total)}` : "",
+    m.disk_total != null ? `磁盘 ${m.disk_used != null ? `${formatSize(m.disk_used)} / ` : ""}${formatSize(m.disk_total)}` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** 电脑页页头说明（v2.85 = App computerIntro）：先说清是服务器上隔出来的一块、各有多大，再说用途。 */
+export function computerIntro(c: ComputerStatus | undefined | null, personal: boolean): string {
+  const size = [c?.sandbox.memory_limit != null ? `内存 ${formatSize(c.sandbox.memory_limit)}` : "",
+    c?.disk_limit != null ? `空间 ${formatSize(c.disk_limit)}` : ""].filter(Boolean).join(" · ");
+  const head = `${personal ? "你的云电脑" : "这个项目的云电脑"}是服务器上隔出来的一块云端 Linux${size ? `（${size}）` : ""}`;
+  return personal ? `${head}：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。`
+    : `${head}：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。`;
 }

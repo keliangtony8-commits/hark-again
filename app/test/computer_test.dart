@@ -213,4 +213,29 @@ void main() {
     expect(find.byIcon(Icons.cloud_off_rounded), findsOneWidget);
     expect(find.text('重启'), findsNothing);
   });
+
+  test('v2.85 同名服务合并（earlier_stops）+ 整台服务器一行 + 页头说清是隔出来的一块', () {
+    final merged = ServiceInfo.fromJson({..._svc('up'), 'earlier_stops': 2});
+    expect(merged.earlierStops, 2);
+    expect(serviceLine(merged), '运行 1 小时 02 分 · 端口 8000 · 24 小时内停过 2 次');
+    expect(ServiceInfo.fromJson(_svc('up')).earlierStops, 0);
+
+    expect(ComputerStatus.fromJson(_status()).machine, isNull); // 项目的电脑不给
+    final m = ComputerStatus.fromJson({..._status(), 'machine': {'cpus': 2, 'load1': 0.34, 'memory_total': 4 << 30,
+        'memory_used': 1 << 30, 'disk_total': 40 << 30, 'disk_used': 12 << 30}}).machine!;
+    expect(machineLine(m), '2 核（负载 0.3） · 内存 ${formatSize(1 << 30)} / ${formatSize(4 << 30)} · 磁盘 ${formatSize(12 << 30)} / ${formatSize(40 << 30)}');
+    expect(machineLine(const MachineInfo()), isNull);
+    expect(machineLine(const MachineInfo(memoryTotal: 4 << 30)), '内存 ${formatSize(4 << 30)}');
+
+    final s = ComputerStatus.fromJson({..._status(), 'disk_limit': 3 << 30});
+    expect(computerIntro(s, personal: true),
+        startsWith('你的云电脑是服务器上隔出来的一块云端 Linux（内存 ${formatSize(1 << 30)} · 空间 ${formatSize(3 << 30)}）：'));
+    expect(computerIntro(null, personal: false), startsWith('这个项目的云电脑是服务器上隔出来的一块云端 Linux：'));
+  });
+
+  testWidgets('v2.85 个人电脑多一行“整台服务器”，没有 machine 就不画', (tester) async {
+    await _pump(tester, {..._status(job: false), 'machine': {'cpus': 4, 'memory_total': 4 << 30, 'memory_used': 1 << 30}});
+    expect(find.text('整台服务器'), findsOneWidget);
+    expect(find.textContaining('4 核'), findsOneWidget);
+  });
 }

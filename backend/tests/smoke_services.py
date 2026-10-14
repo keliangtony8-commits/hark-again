@@ -307,6 +307,44 @@ assert "restart_service" in subagent.CHILD_TOOLS
 from app import plan_mode
 assert "restart_service" not in plan_mode.READ_TOOLS
 
+# ---- 10. v2.85 同一个服务只出一行（同名同命令）：旧的意外结束记录折成 earlier_stops；两个都在跑各出一行 ----
+J = lambda i, st, t="机器人", cmd="python bot.py": NS(id=i, state=st, title=t, command=cmd)
+m = services.merge([J("a", "running"), J("b", "failed"), J("c", "lost"), J("d", "failed", t="别的")])
+assert [(j.id, n) for j, n in m] == [("a", 2), ("d", 0)], m
+m = services.merge([J("a", "running"), J("b", "running"), J("c", "failed")])
+assert [(j.id, n) for j, n in m] == [("a", 1), ("b", 0)], m
+m = services.merge([J("x", "failed"), J("y", "timed_out"), J("z", "failed", cmd="python other.py")])
+assert [(j.id, n) for j, n in m] == [("x", 1), ("z", 0)], m
+async def clone_gone(jid):
+    async with SessionLocal() as db:
+        j = await db.get(Job, jid)
+        import uuid
+        db.add(Job(id="j" + uuid.uuid4().hex[:11], project_id=j.project_id, conversation_id=j.conversation_id, title=j.title, command=j.command, keep_alive=True,
+                   state="failed", finished_at=datetime.now(timezone.utc), timeout=j.timeout)); await db.commit()
+k3 = run(start("sleep 30", keep_alive=True, title="复活"))
+wait_pid(k3)
+run(clone_gone(k3)); run(clone_gone(k3))
+sv = [x for x in run(status())["services"] if x["title"] == "复活"]
+assert len(sv) == 1 and sv[0]["id"] == k3 and sv[0]["health"] == "up" and sv[0]["earlier_stops"] == 2, sv
+c.post(f"/api/jobs/{k3}/cancel")
+
+# ---- 11. v2.85 整台服务器读数（machine.py）：解析 meminfo；个人工作区才给，项目的电脑 None ----
+from app import machine, workspaces
+assert machine._meminfo("MemTotal: 4000 kB\nMemFree: 100 kB\nMemAvailable: 1000 kB\n") == (4000 * 1024, 3000 * 1024)
+assert machine._meminfo("MemTotal: 4000 kB\nMemFree: 500 kB\n") == (4000 * 1024, 3500 * 1024)
+mr = machine.read(tmp)
+assert set(mr) == {"cpus", "load1", "memory_total", "memory_used", "disk_total", "disk_used"} and mr["disk_total"] > 0, mr
+st = run(status())
+assert ("machine" in st) and ((st["machine"] is not None) == workspaces.is_personal(pid)), (pid, st.get("machine"))
+async def personal_status():
+    async with SessionLocal() as db:
+        return await computer.status(db, workspaces.PERSONAL)
+try:
+    pm = run(personal_status())["machine"]
+    assert pm is not None and pm["cpus"] >= 1, pm
+except LookupError:
+    pass  # 个人工作区没建好（只在完整安装里有）
+
 for jid in (k, n):
     c.post(f"/api/jobs/{jid}/cancel")
 for p in procs.values():

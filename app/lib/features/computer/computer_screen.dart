@@ -39,9 +39,7 @@ class ComputerScreen extends ConsumerWidget {
         child: PageBody(children: [
           PageIntro(
             summary: s.value == null ? (s.hasError ? '暂时看不到状态' : '正在查看…') : computerStateLabel(s.value!.state),
-            line: personal
-                ? '主聊天和定时任务用的云端 Linux：我在这里跑代码、装软件、做后台任务，产物放进“我的文件”。'
-                : '这个项目专用的云端 Linux：项目里的对话都在这里跑代码、装软件、做后台任务，文件就是项目文件。',
+            line: computerIntro(s.value, personal: personal), // v2.85 先说清是服务器上隔出来的一块、多大
           ),
           ComputerSection(ws: ws, title: '状态', pollAlways: true),
           PortsSection(ws: ws, delay: Motion.stagger(1)),
