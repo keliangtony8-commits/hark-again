@@ -121,3 +121,13 @@ async def render(html: str, fmt: str = "pdf", paper: str = "A4", landscape: bool
     except ValueError:
         blocked = 0
     return r.content, blocked, r.headers.get("x-render-cut") == "1"
+
+
+async def live_connect(session: str, reopen: bool = False):
+    """和 browser 服务的实时画面 WS 握手（browser/service.py /sessions/{name}/live），返回 websockets 连接；连不上抛异常。
+    帧是 JPEG 二进制，后端不解码，只转发（routes/browser.py live）。"""
+    import websockets
+    base = settings.browser_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
+    return await websockets.connect(f"{base}/sessions/{session}/live" + ("?open=1" if reopen else ""),
+                                    open_timeout=15, ping_interval=None, compression=None, proxy=None,
+                                    max_size=8 * 1024 * 1024, additional_headers=_h())

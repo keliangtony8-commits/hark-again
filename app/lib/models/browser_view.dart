@@ -1,4 +1,4 @@
-// 浏览器画面卡 + 接管页的纯规则（v1.29 / v2.82）：接管条文案、截图刷新节奏（截图轮询，不上 VNC：省 VPS 和流量）、
+// 浏览器画面卡 + 接管页的纯规则（v1.29 / v2.82 / v2.89）：接管条文案、实时画面连接状态机（WS 推流，断了退避重连）、
 // 读屏句子、接管页的坐标换算（缩放平移后点到网页哪里）。
 // 网页版 lib/browserView.ts 同一套；卡片在 blocks/browser_block.dart，接管页在 blocks/browser_takeover.dart。
 import 'dart:ui';
@@ -6,11 +6,11 @@ import 'dart:ui';
 import '../theme/tokens.dart';
 import 'block.dart';
 
-/// 浏览器服务的视口（browser/service.py VIEW）：截图就是这么大。
+/// 浏览器服务的视口（browser/service.py VIEW）：画面就是这个比例。
 const browserView = Size(1280, 800);
 const browserAspect = 1280 / 800;
 
-/// 接管页最多放大几倍（再大截图就糊成色块了）。
+/// 接管页最多放大几倍（再大画面就糊成色块了）。
 const takeoverZoomMax = 4.0;
 
 /// 接管页第一次进来时画面下的一句手势说明；用户做过一次手势就不再显示。
@@ -36,18 +36,45 @@ String handoffStateLine(BrowserHandoff h) => switch (h.state) {
       _ => '',
     };
 
-/// 截图刷新节奏：接管页开着（或助手在等你）→ 快；页面在打开 → 中；只是看着 → 慢。
-Duration screenInterval({required bool control, required bool live}) =>
-    control ? Timing.screenFast : live ? Timing.screenOpening : Timing.screenIdle;
+/// 实时画面连接（v2.89 §M，一条 WS：下行 JPEG 帧、上行接管输入；= 网页 lib/browserView.ts LiveState）。
+/// connecting 刚连 / live 有画面在推 / reconnecting 断了在退避重连 / closed 浏览器已关闭（等用户点“重新打开”）/ down 浏览器服务不可用。
+enum LiveState { connecting, live, reconnecting, closed, down }
 
-/// 只是看着超过 screenPauseAfter 就暂停刷新；在操作、在打开、在等你接管都不停。
-bool screenShouldPause({required Duration idle, required bool control, required bool live, required bool pending}) =>
-    !control && !live && !pending && idle >= Timing.screenPauseAfter;
+/// 服务器的关闭码（= backend routes/browser.py、browser/live.py CLOSE_*）。
+const liveCloseUnauthorized = 4401, liveCloseNotOpen = 4404, liveCloseDown = 4503;
+
+/// 连接关了之后进哪个状态。还在打开（block.live）时“没开”是正常的 → 接着重连；token 失效交给聊天连接去登出。
+LiveState liveStateAfterClose(int? code, {required bool opening}) => switch (code) {
+      liveCloseNotOpen => opening ? LiveState.reconnecting : LiveState.closed,
+      liveCloseDown => LiveState.down,
+      liveCloseUnauthorized => LiveState.closed,
+      _ => LiveState.reconnecting,
+    };
+
+/// 第 [attempt] 次重连前等多久（从 0 起）：1、2、4、8、15、15… 秒。
+Duration liveRetryDelay(int attempt) {
+  final d = Timing.liveRetryMin * (1 << attempt.clamp(0, 8));
+  return d > Timing.liveRetryMax ? Timing.liveRetryMax : d;
+}
+
+/// 画面上的一句状态；live 且有画面 → null（不盖东西）。[hasFrame] = 已经有过一帧（重连时先留着最后一帧）。
+String? liveStatusLine(LiveState s, {required bool hasFrame, required bool opening, String? site}) => switch (s) {
+      LiveState.live => hasFrame ? null : '正在载入画面…',
+      LiveState.connecting => hasFrame ? null : opening ? '正在打开${site == null ? '网页' : ' $site'}…' : '正在连接画面…',
+      LiveState.reconnecting => opening && !hasFrame ? '正在打开${site == null ? '网页' : ' $site'}…' : '正在重连…',
+      LiveState.closed => liveClosedTitle,
+      LiveState.down => browserDownTitle,
+    };
+
+const liveClosedTitle = '浏览器已关闭';
+const liveReopenLabel = '重新打开';
+
+/// closed / down 时画面上给一个“重新打开”（用存好的登录回到最后网址）。
+bool liveCanReopen(LiveState s) => s == LiveState.closed || s == LiveState.down;
 
 /// 读屏：takeover = 在接管页里（点哪里就点网页哪里）；卡片上 = 预览，点开接管。
-String browserScreenSemantics({required bool takeover, required bool paused, String? site}) {
+String browserScreenSemantics({required bool takeover, String? site}) {
   final where = site == null ? '浏览器' : '$site 的浏览器';
-  if (paused) return '$where画面已暂停，轻点继续';
   return takeover ? '$where实时画面，已接管，点哪里就点网页哪里' : '$where实时画面，点开接管';
 }
 

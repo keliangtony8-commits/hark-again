@@ -63,7 +63,7 @@ assert c["litellm"].get("profiles") == ["gateway"], "litellm 应只在 gateway p
 for s in ("backend", "worker"):
     dep = c[s]["depends_on"]
     assert "litellm" not in dep, f"{s} 不能依赖 litellm（小内存档不启动它）"
-assert "${BROWSER_MAX_SESSIONS:-3}" in str(c["browser"]["environment"])
+assert "${BROWSER_MAX_SESSIONS:-2}" in str(c["browser"]["environment"])
 assert "SANDBOX_MEM" in c["sandbox"]["environment"]
 assert "redis" not in c, "不引入 Redis"
 PY

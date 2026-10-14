@@ -4,7 +4,7 @@
 # 2) browser_client：503 → BrowserDown（short = 卡上一句），连不上 → BrowserDown，别的错误码照常返回；
 # 3) 模拟模型：browser_open / browser_click 碰到 → 这一步记失败、模型拿到整句原因、画面卡标 down 且不残留 live；
 #    之后浏览器好了再打开 → 卡上 down 消失；
-# 4) 接口：/api/browser/screen、mouse 碰到 → 503（不是 500）。
+# 4) 接口：实时画面 WS 连不上 browser 服务 → 关闭码 4503（不是一直重连）。
 # 运行：python tests/smoke_browser_down.py
 import os, sys, asyncio, subprocess, tempfile, json, types
 from types import SimpleNamespace as NS
@@ -182,19 +182,24 @@ print("ok: model turns")
 # ---- 4. 接口 ----
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.auth import require_user, require_query_token
+from app.auth import require_user
 from app.routes import browser as rb
 async def dead_call(session, method, path, json=None):
     raise browser_client.BrowserDown(DETAIL)
 browser_client.call = dead_call
 app = FastAPI(); app.include_router(rb.router)
 app.dependency_overrides[require_user] = lambda: None
-app.dependency_overrides[require_query_token] = lambda: None
 c = TestClient(app)
-r = c.get("/api/browser/screen?session=a-com")
-assert r.status_code == 503 and r.json()["detail"] == "缺少系统库 libatk-1.0.so.0", r.text
-assert c.post("/api/browser/mouse", json={"x": 0.5, "y": 0.5, "session": "a-com"}).status_code == 503
-assert c.post("/api/browser/scroll", json={"dy": 100, "session": "a-com"}).status_code == 503
-assert c.post("/api/browser/nav", json={"action": "reload", "session": "a-com"}).status_code == 503
+from starlette.websockets import WebSocketDisconnect
+async def dead_live(session, reopen=False):
+    raise OSError("connection refused")
+async def ok_token(token): return "u"
+browser_client.live_connect, rb.verify_token = dead_live, ok_token
+try:
+    with c.websocket_connect("/api/browser/live?token=x&session=a-com") as w:
+        w.receive_bytes()
+    raise AssertionError("应当被关")
+except WebSocketDisconnect as e:
+    assert e.code == 4503, e.code  # 服务坏了：客户端显示“云浏览器现在用不了”，不是一直重连
 print("ok: routes")
 print("✓ smoke_browser_down 通过")

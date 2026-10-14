@@ -3,7 +3,8 @@
 - 会话 = 一个浏览器上下文，按站点命名（后端 app/browser_sessions.py 起名，如 taobao-com），
   登录状态持久化到 /state/<name>.json，下次同名会话自动带上；GET /sessions 列出、DELETE ?forget=1 = 退出登录
 - 快照：可交互元素编上号（ref），外加页面可见文字（截断），给模型用
-- 截图 + 鼠标/键盘：给你“实时画面 + 接管”用
+- 实时画面 + 接管（v2.89）：WS /sessions/{name}/live，CDP screencast 推帧、同一条 WS 收输入（规则 live.py）；
+  有人在看不回收、没人看不推；会话关了观看者收 4404，open=1 用存好的登录回到最后网址。/screen 只给助手截图用
 - 安全：只允许 http(s)；Chromium 的每个连接都走本进程里的出网关卡 egress.py（v2.02：页面里的跳转、重定向、
   WebSocket、Service Worker 都算，连的是查过的 IP），内网/回环地址一律拦截并在快照里报给模型（blocked）
 - 空闲 15 分钟自动关闭会话
@@ -35,7 +36,7 @@ import re
 import time
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from pydantic import BaseModel
@@ -44,6 +45,7 @@ import dialogs
 import egress
 import forms
 import frames
+import live
 import region
 import shadow
 import tabs
@@ -54,7 +56,7 @@ IDLE = 15 * 60
 VIEW = {"width": 1280, "height": 800}
 MAX_TEXT = 6000
 # 同时开着的会话上限（小 VPS 设 1）：超出时把最久没用的会话存好登录状态后关掉
-MAX_SESSIONS = max(1, int(os.environ.get("BROWSER_MAX_SESSIONS", "3")))
+MAX_SESSIONS = max(1, int(os.environ.get("BROWSER_MAX_SESSIONS", "2")))
 DOWNLOADS = "/tmp/browser-downloads"
 UPLOAD_MAX = 20 * 1024 * 1024  # 一次上传的总字节（后端 browser_files.UPLOAD_MAX_MB 同值）
 DOWNLOAD_MAX = 200 * 1024 * 1024  # 单个下载超过就丢掉，只回报名字
@@ -131,6 +133,7 @@ def _forget_browser() -> None:
         _drop_downloads(name)
         _egress.forget(name)
         _forget_dialogs(name)
+        asyncio.ensure_future(_live_end(name))  # 看着的人收到“浏览器已关闭”
 
 
 async def _ensure_browser() -> Browser:
@@ -168,7 +171,7 @@ async def _session(name: str, want: region.Region | None = None) -> Page:
         if name not in _sessions:
             reg = want or _region_last
             while len(_sessions) >= MAX_SESSIONS:
-                await _evict(min(_sessions, key=lambda n: _used.get(n, 0)))
+                await _evict(min(_sessions, key=lambda n: (_watched_now(n), _used.get(n, 0))))  # 先关没人看的
             path = _state_path(name)
             saved = os.path.exists(path)
             ctx = await _browser.new_context(viewport=VIEW, **reg.options(),
@@ -216,6 +219,7 @@ async def _follow(name: str) -> Page:
             except Exception:
                 pass  # 重开也失败：快照照常给出（多半是空白 / 错误页），tab 字段已说明崩过
     _sessions[name] = (ctx, page)
+    _cast_follow(name)
     return page
 
 
@@ -225,6 +229,8 @@ async def _evict(name: str) -> None:
         await _save(name)
     except Exception:
         pass
+    await _live_end(name)
+    _remember_url(name, _sessions[name][1])
     ctx, _ = _sessions.pop(name)
     _tabs.pop(name, None)
     _used.pop(name, None)
@@ -513,28 +519,6 @@ class UploadIn(BaseModel):
 
 class LoginStateIn(BaseModel):
     state: str              # signed_in | expired
-
-
-class PointIn(BaseModel):
-    x: float                # 0..1，相对截图宽度
-    y: float
-    kind: str = "click"     # click | down | move | up（v2.82 接管页：长按拖动 = down → move… → up，拖滑块验证码）
-
-
-class ScrollIn(BaseModel):
-    x: float = 0.5          # 滚轮落在哪（0..1）：页面里可能有多个可滚区域
-    y: float = 0.5
-    dx: float = 0           # 像素，正 = 往右 / 往下
-    dy: float = 0
-
-
-class NavIn(BaseModel):
-    action: str             # back | reload
-
-
-class KeysIn(BaseModel):
-    text: str | None = None
-    key: str | None = None
 
 
 @app.post("/sessions/{name}/goto", dependencies=[Depends(auth)])
@@ -908,14 +892,14 @@ def png_height(data: bytes) -> int:
     return int.from_bytes(data[20:24], "big") if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24 else 0
 
 
-# ---- 实时画面与人工接管 ----
+# ---- 截图（助手看一眼 browser_look / 存文件 browser_screenshot）----
 SHOT_FORMATS = ("jpeg", "png")
 SHOT_HEIGHT_JS = "Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)"
 
 
 @app.get("/sessions/{name}/screen", dependencies=[Depends(auth)])
 async def screen(name: str, format: str = "jpeg", full: bool = False, quality: int = 60):
-    """当前画面。默认 = 实时画面卡用的 JPEG q60 视口；存文件（backend browser_shot）用 png / full=整页。
+    """当前画面。默认 = JPEG q60 视口（助手 browser_look）；存文件（backend browser_shot）用 png / full=整页。
     整页高过 RENDER_PNG_MAX_H 只截最上面那一段，X-Shot-Cut: 1。"""
     if format not in SHOT_FORMATS:
         raise HTTPException(400, "format 只能是 jpeg 或 png")
@@ -923,8 +907,6 @@ async def screen(name: str, format: str = "jpeg", full: bool = False, quality: i
         _forget_browser()
     if name not in _sessions:
         raise HTTPException(404)
-    if format == "jpeg" and not full:  # 有人在看实时画面 / 接管 = 在用：不让 15 分钟空闲回收把正在看的浏览器关掉（用户 18:38“动不动就断”）
-        _used[name] = time.time()
     page = await _follow(name)  # 画面跟着当前标签页（网站开的新页、崩了重开的页）
     kw: dict = {"type": format}
     if format == "jpeg":
@@ -942,82 +924,249 @@ async def screen(name: str, format: str = "jpeg", full: bool = False, quality: i
     return Response(await page.screenshot(**kw), media_type=f"image/{format}", headers={"X-Shot-Cut": "1" if cut else "0"})
 
 
-MOUSE_KINDS = ("click", "down", "move", "up")
-SCROLL_MAX = 3000           # 一次滚轮最多滚多少像素（手指一甩也不会一下飞到页底）
 NAV_TIMEOUT_MS = 15_000
 
 
-@app.post("/sessions/{name}/mouse", dependencies=[Depends(auth)])
-async def mouse(name: str, body: PointIn):
-    """用户在接管页里亲手操作。click = 点一下；down/move/up = 长按拖动（滑块验证码、拖地图）。
-    move 只移动不落盘（拖动中一秒几十次）；click/up 结束一次操作 → 跟新标签页 + 存登录态。"""
-    if body.kind not in MOUSE_KINDS:
-        raise HTTPException(400, f"kind 只能是 {'/'.join(MOUSE_KINDS)}")
-    page = await _session(_check_name(name))
-    x, y = body.x * VIEW["width"], body.y * VIEW["height"]
-    if body.kind == "move":
+# ---- 实时画面（v2.89 §M）：一条 WS = 下行 JPEG 帧（CDP screencast）+ 上行接管输入；规则在 live.py ----
+class _Live:
+    """一个会话的推流：观看者们 + 挂在当前标签页上的 CDP screencast。"""
+
+    def __init__(self) -> None:
+        self.hub = live.Hub()
+        self.page = None
+        self.cdp = None
+        self.width = 0
+        self.lock = asyncio.Lock()
+        self.sockets: list = []
+
+
+_live: dict[str, _Live] = {}
+
+
+def _watched_now(name: str) -> bool:
+    lv = _live.get(name)
+    return bool(lv and lv.hub.viewers)
+
+
+async def _cast_stop(lv: _Live) -> None:
+    cdp, lv.cdp, lv.page, lv.width = lv.cdp, None, None, 0
+    if cdp is None:
+        return
+    try:
+        await cdp.send("Page.stopScreencast")
+        await cdp.detach()
+    except Exception:
+        pass  # 页面已关 / 崩了：会话跟着没了
+
+
+async def _ack(cdp, sid) -> None:
+    try:
+        await cdp.send("Page.screencastFrameAck", {"sessionId": sid})
+    except Exception:
+        pass  # 会话已拆
+
+
+async def _cast(name: str) -> None:
+    """让 screencast 挂在会话的当前标签页、按观看者的宽度推；没人看就停（0 开销）。换页 / 换宽度才重挂。"""
+    lv = _live.get(name)
+    if lv is None:
+        return
+    async with lv.lock:
+        if not lv.hub.viewers or name not in _sessions:
+            await _cast_stop(lv)
+            return
+        ctx, page = _sessions[name]
+        width = lv.hub.width(live.MAX_DIMENSION)
+        if lv.page is page and lv.width == width and lv.cdp is not None:
+            return
+        await _cast_stop(lv)
+        try:
+            cdp = await ctx.new_cdp_session(page)
+
+            def frame(ev, cdp=cdp):
+                asyncio.ensure_future(_ack(cdp, ev.get("sessionId")))  # 立刻 ack，Chrome 才继续出帧；慢的观看者靠 latest-frame-wins 跳帧
+                if lv.cdp is cdp:
+                    lv.hub.deliver(base64.b64decode(ev.get("data") or ""))
+
+            cdp.on("Page.screencastFrame", frame)
+            # 先登记再开：第一帧可能在 startScreencast 返回之前就到（静止页面只有这一帧，丢了就一直黑屏）
+            lv.cdp, lv.page, lv.width = cdp, page, width
+            await cdp.send("Page.startScreencast", {"format": "jpeg", "quality": live.DEFAULT_QUALITY,
+                                                    "maxWidth": width, "maxHeight": width, "everyNthFrame": 1})
+        except Exception:
+            lv.cdp, lv.page, lv.width = None, None, 0
+            return  # 页面正在关 / 崩：下一次 _follow 或输入会再挂
+
+
+def _cast_follow(name: str) -> None:
+    """_follow 换了标签页（网站开新页、崩了重开）：有人在看就把推流挂过去。"""
+    lv = _live.get(name)
+    if lv and lv.hub.viewers and lv.page is not _sessions[name][1]:
+        asyncio.ensure_future(_cast(name))
+
+
+async def _live_end(name: str) -> None:
+    """会话关了：所有观看者断开（客户端收到 4404 → “浏览器已关闭”+“重新打开”）。"""
+    lv = _live.pop(name, None)
+    if lv is None:
+        return
+    lv.hub.close_all()
+    await _cast_stop(lv)
+    for ws in list(lv.sockets):
+        try:
+            await ws.close(live.CLOSE_NOT_OPEN, "浏览器已关闭")
+        except Exception:
+            pass
+
+
+def _last_url_path(name: str) -> str:
+    return f"{STATE}/{name}.last"
+
+
+def _remember_url(name: str, page) -> None:
+    """关会话前记下最后网址：“重新打开”用存好的登录回到这里。"""
+    url = getattr(page, "url", "") or ""
+    if not url.startswith(("http://", "https://")):
+        return
+    try:
+        os.makedirs(STATE, exist_ok=True)
+        with open(_last_url_path(name), "w", encoding="utf-8") as f:
+            f.write(url[:2000])
+    except OSError:
+        pass
+
+
+async def _reopen(name: str) -> None:
+    """“重新打开”：同名会话用存好的登录状态开起来，回到最后网址（出网关卡照样管，内网进不去）。"""
+    page = await _session(name)
+    try:
+        with open(_last_url_path(name), encoding="utf-8") as f:
+            url = f.read().strip()
+    except OSError:
+        url = ""
+    if url and page.url in ("", "about:blank"):
+        try:
+            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+        except Exception:
+            pass  # 打不开：画面照样推（错误页），用户自己看得到
+
+
+async def _input(name: str, cmd: dict) -> None:
+    """用户在接管页里亲手操作（live.parse 洗过的命令）。坐标 0–1 × 视口。
+    click/up/text/key = 一次完整操作：弹出的确认框就是他要确认的（dialogs 规则 5）、跟新标签页、存登录态；
+    move 只移动（拖动中一秒几十次），down 只按下。"""
+    if name not in _sessions:
+        return
+    _used[name] = time.time()
+    page = await _follow(name)
+    t = cmd["t"]
+    if t == "view":
+        return
+    x, y = cmd.get("x", 0.5) * VIEW["width"], cmd.get("y", 0.5) * VIEW["height"]
+    if t == "mouse" and cmd["kind"] == "move":
         await page.mouse.move(x, y, steps=2)
-        return {"ok": True}
-    if body.kind == "down":
+        return
+    if t == "mouse" and cmd["kind"] == "down":
         await page.mouse.move(x, y)
         await page.mouse.down()
-        return {"ok": True}
-    _arm(name, "accept")  # 用户亲手点：弹出的确认框就是他要确认的（dialogs 规则 5）
+        return
+    if t == "wheel":
+        await page.mouse.move(x, y)
+        await page.mouse.wheel(cmd["dx"], cmd["dy"])
+        return
+    if t == "nav":
+        try:
+            if cmd["action"] == "back":
+                await page.go_back(timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+            else:
+                await page.reload(timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+        except Exception as e:  # noqa: BLE001 —— 只吞超时（测试里 playwright 是桩，按类名认）
+            if type(e).__name__ != "TimeoutError":
+                raise  # 慢页面超时：画面会自己跟上，不当错误
+    else:
+        _arm(name, "accept")
+        try:
+            if t == "mouse" and cmd["kind"] == "up":
+                await page.mouse.move(x, y, steps=2)
+                await page.mouse.up()
+            elif t == "mouse":
+                await page.mouse.click(x, y)
+            elif t == "text":
+                await page.keyboard.type(cmd["text"], delay=20)
+            elif t == "key":
+                await page.keyboard.press(cmd["key"])
+        finally:
+            _disarm(name)
+    if name in _sessions:
+        await _follow(name)  # 用户在画面里点开了新标签页：推流跟过去（_follow 里接）
+        await _save(name)
+
+
+@app.websocket("/sessions/{name}/live")
+async def live_ws(ws: WebSocket, name: str, open: bool = False):
+    """实时画面 + 接管。open=1 = 浏览器关着就用存好的登录重开（客户端“重新打开”）。
+    关闭码见 live.CLOSE_*。每个连接、每条输入都算“在用”；有人在看，空闲回收不关它。"""
+    if ws.headers.get("authorization") != f"Bearer {TOKEN}":
+        await ws.close(live.CLOSE_UNAUTHORIZED)
+        return
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", name):
+        await ws.close(live.CLOSE_BAD_NAME)
+        return
+    await ws.accept()
+    if _browser and not _browser.is_connected():
+        _forget_browser()
+    if name not in _sessions:
+        if not open:
+            await ws.close(live.CLOSE_NOT_OPEN, "浏览器已关闭")
+            return
+        try:
+            await _reopen(name)
+        except HTTPException as e:
+            await ws.close(live.CLOSE_DOWN, str(e.detail)[:120])
+            return
+    lv = _live.setdefault(name, _Live())
+    viewer = live.Viewer()
+    lv.hub.join(viewer)
+    lv.sockets.append(ws)
+    _used[name] = time.time()
+    await _cast(name)
+
+    async def pump():
+        while (frame := await viewer.next()) is not None:
+            await ws.send_bytes(frame)
+
+    sender = asyncio.ensure_future(pump())
     try:
-        if body.kind == "up":
-            await page.mouse.move(x, y, steps=2)
-            await page.mouse.up()
-        else:
-            await page.mouse.click(x, y)
+        while True:
+            cmd = live.parse(await ws.receive_text())
+            if cmd is None:
+                continue
+            if cmd["t"] == "view":
+                viewer.px = cmd["px"]
+                await _cast(name)
+                continue
+            try:
+                await _input(name, cmd)
+            except Exception:
+                pass  # 一次操作失败（页面正在跳转）不断线；画面会说明一切
+            if name not in _sessions:
+                break
+    except (WebSocketDisconnect, RuntimeError):
+        pass
     finally:
-        _disarm(name)
-    await _follow(name)  # 用户在画面里点开了新标签页：实时画面跟过去
-    await _save(name)
-    return {"ok": True}
-
-
-@app.post("/sessions/{name}/scroll", dependencies=[Depends(auth)])
-async def scroll(name: str, body: ScrollIn):
-    """接管页：单指拖动 / 鼠标滚轮 = 在 (x,y) 处滚动网页。"""
-    page = await _session(_check_name(name))
-    await page.mouse.move(body.x * VIEW["width"], body.y * VIEW["height"])
-    clamp = lambda v: max(-SCROLL_MAX, min(SCROLL_MAX, v))  # noqa: E731
-    await page.mouse.wheel(clamp(body.dx), clamp(body.dy))
-    return {"ok": True}
-
-
-@app.post("/sessions/{name}/nav", dependencies=[Depends(auth)])
-async def nav(name: str, body: NavIn):
-    """接管页底栏的后退 / 刷新（无头浏览器没有地址栏按钮，快捷键也不管用）。没有上一页 → back 什么也不做。"""
-    if body.action not in ("back", "reload"):
-        raise HTTPException(400, "action 只能是 back/reload")
-    page = await _session(_check_name(name))
-    try:
-        if body.action == "back":
-            await page.go_back(timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
-        else:
-            await page.reload(timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
-    except Exception as e:  # noqa: BLE001 —— 只吞超时（测试里 playwright 是桩，按类名认）
-        if type(e).__name__ != "TimeoutError":
-            raise  # 慢页面超时：画面会自己跟上，不当错误
-    await _save(name)
-    return {"ok": True}
-
-
-@app.post("/sessions/{name}/keyboard", dependencies=[Depends(auth)])
-async def keyboard(name: str, body: KeysIn):
-    page = await _session(_check_name(name))
-    _arm(name, "accept")
-    try:
-        if body.text:
-            await page.keyboard.type(body.text, delay=20)
-        if body.key:
-            await page.keyboard.press(body.key)
-    finally:
-        _disarm(name)
-    await _follow(name)
-    await _save(name)
-    return {"ok": True}
+        sender.cancel()
+        lv.hub.leave(viewer)
+        if ws in lv.sockets:
+            lv.sockets.remove(ws)
+        if name in _sessions:
+            _used[name] = time.time()  # 刚看完也算刚用过
+            if not lv.hub.viewers:
+                await _cast(name)  # 最后一个人走了：停推
+    if name not in _sessions:
+        try:
+            await ws.close(live.CLOSE_NOT_OPEN, "浏览器已关闭")
+        except RuntimeError:
+            pass
 
 
 @app.get("/sessions", dependencies=[Depends(auth)])
@@ -1038,6 +1187,7 @@ async def close(name: str, forget: bool = False):
     async with _lock:
         if name in _sessions:
             if forget:
+                await _live_end(name)
                 ctx, _ = _sessions.pop(name)
                 _tabs.pop(name, None)
                 _used.pop(name, None)
@@ -1050,7 +1200,7 @@ async def close(name: str, forget: bool = False):
                 await _evict(name)
         _restored.discard(name)
         if forget:
-            for path in (_state_path(name), _meta_path(name)):
+            for path in (_state_path(name), _meta_path(name), _last_url_path(name)):
                 try:
                     os.remove(path)
                 except FileNotFoundError:
@@ -1058,14 +1208,18 @@ async def close(name: str, forget: bool = False):
     return {"ok": True}
 
 
+def _idle_out(now: float) -> list[str]:
+    """空闲超过 IDLE 该关的会话；有人在看 / 接管的不算（用户 18:38“动不动就断”）。"""
+    return [n for n, t in list(_used.items()) if now - t > IDLE and n in _sessions and not _watched_now(n)]
+
+
 async def _reaper():
     while True:
         await asyncio.sleep(60)
-        for name, t in list(_used.items()):
-            if time.time() - t > IDLE and name in _sessions:
-                async with _lock:
-                    if name in _sessions:
-                        await _evict(name)
+        for name in _idle_out(time.time()):
+            async with _lock:
+                if name in _sessions:
+                    await _evict(name)
 
 
 @app.on_event("startup")

@@ -1,6 +1,7 @@
 // v2.28 浏览器服务本身不能用（后端 BrowserDown → 卡上 down）：解析（空串当没有）、画面位置换成原因 + 怎么办、
-// 不拉画面（不请求截图）、不能接管、没有实时红点；换成正常新卡后画面回来。
+// 不连实时画面、不能接管、没有实时红点；换成正常新卡后画面连上。
 import 'package:assistant/blocks/block_view.dart';
+import 'package:assistant/blocks/browser_live.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/models/block.dart';
 import 'package:assistant/models/browser_view.dart';
@@ -10,13 +11,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'browser_handoff_test.dart' show FakeLives;
+
 class FakeApi implements Api {
-  final urls = <String>[];
   @override
-  String fileUrl(String path) {
-    urls.add(path);
-    return 'http://test.invalid$path?token=t';
-  }
+  String fileUrl(String path) => 'http://test.invalid$path?token=t';
 
   @override
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError();
@@ -29,8 +28,8 @@ Map<String, dynamic> card({String? down}) => {
       'down': ?down,
     };
 
-Widget host(FakeApi api, Map<String, dynamic> j) => ProviderScope(
-      overrides: [apiProvider.overrideWithValue(api)],
+Widget host(FakeLives lives, Map<String, dynamic> j) => ProviderScope(
+      overrides: [apiProvider.overrideWithValue(FakeApi()), liveConnectProvider.overrideWithValue(lives.connect)],
       child: MaterialApp(
         theme: buildTheme(Brightness.light),
         home: Scaffold(body: SingleChildScrollView(child: BlockView(Block.fromJson(j)))),
@@ -48,8 +47,8 @@ void main() {
     tester.view.physicalSize = const Size(500, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final api = FakeApi();
-    await tester.pumpWidget(host(api, card(down: '缺少系统库 libatk-1.0.so.0')));
+    final lives = FakeLives();
+    await tester.pumpWidget(host(lives, card(down: '缺少系统库 libatk-1.0.so.0')));
     await tester.pump(const Duration(seconds: 3));
     expect(find.text(browserDownTitle), findsOneWidget);
     expect(find.text('缺少系统库 libatk-1.0.so.0'), findsOneWidget);
@@ -57,15 +56,15 @@ void main() {
     expect(find.text('接管'), findsNothing);
     expect(find.byType(PulseDot), findsNothing);
     expect(find.byType(Image), findsNothing);
-    expect(api.urls.where((u) => u.contains('/api/browser/screen')), isEmpty);
+    expect(lives.all, isEmpty);
 
-    await tester.pumpWidget(host(api, card()));
+    await tester.pumpWidget(host(lives, card()));
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(find.text(browserDownTitle), findsNothing);
     expect(find.text('接管'), findsOneWidget);
-    expect(api.urls.where((u) => u.contains('/api/browser/screen')), isNotEmpty);
+    expect(lives.all, hasLength(1));
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
   });

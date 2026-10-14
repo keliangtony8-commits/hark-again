@@ -4,7 +4,8 @@
 //   长按后拖动 = 按住鼠标拖（滑块验证码）：down → move… → up。拖动/滚动攒 Timing.takeoverInput 发一次。
 // 底栏：后退、刷新、打字框（提交 = 把字打进网页；空着提交 = 回车）。助手在等你（handoff pending）时顶部出“需要你来”条，
 // 完成/做不了走卡片传进来的 onAnswer（和卡上的条是同一个 HandoffBar），答完关页。
-// 画面每 Timing.screenFast 刷一帧；页面开着时卡片自己不刷（BrowserBlockView 负责）。
+// v2.89 §M：画面和输入走卡片的同一条实时连接（BrowserLive，推流，不再轮询截图、不再一次操作一个 HTTP）；
+// 页面开着时 hold 住连接，并按“画面宽 × 放大倍数”报宽度（放大看得清）。
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -13,7 +14,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/api.dart';
 import '../models/block.dart';
 import '../models/browser_view.dart';
 import '../theme/app_theme.dart';
@@ -21,19 +21,22 @@ import '../theme/tokens.dart';
 import '../ui/glass.dart';
 import '../ui/kit.dart';
 import '../ui/motion.dart';
+import 'browser_block.dart' show LiveScreen;
+import 'browser_live.dart';
 
 /// 推出接管页（根导航，盖住底栏和抽屉）。[block] 随卡片更新（handoff 状态变了页里跟着变）。
 /// [onAnswer] 为空 = 只读场景，没有完成/做不了按钮；返回 false = 没连上，按钮留着。
 Future<void> openBrowserTakeover(BuildContext context,
-    {required ValueListenable<BrowserBlock> block, bool Function(bool done)? onAnswer}) {
+    {required ValueListenable<BrowserBlock> block, required BrowserLive live, bool Function(bool done)? onAnswer}) {
   HapticFeedback.mediumImpact();
   return Navigator.of(context, rootNavigator: true)
-      .push(riseRoute<void>(context, (_) => BrowserTakeoverPage(block: block, onAnswer: onAnswer)));
+      .push(riseRoute<void>(context, (_) => BrowserTakeoverPage(block: block, live: live, onAnswer: onAnswer)));
 }
 
 class BrowserTakeoverPage extends ConsumerStatefulWidget {
-  const BrowserTakeoverPage({super.key, required this.block, this.onAnswer});
+  const BrowserTakeoverPage({super.key, required this.block, required this.live, this.onAnswer});
   final ValueListenable<BrowserBlock> block;
+  final BrowserLive live;
   final bool Function(bool done)? onAnswer;
 
   @override
@@ -41,8 +44,7 @@ class BrowserTakeoverPage extends ConsumerStatefulWidget {
 }
 
 class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
-  Timer? _frames, _flush;
-  int _tick = 0;
+  Timer? _flush;
   bool _touched = false; // 做过一次手势 → 说明那句收起
   final _keys = TextEditingController();
 
@@ -55,33 +57,25 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
   double _scrollDy = 0, _scrollDx = 0;
   Offset? _scrollAt, _dragTo;
 
-  BrowserBlock get _b => widget.block.value;
-  Api get _api => ref.read(apiProvider);
+  BrowserLive get _live => widget.live;
 
   @override
   void initState() {
     super.initState();
-    _frames = Timer.periodic(Timing.screenFast, (_) {
-      if (mounted && TickerMode.valuesOf(context).enabled) setState(() => _tick++);
-    });
+    _live.hold();
   }
 
   @override
   void dispose() {
-    _frames?.cancel();
     _flush?.cancel();
     _keys.dispose();
+    _live.release();
     super.dispose();
   }
 
-  Future<void> _post(String path, Map<String, Object?> body) async {
-    try {
-      await _api.post(path, {...body, 'session': _b.session});
-    } catch (_) {
-      if (mounted) showToast(context, '没发出去，再试一次');
-      return;
-    }
-    if (mounted) setState(() => _tick++); // 操作完马上拿一帧，不等下一拍
+  /// 发一条接管输入（格式见 docs/protocol.md）；没连上 → 提示一次，画面上也写着“正在重连…”。
+  void _send(Map<String, Object?> m) {
+    if (!_live.send(m) && mounted) showToast(context, '画面未连接，请稍后重试');
   }
 
   void _touch() {
@@ -93,7 +87,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
   void _tap(TapUpDetails d, Size box) {
     _touch();
     final at = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan);
-    if (at != null) _post('/api/browser/mouse', {'x': at.dx, 'y': at.dy});
+    if (at != null) _send({'t': 'mouse', 'kind': 'click', 'x': at.dx, 'y': at.dy});
   }
 
   void _scaleStart(ScaleStartDetails d) {
@@ -140,7 +134,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
     if (at == null) return;
     HapticFeedback.selectionClick();
     _dragTo = null;
-    _post('/api/browser/mouse', {'x': at.dx, 'y': at.dy, 'kind': 'down'});
+    _send({'t': 'mouse', 'kind': 'down', 'x': at.dx, 'y': at.dy});
   }
 
   void _dragMove(LongPressMoveUpdateDetails d, Size box) {
@@ -152,7 +146,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
     _flush?.cancel();
     final at = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan) ?? _dragTo;
     _dragTo = null;
-    if (at != null) _post('/api/browser/mouse', {'x': at.dx, 'y': at.dy, 'kind': 'up'});
+    if (at != null) _send({'t': 'mouse', 'kind': 'up', 'x': at.dx, 'y': at.dy});
   }
 
   void _schedule() => _flush ??= Timer(Timing.takeoverInput, _sendNow);
@@ -162,21 +156,21 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
     _flush = null;
     if (_dragTo != null) {
       final to = _dragTo!;
-      _api.post('/api/browser/mouse', {'x': to.dx, 'y': to.dy, 'kind': 'move', 'session': _b.session}).ignore();
+      _live.send({'t': 'mouse', 'kind': 'move', 'x': to.dx, 'y': to.dy});
     }
     if (_scrollDy.abs() >= 1 || _scrollDx.abs() >= 1) {
       final at = _scrollAt ?? const Offset(0.5, 0.5);
-      _post('/api/browser/scroll', {'x': at.dx, 'y': at.dy, 'dx': _scrollDx.roundToDouble(), 'dy': _scrollDy.roundToDouble()});
+      _send({'t': 'wheel', 'x': at.dx, 'y': at.dy, 'dx': _scrollDx.roundToDouble(), 'dy': _scrollDy.roundToDouble()});
       _scrollDx = _scrollDy = 0;
     }
   }
 
   // —— 底栏 ——
 
-  Future<void> _sendKeys() async {
+  void _sendKeys() {
     final text = _keys.text;
     _keys.clear();
-    await _post('/api/browser/keyboard', text.isEmpty ? {'key': 'Enter'} : {'text': text});
+    _send(text.isEmpty ? {'t': 'key', 'key': 'Enter'} : {'t': 'text', 'text': text});
   }
 
   void _answer(bool done) {
@@ -244,6 +238,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
 
   Widget _stage(BuildContext context, BrowserBlock b) => LayoutBuilder(builder: (context, c) {
         final box = c.biggest;
+        _live.view(takeoverFit(box).width * _scale * MediaQuery.devicePixelRatioOf(context)); // 放大了要更清楚的帧
         return Listener(
           onPointerSignal: (e) => _wheel(e, box),
           child: GestureDetector(
@@ -257,7 +252,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
             onLongPressMoveUpdate: (d) => _dragMove(d, box),
             onLongPressEnd: (d) => _dragEnd(d, box),
             child: Semantics(
-              label: browserScreenSemantics(takeover: true, paused: false, site: b.site),
+              label: browserScreenSemantics(takeover: true, site: b.site),
               image: true,
               child: ClipRect(
                 child: Transform(
@@ -267,20 +262,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
                     child: Center(
                       child: AspectRatio(
                         aspectRatio: browserAspect,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(Radii.inner),
-                          child: Image.network(
-                            '${_api.fileUrl('/api/browser/screen')}&session=${Uri.encodeQueryComponent(b.session)}&t=$_tick',
-                            excludeFromSemantics: true,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                            errorBuilder: (_, _, _) => Container(
-                              color: context.tileFill,
-                              alignment: Alignment.center,
-                              child: Text(b.live ? '正在打开…' : '正在载入画面…', style: context.text.bodySmall),
-                            ),
-                          ),
-                        ),
+                        child: LiveScreen(live: _live, site: b.site, radius: Radii.inner),
                       ),
                     ),
                   ),
@@ -298,8 +280,8 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
           radius: Radii.full,
           padding: const EdgeInsets.symmetric(horizontal: Sp.x1),
           child: Row(children: [
-            IconButton(tooltip: '后退', onPressed: () => _post('/api/browser/nav', {'action': 'back'}), icon: const Icon(Icons.arrow_back_rounded)),
-            IconButton(tooltip: '刷新', onPressed: () => _post('/api/browser/nav', {'action': 'reload'}), icon: const Icon(Icons.refresh_rounded)),
+            IconButton(tooltip: '后退', onPressed: () => _send({'t': 'nav', 'action': 'back'}), icon: const Icon(Icons.arrow_back_rounded)),
+            IconButton(tooltip: '刷新', onPressed: () => _send({'t': 'nav', 'action': 'reload'}), icon: const Icon(Icons.refresh_rounded)),
             Expanded(
               child: TextField(
                 controller: _keys,

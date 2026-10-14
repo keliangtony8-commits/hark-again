@@ -1,89 +1,43 @@
-"""实时画面与接管：前端看截图、点画面、拖动、滚动、打字、后退刷新，都经后端转发给 browser 服务（browser 服务不对外）。
-v2.82 接管 = App / 网页的全屏接管页：mouse 带 kind（click|down|move|up，长按拖滑块），scroll 是滚轮 / 单指拖动，nav 是后退 / 刷新。
-每个请求带会话名（实时画面卡上的 session；旧卡没有 → main）。会话列表 / 退出登录（我的电脑 → 浏览器登录）也在这。"""
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
-from pydantic import BaseModel, Field
+"""实时画面与接管（v2.89：一条 WS /api/browser/live，取代 v2.82 的截图轮询 + 点按 HTTP）：browser 服务不对外，后端鉴权后只转发字节。
+会话名 = 实时画面卡上的 session（旧卡没有 → main）。会话列表 / 退出登录（我的电脑 → 浏览器登录）也在这。"""
+import re
 
-from .. import browser_client, browser_sessions, system_alerts
+from fastapi import APIRouter, Depends, HTTPException, WebSocket
+
+from .. import browser_client, browser_sessions, preview, system_alerts
 from ..db import get_session
-from ..auth import require_query_token, require_user
+from ..auth import require_user, verify_token
 
 router = APIRouter(prefix="/api/browser")
-Session = Query(browser_sessions.LEGACY, pattern=r"^[A-Za-z0-9_-]{1,40}$")
+_NAME = r"[A-Za-z0-9_-]{1,40}"
 
 
-_NAME = r"^[A-Za-z0-9_-]{1,40}$"
+# 关闭码 = browser/live.py CLOSE_*（客户端 models/browser_view.dart / lib/browserView.ts 同值）
+CLOSE_UNAUTHORIZED, CLOSE_DOWN = 4401, 4503
 
 
-def _unit(v: float) -> float:
-    return min(max(v, 0), 1)
-
-
-class Point(BaseModel):
-    x: float
-    y: float
-    kind: str = Field("click", pattern=r"^(click|down|move|up)$")
-    session: str = Field(browser_sessions.LEGACY, pattern=_NAME)
-
-
-class Wheel(BaseModel):
-    x: float = 0.5
-    y: float = 0.5
-    dx: float = 0
-    dy: float = 0
-    session: str = Field(browser_sessions.LEGACY, pattern=_NAME)
-
-
-class Nav(BaseModel):
-    action: str = Field(pattern=r"^(back|reload)$")
-    session: str = Field(browser_sessions.LEGACY, pattern=_NAME)
-
-
-class Keys(BaseModel):
-    text: str | None = None
-    key: str | None = None
-    session: str = Field(browser_sessions.LEGACY, pattern=_NAME)
-
-
-async def _call(session: str, method: str, path: str, json: dict | None = None):
-    """转发给 browser 服务；服务本身不能用（BrowserDown）→ 503 + 一句原因，不是 500。"""
+@router.websocket("/live")
+async def live(ws: WebSocket, token: str = "", session: str = browser_sessions.LEGACY, open: bool = False):
+    """实时画面 + 接管（v2.89 §M）：一条 WS，下行 JPEG 帧、上行接管输入（消息格式见 docs/protocol.md），后端只鉴权 + 转发字节。
+    先 accept 再用自定义关闭码关（握手前关客户端只看到 403，分不清原因）。"""
+    await ws.accept()
     try:
-        return await browser_client.call(session, method, path, json)
-    except browser_client.BrowserDown as e:
-        raise HTTPException(503, e.short)
-
-
-@router.get("/screen", dependencies=[Depends(require_query_token)])
-async def screen(session: str = Session):
-    r = await _call(session, "GET", "/screen")
-    if r.status_code != 200:
-        raise HTTPException(404, "浏览器没有打开")
-    return Response(r.content, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
-
-
-@router.post("/mouse", dependencies=[Depends(require_user)])
-async def mouse(p: Point):
-    await _call(p.session, "POST", "/mouse", {"x": _unit(p.x), "y": _unit(p.y), "kind": p.kind})
-    return {"ok": True}
-
-
-@router.post("/scroll", dependencies=[Depends(require_user)])
-async def scroll(w: Wheel):
-    await _call(w.session, "POST", "/scroll", {"x": _unit(w.x), "y": _unit(w.y), "dx": w.dx, "dy": w.dy})
-    return {"ok": True}
-
-
-@router.post("/nav", dependencies=[Depends(require_user)])
-async def nav(n: Nav):
-    await _call(n.session, "POST", "/nav", {"action": n.action})
-    return {"ok": True}
-
-
-@router.post("/keyboard", dependencies=[Depends(require_user)])
-async def keyboard(k: Keys):
-    await _call(k.session, "POST", "/keyboard", k.model_dump(exclude={"session"}))
-    return {"ok": True}
+        await verify_token(token)
+    except HTTPException:
+        await ws.close(CLOSE_UNAUTHORIZED)
+        return
+    if not re.fullmatch(_NAME, session):
+        await ws.close(4400)
+        return
+    try:
+        upstream = await browser_client.live_connect(session, reopen=open)
+    except Exception:
+        await ws.close(CLOSE_DOWN, "云浏览器服务未运行")
+        return
+    try:
+        await preview.ws_relay(ws, upstream)
+    finally:
+        await upstream.close()
 
 
 @router.get("/sessions", dependencies=[Depends(require_user)])

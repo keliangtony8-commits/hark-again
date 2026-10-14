@@ -222,7 +222,7 @@ print("ok: model turns")
 import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.auth import require_user, require_query_token
+from app.auth import require_user
 from app.routes import browser as rb
 
 state = {"down": False}
@@ -245,7 +245,6 @@ async def fake_call(session, method, path, json=None):
 browser_client.sessions, browser_client.close, browser_client.call = fake_sessions, fake_close, fake_call
 app = FastAPI(); app.include_router(rb.router)
 app.dependency_overrides[require_user] = lambda: None
-app.dependency_overrides[require_query_token] = lambda: None
 c = TestClient(app)
 j = c.get("/api/browser/sessions").json()
 assert j["max_open"] == 1 and [s["label"] for s in j["sessions"]] == ["taobao.com", "早先的浏览器会话"]
@@ -256,22 +255,49 @@ assert closed == [("taobao-com", True)] and bs.tab("k9").session == ""
 assert c.delete("/api/browser/sessions/Bad.Name").status_code == 400
 state["down"] = True
 assert c.get("/api/browser/sessions").status_code == 503 and c.delete("/api/browser/sessions/a-b").status_code == 503
-assert c.get("/api/browser/screen?session=taobao-com").content == b"jpg"
-assert c.get("/api/browser/screen").status_code == 200 and seen_calls[-1][0] == "main"  # 旧卡
-assert c.get("/api/browser/screen?session=../x").status_code == 422
-c.post("/api/browser/mouse", json={"x": 2, "y": 0.5, "session": "jd-com"})
-assert seen_calls[-1] == ("jd-com", "POST", "/mouse", {"x": 1, "y": 0.5, "kind": "click"})
-# v2.82 接管页：拖动（kind）、滚轮、后退刷新；写错的值 422，不转发
-c.post("/api/browser/mouse", json={"x": 0.2, "y": -1, "kind": "down", "session": "jd-com"})
-assert seen_calls[-1] == ("jd-com", "POST", "/mouse", {"x": 0.2, "y": 0, "kind": "down"})
-n = len(seen_calls)
-assert c.post("/api/browser/mouse", json={"x": 0, "y": 0, "kind": "drag"}).status_code == 422 and len(seen_calls) == n
-assert c.post("/api/browser/scroll", json={"dy": 640, "x": 0.3, "session": "jd-com"}).json() == {"ok": True}
-assert seen_calls[-1] == ("jd-com", "POST", "/scroll", {"x": 0.3, "y": 0.5, "dx": 0, "dy": 640})
-assert c.post("/api/browser/nav", json={"action": "back"}).json() == {"ok": True}
-assert seen_calls[-1] == ("main", "POST", "/nav", {"action": "back"})
-assert c.post("/api/browser/nav", json={"action": "forward"}).status_code == 422
-c.post("/api/browser/keyboard", json={"text": "hi", "session": "jd-com"})
-assert seen_calls[-1] == ("jd-com", "POST", "/keyboard", {"text": "hi", "key": None})
+# v2.89 实时画面：一条 WS，后端鉴权后只转发字节（帧原样下行、输入原样上行），会话名 / 重开参数带给 browser 服务
+from starlette.websockets import WebSocketDisconnect
+import asyncio as _aio
+live_calls: list = []
+class Up:
+    close_code = 4404
+    def __init__(self): self.q, self.sent = _aio.Queue(), []
+    def __aiter__(self): return self
+    async def __anext__(self):
+        m = await self.q.get()
+        if m is None: raise StopAsyncIteration
+        return m
+    async def send(self, m):
+        self.sent.append(m)
+        await self.q.put(m.encode() if m == "echo" else None)  # 收到 echo → 回一帧；别的 → 上游关（4404）
+    async def close(self, code=1000): await self.q.put(None)
+async def fake_live(session, reopen=False):
+    up = Up(); live_calls.append((session, reopen, up)); await up.q.put(b"jpg"); return up
+async def fake_verify(token):
+    if token != "ok": raise HTTPException(401)
+    return "u"
+from fastapi import HTTPException
+browser_client.live_connect, rb.verify_token = fake_live, fake_verify
+def ws_code(url):
+    try:
+        with c.websocket_connect(url) as w: w.receive_bytes()
+    except WebSocketDisconnect as e: return e.code
+assert ws_code("/api/browser/live?token=bad&session=jd-com") == 4401 and not live_calls
+assert ws_code("/api/browser/live?token=ok&session=../x") == 4400 and not live_calls
+with c.websocket_connect("/api/browser/live?token=ok&session=jd-com&open=1") as w:
+    assert w.receive_bytes() == b"jpg"
+    w.send_text("echo")
+    assert w.receive_bytes() == b"echo"
+    w.send_text('{"t":"mouse","x":0.5,"y":0.5}')  # 上游这时关了 4404 → 客户端收到同一个码
+    try:
+        w.receive_bytes(); raise AssertionError("应当被关")
+    except WebSocketDisconnect as e:
+        assert e.code == 4404
+assert live_calls[0][:2] == ("jd-com", True) and live_calls[0][2].sent == ["echo", '{"t":"mouse","x":0.5,"y":0.5}']
+with c.websocket_connect("/api/browser/live?token=ok") as w:
+    w.receive_bytes()
+assert live_calls[-1][:2] == ("main", False)  # 旧卡没有会话名 → main
+for gone in ("screen", "mouse", "scroll", "nav", "keyboard"):  # 旧的轮询 / 点按接口已删
+    assert c.post(f"/api/browser/{gone}", json={}).status_code in (404, 405) and c.get(f"/api/browser/{gone}").status_code in (404, 405)
 print("ok: api")
 print("✓ smoke_browser_sessions")

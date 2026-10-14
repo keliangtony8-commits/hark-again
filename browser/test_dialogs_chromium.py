@@ -63,7 +63,7 @@ async def main():
     assert "备注=null" in s["text"], s["text"]
 
     # 用户亲手点（实时画面）：确认框 = 确定
-    await service.mouse("d", service.PointIn(x=50 / 1280, y=30 / 800))
+    await service._input("d", {"t": "mouse", "kind": "click", "x": 50 / 1280, "y": 30 / 800})
     await asyncio.sleep(0.5)
     s = await service.snapshot("d")
     assert "已移除" in s["text"] and s["dialogs"][0]["accepted"] is True, s

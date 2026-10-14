@@ -1,6 +1,7 @@
 // 浏览器 ⇄ 工作区文件（v1.32）：BrowserBlock.files/workspace 解析、models/browser_view.dart 文案、
 // core/workspace.dart workspaceFilePath 编码，画面卡下列出传上去 / 下载下来的文件（没有 workspace 不列）。
 import 'package:assistant/blocks/block_view.dart';
+import 'package:assistant/blocks/browser_live.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/workspace.dart';
 import 'package:assistant/models/block.dart';
@@ -9,6 +10,8 @@ import 'package:assistant/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'browser_handoff_test.dart' show FakeLives;
 
 class _Api implements Api {
   @override
@@ -34,7 +37,7 @@ Future<void> pump(WidgetTester tester, Map<String, dynamic> j) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(_Api())],
+    overrides: [apiProvider.overrideWithValue(_Api()), liveConnectProvider.overrideWithValue(FakeLives().connect)],
     child: MaterialApp(
       theme: buildTheme(Brightness.light),
       home: Scaffold(body: SingleChildScrollView(child: BlockView(Block.fromJson(j)))),
