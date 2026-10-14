@@ -12,10 +12,10 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass, field
 
-from .. import activity, browser_files, command_env, llm_retry, plan, plan_mode, spill, steering, vision
+from .. import activity, browser_files, command_env, llm_retry, plan, plan_mode, spill, steering, storage, vision
 from ..config import settings
 from ..llm import Reasoning, Turn, stream_turn
-from . import approvals, claimed_action, compact, deferred, distill, loop_guard, next_speaker, owed_delivery, parallel, reply_fix, supersede, text_tool_call, tool_args, tool_mask, tool_trace
+from . import approvals, claimed_action, compact, deferred, distill, loop_guard, named_file, next_speaker, owed_delivery, parallel, reply_fix, supersede, text_tool_call, tool_args, tool_mask, tool_trace
 from .tools import REGISTRY, Approval, ToolContext, ToolResult, no_live, schemas
 
 # 预算到了的最后一步：收掉工具，让模型交代进度（用户回“继续”就能接着做——上文里有这一轮做过的事）
@@ -262,6 +262,7 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
     claims_left, acted = claimed_action.ONCE, set()  # 嘴上做完、手上没做：拦的剩余次数 + 这一轮成功完成的工具（claimed_action.py）
     texted_left = text_tool_call.ONCE  # 把工具调用写成文字：拦的剩余次数（text_tool_call.py）
     owed_left = owed_delivery.ONCE  # 用户要文件回来、改好了却没交付：拦的剩余次数（owed_delivery.py）
+    named_left = named_file.ONCE  # 用户点名“存成 X.csv”、回复说好了、磁盘上却没有：拦的剩余次数（named_file.py）
     while True:
         if inbox is not None and inbox.pending():  # 用户在途中补了话：作为新的用户消息接在后面（Codex pending input）
             builder.break_text()
@@ -382,6 +383,16 @@ async def run(system: str, history: list[dict], ctx: ToolContext,
                     yield ev
                 messages += [{"role": "assistant", "content": said},
                              {"role": "user", "content": owed_delivery.nudge(asked)}]
+                continue
+            if not turn.tool_calls and not over and named_left > 0 and step < max_steps - 1 and ctx.workspace \
+                    and not plan_mode.refusal("write_file", {}, ctx.plan) \
+                    and (absent := named_file.missing(next_speaker.last_question(messages), said,
+                                                      storage.project_file_root(ctx.workspace), acted)):
+                named_left -= 1  # 点名的输出文件在工作区里不存在：这段不交付，撤回后让它真写（看磁盘，不看措辞）
+                for ev in builder.rollback(mark):
+                    yield ev
+                messages += [{"role": "assistant", "content": said},
+                             {"role": "user", "content": named_file.nudge(absent)}]
                 continue
             if not turn.tool_calls and not over and nudges > 0 and step < max_steps - 1 \
                     and await next_speaker.decide(said, turn.cut, used_tools, messages):
