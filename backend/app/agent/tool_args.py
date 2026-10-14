@@ -12,7 +12,7 @@
 parse(raw, cut)：参数字符串 → 对象。坏 JSON 先做几种确定性的小修（去 ```json 围栏、截掉对象后面的多余文字、
   被二次编码成字符串的 JSON），修不好就给模型一句带位置的原因（Codex：failed to parse function arguments: <serde 原因>）；
   输出被长度上限截断（cut）时直说“参数被截断”，让模型拆小。
-check(schema, args, accepts)：安全的类型修正（"5"→5、"true"→true、5.0→5）→ 校验（deepseek checkValue 的规则与顺序：
+check(schema, args, accepts)：安全的类型修正（"5"→5、"true"→true、5.0→5；pattern=DIGITS 的编号 "[3]"→"3"）→ 校验（deepseek checkValue 的规则与顺序：
   必填、类型、enum/const、oneOf 恰好一个、additionalProperties:false）→ 丢掉函数收不下的未知参数并告诉模型。
   有违规就整次不执行，把逐条原因（带路径）还给模型改。
 suggest(name, names)：工具名写错时给最像的三个（Gemini Did you mean）。
@@ -39,6 +39,9 @@ NAMES_MAX = 60       # 列可用工具名最多几个  # 编辑距离超过名�
 
 _FENCE = re.compile(r"^\s*```[a-zA-Z0-9_-]*\s*\n?(.*?)\n?\s*```\s*$", re.S)
 _INT = re.compile(r"^[+-]?\d+$")
+DIGITS = r"^\d+$"   # 只收数字编号的字符串参数（浏览器快照的 ref）用这个 pattern
+# round 12 B32：模型把编号照快照里的样子写成 "[3]" / "#3" / "ref=3" / "编号3"——只有包着的标点 / 前缀，就取出那个数
+_WRAPPED_NUM = re.compile(r"^\s*(?:ref\s*[=:：]?\s*|编号\s*)?[\[【(（#]?\s*(\d+)\s*[\]】)）]?\s*$", re.I)
 _NUM = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
 
 
@@ -231,6 +234,9 @@ def coerce(schema, value, depth: int = 0):
     if not isinstance(schema, dict) or depth > MAX_DEPTH:
         return value, 0
     kinds = _types(schema) or []
+    if isinstance(value, str) and "string" in kinds and schema.get("pattern") == DIGITS and not value.isdigit():
+        m = _WRAPPED_NUM.match(value)
+        return (m.group(1), 1) if m else (value, 0)
     if isinstance(value, str) and "string" not in kinds:
         s = value.strip()
         if "integer" in kinds and _INT.match(s):

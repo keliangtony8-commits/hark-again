@@ -29,7 +29,7 @@ from ... import browser_client, browser_files, browser_sessions, browser_shot, d
 from ...storage import project_dir
 from ...browser_sessions import Tab
 from ...config import settings
-from .. import approvals
+from .. import approvals, tool_args
 from ..approvals import FormReply
 from ..tools import ToolContext, ToolImage, ToolResult, nobody, tool
 
@@ -324,6 +324,7 @@ async def browser_open(ctx: ToolContext, url: str, session: str = "") -> ToolRes
     return await _after(ctx, tab, f"会话：{name}。{note}\n" + text, card=True)
 
 
+REF = {"type": "string", "pattern": tool_args.DIGITS, "description": "快照里元素的编号，只写数字（如 3）"}
 CONFIRM_DOC = {"type": "boolean", "description": "点了以后网页若弹出“确定要…吗？”的确认框：true = 点确定。"
                "默认不确认（点取消），只在确实是用户要做的事时传 true"}
 PROMPT_DOC = {"type": "string", "description": "可省略：网页弹出要填字的输入框时填这段（同时要 confirm=true）"}
@@ -337,7 +338,7 @@ def _dialog(confirm: bool, prompt_text: str | None) -> dict:
 
 
 @tool("browser_click", "正在点击", "点击快照里编号为 ref 的元素，返回新快照。",
-      {"type": "object", "properties": {"ref": {"type": "string"}, "confirm": CONFIRM_DOC, "prompt_text": PROMPT_DOC},
+      {"type": "object", "properties": {"ref": REF, "confirm": CONFIRM_DOC, "prompt_text": PROMPT_DOC},
        "required": ["ref"]}, risk=_click_risk)
 async def browser_click(ctx: ToolContext, ref: str, confirm: bool = False, prompt_text: str | None = None) -> ToolResult:
     # 付款 / 删除这类按钮用户已在审批卡上同意：随后弹出的“确定吗？”是同一件事，直接确定，不再弹第二次卡
@@ -347,7 +348,7 @@ async def browser_click(ctx: ToolContext, ref: str, confirm: bool = False, promp
 
 @tool("browser_type", "正在输入", "在编号为 ref 的输入框里填入文字；submit=true 时随后按回车。"
       "不要用它输入密码或验证码：登录用 browser_login，验证码用 browser_code（都会在聊天里问用户）。",
-      {"type": "object", "properties": {"ref": {"type": "string"}, "text": {"type": "string"},
+      {"type": "object", "properties": {"ref": REF, "text": {"type": "string"},
                                         "submit": {"type": "boolean", "default": False}},
        "required": ["ref", "text"]})
 async def browser_type(ctx: ToolContext, ref: str, text: str, submit: bool = False) -> ToolResult:
@@ -357,7 +358,7 @@ async def browser_type(ctx: ToolContext, ref: str, text: str, submit: bool = Fal
 @tool("browser_select", "正在选择",
       "在编号为 ref 的下拉框（快照里标“下拉框”的 select）里选一项：option 写选项的文字（照快照抄），也可以写选项值。"
       "对不上时结果会列出全部可选项。网站自己画的下拉菜单（不是 select）用 browser_click 点开再点选项。",
-      {"type": "object", "properties": {"ref": {"type": "string"}, "option": {"type": "string"}},
+      {"type": "object", "properties": {"ref": REF, "option": {"type": "string"}},
        "required": ["ref", "option"]})
 async def browser_select(ctx: ToolContext, ref: str, option: str) -> ToolResult:
     return await _act(ctx, "POST", "/act", {"action": "select", "ref": ref, "text": option})
@@ -367,7 +368,7 @@ async def browser_select(ctx: ToolContext, ref: str, option: str) -> ToolResult:
       "在网页上按一个键：Escape 关弹窗、ArrowDown / Enter 选自动补全的候选、Tab 跳到下一格、PageDown 翻页等。"
       "传 ref 时先聚焦那个元素再按。打字用 browser_type。",
       {"type": "object", "properties": {"key": {"type": "string", "description": "Enter / Escape / Tab / ArrowDown 等"},
-                                        "ref": {"type": "string", "description": "可省略：按在当前焦点上"},
+                                        "ref": {**REF, "description": "可省略：按在当前焦点上"},
                                         "confirm": CONFIRM_DOC},
        "required": ["key"]}, deferred=True)
 async def browser_press(ctx: ToolContext, key: str, ref: str = "", confirm: bool = False) -> ToolResult:
@@ -475,7 +476,7 @@ async def _login_form(ctx: ToolContext, args: dict) -> dict | None:
 @tool("browser_login", "正在登录",
       "登录当前网页。user_ref/pass_ref 是快照里用户名框和密码框的编号。保险箱里有这个网站的登录就直接代填；"
       "没有（或保险箱那条刚自动代填没登上）就会在聊天里给用户弹登录卡，用户填完自动代填、勾记住就存进/更新保险箱（你始终看不到账号密码），不用你另外询问。",
-      {"type": "object", "properties": {"user_ref": {"type": "string"}, "pass_ref": {"type": "string"}},
+      {"type": "object", "properties": {"user_ref": REF, "pass_ref": REF},
        "required": ["user_ref", "pass_ref"]}, form=_login_form)
 async def browser_login(ctx: ToolContext, user_ref: str, pass_ref: str, form: FormReply | None = None) -> ToolResult:
     tab = _tab(ctx)
@@ -528,7 +529,7 @@ async def _code_form(ctx: ToolContext, args: dict) -> dict | None:
 @tool("browser_code", "正在填验证码",
       "网站要短信/邮箱/两步验证码时用：在聊天里给用户弹验证码卡，用户填完自动填进编号为 ref 的输入框"
       "（submit=true 随后按回车）。label 写清是哪种码，如“短信验证码（发到尾号 1234）”。图形验证码、滑块、扫码不能用它，用 browser_handoff。",
-      {"type": "object", "properties": {"ref": {"type": "string"}, "label": {"type": "string"},
+      {"type": "object", "properties": {"ref": REF, "label": {"type": "string"},
                                         "submit": {"type": "boolean", "default": True}},
        "required": ["ref"]}, form=_code_form)
 async def browser_code(ctx: ToolContext, ref: str, label: str = "", submit: bool = True,
@@ -591,7 +592,7 @@ async def browser_handoff(ctx: ToolContext, reason: str) -> ToolResult:
       "把工作区里的文件放进网页的文件框（简历、图片、表格…）。ref = 快照里的文件框（input:file，常是隐藏的，名字可能叫“选择文件”）"
       "或点了会弹出选文件的“上传”按钮；paths = 工作区相对路径，最多 5 个、共 20 MB，目录先打包成 zip。"
       "只是放进框里，之后照常点提交/上传按钮。网页下载的文件会自动存进工作区 downloads/，不用这个。",
-      {"type": "object", "properties": {"ref": {"type": "string"},
+      {"type": "object", "properties": {"ref": REF,
                                         "paths": {"type": "array", "items": {"type": "string"}}},
        "required": ["ref", "paths"]}, deferred=True)
 async def browser_upload(ctx: ToolContext, ref: str, paths: list[str]) -> ToolResult:

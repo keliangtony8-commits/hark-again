@@ -9,6 +9,7 @@
 - 缓存：同一规范化地址 CACHE_TTL 秒内再读直接用（max_age 可以更短，0 = 必须现读）；最多 CACHE_MAX 条（LRU）。"""
 import io
 import json
+import re
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, replace
@@ -25,6 +26,7 @@ TIMEOUT = 20
 CACHE_TTL = 900
 CACHE_MAX = 64
 UA = "Mozilla/5.0 (compatible; assistant-fetch/1.0)"
+PASSWORD_INPUT = re.compile(rb"<input[^>]*type\s*=\s*[\"']?password", re.I)
 TEXT_TYPES = ("application/json", "application/xml", "application/rss+xml", "application/atom+xml",
               "application/javascript", "application/x-yaml", "application/yaml", "application/x-ndjson")
 
@@ -44,6 +46,7 @@ class Page:
     status: int = 200
     cached: bool = False
     fetched_at: float = 0.0
+    password: bool = False  # HTML 里有密码框（是不是登录页由 browser_sessions.login_page 判断）
 
     def for_model(self) -> str:
         head = [f"地址：{self.url}"] + ([f"标题：{self.title}"] if self.title else [])
@@ -215,7 +218,8 @@ async def fetch(url: str, max_age: int | None = None, transport: httpx.AsyncBase
         raise FetchError(f"连不上这个网站（{e.__class__.__name__}）。") from e
     kind, text, title = to_text(body, ctype, final)
     page = Page(url=final, kind=kind, text=text[:limit], title=title, truncated=len(text) > limit,
-                partial=partial, status=status, fetched_at=time.time())
-    if status < 400:
+                partial=partial, status=status, fetched_at=time.time(),
+                password=kind == "html" and bool(PASSWORD_INPUT.search(body)))
+    if status < 400 and not page.password:  # 登录页不缓存：用户登录后再读不该拿到旧的登录页
         _store(key, page)
     return page

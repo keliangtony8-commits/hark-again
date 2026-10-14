@@ -5,17 +5,18 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
-from ... import schedule, script_tasks, task_brief, task_runs, task_store, task_wall
+from ... import clock, schedule, script_tasks, task_brief, task_runs, task_store, task_wall
 from ...config import settings
 from ...models import ScheduledTask
 from ..tools import ToolContext, ToolResult, tool
 
 
 def _local(t: datetime | None) -> str:
+    """任务时间给模型看：带“今天 / 明天 / 周X”（round 12 B31：模型把今天 08:00 说成“明天”——日期别让它心算）。"""
     if t is None:
         return "—"
-    t = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
-    return t.astimezone(ZoneInfo(settings.timezone)).strftime("%Y-%m-%d %H:%M")
+    t = (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(ZoneInfo(settings.timezone))
+    return f"{t:%Y-%m-%d %H:%M}（{clock.near_day(t.date(), schedule.local_now().date())}）"
 
 
 def _plan(t: ScheduledTask) -> str:
@@ -69,7 +70,7 @@ def _when(run_at: str | None) -> datetime | None:
 
 @tool("schedule_task", "正在安排任务",
       "管理定时任务和一次性提醒。action=create：cron（重复，5 段，用户时区）与 run_at（一次性，用户时区 'YYYY-MM-DD HH:MM'）二选一；"
-      "prompt 是到点时独立执行的指令（看不到当前对话，写全要做什么；纯提醒就写“提醒我：……”），结果进 Home 收件箱。"
+      "prompt 是到点时独立执行的指令（看不到当前对话，写全要做什么；用户原话里的要求一个不丢，如“登录后看”“用浏览器”“用哪个账号”；纯提醒就写“提醒我：……”），结果进 Home 收件箱。"
       "定时脚本：create 时给 command（不给 prompt）= 到点直接在当前工作区跑这条 shell 命令，不调用模型、不花 token，"
       "适合备份、定时抓取/爬虫、跑测试、清理文件这类固定步骤（复杂的先写成脚本文件放工作区再调用）；"
       "notify（只对 command 脚本）：failure 只在失败时告诉用户（默认）/ always 每次 / change 输出和上次不一样时（监控网页、价格用这个）；交给助手的任务每次到点都会通知，不传。"

@@ -110,6 +110,15 @@ def day_text(d: date) -> str:
     return f"{d.isoformat()} {weekday(d)}"
 
 
+NEAR = {-1: "昨天", 0: "今天", 1: "明天", 2: "后天"}
+
+
+def near_day(d: date, today: date) -> str:
+    """离今天近的日子给相对说法 + 星期（“今天 周三”），远的只给星期——工具结果里的日期让模型照抄，不心算。"""
+    rel = NEAR.get((d - today).days)
+    return f"{rel} {weekday(d)}" if rel else weekday(d)
+
+
 def _dst_note(dt: datetime) -> str:
     if not isinstance(dt.tzinfo, ZoneInfo):
         return ""

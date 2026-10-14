@@ -2,8 +2,9 @@
 出网地址检查在 app/web_guard.py。SearXNG 是我们自己配的内部地址，不经 web_guard。"""
 import httpx
 
-from ... import web_page
+from ... import browser_sessions, vault, web_page
 from ...config import settings
+from ...db import SessionLocal
 from ..tools import ToolContext, ToolResult, tool
 
 SEARCH_MAX = 8
@@ -91,5 +92,26 @@ async def web_fetch(ctx: ToolContext, url: str, max_age_seconds: int | None = No
         page = await web_page.fetch(url, max_age=max_age_seconds)
     except web_page.FetchError as e:
         return ToolResult(str(e), failed=str(e))
-    return ToolResult(page.for_model(), detail=page.detail(),
+    text = page.for_model()
+    wall = await _login_wall(ctx, url, page)
+    if wall:
+        text = wall + "\n\n" + text
+    return ToolResult(text, detail=page.detail() + (" · 登录页" if wall else ""),
                       failed=f"HTTP {page.status}" if page.status >= 400 else "")
+
+
+async def _login_wall(ctx: ToolContext, asked: str, page: web_page.Page) -> str:
+    """round 12 B30：web_fetch 不带登录，要登录的页面只会读到登录页——模型（尤其定时运行里）读到就交差“需要登录”。
+    是不是登录页只问 browser_sessions.login_page（和浏览器同一条规则）；是就指向 browser_open（保险箱有账号会自动登录）。"""
+    if page.kind != "html":
+        return ""
+    snap = {"url": page.url, "text": page.text,
+            "elements": [{"tag": "input", "type": "password"}] if page.password else []}
+    if not browser_sessions.login_page(snap):
+        return ""
+    async with SessionLocal() as db:  # web_fetch 可并行：不碰共享的 ctx.db
+        saved = await vault.find_for_url(db, page.url, kind="login")
+    how = (f"保险箱里有这个网站的账号（{saved.name}），浏览器打开时会自动登录。" if saved
+           else "浏览器打开后到登录页会请用户自己填账号（不要在聊天里要密码）。")
+    return (f"⚠ 这里读到的是登录页（{page.url}）：web_fetch 不带登录，读不到登录后的内容。"
+            f"改用 browser_open 打开 {asked}；{how}别凭这页就回答“需要登录”。")
