@@ -127,6 +127,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - service.py     唯一运行 Chromium 的服务：快照、点击、输入、截图、人工接管
 - forms.py       表单控件唯一规则（v2.53）：下拉框选哪一项（文字 → 值 → 忽略大小写 → 唯一包含，禁用项不选）、按键名白名单；测试 browser/test_forms.py、真 Chromium browser/test_forms_chromium.py
 - frames.py      内嵌框唯一规则（v2.59）：哪些 iframe 进快照（看得见、≥20px、≤3 层、最多 6 个，多的报个数）、编号全局接着编、框里元素带 frame 标签（别家域名 / 同站）、框文字接在主页面后（每框 1500 字，主页面至少留 3000）；service 记 ref → 框，act / login / upload 自动去框里；后端 Tab.login_url 让保险箱按密码框所属网站取登录；测试 browser/test_frames.py、真 Chromium browser/test_frames_chromium.py
+- shadow.py      网页组件影子树唯一规则（v2.62）：快照按文档顺序深度优先走 open shadowRoot（组件先走影子树再走子元素，≤8 层），里面的元素照常编号、不加标签（Playwright 定位器默认穿透，act / login / upload 不用改）；每个看得见的组件影子树文字一段【组件 · 标签名】（≤30 段、每段 1000 字，空的 / 重复的 / 主页面已有的插槽字不写），排在内嵌框文字之前；closed 影子树看不到；测试 browser/test_shadow.py、真 Chromium browser/test_shadow_chromium.py
 - dialogs.py     网页原生弹框唯一规则（v2.56）：alert 记原话、离开提示确定，confirm / prompt 照这次动作说好的（confirm=true）办，没说 = 取消；连环弹框限数；用户实时画面里亲手点 = 确定；测试 browser/test_dialogs.py、真 Chromium browser/test_dialogs_chromium.py
 - egress.py      浏览器出网关卡（v2.02）：Chromium 每个连接都走它（127.0.0.1 上的小代理，每会话一个代理账号），只放行公网、连查过的 IP；地址规则与后端 web_guard 一致（tests/smoke_browser_egress.py 对表）；测试 browser/test_egress.py、真 Chromium browser/test_egress_chromium.py
 

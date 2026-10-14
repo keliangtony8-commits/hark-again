@@ -42,6 +42,7 @@ import dialogs
 import egress
 import forms
 import frames
+import shadow
 import tabs
 
 TOKEN = os.environ["BROWSER_TOKEN"]
@@ -320,11 +321,28 @@ def _summary(name: str) -> dict:
 
 
 SNAPSHOT_JS = """
-({start, cap}) => {
+({start, cap, shadowDepth, shadowRoots}) => {
   const sel = 'a[href],button,input,textarea,select,[role=button],[role=link],[role=tab],[role=checkbox],[contenteditable=true]';
   const out = []; let n = start; const end = start + cap;
-  document.querySelectorAll('[data-ref]').forEach(e => e.removeAttribute('data-ref'));
-  for (const el of (cap > 0 ? document.querySelectorAll(sel) : [])) {
+  // 文档顺序深度优先，组件先走它的 open 影子树（规则在 shadow.py；定位器自己穿透影子树）
+  const all = [], roots = [];
+  const walk = (root, depth) => {
+    for (const el of root.querySelectorAll('*')) {
+      all.push(el);
+      if (el.shadowRoot && depth < shadowDepth) { roots.push(el); walk(el.shadowRoot, depth + 1); }
+    }
+  };
+  walk(document, 0);
+  all.forEach(e => e.hasAttribute('data-ref') && e.removeAttribute('data-ref'));
+  const shadow = [];
+  for (const host of roots) {
+    if (shadow.length >= shadowRoots) break;
+    const r = host.getBoundingClientRect(); if (r.width < 1 || r.height < 1) continue;
+    const t = [...host.shadowRoot.childNodes].map(x => x.nodeType === 3 ? x.data
+      : (x.nodeType !== 1 || ['STYLE', 'SCRIPT', 'SLOT', 'TEMPLATE'].includes(x.tagName)) ? '' : (x.innerText || '')).join('\\n');
+    if (t.trim()) shadow.push([host.tagName.toLowerCase(), t]);
+  }
+  for (const el of (cap > 0 ? all.filter(e => e.matches(sel)) : [])) {
     // 文件框常被藏起来（样式化的“上传”按钮盖在上面），照样编号：browser_upload 直接往里放文件
     const file = el.tagName === 'INPUT' && el.type === 'file';
     const r = el.getBoundingClientRect();
@@ -337,7 +355,7 @@ SNAPSHOT_JS = """
     const sel_ = el.tagName === 'SELECT', tick = el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio');
     const lab = (el.labels && el.labels[0] && el.labels[0].innerText) || '';
     const raw = sel_ || tick ? (el.getAttribute('aria-label') || lab || el.title || el.name || '')
-                             : (el.getAttribute('aria-label') || el.innerText || val || el.placeholder || el.title || el.alt || label || '');
+                             : (el.getAttribute('aria-label') || el.innerText || val || el.placeholder || lab || el.title || el.alt || label || '');
     const name = raw.trim().replace(/\\s+/g, ' ').slice(0, 80);
     const item = { ref, tag: el.tagName.toLowerCase(), type: el.type || '', name };
     if (sel_) {
@@ -351,7 +369,7 @@ SNAPSHOT_JS = """
     out.push(item);
     if (n >= end) break;
   }
-  return { url: location.href, title: document.title, text: document.body ? document.body.innerText : '', elements: out };
+  return { url: location.href, title: document.title, text: document.body ? document.body.innerText : '', elements: out, shadow };
 }
 """
 
@@ -383,7 +401,7 @@ async def _snapshot(name: str, page: Page) -> dict:
         await page.wait_for_load_state("domcontentloaded", timeout=8000)
     except Exception:
         pass
-    snap = await page.evaluate(SNAPSHOT_JS, {"start": 0, "cap": frames.ELEMENT_MAX})
+    snap = await page.evaluate(SNAPSHOT_JS, {"start": 0, "cap": frames.ELEMENT_MAX, **shadow.js_args()})
     where: dict[str, object] = {}
     parts: list[tuple[str, str]] = []
     taken = more = 0
@@ -394,7 +412,8 @@ async def _snapshot(name: str, page: Page) -> dict:
             more += 1
             continue
         try:
-            sub = await frame.evaluate(SNAPSHOT_JS, {"start": len(snap["elements"]), "cap": frames.budget(len(snap["elements"]))})
+            sub = await frame.evaluate(SNAPSHOT_JS, {"start": len(snap["elements"]), "cap": frames.budget(len(snap["elements"])),
+                                                       **shadow.js_args()})
         except Exception:
             continue  # 框正在跳转 / 刚被删：这次不收
         taken += 1
@@ -403,9 +422,10 @@ async def _snapshot(name: str, page: Page) -> dict:
             e["frame"] = lab
             where[e["ref"]] = frame
         snap["elements"] += sub["elements"]
-        parts.append((lab, _tidy(sub["text"])))
+        parts.append((lab, _tidy(shadow.merge_text(_tidy(sub["text"]), sub.pop("shadow", [])))))
     _frame_of[name] = where
-    snap["text"] = frames.merge_text(_tidy(snap["text"]), parts, MAX_TEXT)
+    main = shadow.merge_text(_tidy(snap["text"]), snap.pop("shadow", []))
+    snap["text"] = frames.merge_text(main, parts, MAX_TEXT)
     if more:
         snap["frames_more"] = more
     return snap
