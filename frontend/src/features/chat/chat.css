@@ -57,6 +57,32 @@
 .conv-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scrim { display: none; }
 
+/* v2.91 §N 状态胶囊（项目对话列表、项目首屏；= App StatusCapsule）：进行中 = 安静底 + 呼吸点；等你回复 = 墨色实心；已完成 = 安静底三级字 */
+.status-capsule { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 var(--sp-2); border-radius: var(--r-full);
+  font-size: var(--fs-xs); line-height: 1; font-weight: var(--fw-title); white-space: nowrap; background: var(--tile); color: var(--text-3); animation: fade var(--dur) var(--ease) both; }
+.status-capsule.running { color: var(--text-2); }
+.status-capsule.waiting { background: var(--ink); color: var(--on-ink); }
+.status-dot { width: 6px; height: 6px; border-radius: var(--r-full); background: currentColor; animation: breathe var(--dur-pulse) ease-in-out infinite; }
+.conv-item .status-capsule { margin-right: var(--sp-1); }
+
+/* v2.91 §N 项目对话左上钮 ≡ ↔ +（= App MenuPlusIcon）：上下两条平移到中线、各转 ±90° 成竖线，中线不动；只动 transform */
+.morph-icon { position: relative; display: block; width: 18px; height: 14px; }
+.morph-icon i { position: absolute; left: 0; top: 6px; width: 18px; height: 2px; border-radius: 1px; background: currentColor;
+  transition: transform var(--dur-morph) var(--ease-morph); }
+.morph-icon i:nth-child(1) { transform: translateY(-6px); }
+.morph-icon i:nth-child(3) { transform: translateY(6px); }
+.morph-icon.plus i:nth-child(1) { transform: rotate(90deg) scaleX(.9); }
+.morph-icon.plus i:nth-child(2) { transform: scaleX(.9); }
+.morph-icon.plus i:nth-child(3) { transform: rotate(-90deg) scaleX(.9); }
+
+/* v2.91 §N 项目对话的标题药丸：标题栏下方居中；出现 = 从上方 8px 落下 + 淡入（--spring 轻微回弹），收起 = 反向不回弹；只动 transform/opacity */
+.title-pill-slot { position: absolute; z-index: 5; left: var(--gutter); right: var(--gutter); top: calc(var(--topbar-top) + var(--topbar-h) + var(--sp-2) + env(safe-area-inset-top));
+  display: flex; justify-content: center; pointer-events: none; }
+.title-pill { max-width: min(100%, 320px); padding: var(--sp-2) var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transform: translateY(calc(var(--pill-drop) * -1));
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.title-pill.shown { opacity: 1; transform: none; transition: opacity var(--dur-slow) var(--ease), transform var(--dur-slow) var(--spring); }
+
 @media (min-width: 861px) { .convs.glass-drawer { background: transparent; border-color: transparent; box-shadow: none; } }
 @media (max-width: 860px) {
   .convs { position: fixed; inset: var(--sp-2) auto var(--sp-2) var(--sp-2); margin: 0; z-index: 30; width: min(84vw, 320px); transform: translateX(calc(-100% - var(--sp-3)));
@@ -64,6 +90,11 @@
   .chat.drawer-open .convs { transform: none; }
   .chat.drawer-open .scrim { display: block; position: fixed; inset: 0; z-index: 25; background: var(--glass-scrim); animation: fade var(--dur) var(--ease); }
   .conv-item .menu-trigger { opacity: 1; }
+  /* v2.91 §N 项目对话：列表从标题栏下面滑出，标题栏留在遮罩之上（左上 ≡ 变 + 才看得见、点得到）；
+     新对话 = 那颗 +，关闭 = 遮罩 / 再点 +，抽屉里不再重复“新对话”和关闭钮 */
+  .chat.with-bar .convs { top: calc(var(--topbar-top) + var(--topbar-h) + var(--sp-2) + env(safe-area-inset-top)); }
+  .chat.with-bar.drawer-open .chat-bar { z-index: 31; }
+  .chat.with-bar .convs .new-chat, .chat.with-bar .convs-head .icon-btn { display: none; }
 }
 
 /* 消息流：铺满，上面让出标题，下面让出输入胶囊（--footer-h 由 FloatingFooter 量出）；内容在标题下方淡出 */

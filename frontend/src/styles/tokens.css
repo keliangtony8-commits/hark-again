@@ -121,6 +121,10 @@
   --send-rise: 28px;
   --spring-send: linear(0, 0.11, 0.36, 0.649, 0.903, 1.083, 1.18, 1.205, 1.179, 1.126, 1.067, 1.016, 0.98, 0.962, 0.958, 0.964, 0.975, 0.987, 0.998, 1.005, 1.008, 1.009, 1.007, 1.005, 1);
   --dur-flash: 1600ms; /* 搜索命中的消息闪一下：先停住再淡出，与 App Motion.flash 一致 */
+  /* v2.91 §N 项目页：≡↔+ 与标题药丸（= App Motion.morph / morphCurve / pillDrop） */
+  --dur-morph: 280ms;
+  --ease-morph: cubic-bezier(0.65, 0, 0.35, 1);
+  --pill-drop: 8px;
 }
 
 /* 深色：只认 <html data-theme="dark">（由 lib/theme.ts 和 index.html 首帧脚本按偏好/系统写入） */

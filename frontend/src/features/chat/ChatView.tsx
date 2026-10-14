@@ -10,6 +10,7 @@ import { useStickToBottom } from "./useStickToBottom";
 import Composer, { type EditDraft } from "./Composer";
 import type { SlashCall } from "../../lib/slash";
 import EmptyState from "./EmptyState";
+import TitlePill from "./TitlePill";
 import MessageView, { type OutboxActions } from "./MessageView";
 import { CONTINUE_TEXT, continuable } from "../../lib/messageStatus";
 
@@ -31,6 +32,8 @@ type Props = OutboxActions & {
   onSlash?: (c: SlashCall, files: OutgoingFile[]) => Promise<string | undefined>;
   /** 没有消息时画什么（项目首屏）；空 = 通用问候 EmptyState。 */
   empty?: ReactNode;
+  /** v2.91 §N 项目对话：标题栏下方的总结标题药丸（id = 当前对话，title = 列表里它的标题）；主聊天不传。 */
+  pill?: { id: string | null; title: string };
 };
 
 /** 长连接断开时的提示条（输入胶囊上方的一颗玻璃胶囊）：待发送的消息会在连上后自动发出，“重试”跳过退避立刻重连。
@@ -48,7 +51,7 @@ function LinkBar({ onRetry, streaming }: { onRetry: () => void; streaming: boole
 /** 点一条消息 = 这条的时间开关（§I）；每条消息悬停一颗“⋯” = 它的动作菜单（MessageView）。
  *  编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
  *  编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。 */
-export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, canSteer, focus, onFocused, accessory, onSend, onSlash, onReconnect, onResend, onDiscard, greeting, empty: emptyView, projectId }: Props) {
+export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, canSteer, focus, onFocused, accessory, onSend, onSlash, onReconnect, onResend, onDiscard, greeting, empty: emptyView, projectId, pill }: Props) {
   const last = messages[messages.length - 1];
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const editing = draft && draft.id === editableId ? draft : null;
@@ -132,6 +135,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
           </div>
         )}
       </div>
+      {pill && !empty && <TitlePill scroller={thread} conversationId={pill.id} title={pill.title} />}
       <FloatingFooter onHeight={setFooterH}>
         {stick.away && !empty && (
           <button className="jump-latest glass raised" onClick={stick.jump}><IconArrowDown size={14} />回到最新</button>

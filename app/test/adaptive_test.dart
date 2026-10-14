@@ -7,6 +7,7 @@ import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/shell/top_bar.dart';
 import 'package:assistant/ui/adaptive.dart';
+import 'package:assistant/ui/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -93,14 +94,36 @@ void main() {
     expect(find.byType(Drawer), findsOneWidget);
   });
 
-  testWidgets('项目聊天：手机上历史从右侧抽屉打开', (tester) async {
+  testWidgets('项目聊天（v2.91 §N）：手机上左上 返回 + ≡；列表从标题栏下面滑出、≡ 变 +，点 + 新对话并收起', (tester) async {
     _size(tester, 400);
-    await tester.pumpWidget(_app(const ChatScaffold(projectId: 'p1', title: Text('项目'), historyTooltip: '项目对话')));
+    await tester.pumpWidget(_app(const ChatScaffold(projectId: 'p1', title: Text('项目'))));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('项目对话'));
+    final menu = find.byTooltip('项目对话');
+    expect(menu, findsOneWidget);
+    expect(tester.getTopLeft(menu).dx, lessThan(120)); // 在左边，返回键旁
+    expect(find.byType(BackButton), findsOneWidget);
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isFalse);
+    await tester.tap(menu);
     await tester.pumpAndSettle();
-    expect(find.text('项目对话'), findsWidgets);
-    final drawerX = tester.getTopLeft(find.byType(Drawer)).dx;
-    expect(drawerX, greaterThan(0));
+    final drawer = find.byType(Drawer);
+    expect(drawer, findsOneWidget);
+    expect(tester.getTopLeft(drawer).dx, 0); // 从左边出来
+    // 标题栏仍在抽屉之上、可点：同一颗钮现在是 +
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isTrue);
+    expect(find.byTooltip('新对话'), findsOneWidget); // 手机项目抽屉里不再有第二个“新对话”钮
+    await tester.tap(find.byTooltip('新对话'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Drawer), findsNothing);
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isFalse);
+  });
+
+  testWidgets('项目聊天：双栏时历史常驻、没有 ≡，右侧是收起/展开', (tester) async {
+    _size(tester, 1100);
+    await tester.pumpWidget(_app(const ChatScaffold(projectId: 'p1', title: Text('项目'))));
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuPlusIcon), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is HistoryPanel && w.docked), findsOneWidget);
+    expect(find.byTooltip('收起项目对话'), findsOneWidget);
+    expect(find.byTooltip('新对话'), findsOneWidget); // 常驻栏保留自己的新对话
   });
 }

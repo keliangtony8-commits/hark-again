@@ -214,6 +214,18 @@ def running(conversation_id: str) -> Turn | None:
     return t if t is not None and t.running and not t.ended else None
 
 
+def busy() -> dict[str, list[Turn]]:
+    """v2.91 正在跑的轮次按对话分组（主路 + 并行路）：项目对话列表的“进行中 / 等你回复”（app/conversation_status.py）读它。"""
+    out: dict[str, list[Turn]] = {}
+    for t in _turns.values():
+        if not t.running or t.ended:
+            continue
+        cid = t.conv_id or (t.key[:-len(SIDE)] if t.key.endswith(SIDE) else None)
+        if cid:
+            out.setdefault(cid, []).append(t)
+    return out
+
+
 async def note(conversation_id: str, event: dict) -> bool:
     """往这个对话正在跑的那一轮的事件流里加一条（编号、进日志、推给所有订阅者，断线重连也补得到）。"""
     turn = _by_conv.get(conversation_id)

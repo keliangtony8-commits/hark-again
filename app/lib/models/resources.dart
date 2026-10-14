@@ -125,7 +125,7 @@ class ModelEfforts {
 }
 
 class ConversationSummary {
-  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId, this.routedModel, this.planMode = false});
+  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId, this.routedModel, this.planMode = false, this.status});
   factory ConversationSummary.fromJson(Map<String, dynamic> j) => ConversationSummary(
     id: j['id'] as String,
     title: j['title'] as String? ?? '新对话',
@@ -137,6 +137,7 @@ class ConversationSummary {
     messageId: j['message_id'] as String?,
     routedModel: j['routed_model'] as String?,
     planMode: j['mode'] == 'plan',
+    status: ConversationStatus.parse(j['status']),
   );
   final String id, title;
   final DateTime? updatedAt;
@@ -144,7 +145,7 @@ class ConversationSummary {
 
   /// 服务器自动起了标题（conversation.title 事件）：只换标题，其余照旧。
   ConversationSummary withTitle(String t) => ConversationSummary(
-    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId, routedModel: routedModel, planMode: planMode);
+    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId, routedModel: routedModel, planMode: planMode, status: status);
 
   /// 这个对话选的聊天模型别名；null = 服务器默认。
   final String? model;
@@ -163,6 +164,26 @@ class ConversationSummary {
 
   /// 只在内容命中时有：命中的那条消息（打开后滚过去并闪一下）。
   final String? messageId;
+
+  /// v2.91 §N 项目对话列表的状态（后端 app/conversation_status.py）；主聊天列表、搜索结果、不认识的值 → null（不画胶囊）。
+  final ConversationStatus? status;
+}
+
+/// 对话状态胶囊的三种值（服务器 status 字段）。
+enum ConversationStatus {
+  running('进行中'),
+  waiting('等你回复'),
+  done('已完成');
+
+  const ConversationStatus(this.label);
+  final String label;
+
+  static ConversationStatus? parse(Object? v) => switch (v) {
+        'running' => running,
+        'waiting' => waiting,
+        'done' => done,
+        _ => null,
+      };
 }
 
 /// 项目档案最长多少字（和后端 project_brief.BRIEF_MAX 一致）。

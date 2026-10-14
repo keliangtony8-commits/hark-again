@@ -141,6 +141,7 @@ export function useChat(projectId?: string) {
           if (um && i >= 0) ms[i] = { ...ms[i], blocks: um.blocks };
           return { id: e.conversation_id, messages: [...ms, { id: "pending", role: "assistant", blocks: [], steps: [], pending: true }] };
         });
+        if (projectId) list.refresh();   // v2.91 §N 项目对话：新对话出现、状态胶囊变“进行中”（服务器此刻已能看到这一轮）
         break;
       }
       case "turn.steered": {

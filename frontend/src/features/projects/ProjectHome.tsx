@@ -1,5 +1,5 @@
 // 项目首屏（v1.10，= App ProjectHome）：项目聊天还没打开对话时，代替通用问候。
-// 字标 + 衬线名字 → 规则一行（点开规则与档案）→ 最近的对话（窄屏才有；宽屏历史栏常驻左侧，CSS 藏掉）
+// 字标 + 衬线名字 → 规则一行（点开规则与档案）→ 最近的对话（窄屏才有；宽屏历史栏常驻左侧，CSS 藏掉；v2.91 行尾状态胶囊代替时间）
 // → 文件（v1.11：最近改过的 3 个，点开就看；全部/管理 → 文件面板；空文件夹一行上传入口）
 // → 电脑（v1.25：features/computer/ComputerSection）→ 起步建议。
 import { fileUrl } from "../../lib/api";
@@ -9,6 +9,7 @@ import type { ConversationSummary, Project, ProjectFile } from "../../lib/types"
 import { IconChat, IconChevron, IconPin, IconUpload } from "../../ui/icons";
 import { stagger } from "../../ui/kit";
 import ComputerSection from "../computer/ComputerSection";
+import StatusCapsule from "../chat/StatusCapsule";
 import { PROJECT_FILES_MAX, projectFileLine, projectFilePath, projectLine, projectRecent, projectRecentFiles } from "./projectHomeRules";
 
 type Props = {
@@ -47,7 +48,7 @@ export default function ProjectHome({ project: p, conversations, suggestions, on
               <button key={c.id} className="row" onClick={() => onOpen(c.id)}>
                 <span className="row-icon">{c.pinned ? <IconPin /> : <IconChat />}</span>
                 <div className="row-body"><div className="row-title">{c.title}</div></div>
-                {c.updated_at && <span className="row-hint">{formatWhen(c.updated_at)}</span>}
+                {c.status ? <StatusCapsule status={c.status} /> : c.updated_at && <span className="row-hint">{formatWhen(c.updated_at)}</span>}
               </button>
             ))}
           </div>

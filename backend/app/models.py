@@ -25,6 +25,8 @@ class Conversation(Base):
     # 标题从哪来（app/conversation_title.py）：first = 第一句话截取（第一轮后自动换成模型起的）/ auto / user = 用户改过 /
     # fixed = 程序给的（定时任务等），只有 first 会被自动改
     title_source: Mapped[str] = mapped_column(String(8), default="fixed", server_default="fixed")
+    # v2.91 上次自动起标题时这段对话有几条消息（迁移 0065）；auto 标题每多约 10 条复查一次话题变没变。None = 还没自动起过
+    title_at: Mapped[int | None] = mapped_column(Integer, nullable=True, info={"private": True})
     # 预留：Phase 3 的 Project 归属
     project_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

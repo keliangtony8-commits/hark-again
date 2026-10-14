@@ -3,6 +3,7 @@
 // 引用回复（§J）：长按 → “回复” → _quoting，输入框顶上出引用条，发出时随消息带 reply_to；气泡顶上的引用行点一下 = _reveal 回到原消息并闪一下。
 // 编辑最后一条用户消息：长按气泡 → “编辑” → 输入框进入编辑态（顶部“编辑消息”条，返回键/叉号取消），
 //   发送时走 ChatController.edit。编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。
+// 项目对话（v2.91 §N）：列表上方浮一颗总结标题药丸（title_pill.dart）。
 // 定位（搜索命中）：ChatState.focus 指向的消息一进列表就取走 → 先回到底部，再一屏一屏往上找，直到它被建出来
 //   （列表是懒加载、高度不定，没法直接算偏移），然后平滑滚到视口中间并 FlashHighlight 闪一下。
 import 'package:flutter/material.dart';
@@ -28,6 +29,7 @@ import 'message_view.dart';
 import 'open_conversation.dart';
 import 'model_choice.dart';
 import 'slash_actions.dart';
+import 'title_pill.dart';
 
 class ChatView extends ConsumerStatefulWidget {
   const ChatView({super.key, this.projectId = '', this.suggestions = const [], this.empty});
@@ -258,6 +260,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
                       ),
                     ),
             ),
+            // v2.91 §N 项目对话：标题栏下方的总结标题药丸（显隐自己管，滚动不触发这里 setState）
+            if (widget.projectId.isNotEmpty && chat.messages.isNotEmpty)
+              Positioned(
+                top: inset + Sp.x2,
+                left: Sp.x4,
+                right: Sp.x4,
+                child: Center(
+                  child: TitlePill(
+                    scroll: _scroll,
+                    conversationId: chat.activeId,
+                    title: chat.conversations.where((c) => c.id == chat.activeId).firstOrNull?.title ?? '',
+                  ),
+                ),
+              ),
             Positioned(
               top: inset,
               left: 0,

@@ -4,7 +4,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import chat_search, conversation_share, conversation_title, model_router, plan_mode, quota, reasoning, reply_quote, run_conversations, turn_changes, turn_journal, usage, workspaces
+from .. import chat_search, conversation_share, conversation_status, conversation_title, model_router, plan_mode, quota, reasoning, reply_quote, run_conversations, turn_changes, turn_journal, usage, workspaces
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -27,7 +27,7 @@ def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
 
 @router.get("")
 async def list_conversations(project_id: str | None = None, q: str = "", db: AsyncSession = Depends(get_session)):
-    """不带 project_id = 主聊天的对话；带 = 该项目内的对话。q = 按标题和消息内容搜索（空格分开的词都要有）。置顶在前。"""
+    """不带 project_id = 主聊天的对话；带 = 该项目内的对话（每项多 status，v2.91）。q = 按标题和消息内容搜索（空格分开的词都要有）。置顶在前。"""
     q = q.strip()
     if q:  # 规则在 chat_search（拆词 AND、摘录、最佳命中消息）；标题已含全部词的不带摘录/定位
         found = await chat_search.search(db, q, scope=project_id or None, limit=50)
@@ -36,7 +36,11 @@ async def list_conversations(project_id: str | None = None, q: str = "", db: Asy
     scope = Conversation.project_id == project_id if project_id else Conversation.project_id.is_(None)
     rows = (await db.scalars(select(Conversation).where(scope, run_conversations.listed())
                              .order_by(Conversation.pinned.desc(), Conversation.updated_at.desc()).limit(100))).all()
-    return [_summary(c) for c in rows]
+    if not project_id:
+        return [_summary(c) for c in rows]
+    # v2.91 §N 项目对话列表带状态胶囊（规则在 conversation_status）；主聊天列表、搜索结果不带
+    status = await conversation_status.for_list(db, [c.id for c in rows])
+    return [{**_summary(c), "status": status.get(c.id)} for c in rows]
 
 
 class ConversationPatch(BaseModel):

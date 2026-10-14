@@ -1,6 +1,9 @@
 // 聊天页骨架：主聊天和项目聊天共用，一处决定历史栏怎么摆。
-//   手机/小平板：历史在抽屉里，顶栏有“历史”按钮（主聊天在左边开，项目页左边是返回键所以在右边开）。
-//   平板/折叠屏展开（≥ Layout.expandedMin）：历史栏常驻左侧和对话并排；顶栏按钮变成“收起/展开历史”（专注模式）。
+//   手机/小平板：历史在抽屉里。主聊天：顶栏左侧“历史”按钮。
+//   项目聊天（v2.91 §N）：标题栏左侧 返回 + “≡”；≡ 打开项目对话列表——抽屉在标题栏下面滑出（SubPage 里再套一层 Scaffold，
+//   抽屉和遮罩只盖正文），所以同一颗钮在列表打开时旋转成 +（MenuPlusIcon）= 本项目新对话，拇指不用挪位；遮罩 / 返回键收起。
+//   列表开着与否只放在 ValueNotifier 里，按钮自己听，不整页 setState；打开列表时刷新一次（状态胶囊以服务器为准）。
+//   平板/折叠屏展开（≥ Layout.expandedMin）：历史栏常驻左侧和对话并排；顶栏按钮变成“收起/展开历史”（专注模式，项目页在标题栏右侧）。
 // 标题下挂本对话用量（ChatTitle，点开明细），主聊天和项目聊天一致。
 // 主聊天是一级页面（设计 v2）：没有 AppBar，历史按钮是浮动顶栏左侧的玻璃圆钮（ShellPage.lead），
 //   标题 + 用量是顶栏下面居中的一行小字；新对话在历史面板顶部（v0.46 起，去掉了第二排的胶囊和按钮）。
@@ -19,6 +22,7 @@ import '../../ui/adaptive.dart';
 import '../../ui/glass.dart';
 import '../../ui/motion.dart';
 import '../../ui/sub_page.dart';
+import 'chat_controller.dart';
 import 'chat_view.dart';
 import 'conversation_usage.dart';
 import 'history_panel.dart';
@@ -30,7 +34,6 @@ class ChatScaffold extends StatefulWidget {
     required this.title,
     this.actions = const [],
     this.suggestions = const [],
-    this.historyTooltip = '历史',
     this.empty,
   });
 
@@ -38,7 +41,6 @@ class ChatScaffold extends StatefulWidget {
   final Widget title;
   final List<Widget> actions;
   final List<String> suggestions;
-  final String historyTooltip;
 
   /// 没有消息时的首屏（见 ChatView.empty）。
   final Widget Function(BuildContext context, void Function(String text) send)? empty;
@@ -57,8 +59,13 @@ class _ChatScaffoldState extends State<ChatScaffold> {
     _cover = ProviderScope.containerOf(context, listen: false).read(shellCoverProvider.notifier);
   }
 
+  /// 项目抽屉开着（≡ 变 +）。只给左上那颗钮听。
+  final _listOpen = ValueNotifier(false);
+  final _inner = GlobalKey<ScaffoldState>();
+
   @override
   void dispose() {
+    _listOpen.dispose();
     final cover = _cover;
     if (cover != null && _drawerOpen) Future.microtask(() => cover.set(false)); // 抽屉开着离开才复位；不在拆树途中改状态
     super.dispose();
@@ -69,6 +76,26 @@ class _ChatScaffoldState extends State<ChatScaffold> {
   bool _animatePane = false;
 
   bool get _isProject => widget.projectId.isNotEmpty;
+  String get _listName => _isProject ? '项目对话' : '历史';
+
+  ChatController get _ctl => ProviderScope.containerOf(context, listen: false).read(chatProvider(widget.projectId).notifier);
+
+  /// 项目左上钮：列表关着 → 打开；开着（显示 +）→ 本项目新对话并收起列表。
+  void _menuTap() {
+    final inner = _inner.currentState;
+    if (inner == null) return;
+    if (_listOpen.value) {
+      _ctl.open(null);
+      inner.closeDrawer();
+    } else {
+      inner.openDrawer();
+    }
+  }
+
+  void _onListChanged(bool open) {
+    _listOpen.value = open;
+    if (open) _ctl.refreshList().catchError((_) {}); // 状态胶囊：挂起的卡片出现在一轮中途，打开时以服务器为准
+  }
 
   void _togglePane() => setState(() {
         _paneOpen = !_paneOpen;
@@ -83,41 +110,54 @@ class _ChatScaffoldState extends State<ChatScaffold> {
     _wasTwoPane = twoPane;
     final showPane = twoPane && _paneOpen;
 
-    Widget historyButton(BuildContext ctx) => twoPane
-        ? IconButton(
-            icon: Icon(showPane ? Icons.menu_open_rounded : Icons.notes_rounded),
-            tooltip: showPane ? '收起${widget.historyTooltip}' : '展开${widget.historyTooltip}',
-            onPressed: _togglePane,
-          )
-        : IconButton(
-            icon: const Icon(Icons.notes_rounded),
-            tooltip: widget.historyTooltip,
-            onPressed: () => Scaffold.of(ctx).openEndDrawer(), // 只有项目聊天用这个按钮（主聊天是 ShellPage.lead）
-          );
     final drawer = twoPane ? null : HistoryPanel.drawer(context, projectId: widget.projectId);
     if (!_isProject) return _floating(context, twoPane: twoPane, showPane: showPane, drawer: drawer);
 
-    // 项目聊天：子页面外框（玻璃标题栏 + 壁纸），历史按钮在右（左边是返回键），历史栏和对话都在标题栏下面
+    // 项目聊天：子页面外框（玻璃标题栏 + 壁纸）。手机：左上 返回 + ≡/+，抽屉在里层 Scaffold（标题栏下面）；
+    // 双栏：历史栏常驻，标题栏右侧是收起/展开。两种都是同一棵树（里层 Scaffold → Row → 带 key 的聊天区），转屏不丢状态。
+    final menu = ValueListenableBuilder<bool>(
+      valueListenable: _listOpen,
+      builder: (_, open, _) => IconButton(
+        icon: MenuPlusIcon(plus: open),
+        tooltip: open ? '新对话' : _listName,
+        onPressed: _menuTap,
+      ),
+    );
     return SubPage(
       title: ChatTitle(scope: widget.projectId, child: widget.title),
-      actions: [Builder(builder: historyButton), ...widget.actions],
-      endDrawer: drawer,
-      body: Row(children: [
-        SidePaneSwitcher(
-          animate: _animatePane,
-          child: showPane
-              ? SizedBox(
-                  key: const ValueKey('pane'),
-                  width: Layout.sidePane,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(border: Border(right: BorderSide(color: p.glassBorder))),
-                    child: HistoryPanel(projectId: widget.projectId, docked: true),
-                  ),
-                )
-              : null,
-        ),
-        Expanded(key: const ValueKey('chat'), child: ChatView(projectId: widget.projectId, suggestions: widget.suggestions, empty: widget.empty)),
-      ]),
+      leading: twoPane ? null : Row(mainAxisSize: MainAxisSize.min, children: [const BackButton(), menu]),
+      leadingWidth: twoPane ? null : A11y.minTap * 2 + Sp.x2,
+      actions: [
+        if (twoPane)
+          IconButton(
+            icon: Icon(showPane ? Icons.menu_open_rounded : Icons.notes_rounded),
+            tooltip: showPane ? '收起$_listName' : '展开$_listName',
+            onPressed: _togglePane,
+          ),
+        ...widget.actions,
+      ],
+      body: Scaffold(
+        key: _inner,
+        backgroundColor: Colors.transparent,
+        drawer: drawer,
+        onDrawerChanged: _onListChanged,
+        body: Row(children: [
+          SidePaneSwitcher(
+            animate: _animatePane,
+            child: showPane
+                ? SizedBox(
+                    key: const ValueKey('pane'),
+                    width: Layout.sidePane,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(border: Border(right: BorderSide(color: p.glassBorder))),
+                      child: HistoryPanel(projectId: widget.projectId, docked: true),
+                    ),
+                  )
+                : null,
+          ),
+          Expanded(key: const ValueKey('chat'), child: ChatView(projectId: widget.projectId, suggestions: widget.suggestions, empty: widget.empty)),
+        ]),
+      ),
     );
   }
 
@@ -129,10 +169,10 @@ class _ChatScaffoldState extends State<ChatScaffold> {
       builder: (ctx) => twoPane
           ? GlassIconButton(
               icon: showPane ? Icons.menu_open_rounded : Icons.notes_rounded,
-              tooltip: showPane ? '收起${widget.historyTooltip}' : '展开${widget.historyTooltip}',
+              tooltip: showPane ? '收起$_listName' : '展开$_listName',
               onTap: _togglePane,
             )
-          : GlassIconButton(icon: Icons.notes_rounded, tooltip: widget.historyTooltip, onTap: () => Scaffold.of(ctx).openDrawer()),
+          : GlassIconButton(icon: Icons.notes_rounded, tooltip: _listName, onTap: () => Scaffold.of(ctx).openDrawer()),
     );
     return Scaffold(
       backgroundColor: Colors.transparent, // 透出外壳的壁纸

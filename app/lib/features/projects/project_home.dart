@@ -1,7 +1,7 @@
 // 项目首屏（v1.10）：项目聊天还没打开任何对话时显示，代替通用的“今天想做点什么？”。
 // 一个项目是长期的事，进来先看到“这是哪件事、上次聊到哪”：
 //   项目字标 + 衬线名字 → 规则（或档案第一行）一行，点开规则与档案
-//   → “最近的对话”最多 3 条（点开续聊；更多 → 打开项目对话抽屉）——双栏时历史已常驻左侧，不重复画
+//   → “最近的对话”最多 3 条，行尾是状态胶囊（v2.91，点开续聊；更多 → 打开项目对话抽屉）——双栏时历史已常驻左侧，不重复画
 //   → “文件”（v1.11）：最近改过的 3 个项目文件（我和沙箱共用的文件夹），点开就看；全部/管理 → 文件抽屉；
 //     空文件夹给一行“放点资料进来”——双栏也显示（文件不像历史那样常驻）
 //   → “电脑”（v1.25）：项目沙盒的运行状态、内存、磁盘、正在运行的后台任务（features/computer/computer_section.dart）；
@@ -22,6 +22,7 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../chat/chat_controller.dart';
+import '../chat/status_capsule.dart';
 import '../computer/computer_section.dart';
 import 'project_files_sheet.dart';
 
@@ -129,7 +130,7 @@ class ProjectHome extends ConsumerWidget {
               enter(SectionTitle('最近的对话',
                   trailing: all.length > recent.length
                       ? TextButton(
-                          onPressed: () => Scaffold.maybeOf(context)?.openEndDrawer(),
+                          onPressed: () => Scaffold.maybeOf(context)?.openDrawer(), // 标题栏下的项目对话列表（≡ 随之变 +）
                           child: Text('全部 ${all.length} 个'),
                         )
                       : null)),
@@ -139,7 +140,8 @@ class ProjectHome extends ConsumerWidget {
                     key: ValueKey('recent-${c.id}'),
                     icon: c.pinned ? Icons.push_pin_outlined : Icons.forum_outlined,
                     title: c.title,
-                    trailing: c.updatedAt == null ? null : RowHint(formatAgo(c.updatedAt)),
+                    // v2.91 §N：有状态画胶囊（代替时间），没有才写“几分钟前”
+                    trailing: c.status != null ? StatusCapsule(c.status!) : c.updatedAt == null ? null : RowHint(formatAgo(c.updatedAt)),
                     onTap: () => ref.read(chatProvider(projectId).notifier).open(c.id),
                   ),
               ])),

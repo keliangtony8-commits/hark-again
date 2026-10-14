@@ -303,6 +303,8 @@ class ChatController extends Notifier<ChatState> {
           streaming: true,
           messages: [...ms, const Message(id: 'pending', role: 'assistant', blocks: [], pending: true)],
         );
+        // 项目对话：列表跟上——新对话出现、状态胶囊变“进行中”（服务器此刻已能看到这一轮，v2.91 §N）
+        if (projectId.isNotEmpty) unawaited(refreshList().catchError((_) {}));
       case 'turn.resumed':
         _onResumed(e);
       case 'turn.snapshot':

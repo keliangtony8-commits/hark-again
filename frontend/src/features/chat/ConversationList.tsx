@@ -7,6 +7,7 @@ import { Highlight, Menu, SearchField } from "../../ui/kit";
 import { confirmDialog } from "../../ui/dialog";
 import ConversationFilesSheet from "./ConversationFilesSheet";
 import ShareSheet from "./ShareSheet";
+import StatusCapsule from "./StatusCapsule";
 
 type Props = {
   title: string;
@@ -94,6 +95,7 @@ function ConversationRow({ c, q, index, active, editing, onOpen, onEdit, onRenam
         <span className="conv-title">{c.pinned && <span className="conv-pin"><IconPin size={12} /></span>}<Highlight text={c.title} q={q} /></span>
         {c.snippet && <span className="conv-snippet"><Highlight text={c.snippet} q={q} /></span>}
       </div>
+      {c.status && <StatusCapsule status={c.status} />}{/* v2.91 §N 项目对话列表的状态（服务器 status；主聊天不带） */}
       <Menu trigger={<IconMore />} items={[
         { label: c.pinned ? "取消置顶" : "置顶", icon: <IconPin />, onSelect: onPin },
         { label: "重命名", icon: <IconEdit />, onSelect: () => onEdit(true) },

@@ -733,3 +733,72 @@ class FadeSwitcher extends StatelessWidget {
     ),
   );
 }
+
+
+/// §N 项目对话左上钮的图标：plus=false 是“≡”（三条横线），true 是“+”。
+/// 切换时上下两条线平移到中线、分别旋转 ±90° 合成竖线，中线不动 → 十字（Motion.morph，easeInOut 对称）。
+/// 只动 transform；减少动态时直接换到终态。
+class MenuPlusIcon extends StatelessWidget {
+  const MenuPlusIcon({super.key, required this.plus, this.size = 24, this.color});
+  final bool plus;
+  final double size;
+  final Color? color;
+
+  static const _gap = 6.0, _length = 18.0, _thick = 2.0, _crossScale = 0.9; // 十字比三横略短一点，视觉重量一致
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? IconTheme.of(context).color ?? context.palette.text;
+    Widget line(double t, double dy, double turn) => Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..translateByDouble(0, dy * (1 - t), 0, 1)
+            ..rotateZ(turn * t * math.pi / 2)
+            ..scaleByDouble(1 - (1 - _crossScale) * t, 1, 1, 1),
+          child: Container(
+            width: _length,
+            height: _thick,
+            decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(_thick / 2)),
+          ),
+        );
+    return SizedBox.square(
+      dimension: size,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: plus ? 1 : 0),
+        duration: context.motion(Motion.morph),
+        curve: Motion.morphCurve,
+        builder: (_, t, _) => Stack(alignment: Alignment.center, children: [
+          line(t, -_gap, 1),
+          line(t, 0, 0),
+          line(t, _gap, -1),
+        ]),
+      ),
+    );
+  }
+}
+
+/// §N 浮出 / 收起（项目对话的标题药丸）：出现 = 从上方 Motion.pillDrop 落下 + 淡入，Motion.spring 轻微回弹（过冲约 2–3%）；
+/// 收起 = 反向、不回弹。shown 变了才动；收起后不挡点击、读屏不念。减少动态时直接到位。
+class DropIn extends StatelessWidget {
+  const DropIn({super.key, required this.shown, required this.child});
+  final bool shown;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        ignoring: !shown,
+        child: ExcludeSemantics(
+          excluding: !shown,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: shown ? 1 : 0), // begin 只管第一次：一挂上就要显示（进场）也从上方落下来
+            duration: context.motion(shown ? Motion.slow : Motion.base),
+            curve: shown ? Motion.spring : Motion.ease,
+            child: child,
+            builder: (_, v, c) => Opacity(
+              opacity: v.clamp(0.0, 1.0),
+              child: Transform.translate(offset: Offset(0, (v - 1) * Motion.pillDrop), child: c),
+            ),
+          ),
+        ),
+      );
+}

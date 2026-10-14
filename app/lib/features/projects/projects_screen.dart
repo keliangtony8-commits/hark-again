@@ -248,7 +248,7 @@ class _ProjectTile extends StatelessWidget {
   }
 }
 
-/// 项目内：项目聊天。标题栏只留“项目对话”和一颗 ⋯（文件 / 规则与档案 / 编辑 / 删除，与列表菜单同一份）——
+/// 项目内：项目聊天。标题栏左侧 返回 + ≡/+（项目对话列表 / 新对话，v2.91），右侧只有一颗 ⋯（文件 / 规则与档案 / 编辑 / 删除，与列表菜单同一份）——
 /// 以前四颗图标挤在一起把标题压短（v1.10）。没打开对话时是项目首屏 ProjectHome。
 class ProjectDetailScreen extends ConsumerWidget {
   const ProjectDetailScreen({super.key, required this.id});
@@ -260,7 +260,6 @@ class ProjectDetailScreen extends ConsumerWidget {
     final project = ref.watch(projectsProvider).value?.where((p) => p.id == id).firstOrNull;
     return ChatScaffold(
       projectId: id,
-      historyTooltip: '项目对话',
       title: Text(project == null ? '项目' : '${project.emoji} ${project.name}', maxLines: 1, overflow: TextOverflow.ellipsis),
       actions: [
         if (project != null)

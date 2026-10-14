@@ -4,6 +4,7 @@ import { BlockActionsContext } from "../../blocks/actions";
 import { useChat } from "../../hooks/useChat";
 import { useModelCatalog } from "../../hooks/useModelCatalog";
 import { IconHistory } from "../../ui/icons";
+import MenuPlus from "./MenuPlus";
 import { ShellLead } from "../../shell/ShellLead";
 import ChatTitle from "./ChatTitle";
 import ChatView from "./ChatView";
@@ -55,6 +56,10 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
   if (found) lastTitle.current = { id: found.id, title: found.title };
   const title = headerTitle ?? (lastTitle.current.id === chat.activeId && chat.activeId ? lastTitle.current.title : "新对话");
   const open = (id: string | null, focus?: string) => { chat.open(id, focus); setDrawer(false); };
+  // 打开对话列表：项目里顺便刷新一次（状态胶囊以服务器为准；挂起的卡片出现在一轮中途）
+  const showList = () => { setDrawer(true); if (projectId) chat.list.refresh(); };
+  // v2.91 §N 项目对话的标题药丸：当前对话在列表里的标题（搜索过滤掉时沿用最后一次看到的）
+  const convTitle = chat.activeId && lastTitle.current.id === chat.activeId ? lastTitle.current.title : "";
   // v2.23 转交卡 / “来自 X”：同一个范围（主聊天或同一项目）直接打开，否则跳到那边的聊天再打开（路由状态 open）
   const openElsewhere = (id: string, pid: string | null) => {
     if ((pid ?? undefined) === projectId) open(id);
@@ -80,7 +85,8 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
             <header className="chat-top chat-bar glass">
               <div className="chat-bar-side">
                 {leading}
-                <button className="icon-btn mobile-only" onClick={() => setDrawer(true)} aria-label="历史"><IconHistory /></button>
+                {/* v2.91 §N：≡ 打开项目对话列表（从标题栏下面滑出）；开着时同一颗钮转成 + = 本项目新对话 */}
+                <MenuPlus plus={drawer} onClick={() => (drawer ? open(null) : showList())} />
               </div>
               <ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} />
               <div className="chat-bar-side end">{trailing}</div>
@@ -93,7 +99,8 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
               <header className="chat-top chat-caption"><ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} /></header>
             </>
           )}
-          <ChatView empty={empty?.({ send: (t) => chat.send(t), open: (id) => open(id), showAll: () => setDrawer(true), conversations: chat.list.items })}
+          <ChatView empty={empty?.({ send: (t) => chat.send(t), open: (id) => open(id), showAll: showList, conversations: chat.list.items })}
+            pill={leading ? { id: chat.activeId, title: convTitle } : undefined}
             projectId={projectId} messages={chat.messages} busy={chat.busy} error={chat.error} link={chat.link} greeting={emptyGreeting}
             canRegenerate={chat.canRegenerate} onRegenerate={chat.regenerate}
             editableId={chat.editableId} onEdit={chat.edit}

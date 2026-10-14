@@ -3,6 +3,7 @@
 #    清洗（换行空白、引号、中文前缀/书名号/句号、截断）、空材料不调模型、超时 / 报错 / 空回复 → None；
 # 二、整轮：新对话 first → 第一轮后标题换成模型起的 + conversation.title 事件排在 message.done 之后 + 用量 kind=title + 不改 updated_at；
 #    第二轮不再起；用户改名后不覆盖（含起名途中改名）；失败下一轮重试、超过 TITLE_TRIES 不再试；fixed（任务对话）不碰；关闭开关；
+#    v2.91：名词短语清洗（无标点、不口语、≤14 字）、due()、auto 标题每 10 条复查（没变不推事件、变了换名、途中改名不覆盖）、0065 回填；
 #    （停在还没吐字时 run_turn 返回 None，不起名：见 ws.py 的判断）断线续传快照停在 message.done 之前，收尾事件照补；迁移 down/up。
 # 运行：python tests/smoke_auto_title.py
 import os, sys, asyncio, subprocess, tempfile
@@ -50,6 +51,25 @@ for raw, want in [
 ]:
     assert ct.clean(raw) == want, (raw, ct.clean(raw))
 assert len(ct.clean("长" * 80)) == ct.TITLE_MAX
+# v2.91 §N：名词短语、无标点、不口语、≤14 字 / 英文按词 ≤40
+for raw, want in [
+    ("帮我把 App 加上深色模式，跟随系统", "把 App 加上深色模式跟随系统"),
+    ("考研数学：错题整理（第二轮）", "考研数学错题整理第二轮"),
+    ("新标题：杭州周末两日行程。", "杭州周末两日行程"),
+    ("请问如何部署到 VPS？", "部署到 VPS"),
+    ("Vue.js 与 C++ 接口对接", "Vue.js 与 C++ 接口对接"),
+    ("A very long english conversation title that keeps going on", "A very long english conversation title"),
+    ("？！。", None),
+]:
+    assert ct.clean(raw) == want, (raw, ct.clean(raw))
+assert ct.clean("一二三四五六七八九十一二三四五六") == "一二三四五六七八九十一二三四"
+assert ct.clean("给 App 加深色模式并且适配所有页面的颜色") == "给 App 加深色模式并且适配所"
+assert ct.clean("考研数学错题整理与 PostgreSQL") == "考研数学错题整理与"  # 截点落在英文词中间：退到词前
+assert len(ct.clean("x " * 60)) <= ct.TITLE_MAX_LATIN
+# 该不该叫模型
+assert ct.due("first", 1, 2, None) and not ct.due("first", 0, 0, None) and not ct.due("first", 4, 8, None)
+assert ct.due("auto", 9, 12, 2) and not ct.due("auto", 9, 11, 2) and ct.due("auto", 5, 10, None)
+assert not ct.due("user", 9, 99, 0) and not ct.due("fixed", 9, 99, 0)
 assert ct.first_title("  你好\n\n世界  ") == "你好 世界" and ct.first_title("") == "新对话" and len(ct.first_title("x" * 99)) == 40
 
 calls: list[dict] = []
@@ -117,6 +137,16 @@ async def turn(text, cid=None):
     await ct.drain()
     await asyncio.sleep(0.05)
     return c, t
+
+
+def racing_cid(target):
+    async def racing(m, timeout=ct.TIMEOUT_S, **kw):
+        async with SessionLocal() as db2:
+            await db2.execute(Conversation.__table__.update().where(Conversation.id == target)
+                              .values(title_source="user", title="用户起的"))
+            await db2.commit()
+        return "模型起的"
+    return racing
 
 
 async def conv(cid):
@@ -227,6 +257,8 @@ async def main():
         db.add(Message(conversation_id=fx.id, role="assistant", blocks=[{"type": "text", "text": "yo"}]))
         await db.commit()
         assert fx.title_source == "fixed"
+        global fx_id
+        fx_id = fx.id
         assert await ct.maybe(db, fx.id) is None
     settings.auto_title = False
     n = len(tcalls())
@@ -235,7 +267,54 @@ async def main():
     assert ct.schedule("x", c9.conn.put) is None
     settings.auto_title = True
 
-    # 8) 迁移 down/up
+    # 7) v2.91 复查：auto 标题每多 RETITLE_EVERY 条消息问一次；话题没变 → 不推事件只推进 title_at；变了 → 换名 + 事件
+    mode.update(reply="App 深色模式适配", error=False)
+    c10, _ = await turn("给 app 做深色模式")
+    cid10 = c10.events[0]["conversation_id"]
+    cv10 = await conv(cid10)
+    assert cv10.title == "App 深色模式适配" and cv10.title_source == "auto" and cv10.title_at == 2
+    n = len(tcalls())
+    for k in range(4):                                                      # 2 → 10 条：比上次多不到 10 条，不问
+        cx, _ = await turn(f"继续 {k}", cid10)
+        assert not any(e["type"] == "conversation.title" for e in cx.events)
+    assert len(tcalls()) == n
+    c11, _ = await turn("再调一下颜色", cid10)                              # 12 条：多了 10 条，复查一次，话题没变
+    assert len(tcalls()) == n + 1 and "现在的标题是：App 深色模式适配" in tcalls()[-1]["messages"][0]["content"]
+    assert not any(e["type"] == "conversation.title" for e in c11.events)
+    cv10 = await conv(cid10)
+    assert cv10.title == "App 深色模式适配" and cv10.title_at == 12
+    mode.update(reply="「周末杭州行程规划」。")
+    for k in range(4):                                                      # 12 → 20：不问
+        await turn(f"换个话题 {k}", cid10)
+    assert len(tcalls()) == n + 1
+    c12, _ = await turn("杭州住哪", cid10)                                   # 22 条：复查，话题变了
+    assert len(tcalls()) == n + 2
+    te = next(e for e in c12.events if e["type"] == "conversation.title")
+    assert te["title"] == "周末杭州行程规划"
+    cv10 = await conv(cid10)
+    assert cv10.title == "周末杭州行程规划" and cv10.title_source == "auto" and cv10.title_at == 22
+    # 复查途中用户改名：UPDATE 条件挡住（来源已不是 auto）
+    async with SessionLocal() as db:
+        await db.execute(Conversation.__table__.update().where(Conversation.id == cid10).values(title_at=0))
+        await db.commit()
+    ct.generate = racing_cid(cid10)
+    async with SessionLocal() as db:
+        assert await ct.maybe(db, cid10) is None
+    ct.generate = real
+    assert (await conv(cid10)).title == "用户起的"
+    mode.update(reply="给 App 加深色模式")
+
+    # 8) 迁移 down/up；0065 回填已有 auto 对话的 title_at = 当前消息数
+    r = subprocess.run([sys.executable, "-m", "alembic", "downgrade", "0064"], cwd=root, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    r = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=root, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    cv = await conv(cid)
+    async with SessionLocal() as db:
+        from sqlalchemy import func
+        nmsg = await db.scalar(select(func.count()).select_from(Message).where(Message.conversation_id == cid))
+    assert cv.title_source == "auto" and cv.title_at == nmsg, (cv.title_at, nmsg)
+    assert (await conv(cid6)).title_at is not None and (await conv(fx_id)).title_at is None
     r = subprocess.run([sys.executable, "-m", "alembic", "downgrade", "0036"], cwd=root, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     r = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=root, capture_output=True, text=True)

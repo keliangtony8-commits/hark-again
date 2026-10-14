@@ -22,24 +22,23 @@ class SubPage extends StatelessWidget {
     required this.body,
     this.actions = const [],
     this.leading,
-    this.drawer,
-    this.endDrawer,
+    this.leadingWidth,
   });
 
   final Widget title;
   final Widget body;
   final List<Widget> actions;
   final Widget? leading;
-  final Widget? drawer, endDrawer;
+
+  /// 左侧放了不止一颗钮时（项目对话：返回 + ≡/+）给出宽度。
+  final double? leadingWidth;
 
   @override
   Widget build(BuildContext context) => Backdrop(
     child: Scaffold(
       backgroundColor: Colors.transparent, // 透出壁纸
       extendBodyBehindAppBar: true,
-      appBar: GlassAppBar(title: title, actions: actions, leading: leading),
-      drawer: drawer,
-      endDrawer: endDrawer,
+      appBar: GlassAppBar(title: title, actions: actions, leading: leading, leadingWidth: leadingWidth),
       body: body,
     ),
   );
@@ -47,10 +46,11 @@ class SubPage extends StatelessWidget {
 
 /// 玻璃标题栏：真模糊（它是浮层）+ 玻璃着色 + 底部一根发丝线。标题、返回键、动作沿用 AppBarTheme 的字和色。
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const GlassAppBar({super.key, required this.title, this.actions = const [], this.leading});
+  const GlassAppBar({super.key, required this.title, this.actions = const [], this.leading, this.leadingWidth});
   final Widget title;
   final List<Widget> actions;
   final Widget? leading;
+  final double? leadingWidth;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -67,6 +67,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
       child: AppBar(
         title: title,
         leading: leading,
+        leadingWidth: leadingWidth,
         actions: [
           ...actions,
           if (actions.isNotEmpty) const SizedBox(width: Sp.x1),

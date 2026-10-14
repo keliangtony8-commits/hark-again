@@ -6,10 +6,12 @@ import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
+import 'package:assistant/features/chat/title_pill.dart';
 import 'package:assistant/features/projects/project_form.dart';
 import 'package:assistant/features/projects/project_home.dart';
 import 'package:assistant/features/projects/projects_screen.dart';
 import 'package:assistant/models/resources.dart';
+import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,8 +33,8 @@ class _Api implements Api {
   ];
   late final convs = <Map<String, dynamic>>[
     {'id': 'c1', 'title': '真题第一轮', 'updated_at': now.subtract(const Duration(days: 2)).toIso8601String()},
-    {'id': 'c2', 'title': '单词计划', 'updated_at': now.subtract(const Duration(hours: 1)).toIso8601String()},
-    {'id': 'c3', 'title': '择校', 'pinned': true, 'updated_at': now.subtract(const Duration(days: 9)).toIso8601String()},
+    {'id': 'c2', 'title': '单词计划', 'status': 'running', 'updated_at': now.subtract(const Duration(hours: 1)).toIso8601String()},
+    {'id': 'c3', 'title': '择校', 'status': 'waiting', 'pinned': true, 'updated_at': now.subtract(const Duration(days: 9)).toIso8601String()},
     {'id': 'c4', 'title': '政治大纲', 'updated_at': now.subtract(const Duration(days: 4)).toIso8601String()},
   ];
   int sec(Duration d) => now.subtract(d).millisecondsSinceEpoch ~/ 1000;
@@ -230,6 +232,22 @@ void main() {
     await _settle(tester);
     expect(find.text('或者新开一段'), findsOneWidget);
     expect(find.text('总结一下这个项目现在的进度'), findsOneWidget);
+  });
+
+  testWidgets('v2.91 §N 项目首屏最近对话：有状态画胶囊代替时间；打开对话后标题栏下浮出总结标题药丸', (tester) async {
+    await _pump(tester, at: '/projects/p1');
+    expect(find.text('进行中'), findsOneWidget); // 单词计划
+    expect(find.text('等你回复'), findsOneWidget); // 择校
+    expect(find.text('已完成'), findsNothing); // 真题第一轮没有 status：照旧写时间
+    await tester.tap(find.text('单词计划'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(TitlePill), findsOneWidget);
+    expect(find.descendant(of: find.byType(TitlePill), matching: find.text('单词计划')), findsOneWidget);
+    expect(tester.state<TitlePillState>(find.byType(TitlePill)).shown.value, isTrue);
+    await tester.pump(Timing.pillHold);
+    expect(tester.state<TitlePillState>(find.byType(TitlePill)).shown.value, isFalse);
+    await _settle(tester);
   });
 
   testWidgets('项目首屏：点最近对话 → 打开续聊；⋯ 菜单 = 列表同一份', (tester) async {

@@ -2,6 +2,8 @@
 // 两种摆法同一份内容：手机上装进抽屉（HistoryPanel.drawer，点开对话后自动收起）；平板双栏时常驻左侧（docked）。
 // 顶部搜索（标题 + 内容，防抖；点内容命中的结果 = 打开并定位到那条消息）；平时按 置顶/今天/昨天/… 分组；长按行 = 重命名 / 置顶 / 删除，左滑删除。
 // 数据全走 ChatController，这里只管展示和交互。
+// v2.91 §N 项目：行尾是状态胶囊（进行中 / 等你回复 / 已完成，服务器 status），代替相对时间（分组标题已给出时间）；
+//   手机上的项目抽屉不放“新对话”钮——标题栏左上的 ≡ 在抽屉打开时变成 +，就是新对话。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -22,6 +24,7 @@ import 'chat_controller.dart';
 import 'conversation_files.dart';
 import 'conversation_share.dart';
 import 'history.dart';
+import 'status_capsule.dart';
 
 class HistoryPanel extends ConsumerStatefulWidget {
   const HistoryPanel({super.key, this.projectId = '', this.docked = false});
@@ -157,7 +160,11 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel> {
             padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x2, Sp.x1),
             child: Row(children: [
               Expanded(child: Text(widget.projectId.isEmpty ? '历史对话' : '项目对话', style: context.text.titleLarge)),
-              IconButton(icon: const Icon(Icons.edit_square), tooltip: '新对话', color: p.text, onPressed: _newChat),
+              // 手机项目抽屉：新对话 = 标题栏左上的 +（ChatScaffold），这里不重复；高度照占，标题不跳
+              if (widget.projectId.isEmpty || widget.docked)
+                IconButton(icon: const Icon(Icons.edit_square), tooltip: '新对话', color: p.text, onPressed: _newChat)
+              else
+                const SizedBox(height: A11y.minTap),
             ]),
           ),
           Padding(
@@ -254,7 +261,10 @@ class _ConversationRow extends StatelessWidget {
             ),
             const SizedBox(width: Sp.x2),
             if (c.pinned) Padding(padding: const EdgeInsets.only(right: Sp.x1), child: Icon(Icons.push_pin_rounded, size: Fs.sm, color: p.text3)),
-            Text(formatAgo(c.updatedAt), style: context.text.labelSmall?.copyWith(color: p.text3)),
+            if (c.status case final status?)
+              StatusCapsule(status)
+            else
+              Text(formatAgo(c.updatedAt), style: context.text.labelSmall?.copyWith(color: p.text3)),
           ]),
         ),
       ),

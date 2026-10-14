@@ -168,6 +168,9 @@ FIXTURES = {
         {"path": "笔记/第三章 中值定理.docx", "name": "第三章 中值定理.docx", "size": 240000, "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "modified": 1791500000},
         {"path": "背景.png", "name": "背景.png", "size": 820000, "mime": "image/png", "modified": 1790900000},
     ],
+    # 项目首屏“电脑”一节：缺了这份 useComputer 读 running_jobs.length 会让整页白屏（v2.91 补上）
+    "/api/projects/pr1/computer": {"workspace": "pr1", "name": "考研数学", "sandbox": {"state": "stopped"}, "disk_used": 52428800,
+                                   "disk_partial": False, "running_jobs": [], "services": []},
     "/api/projects/pr1": {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW},
     # 项目首屏的“电脑”一节（v1.25）。形状照 frontend/src/lib/computer.ts 的 ComputerStatus；
     # 缺了它页面会白屏（读 s.sandbox.state 时炸），所以这张图以前一直拍不出来。
@@ -285,9 +288,15 @@ def _report_missing() -> None:
 
 atexit.register(_report_missing)
 
+# v2.91 §N：项目里的对话列表带 status（服务器只在 ?project_id= 时发；主聊天列表不带）
+PROJECT_STATUS = {"c1": "waiting", "c2": "running", "c3": "done", "c4": "waiting", "c5": "done"}
+
 
 def api(route):
     path = route.request.url.split("://", 1)[1].split("/", 1)[1]
+    if path.startswith("api/conversations?") and "project_id=" in path and "q=" not in path:
+        body = [{**c, "status": PROJECT_STATUS.get(c["id"])} for c in FIXTURES["/api/conversations"]]
+        return route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
     path = "/" + path.split("?", 1)[0]
     if path.startswith("/api/conversations/") and path.endswith("/usage"):
         path = "/api/conversations/c1/usage"  # 每个对话的用量都用同一份（缺了标题栏用量会读空）
@@ -469,5 +478,48 @@ def main():
     print("wrote", OUT)
 
 
+def section_n():
+    """v2.91 §N 项目页：首屏状态胶囊、手机 ≡→+ 抽屉、进场药丸 / 停 1.5 秒收起 / 上翻浮出。只跑这一段：shots.py <目录> n"""
+    OUT.mkdir(parents=True, exist_ok=True)
+    base = serve()
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        for theme in ("light", "dark"):
+            for name, size in (("phone", (400, 860)), ("desktop", (1280, 820))):
+                ctx = browser.new_context(viewport={"width": size[0], "height": size[1]}, device_scale_factor=2 if name == "phone" else 1,
+                                          timezone_id="Asia/Shanghai", locale="zh-CN", color_scheme=theme)
+                ctx.add_init_script(f"localStorage.setItem('assistant.token','shot');localStorage.setItem('assistant.server','{base}');")
+                page = ctx.new_page()
+                page.on("pageerror", lambda e: print("PAGE ERROR:", e))
+                page.clock.set_fixed_time(NOW)
+                page.route("**/api/**", api)
+                page.route_web_socket("**/ws**", lambda ws: None)
+                page.goto(base + "/#/projects/pr1")
+                page.wait_for_timeout(800)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-n-project-home.png"))
+                if name == "phone":
+                    page.get_by_role("button", name="项目对话").click()
+                    page.wait_for_timeout(500)
+                    page.screenshot(path=str(OUT / f"{name}-{theme}-n-drawer.png"))
+                    page.get_by_role("button", name="新对话").click()  # 同一颗钮：+ = 新对话、收起
+                    page.wait_for_timeout(400)
+                    page.locator(".project-home button.row", has_text="DeepSeek 和 GPT 的价格对比").click()
+                else:
+                    page.locator(".conv-item", has_text="DeepSeek 和 GPT 的价格对比").click()
+                page.wait_for_timeout(600)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-n-pill.png"))
+                page.wait_for_timeout(1800)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-n-pill-hidden.png"))
+                page.evaluate("const t = document.querySelector('.thread'); t.style.scrollBehavior = 'auto'; t.scrollBy(0, -200)")
+                page.wait_for_timeout(500)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-n-pill-scroll.png"))
+                ctx.close()
+        browser.close()
+    print("wrote", OUT)
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[2] == "n":
+        section_n()
+    else:
+        main()

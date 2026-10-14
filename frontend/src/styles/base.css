@@ -57,6 +57,7 @@ a { color: var(--accent); text-decoration: none; }
 @keyframes bar-grow { from { transform: scaleY(0); } }
 @keyframes float-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }  /* 顶栏回来 */
 @keyframes float-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }   /* 输入胶囊回来 */
+@keyframes breathe { 50% { opacity: .3; } }  /* v2.91 状态胶囊“进行中”的小点（= App PulseDot 0.3–1） */
 .send-btn.ghost { background: var(--tile); color: var(--text-2); }
 .icon-btn.sm { width: 30px; height: 30px; }
 
