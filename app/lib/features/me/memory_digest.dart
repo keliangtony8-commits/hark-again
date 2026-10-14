@@ -119,7 +119,7 @@ class _Card extends StatelessWidget {
                   ? AnimatedOpacity(
                       duration: context.motion(Motion.base),
                       opacity: busy ? 0.5 : 1,
-                      child: Text(d.text!, style: context.text.bodyMedium?.copyWith(height: Fs.lineHeight)),
+                      child: Text(d.text!, style: context.text.bodyMedium?.copyWith(height: Fs.prose)),
                     )
                   : Text('把你的 ${d.memories} 条记忆浓缩成一段话。只在你点生成时调用一次便宜模型。',
                       style: context.text.bodyMedium?.copyWith(color: p.text2)),

@@ -15,7 +15,7 @@ class AppMarkdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final base = context.text.bodyLarge!;
+    final base = context.text.bodyLarge!.copyWith(height: Fs.prose); // 要读的正文才用宽行高（v2.83 §G）
     return MarkdownBody(
       data: data,
       selectable: selectable,

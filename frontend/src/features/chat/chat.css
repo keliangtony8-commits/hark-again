@@ -32,7 +32,7 @@
 .convs { width: var(--sidebar-w); flex: none; display: flex; flex-direction: column; margin: var(--shell-top) 0 var(--sp-4) var(--gutter);
   overflow: hidden; animation: rise var(--dur) var(--ease) both; }
 .convs-head { display: flex; align-items: center; justify-content: space-between; height: var(--topbar-h); padding: 0 var(--sp-3) 0 var(--sp-4); }
-.convs-title { font-family: var(--font-serif); font-weight: var(--fw-title); letter-spacing: var(--display-tracking); }
+.convs-title { font-weight: var(--fw-strong); letter-spacing: var(--display-tracking); }
 .new-chat { margin: 0 var(--sp-3) var(--sp-3); height: 44px; padding: 0 var(--sp-4); display: flex; align-items: center; justify-content: center; gap: var(--sp-2);
   background: var(--pill-on); color: var(--on-pill-on); border-radius: var(--r-full); font-size: var(--fs-sm); font-weight: var(--fw-title); transition: transform var(--dur) var(--ease); }
 .new-chat:active { transform: scale(0.98); }
@@ -106,7 +106,7 @@
 .thought-toggle svg:last-child { transition: transform var(--dur) var(--ease); }
 .thought-toggle.open svg:last-child { transform: rotate(90deg); }
 .thought-full { margin: 0 0 var(--sp-2); padding: var(--sp-3) var(--sp-4); background: var(--tile); border-radius: var(--r-inner); font-size: var(--fs-sm);
-  line-height: 1.6; color: var(--text-2); white-space: pre-wrap; animation: rise var(--dur) var(--ease) both; }
+  line-height: var(--lh-prose); color: var(--text-2); white-space: pre-wrap; animation: rise var(--dur) var(--ease) both; }
 .icon-pop { display: inline-flex; animation: icon-pop var(--dur) var(--spring) both; }
 /* 回复完成：操作键逐个错峰浮现 */
 .msg.assistant .msg-actions > * { animation: rise var(--dur) var(--ease) both; }
@@ -126,7 +126,7 @@
 .empty { flex: 1; display: grid; place-items: center; padding: var(--thread-top) var(--gutter) calc(var(--footer-h, 88px) + var(--sp-4)); }
 .empty-inner { max-width: 520px; width: 100%; text-align: center; }
 .empty-inner .brand-mark { margin: 0 auto var(--sp-4); }
-.empty h1 { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: 0 0 var(--sp-2); }
+.empty h1 { font-weight: var(--fw-strong); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: 0 0 var(--sp-2); }
 .empty p { color: var(--text-2); margin: 0 0 var(--sp-6); }
 .suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .suggestion { text-align: left; padding: var(--sp-4); font-size: var(--fs-sm); background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }

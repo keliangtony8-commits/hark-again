@@ -167,7 +167,8 @@ abstract final class Radii {
 /// 字号。display = 问候语这类页面主标题（衬线、偏细）；xl = 大数字。
 abstract final class Fs {
   static const xs = 13.0, sm = 15.0, md = 17.0, lg = 20.0, xl = 32.0, display = 34.0; // v2.80 F.4：字少而大
-  static const lineHeight = 1.6;
+  static const lineHeight = 1.3; // v2.83 §G：界面文字（标题、行、按钮、标签）紧凑 = 网页 --lh
+  static const prose = 1.6; // 只给要“读”的正文：聊天回复（AppMarkdown）、记忆摘要、项目档案 = 网页 --lh-prose
 }
 
 /// 字重与字距（v2.1「降一档」）：正文 400、标题/按钮/导航 500、只有页面主标题和大数字 600。
@@ -175,7 +176,7 @@ abstract final class Fs {
 abstract final class Weights {
   static const body = FontWeight.w400, title = FontWeight.w500, strong = FontWeight.w600;
   static const labelTracking = 0.5; // 小标签的字距
-  static const displayTracking = -0.3; // 大标题、大数字略收紧
+  static const displayTracking = -0.5; // 大标题、大数字收紧（v2.83 无衬线 600）
 }
 
 /// 动效：全 App 共用一套节奏，保证“手感”统一
@@ -241,8 +242,11 @@ abstract final class Elevation {
 /// 字体：正文用系统无衬线；衬线只做点缀（问候、品牌词、引导卡大标题），克制使用。
 /// 不打包字体（省 10MB+）：安卓有 Noto Serif CJK 就用它，没有就退回系统衬线。
 abstract final class Fonts {
-  static const serif = 'serif';
-  static const serifFallback = ['Noto Serif CJK SC', 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', ...emoji];
+  /// v2.83 §G：全 App 只有一种字——无衬线。拉丁/数字 = 打包的 Inter（OFL，assets/fonts，只含拉丁子集，
+  /// = 网页 --font-sans 首位）；中文不在 Inter 里，自动落到下面的系统中文字（小米 MiSans、苹方、鸿蒙、思源黑体）。
+  /// 不再有衬线/宋体：真机上它落成 Noto Serif CJK，是“丑”的头号来源。
+  static const sans = 'Inter';
+  static const sansFallback = ['MiSans', 'PingFang SC', 'HarmonyOS Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', ...emoji];
   static const emoji = ['Noto Color Emoji', 'Apple Color Emoji']; // 表情兜底（项目图标）：系统通常自己会兜，写明了更稳
 }
 

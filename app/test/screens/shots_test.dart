@@ -499,8 +499,10 @@ Future<void> _loadFonts() async {
     await loader.load();
   }
 
-  await load('Roboto', '$_fonts/NotoSansSC.ttf'); // 安卓默认字族名，正文中英文都用它
-  await load('serif', '$_fonts/NotoSerifSC.ttf'); // 衬线点缀（tokens Fonts.serif）
+  await load('Inter', 'assets/fonts/Inter-Regular.ttf'); // v2.83 §G：tokens Fonts.sans（打包的拉丁字）
+  for (final f in ['MiSans', 'PingFang SC', 'HarmonyOS Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC']) {
+    await load(f, '$_fonts/NotoSansSC.ttf'); // tokens Fonts.sansFallback：中文（每个名都挂，否则未注册名落到 FlutterTest 方块）
+  }
   await load('monospace', '$_fonts/NotoSansSC.ttf'); // 代码块的字族名：测试里没有真等宽字体，借正文字体免得是方块
   await load('Noto Color Emoji', '$_fonts/NotoEmoji.ttf'); // tokens Fonts.emoji 的第一个名字； // 表情的兜底（项目图标），不然是方块
   final sdk = Platform.environment['FLUTTER_ROOT'] ?? '/tmp/flutter';

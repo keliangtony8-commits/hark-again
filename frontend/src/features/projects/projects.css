@@ -33,7 +33,7 @@
 .project-home-head { display: flex; align-items: center; gap: var(--sp-4); }
 .project-home-mark { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-inner); background: var(--tile); font-size: 26px; }
 .project-home-titles { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
-.project-home-titles h1 { margin: 0; font-family: var(--font-serif); font-weight: var(--fw-title); font-size: calc(var(--fs-xl) - 4px); line-height: 1.2;
+.project-home-titles h1 { margin: 0; font-weight: var(--fw-strong); font-size: calc(var(--fs-xl) - 4px); line-height: 1.2;
   letter-spacing: var(--display-tracking); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .project-home-line { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; margin-top: var(--sp-3);
   text-align: left; color: var(--text-2); border-radius: var(--r-inner); transition: color var(--dur) var(--ease); }

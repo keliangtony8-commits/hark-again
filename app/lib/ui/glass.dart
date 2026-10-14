@@ -303,7 +303,7 @@ class GlassIconButton extends StatelessWidget {
       );
 }
 
-/// 圆形头像：底色（null = 中性 Palette.avatar，“我的”里可改）+ 衬线首字，字色按底色亮度自动深/浅。
+/// 圆形头像：底色（null = 中性 Palette.avatar，“我的”里可改）+ 无衬线首字（600），字色按底色亮度自动深/浅。
 /// 只有一圈发丝边和很淡的投影：它是顶栏的一员，不该像贴纸一样浮起来。
 class Avatar extends StatelessWidget {
   const Avatar({super.key, required this.initial, required this.onTap, this.size = Layout.topBar, this.color, this.tooltip = '我的'});

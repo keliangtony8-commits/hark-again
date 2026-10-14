@@ -18,7 +18,7 @@
 /* 一级页面页头（主页、项目）：小标签一行 + 衬线大标题，= App 的 _Hero / _Header（Layout.headTop 节奏） */
 .page-hero { padding: var(--sp-5) var(--sp-1) var(--sp-5); animation: rise var(--dur) var(--ease) both; }
 .page-hero-label { display: block; min-height: 1.5em; font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
-.page-hero h1 { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-2) 0 0; }
+.page-hero h1 { font-weight: var(--fw-strong); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-2) 0 0; }
 .page-head .spacer { width: 40px; }
 
 .section { margin-top: var(--section-gap); }
@@ -34,9 +34,9 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .row-icon { width: 28px; height: 28px; display: grid; place-items: center; flex: none; color: var(--text-2); font-size: 18px; }
 /* 取不到品牌图时的字标：和商品卡字标同一字族，小一号、安静的底 */
 .row-monogram { width: 24px; height: 24px; display: grid; place-items: center; border-radius: var(--r-inner); background: var(--tile);
-  color: var(--text-2); font-family: var(--font-serif); font-size: var(--fs-sm); font-weight: var(--fw-title); }
+  color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-title); }
 .row-body { flex: 1; min-width: 0; }
-.row-title { font-size: var(--fs-md); font-weight: var(--fw-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-title { font-size: var(--fs-md); font-weight: var(--fw-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-sub { font-size: var(--fs-sm); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 行里标题和副标题永远上下两行（用 <span> 写时默认是行内，短文案会挤成一行“网页调研多来源搜索后汇总”，v1.06） */
 .row-body > .row-title, .row-body > .row-sub { display: block; }
@@ -176,7 +176,7 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
 .usage-hero { padding: var(--sp-4); display: grid; gap: var(--sp-2); animation: rise var(--dur) var(--ease) both; }
 .usage-head { display: flex; align-items: center; justify-content: space-between; margin: calc(-1 * var(--sp-1)) 0; }
 .usage-label { font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); }
-.usage-big { font-family: var(--font-serif); font-size: var(--fs-xl); font-weight: var(--fw-title); letter-spacing: var(--display-tracking); font-variant-numeric: tabular-nums; }
+.usage-big { font-size: var(--fs-xl); font-weight: var(--fw-strong); letter-spacing: var(--display-tracking); font-variant-numeric: tabular-nums; }
 .meter { height: 8px; border-radius: var(--r-full); background: var(--tile); overflow: hidden; }
 .meter > span { display: block; height: 100%; background: var(--accent); transform-origin: left; transition: transform var(--dur) var(--ease); animation: meter-grow var(--dur) var(--ease) both; }
 .meter-near > span { background: var(--warning); }
@@ -194,7 +194,7 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
 .usage-stats div { display: grid; }
 /* 只选标签那层：CountUp 里滚动的数字也是 span，之前被这条规则压成 12px 灰字（v1.02 截图） */
 .usage-stats > div > span, .usage-stats small { font-size: var(--fs-xs); color: var(--text-2); }
-.usage-stats b { font-family: var(--font-serif); font-weight: var(--fw-title); font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.usage-stats b { font-weight: var(--fw-title); font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
 /* 本月最花钱的对话：行 + 一条细占比条（同 .meter 的动效）；已删的不可点、灰显 */
 .top-convs .row { flex-wrap: wrap; row-gap: var(--sp-2); }
 .top-convs .meter { flex-basis: 100%; height: 4px; }

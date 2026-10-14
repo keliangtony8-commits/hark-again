@@ -1,7 +1,6 @@
 // 把令牌组装成 Material 主题，并通过 ThemeExtension 暴露 Palette：
 // 组件里用 `context.palette.accent`，不直接碰 Color。
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -17,11 +16,6 @@ class PaletteExt extends ThemeExtension<PaletteExt> {
 
   @override
   PaletteExt lerp(PaletteExt? other, double t) => other == null ? this : PaletteExt(Palette.lerp(p, other.p, t));
-}
-
-/// 衬线点缀（问候、品牌词、引导卡大标题）：同一字号字重，只换字族。克制使用。
-extension SerifX on TextStyle {
-  TextStyle get serif => copyWith(fontFamily: Fonts.serif, fontFamilyFallback: Fonts.serifFallback);
 }
 
 extension ThemeX on BuildContext {
@@ -54,15 +48,13 @@ ThemeData buildTheme(Brightness brightness) {
     error: p.danger,
     outline: p.border,
   );
-  // 全 App 唯一的字样工厂：平台系统字族（安卓 Roboto / iOS 苹方·SF）+ 表情兜底。
+  // 全 App 唯一的字样工厂：Inter（拉丁/数字）+ 系统中文字 + 表情兜底（Fonts.sans/sansFallback）。
   // AppBar 标题、按钮字这类不经过 textTheme 的样式也必须从这里出，否则它们没有字族、也没有表情兜底。
-  final family = Typography.material2021(platform: defaultTargetPlatform).black.bodyMedium?.fontFamily;
   // v2.1：所有数字等宽（tabular figures）——金额、时间、计数上下对齐，跳动时不抖。
   TextStyle t(double size, FontWeight w, [Color? c]) => TextStyle(
-      fontSize: size, fontWeight: w, color: c, height: Fs.lineHeight, fontFamily: family, fontFamilyFallback: Fonts.emoji, fontFeatures: const [FontFeature.tabularFigures()]);
-  // 衬线“高级感”只给三处：页面主标题（display）、大数字（headline）、引导卡大标题——偏细、略收紧。
-  TextStyle serif(double size, FontWeight w, [Color? c]) =>
-      t(size, w, c).copyWith(fontFamily: Fonts.serif, fontFamilyFallback: Fonts.serifFallback, height: 1.2, letterSpacing: Weights.displayTracking);
+      fontSize: size, fontWeight: w, color: c, height: Fs.lineHeight, fontFamily: Fonts.sans, fontFamilyFallback: Fonts.sansFallback, fontFeatures: const [FontFeature.tabularFigures()]);
+  // v2.83 §G：页面主标题和大数字 = 同一字族 600、收紧字距（原来是宋体衬线，真机上最丑的地方）。
+  TextStyle display(double size, [Color? c]) => t(size, Weights.strong, c).copyWith(height: 1.2, letterSpacing: Weights.displayTracking);
 
   return ThemeData(
     useMaterial3: true,
@@ -73,10 +65,10 @@ ThemeData buildTheme(Brightness brightness) {
     splashFactory: InkSparkle.splashFactory,
     // 字重降一档（v2.1）：正文 400，标题/按钮 500，只有主标题和大数字 600；小标签不加粗、加字距。
     textTheme: TextTheme(
-      displayMedium: serif(Fs.display, Weights.title, p.text), // 问候语、“我的”
-      displaySmall: serif(Fs.xl, Weights.title, p.text), // 面板/用量卡里的大数字
-      headlineMedium: serif(Fs.xl - 4, Weights.title, p.text), // 子页面的关键数字
-      titleLarge: t(Fs.lg, Weights.strong, p.text).copyWith(height: 1.3),
+      displayMedium: display(Fs.display, p.text), // 页面主标题
+      displaySmall: display(Fs.xl, p.text), // 面板/用量卡里的大数字
+      headlineMedium: display(Fs.xl - 4, p.text), // 子页面的关键数字
+      titleLarge: t(Fs.lg, Weights.strong, p.text),
       titleMedium: t(Fs.md, Weights.title, p.text),
       titleSmall: t(Fs.sm, Weights.title, p.text),
       bodyLarge: t(Fs.md, Weights.body, p.text),

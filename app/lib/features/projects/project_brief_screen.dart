@@ -208,7 +208,7 @@ class _Editor extends StatelessWidget {
       autofocus: true,
       minLines: 14,
       maxLines: null,
-      style: context.text.bodyMedium?.copyWith(fontFamily: 'monospace', fontSize: Fs.sm, height: Fs.lineHeight),
+      style: context.text.bodyMedium?.copyWith(fontFamily: 'monospace', fontSize: Fs.sm, height: Fs.prose),
       decoration: InputDecoration(
         alignLabelWithHint: true,
         hintText: '## 目标\n12 月考研，目标 211 软件工程\n\n## 固定做法\n- 每晚复盘当天错题',

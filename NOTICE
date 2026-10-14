@@ -131,3 +131,4 @@
 
 - Design method in project skill hark-elegant-ui adapted from anthropics/skills skills/frontend-design (Apache-2.0), modified. Guidance only, no code.
 - v2.82 浏览器全屏接管页：只参考了思路（无代码）——Skyvern PR #4904（AGPL-3.0，仅阅读设计）、vercel-labs/agent-browser streaming（Apache-2.0）、steel-dev/steel-browser（Apache-2.0）：接管/交还门控、鼠标 down/move/up 与滚轮转发。
+- v2.83 字体：Inter v4.1（rsms/inter，SIL Open Font License 1.1，© The Inter Project Authors），拉丁子集重新打包为 app/assets/fonts/Inter-{Regular,Medium,SemiBold}.ttf 与 frontend/public/fonts/*.woff2；许可全文 app/assets/fonts/Inter-OFL.txt。

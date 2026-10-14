@@ -165,7 +165,7 @@ class _Monogram extends StatelessWidget {
         child: ColoredBox(
           color: context.tileFill,
           child: Center(
-            child: Text(monogramOf(name), style: (size ?? context.text.titleMedium)?.serif.copyWith(color: context.palette.text3)),
+            child: Text(monogramOf(name), style: (size ?? context.text.titleMedium)?.copyWith(color: context.palette.text3)),
           ),
         ),
       );

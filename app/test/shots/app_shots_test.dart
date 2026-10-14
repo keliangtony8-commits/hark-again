@@ -1,6 +1,7 @@
-// App 截图（v2.78）：真字体（文泉驿正黑 = 中文 + 拉丁，MaterialIcons 来自 Flutter SDK）把整个 App 外壳画成 PNG，
-// 对照 Hark 截图自查。默认跳过；要出图：
-//   SHOTS_DIR=/tmp/shots/app CJK_FONT=/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc flutter test test/shots/app_shots_test.dart
+// App 截图（v2.78）：真字体把整个 App 外壳画成 PNG，对照 Hark 截图自查。v2.83 §G：和真机同一套字——
+// 拉丁/数字 = 打包的 Inter（assets/fonts，三种字重），中文 = Noto Sans CJK（真机上是 MiSans/苹方，同为黑体），
+// MaterialIcons 来自 Flutter SDK。默认跳过；要出图（先按 app/README.md「截图」下 NotoSansSC.ttf）：
+//   SHOTS_DIR=/tmp/shots/app flutter test test/shots/app_shots_test.dart
 // 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-dark / me-preferences-dark（手机 412×915 逻辑像素，2.625 倍）。
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -10,6 +11,7 @@ import 'package:assistant/core/api.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
+import 'package:assistant/theme/tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -21,7 +23,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../chat_controller_test.dart' show FakeSocket;
 
 final _out = Platform.environment['SHOTS_DIR'];
-final _cjk = Platform.environment['CJK_FONT'] ?? '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc';
+final _cjk = Platform.environment['CJK_FONT'] ?? '/tmp/shots/fonts/NotoSansSC.ttf';
 
 class _SignedIn extends SessionNotifier {
   @override
@@ -81,8 +83,11 @@ class _Api implements Api {
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError();
 }
 
-Future<void> _font(String family, String path) async {
-  final loader = FontLoader(family)..addFont(Future.value(ByteData.sublistView(File(path).readAsBytesSync())));
+Future<void> _font(String family, String path, [List<String> more = const []]) async {
+  final loader = FontLoader(family);
+  for (final p in [path, ...more]) {
+    loader.addFont(Future.value(ByteData.sublistView(File(p).readAsBytesSync())));
+  }
   await loader.load();
 }
 
@@ -140,7 +145,11 @@ void main() {
   setUpAll(() async {
     if (_out == null) return;
     Directory(_out!).createSync(recursive: true);
-    for (final f in ['Roboto', 'serif', 'Noto Serif CJK SC']) {
+    // 和 tokens Fonts.sans/sansFallback 同名：Inter 用打包的那三份，中文兜底名挂上 CJK 字
+    await _font('Inter', 'assets/fonts/Inter-Regular.ttf', ['assets/fonts/Inter-Medium.ttf', 'assets/fonts/Inter-SemiBold.ttf']);
+    // 每个中文兜底名都挂上 CJK 字：测试引擎把没注册的字族名解析成 FlutterTest 字，
+    // 它恰好有“一中本”等几个字（画成方块），排在前面的 MiSans 就会把这几个字吃掉
+    for (final f in Fonts.sansFallback.where((f) => !Fonts.emoji.contains(f))) {
       await _font(f, _cjk);
     }
     await _font('MaterialIcons', '${Platform.environment['FLUTTER_ROOT'] ?? '/tmp/flutter'}/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf');
