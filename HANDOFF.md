@@ -149,6 +149,17 @@
 - **顺手抓到一个真问题**：浅色 `warning` = `#B86E00` 到处当小字用（`bodySmall`/`labelSmall`），对底色只有 **3.62:1**、对白卡 3.99:1——不到 AA。已压深到 `#9A5B00`（对底色 4.93、白卡 5.43），App `tokens.dart` 与网页 `tokens.css` 同步改。
 - 新增守门：App 侧 6 个测试（对比度表 + 气泡/回复卡画出来也达标 + 编辑条/引用条/长按聚焦跟随同一套色），网页侧 `check-contrast.mjs`（14 对 × 2 套主题 **且校验两端同值**，改了一边忘另一边会红）。
 - 截图：App 62 张（`%TEMP%\shots-app`）、网页 126 张；对照图放在 `shots-2.90.2/`（`app-chat/` 看气泡，`warning-aa/` 看警示色改前改后）。
+- **已发 v2.90.3 并部署到 VPS**：`/api/version` = 2.90.3（build 29003），线上 CSS 里 `9a5b00` 出现 1 次、`b86e00` 0 次（颜色确实上线了），7 个容器都在跑。tag `v2.90.3` = `615b656`。
+
+### 网页守卫不能读 App 的文件（第一次部署就栽在这）
+`frontend/scripts/check-contrast.mjs` 一开始写成必须读 `../app/lib/theme/tokens.dart` 做两端同值校验 → 镜像构建
+失败 `ENOENT '/app/lib/theme/tokens.dart'`：**网页镜像的构建上下文就是 `frontend/`，里面根本没有 `app/`**。
+现在改成：对比度那半永远查（只要 tokens.css）；两端同值那半读得到才查（完整仓库/本地跑 build），读不到打印一行说明。
+以后往 `npm run build` 里加脚本，先想清楚「镜像里有没有这个文件」。
+
+### 第五节 2 之外的下一步（按第五节顺序）
+- 第五节 3「录入准确率重估」、4「§N 项目页 v2.91」、5「§P 名字头像 v2.92」、6「首页重设计 E1/E4/天气去重」、7「子对话不进主列表（VPS 验）」、9「SearXNG 实测 + 关掉 VPS 密码登录」、10「CORE #9 多文件读」。
+- 第五节 2a 只有你能做：GitHub / Google 后台注册 OAuth 应用 → 填 VPS `.env` → 重启 → 真机走一遍授权。
 
 ### 这台机器上别做的事（我踩了）
 - **不要用 PowerShell 的 `Get-Content`/`Set-Content` 改 Dart/CSS 源文件**：默认编码会把中文注释整片写成乱码（我这轮把 `tokens.dart` 弄坏过一次，`git restore` 才救回来）。要改就用编辑工具，或 `git apply`。
