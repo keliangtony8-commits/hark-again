@@ -6,17 +6,24 @@ import type { ConnectBlock, Connector } from "./types";
 export type ConnectStatus = "connected" | "expired" | "available" | "unconfigured";
 export type ConnectTone = "action" | "done" | "warning" | "off";
 
-/** 老服务器没有 status：按账户 / 配置推。 */
+/** 万一缺 status：有账户 = 已连接，否则当没配——宁可不显示，也不给一颗点了会失败的按钮（v2.90.2）。 */
 export const connectorStatus = (c: Connector): ConnectStatus =>
-  (c.status as ConnectStatus | undefined) ?? (c.account != null ? "connected" : c.configured ? "available" : "unconfigured");
+  (c.status as ConnectStatus | undefined) ?? (c.account != null ? "connected" : "unconfigured");
+
+/** 连接器页画这一行：没配又没连过的不画。 */
+export const connectorShown = (c: Connector) => connectorStatus(c) !== "unconfigured";
+
+/** 现在点“连接 / 重新连接”真能走通：服务器配好了这个应用（setup 为空）。 */
+export const connectorAuthorizable = (c: Connector) => !c.setup && connectorShown(c);
 
 const who = (head: string, account?: string | null) => (account ? `${head} · ${account}` : head);
 
 export function connectCardState(b: ConnectBlock, live?: Connector | null): { line: string; button: string | null; tone: ConnectTone } {
   if (!live) return { line: b.desc ?? "", button: b.reconnect ? "重新连接" : `连接 ${b.name}`, tone: "action" };
+  const can = connectorAuthorizable(live); // 服务器后来删了配置：照实说状态，不给点了会失败的按钮
   switch (connectorStatus(live)) {
-    case "connected": return { line: who("已连接", live.account), button: b.reconnect ? "换个账户" : null, tone: "done" };
-    case "expired": return { line: who("授权失效", live.account), button: "重新连接", tone: "warning" };
+    case "connected": return { line: who("已连接", live.account), button: b.reconnect && can ? "换个账户" : null, tone: "done" };
+    case "expired": return { line: who("授权失效", live.account), button: can ? "重新连接" : null, tone: "warning" };
     case "unconfigured": return { line: "服务器还没配置这个应用", button: null, tone: "off" };
     default: return { line: live.desc || b.desc || "", button: `连接 ${b.name}`, tone: "action" };
   }

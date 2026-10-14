@@ -1,6 +1,7 @@
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/connector_library.dart';
 import 'package:assistant/features/me/connectors_screen.dart';
+import 'package:assistant/features/me/oauth_setup_sheet.dart';
 import 'package:assistant/features/me/vault_screen.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -12,8 +13,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
-Connector c(String id, {bool configured = true, String? account}) =>
-    Connector(id: id, name: id, desc: 'd', configured: configured, account: account);
+const _setup = ConnectorSetup(console: 'https://github.com/settings/developers', callback: 'https://t.dev/api/oauth/callback',
+    env: ['X_CLIENT_ID', 'X_CLIENT_SECRET']);
+Connector c(String id, {bool configured = true, String? account}) => Connector(
+    id: id, name: id, desc: 'd', account: account, setup: configured ? null : _setup,
+    status: account != null ? 'connected' : (configured ? 'available' : 'unconfigured'));
 SecretItem sec(String id, {bool login = false}) =>
     SecretItem(id: id, kind: login ? 'login' : 'api_key', name: id, username: login ? 'me' : null, hosts: const ['a.com'], preview: login ? '' : 'wxyz');
 
@@ -44,9 +48,30 @@ Future<void> pump(WidgetTester tester, String path, Widget screen, Map<String, O
 }
 
 void main() {
-  test('sortAccounts：已连接 → 可连接 → 未配置，同组保持顺序', () {
+  test('sortAccounts：没配又没连的不画；已连接 → 可连接，同组保持顺序', () {
     final list = [c('x', configured: false), c('b'), c('a', account: 'me@a'), c('d'), c('y', configured: false)];
-    expect(sortAccounts(list).map((e) => e.id), ['a', 'b', 'd', 'x', 'y']);
+    expect(sortAccounts(list).map((e) => e.id), ['a', 'b', 'd']);
+    expect(missingSetup(list).map((e) => e.id), ['x', 'y']);
+    expect(setupLine(missingSetup(list)), '配置 x / y 授权');
+    // 连过、但服务器后来删了配置：照样画（账户还在），不算“缺配置”那一行，也不能再授权
+    final orphan = Connector(id: 'g', name: 'G', desc: 'd', account: 'me', status: 'connected', setup: _setup);
+    expect(sortAccounts([orphan]).single.id, 'g');
+    expect(missingSetup([orphan]), isEmpty);
+    expect(orphan.authorizable, isFalse);
+    expect(c('b').authorizable, isTrue);
+  });
+
+  test('ConnectorSetup 解析；缺 status 时宁可当没配', () {
+    final j = Connector.fromJson({
+      'id': 'github', 'name': 'GitHub', 'status': 'unconfigured',
+      'setup': {'console': 'https://github.com/settings/developers', 'callback': 'https://t.dev/api/oauth/callback',
+        'env': ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET']},
+    });
+    expect((j.shown, j.authorizable), (false, false));
+    expect(j.setup!.env, ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET']);
+    expect(Connector.fromJson({'id': 'g', 'status': 'available', 'setup': null}).authorizable, isTrue);
+    expect(Connector.fromJson({'id': 'g'}).status, 'unconfigured');
+    expect(Connector.fromJson({'id': 'g', 'account': 'x'}).status, 'connected');
   });
 
   test('摘要与脱敏', () {
@@ -78,12 +103,17 @@ void main() {
     expect(envNameError('A'), isNotNull);
   });
 
-  testWidgets('连接器页：页头摘要、MCP 为空时起步卡', (tester) async {
+  const ghSetup = {'console': 'https://github.com/settings/developers', 'callback': 'https://toyuis.itsllm.com/api/oauth/callback',
+    'env': ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET']};
+  const ggSetup = {'console': 'https://console.cloud.google.com/apis/credentials', 'callback': 'https://toyuis.itsllm.com/api/oauth/callback',
+    'env': ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']};
+
+  testWidgets('连接器页：页头摘要、MCP 为空时起步卡；没配的服务商不画，给部署者一行', (tester) async {
     await pump(tester, '/me/connectors', const ConnectorsScreen(), {
       '/api/connectors': [
-        {'id': 'github', 'name': 'GitHub', 'desc': '代码', 'configured': false},
-        {'id': 'google', 'name': 'Google', 'desc': '邮件', 'configured': true, 'account': 'me@gmail.com'},
-        {'id': 'notion', 'name': 'Notion', 'desc': '笔记', 'configured': true},
+        {'id': 'github', 'name': 'GitHub', 'desc': '代码', 'status': 'unconfigured', 'setup': ghSetup},
+        {'id': 'google', 'name': 'Google', 'desc': '邮件', 'status': 'connected', 'account': 'me@gmail.com'},
+        {'id': 'notion', 'name': 'Notion', 'desc': '笔记', 'status': 'available'},
       ],
     });
     expect(find.text('已连接 1 个账户'), findsOneWidget);
@@ -92,8 +122,43 @@ void main() {
     expect(find.widgetWithText(PillButton, '连接'), findsOneWidget);
     expect(tester.getSize(find.widgetWithText(PillButton, '连接')).height, greaterThanOrEqualTo(A11y.minTap));
     expect(find.text('接入任何 MCP 服务'), findsOneWidget);
-    // 已连接的排在未配置的前面
-    expect(tester.getTopLeft(find.text('Google')).dy, lessThan(tester.getTopLeft(find.text('GitHub')).dy));
+    // 没配的 GitHub 不画成一行（没有“看起来能点、点了失败”的东西），只在末尾给部署者一行
+    expect(find.text('GitHub'), findsNothing);
+    expect(find.text('服务器还差一步'), findsOneWidget);
+    expect(find.text('配置 GitHub 授权'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Google')).dy, lessThan(tester.getTopLeft(find.text('服务器还差一步')).dy));
+  });
+
+  testWidgets('连接器页：一个都没配 → 账户区只有部署者那一行，点开是引导（回调地址、变量名、重启命令）', (tester) async {
+    await pump(tester, '/me/connectors', const ConnectorsScreen(), {
+      '/api/connectors': [
+        {'id': 'google', 'name': 'Google', 'desc': '邮件', 'status': 'unconfigured', 'setup': ggSetup},
+        {'id': 'github', 'name': 'GitHub', 'desc': '代码', 'status': 'unconfigured', 'setup': ghSetup},
+      ],
+    });
+    expect(find.byType(PillButton), findsWidgets); // MCP 起步卡的按钮
+    expect(find.widgetWithText(PillButton, '连接'), findsNothing);
+    expect(find.text('配置 Google / GitHub 授权'), findsOneWidget);
+    await tester.tap(find.text('服务器还差一步'));
+    await tester.pumpAndSettle();
+    expect(find.text('在 Google 开发者后台创建'), findsOneWidget);
+    expect(find.text('在 GitHub 开发者后台创建'), findsOneWidget);
+    expect(find.text('console.cloud.google.com'), findsOneWidget);
+    expect(find.text('https://toyuis.itsllm.com/api/oauth/callback'), findsOneWidget); // 两家同一个回调，只列一次
+    expect(find.text('GOOGLE_CLIENT_ID\nGOOGLE_CLIENT_SECRET\nGITHUB_CLIENT_ID\nGITHUB_CLIENT_SECRET'), findsOneWidget);
+    expect(find.text(oauthRestartCommand), findsOneWidget);
+    expect(find.textContaining('docs/oauth-setup.md'), findsOneWidget);
+  });
+
+  testWidgets('连接器页：全部配好 → 没有部署者那一行', (tester) async {
+    await pump(tester, '/me/connectors', const ConnectorsScreen(), {
+      '/api/connectors': [
+        {'id': 'google', 'name': 'Google', 'desc': '邮件', 'status': 'available', 'setup': null},
+        {'id': 'github', 'name': 'GitHub', 'desc': '代码', 'status': 'available', 'setup': null},
+      ],
+    });
+    expect(find.widgetWithText(PillButton, '连接'), findsNWidgets(2));
+    expect(find.text('服务器还差一步'), findsNothing);
   });
 
   test('MCP 服务器问题：auth / down / 不认识 / 老服务器不给', () {

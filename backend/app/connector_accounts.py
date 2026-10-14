@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import system_alerts
-from .connectors import mcp
+from .connectors import mcp, oauth
 from .connectors.providers import PROVIDERS, Provider
 from .models import Connection, McpServer
 
@@ -60,6 +60,14 @@ async def accounts(db: AsyncSession) -> list[Account]:
             dead = await system_alerts.active(db, f"connector:{p.id}")
             out.append(Account(p, EXPIRED if dead else CONNECTED, c.account))
     return out
+
+
+def setup(p: Provider) -> dict | None:
+    """v2.90.2 服务器还没配这个 OAuth 应用时，部署者要做的事（连接器页“配置授权”引导读它）；配好了 → None。
+    回调地址只来自 oauth.redirect_uri（PUBLIC_URL），变量名只来自 Provider.env_names。"""
+    if p.configured:
+        return None
+    return {"console": p.console_url, "callback": oauth.redirect_uri(), "env": list(p.env_names)}
 
 
 async def one(db: AsyncSession, p: Provider) -> Account:
@@ -117,8 +125,8 @@ def prompt(connected: list[str]) -> str | None:
 def refuse_connect(a: Account) -> str | None:
     """不能发连接卡的原因（给模型）；None = 可以发。已连接照样可以发（用户想换号 / 重新授权）。"""
     if a.status == UNCONFIGURED:
-        return (f"服务器还没配置 {a.provider.name} 的 OAuth 应用（.env 里的 {a.provider.id.upper()}_CLIENT_ID / "
-                f"{a.provider.id.upper()}_CLIENT_SECRET），只有部署的人能加，别发连接卡。"
+        return (f"服务器还没配置 {a.provider.name} 的 OAuth 应用（.env 里的 {' / '.join(a.provider.env_names)}，"
+                "步骤见 docs/oauth-setup.md），只有部署的人能加，别发连接卡。"
                 f"替代办法只说一次：用户可以在「我的 → 保险箱」为 {'、'.join(a.provider.api_hosts)} 存一个 API Key / 个人访问令牌，"
                 "之后 api_request 自动带上；没存之前别去试调接口。")
     return None

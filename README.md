@@ -56,7 +56,7 @@ mkdir -p /opt/assistant/data && sudo chown -R 1000:1000 /opt/assistant/data   # 
 docker compose --profile build-only build sandbox-image                      # 构建项目沙盒镜像
 ```
 在 `.env` 里填 `HOST_DATA_DIR`、`SANDBOX_TOKEN`、`BROWSER_TOKEN`、`VAULT_KEY`、`PUBLIC_URL`；
-要连 Google/GitHub 再填对应的 OAuth 客户端（回调地址：`<PUBLIC_URL>/api/oauth/callback`）。App 里授权完会自动跳回 App（深链 scheme 默认 `myassistant`，改的话设 `APP_SCHEME` 并同步 App 的 AndroidManifest / Info.plist / `lib/core/links.dart`）。
+要连 Google/GitHub 再填对应的 OAuth 客户端（回调地址：`<PUBLIC_URL>/api/oauth/callback`，注册步骤见 `docs/oauth-setup.md`；没配的服务商连接器页不显示，只给一行配置引导）。App 里授权完会自动跳回 App（深链 scheme 默认 `myassistant`，改的话设 `APP_SCHEME` 并同步 App 的 AndroidManifest / Info.plist / `lib/core/links.dart`）。
 后端冒烟测试在 `backend/tests/`（如 `python tests/smoke_oauth_return.py`、`python tests/smoke_conversations.py`、`python tests/smoke_inbox.py`，后两个会真跑一遍 Alembic 迁移）。
 
 沙盒服务是唯一持有 Docker 权限的容器，不暴露端口；后端只能用 SANDBOX_TOKEN 调它。

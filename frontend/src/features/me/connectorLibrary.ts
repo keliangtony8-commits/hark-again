@@ -1,11 +1,18 @@
 // 连接器页与保险箱页的纯逻辑。与 App lib/features/me/connector_library.dart 同规则。
 import type { Connector, McpServerInfo, VaultSecret } from "../../lib/types";
+import { connectorShown } from "../../lib/connect";
 
-/** 已连接 → 可连接（服务器配好了）→ 未配置；同组保持服务器顺序。 */
+/** “账户”区要画的行：没配又没连过的不画（v2.90.2），已连接 → 可连接，同组保持服务器顺序。 */
 export function sortAccounts(list: Connector[]): Connector[] {
-  const rank = (c: Connector) => (c.account ? 0 : c.configured ? 1 : 2);
-  return list.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map((x) => x.c);
+  const rank = (c: Connector) => (c.account ? 0 : 1);
+  return list.filter(connectorShown).map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map((x) => x.c);
 }
+
+/** 服务器还没配、也没连过的服务商（部署者那一行与引导弹层列它们）。 */
+export const missingSetup = (list: Connector[]) => list.filter((c) => c.setup && !c.account);
+
+/** 部署者那一行的副标题：“配置 Google / GitHub 授权”。 */
+export const setupLine = (missing: Connector[]) => `配置 ${missing.map((c) => c.name).join(" / ")} 授权`;
 
 /** MCP 服务器：有问题的排最前（要你处理的先看到），其余保持添加顺序。 */
 export function sortServers(list: McpServerInfo[]): McpServerInfo[] {

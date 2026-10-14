@@ -12,9 +12,11 @@ ConnectCardState connectCardState(ConnectBlock b, Connector? live) {
   if (live == null) {
     return (line: b.desc, button: b.reconnect ? '重新连接' : '连接 ${b.name}', tone: ConnectTone.action);
   }
+  // 服务器后来删了这个应用的配置（setup 非空）：照实说状态，不给点了会失败的按钮
+  final can = live.authorizable;
   return switch (live.status) {
-    'connected' => (line: _who('已连接', live.account), button: b.reconnect ? '换个账户' : null, tone: ConnectTone.done),
-    'expired' => (line: _who('授权失效', live.account), button: '重新连接', tone: ConnectTone.warning),
+    'connected' => (line: _who('已连接', live.account), button: b.reconnect && can ? '换个账户' : null, tone: ConnectTone.done),
+    'expired' => (line: _who('授权失效', live.account), button: can ? '重新连接' : null, tone: ConnectTone.warning),
     'unconfigured' => (line: '服务器还没配置这个应用', button: null, tone: ConnectTone.off),
     _ => (line: live.desc.isNotEmpty ? live.desc : b.desc, button: '连接 ${b.name}', tone: ConnectTone.action),
   };

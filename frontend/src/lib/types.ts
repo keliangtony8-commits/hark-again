@@ -257,8 +257,10 @@ export type Upload = { id: string; name: string; mime: string; size: number };
 /** 一条消息要带的文件：刚上传的（Upload）或引用的项目文件（source=project 的 FileBlock）。 */
 export type OutgoingFile = Upload | FileBlock;
 export type ProjectFile = { path: string; name: string; size: number; mime: string; modified: number };
-/** status（v2.36，后端 app/connector_accounts.py）：connected / expired / available / unconfigured；老服务器没有（看 lib/connect.ts connectorStatus）。 */
-export type Connector = { id: string; name: string; desc: string; logo: string; configured: boolean; account: string | null; status?: string };
+/** 只认 status（v2.36，后端 app/connector_accounts.py：connected / expired / available / unconfigured）+ setup（v2.90.2：
+ *  服务器没配这个 OAuth 应用时给部署者的引导，配好了为 null）。旧字段 configured 不读。 */
+export type Connector = { id: string; name: string; desc: string; logo: string; account: string | null; status?: string; setup?: ConnectorSetup | null };
+export type ConnectorSetup = { console: string; callback: string; env: string[] };
 /** problem：还没恢复的问题 "auth"（令牌被拒）| "down"（连不上）| null（规则见后端 connectors/mcp.py）。 */
 /** retried_note（v2.19）只在新建的响应里有：因此重跑的碰壁任务那句话（后端 task_wall.retry_note） */
 export type McpServerInfo = { id: string; name: string; url: string; has_token: boolean; problem?: string | null; retried_note?: string | null };

@@ -21,7 +21,7 @@ void main() {
     final s = SecretItem.fromJson({'id': '1', 'kind': 'login', 'name': '教务', 'username': 'me', 'hosts': ['a.edu'], 'preview': '••ab'});
     expect(s.isLogin, isTrue);
     expect(s.hosts, ['a.edu']);
-    expect(Connector.fromJson({'id': 'github', 'name': 'GitHub', 'configured': true, 'account': null}).connected, isFalse);
+    expect(Connector.fromJson({'id': 'github', 'name': 'GitHub', 'status': 'available', 'account': null}).connected, isFalse);
     final pg = PageItem.fromJson({'id': 'trip', 'slug': 'trip', 'title': '行程', 'url': 'https://x/p/trip/', 'updated': 1760000000.5});
     expect(pg.updatedAt, isNotNull);
   });

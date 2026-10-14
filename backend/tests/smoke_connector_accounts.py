@@ -1,5 +1,6 @@
 # 冒烟：v2.36 BRAIN (bb) connector_accounts——app/connector_accounts.py 唯一规则 + 工具。
 # 1) 规则：find 认 id/名字；四种状态（已连接 / 授权失效 / 可以连接 / 服务器没配）；listing 带 MCP；系统提示那一行；
+#    v2.90.2 setup()：只对没配的服务商给部署引导（注册地址、回调 = PUBLIC_URL/api/oauth/callback、.env 变量名）；
 # 2) 工具：list；connect 出连接卡（换号 = reconnect）、没配 → 拒绝、无人值守 → 不出卡；disconnect 要审批、执行后连接与失效提醒都清掉；
 # 3) 一轮（模拟模型，经 deferred_tool call）：回复里有连接卡，历史文本是“[连接卡：Google（google）]”。
 # 运行：python tests/smoke_connector_accounts.py
@@ -8,7 +9,8 @@ from types import SimpleNamespace as NS
 tmp = tempfile.mkdtemp()
 os.environ.update(DATABASE_URL=f"sqlite+aiosqlite:///{tmp}/t.db", LLM_BASE_URL="http://x", LITELLM_MASTER_KEY="k",
   OWNER_USERNAME="u", OWNER_PASSWORD="p", JWT_SECRET="s"*32, VAULT_KEY="", DATA_DIR=tmp,
-  GOOGLE_CLIENT_ID="gid", GOOGLE_CLIENT_SECRET="gs", GITHUB_CLIENT_ID="", GITHUB_CLIENT_SECRET="",
+  GOOGLE_CLIENT_ID="gid", GOOGLE_CLIENT_SECRET="gs", GITHUB_CLIENT_ID="ghid", GITHUB_CLIENT_SECRET="",  # 只填一半 = 没配
+  PUBLIC_URL="https://toyuis.example.com/",
   CHAT_MODELS=json.dumps({"fast": "快速"}), DEFAULT_MODEL="fast", VISION_MODELS='[]')
 root = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, root)
@@ -28,6 +30,15 @@ assert CA.find("Google Calendar").id == "google" and CA.find("google_calendar").
 assert CA.find("日历").id == "google" and CA.find("dropbox") is None and CA.find("") is None
 assert CA.prompt([]) .startswith("还没连接、但可以连：Google（") and "GitHub" not in CA.prompt([])  # github 没配
 assert CA.prompt(["google"]) is None
+# v2.90.2 setup：配好的 → None；没配（id 有、secret 空也算）→ 部署引导，回调只来自 oauth.redirect_uri
+assert CA.setup(CA.find("google")) is None
+assert CA.setup(CA.find("github")) == {"console": "https://github.com/settings/developers",
+                                       "callback": "https://toyuis.example.com/api/oauth/callback",
+                                       "env": ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"]}, CA.setup(CA.find("github"))
+from app.connectors.providers import PROVIDERS
+from app.config import settings
+for p in PROVIDERS.values():  # 变量名必须真是 config.py 的字段（.env 填了才读得到），注册地址必须有
+    assert all(hasattr(settings, n.lower()) for n in p.env_names) and p.console_url.startswith("https://"), p.id
 
 async def ask(_id, _form):
     return None
@@ -136,4 +147,9 @@ api = FastAPI(); api.include_router(rc.router)
 api.dependency_overrides[require_user] = lambda: None
 rows = {x["id"]: x for x in TestClient(api).get("/api/connectors").json()}
 assert rows["google"]["status"] == "available" and rows["google"]["account"] is None and rows["github"]["status"] == "unconfigured"
+# v2.90.2：没配的带 setup（客户端据此隐藏这一行、给部署者一行引导），配好的 setup 为 null
+assert rows["google"]["setup"] is None and rows["github"]["setup"]["env"] == ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"], rows
+assert rows["github"]["setup"]["callback"] == "https://toyuis.example.com/api/oauth/callback"
+r = TestClient(api).get("/api/connectors/github/start")
+assert r.status_code == 400 and "docs/oauth-setup.md" in r.json()["detail"], r.text
 print("smoke_connector_accounts ok")

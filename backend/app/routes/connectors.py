@@ -24,10 +24,12 @@ public = APIRouter()  # OAuth 回调由第三方跳回，没有登录头，靠�
 
 @router.get("")
 async def list_connectors(db: AsyncSession = Depends(get_session)):
-    # status（v2.36）：connected / expired / available / unconfigured，判定只在 app/connector_accounts.py（助手看的同一份）
+    # status（v2.36）：connected / expired / available / unconfigured，判定只在 app/connector_accounts.py（助手看的同一份）；
+    # setup（v2.90.2）：服务器没配这个 OAuth 应用时给部署者的引导 {console, callback, env}，配好了为 null。
+    # configured 只为还没更新的旧客户端保留，新客户端只读 status + setup。
     return [{"id": a.provider.id, "name": a.provider.name, "desc": a.provider.desc, "logo": a.provider.logo,
              "configured": a.provider.configured, "account": a.account if a.status in ("connected", "expired") else None,
-             "status": a.status} for a in await connector_accounts.accounts(db)]
+             "status": a.status, "setup": connector_accounts.setup(a.provider)} for a in await connector_accounts.accounts(db)]
 
 
 @router.get("/{provider}/start")
@@ -36,7 +38,7 @@ async def start(provider: str, client: Literal["web", "app"] = "web"):
     if not p:
         raise HTTPException(404)
     if not p.configured:
-        raise HTTPException(400, f"服务器还没配置 {p.name} 的 OAuth 应用（见 .env.example）")
+        raise HTTPException(400, f"服务器还没配置 {p.name} 的 OAuth 应用（见 docs/oauth-setup.md）")
     return {"url": oauth.authorize_url(p, client)}
 
 

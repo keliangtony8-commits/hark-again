@@ -2,12 +2,18 @@
 // 网页版 frontend/src/features/me/connectorLibrary.ts 与此同规则。
 import '../../models/resources.dart';
 
-/// 账户排序：已连接的在前，其次是服务器配好、点了就能连的，最后是还没配置的（变淡）。同组保持服务器顺序。
+/// 连接器页“账户”区要画的行：没配又没连过的不画（v2.90.2），已连接的在前，同组保持服务器顺序。
 List<Connector> sortAccounts(List<Connector> list) {
-  int rank(Connector c) => c.connected ? 0 : (c.configured ? 1 : 2);
-  final indexed = list.indexed.toList()..sort((a, b) => rank(a.$2) != rank(b.$2) ? rank(a.$2) - rank(b.$2) : a.$1 - b.$1);
+  int rank(Connector c) => c.connected ? 0 : 1;
+  final indexed = list.where((c) => c.shown).indexed.toList()..sort((a, b) => rank(a.$2) != rank(b.$2) ? rank(a.$2) - rank(b.$2) : a.$1 - b.$1);
   return [for (final (_, c) in indexed) c];
 }
+
+/// 服务器还没配、也没连过的服务商（部署者那一行与引导弹层列它们）。
+List<Connector> missingSetup(List<Connector> list) => [for (final c in list) if (c.setup != null && !c.connected) c];
+
+/// 部署者那一行的副标题：“配置 Google / GitHub 授权”。
+String setupLine(List<Connector> missing) => '配置 ${missing.map((c) => c.name).join(' / ')} 授权';
 
 /// MCP 服务器排序：有问题（连不上 / 令牌被拒）的排最前——要你处理的先看到；其余保持添加顺序。
 List<McpServerItem> sortServers(List<McpServerItem> list) {

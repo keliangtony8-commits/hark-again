@@ -63,3 +63,10 @@
 .wallet-face-number { margin-top: auto; margin-bottom: var(--sp-3); font-size: 20px; letter-spacing: 1.5px;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 .wallet-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+
+/* v2.90.2 连接器“服务器还差一步”引导弹层（= App oauth_setup_sheet.dart）：步骤小标签 + 可复制的等宽代码块 */
+.setup-step { margin-top: var(--sp-5); }
+.setup-code { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-1) var(--sp-2) var(--sp-4); border-radius: var(--r-inner); background: var(--tile); }
+.setup-code code { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); user-select: all; }
+.setup-gap { margin-top: var(--sp-2); }
+.setup-note { margin: var(--sp-4) var(--sp-1) 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.55; }

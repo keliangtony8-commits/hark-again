@@ -364,9 +364,10 @@ class _Api implements Api {
     }
     if (path == '/api/connectors') {
       return [
-        {'id': 'github', 'name': 'GitHub', 'desc': '仓库、议题、代码', 'configured': true, 'account': 'keliang'},
-        {'id': 'google', 'name': 'Google', 'desc': '邮件、日历、云盘', 'configured': true},
-        {'id': 'notion', 'name': 'Notion', 'desc': '笔记和数据库', 'configured': false},
+        {'id': 'github', 'name': 'GitHub', 'desc': '仓库、议题、代码', 'status': 'connected', 'account': 'keliang'},
+        {'id': 'google', 'name': 'Google', 'desc': '邮件、日历、云盘', 'status': 'available'},
+        {'id': 'notion', 'name': 'Notion', 'desc': '笔记和数据库', 'status': 'unconfigured',
+          'setup': {'console': 'https://notion.so/my-integrations', 'callback': 'https://toyuis.itsllm.com/api/oauth/callback', 'env': ['NOTION_CLIENT_ID', 'NOTION_CLIENT_SECRET']}},
       ];
     }
     if (path == '/api/connectors/mcp') {

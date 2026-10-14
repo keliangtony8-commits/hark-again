@@ -18,6 +18,7 @@ import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'connector_library.dart';
+import 'oauth_setup_sheet.dart';
 import 'task_wall.dart' show withRetried;
 
 /// OAuth 回调带回来的结果（深链的查询参数）。没有结果时为 null。
@@ -93,6 +94,7 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
         value: accounts,
         onRetry: () => ref.invalidate(connectorsProvider),
         builder: (list) {
+          final shown = sortAccounts(list), missing = missingSetup(list);
           var i = 0; // 整页错峰序号：账户 → MCP → 其他服务一行一行进
           Duration next() => Motion.stagger(i++, from: 1);
           final servers = mcp.value;
@@ -103,8 +105,23 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
                 summary: connectorSummary(list, servers),
                 line: '连接后我能读你的邮件、日历和代码仓库。发邮件、推送代码这类动作，永远先问你。',
               ),
-              SectionTitle('账户', count: list.isEmpty ? null : list.length),
-              ListGroup(children: [for (final c in sortAccounts(list)) _AccountRow(c, delay: next())]),
+              // v2.90.2 只画服务器配好了的（或已连过的）；缺配置时给部署者一行，点开是引导，不放点了会失败的按钮
+              if (shown.isNotEmpty || missing.isNotEmpty) ...[
+                SectionTitle('账户', count: shown.isEmpty ? null : shown.length),
+                ListGroup(children: [
+                  for (final c in shown) _AccountRow(c, delay: next()),
+                  if (missing.isNotEmpty)
+                    FadeSlideIn(
+                      delay: next(),
+                      child: RowTile(
+                        icon: Icons.tune_rounded,
+                        title: '服务器还差一步',
+                        subtitle: setupLine(missing),
+                        onTap: () => showOAuthSetupSheet(context, missing),
+                      ),
+                    ),
+                ]),
+              ],
               SectionTitle('MCP 服务器',
                   trailing: servers == null || servers.isEmpty
                       ? null
@@ -165,28 +182,24 @@ class _AccountRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final usable = c.configured || c.connected;
+    // 能画出来的行要么已连过、要么服务器配好了；只有“连过但服务器后来删了配置”时 authorizable 为假：照实说状态，不给按钮
+    final can = c.authorizable;
     return FadeSlideIn(
       delay: delay,
-      child: Dimmed(
-        dimmed: !usable, // 服务器没配这个应用：留在列表里告诉你有这项，但点不了
-        child: RowTile(
-          icon: _icons[c.id] ?? Icons.link_rounded,
-          title: c.name,
-          subtitle: c.connected ? c.account : (c.configured ? c.desc : '服务器还没配置这个应用（见 .env.example）'),
-          problem: c.expired ? '授权失效' : null, // v2.36：失效的账户在这一行就说，点一下重新连接
-          // 状态是小字，动作才是按钮：已连接 = 安静的说明；能连 = 墨色小胶囊“连接”
-          trailing: SwapSwitcher(
-            child: c.expired
-                ? PillButton(key: const ValueKey('expired'), label: '重新连接', primary: true, dense: true, onTap: () => _connect(context, ref))
-                : c.connected
-                ? const RowHint('已连接', key: ValueKey('on'))
-                : (usable
-                    ? PillButton(key: const ValueKey('off'), label: '连接', primary: true, dense: true, onTap: () => _connect(context, ref))
-                    : const SizedBox.shrink(key: ValueKey('none'))),
-          ),
-          onTap: !usable ? null : () => c.connected ? _manage(context, ref) : _connect(context, ref),
+      child: RowTile(
+        icon: _icons[c.id] ?? Icons.link_rounded,
+        title: c.name,
+        subtitle: c.connected ? c.account : c.desc,
+        problem: c.expired ? '授权失效' : null, // v2.36：失效的账户在这一行就说，点一下重新连接
+        // 状态是小字，动作才是按钮：已连接 = 安静的说明；能连 = 墨色小胶囊“连接”
+        trailing: SwapSwitcher(
+          child: c.expired && can
+              ? PillButton(key: const ValueKey('expired'), label: '重新连接', primary: true, dense: true, onTap: () => _connect(context, ref))
+              : c.connected
+              ? RowHint(c.expired ? '授权失效' : '已连接', key: const ValueKey('on'))
+              : PillButton(key: const ValueKey('off'), label: '连接', primary: true, dense: true, onTap: () => _connect(context, ref)),
         ),
+        onTap: () => c.connected ? _manage(context, ref) : _connect(context, ref),
       ),
     );
   }
@@ -196,7 +209,7 @@ class _AccountRow extends ConsumerWidget {
   Future<void> _connect(BuildContext context, WidgetRef ref) => startConnect(context, ref, c.id);
 
   void _manage(BuildContext context, WidgetRef ref) => showActionSheet<void>(context, title: '${c.name} · ${c.account}', actions: [
-        SheetAction(Icons.refresh_rounded, '重新授权', onTap: () => _connect(context, ref)),
+        if (c.authorizable) SheetAction(Icons.refresh_rounded, '重新授权', onTap: () => _connect(context, ref)),
         SheetAction(Icons.link_off_rounded, '断开连接', onTap: () async {
           if (await confirmDanger(context, title: '断开 ${c.name}？', text: '我将不能再代你读写这个账户。', action: '断开')) {
             await ref.read(apiProvider).delete('/api/connectors/${c.id}');

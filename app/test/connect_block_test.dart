@@ -25,8 +25,8 @@ class FakeApi implements Api {
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError();
 }
 
-Map<String, dynamic> conn(String status, {String? account, bool configured = true}) =>
-    {'id': 'google', 'name': 'Google', 'desc': 'Gmail、日历、云端硬盘', 'configured': configured, 'account': account, 'status': status};
+Map<String, dynamic> conn(String status, {String? account}) =>
+    {'id': 'google', 'name': 'Google', 'desc': 'Gmail、日历、云端硬盘', 'account': account, 'status': status};
 
 const block = {'type': 'connect', 'provider': 'google', 'name': 'Google', 'desc': 'Gmail、日历、云端硬盘', 'reason': '读你的日历排明天的事'};
 
@@ -53,10 +53,10 @@ void main() {
     expect(connectCardState(again, c('connected', a: 'me@gmail.com')).button, '换个账户');
     expect(connectCardState(b, c('expired', a: 'me@gmail.com')), (line: '授权失效 · me@gmail.com', button: '重新连接', tone: ConnectTone.warning));
     expect(connectCardState(b, c('unconfigured')).button, isNull);
-    // 老服务器没有 status：按账户 / 配置推
-    expect(Connector.fromJson({'id': 'g', 'configured': true, 'account': 'x'}).status, 'connected');
-    expect(Connector.fromJson({'id': 'g', 'configured': true}).status, 'available');
-    expect(Connector.fromJson({'id': 'g', 'configured': false}).status, 'unconfigured');
+    // v2.90.2：只认 status；服务器后来删了配置（setup 非空）时，失效 / 换号都不给按钮
+    final orphan = {...conn('expired', account: 'x'), 'setup': {'console': 'c', 'callback': 'u', 'env': ['A', 'B']}};
+    expect(connectCardState(b, Connector.fromJson(orphan)), (line: '授权失效 · x', button: null, tone: ConnectTone.warning));
+    expect(connectCardState(again, Connector.fromJson({...orphan, 'status': 'connected'})).button, isNull);
     expect(Connector.fromJson(conn('expired', account: 'x')).expired, isTrue);
   });
 

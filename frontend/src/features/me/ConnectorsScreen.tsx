@@ -4,12 +4,13 @@ import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { Connector, McpServerInfo } from "../../lib/types";
 import { withRetried } from "../../lib/taskLabels";
-import { IconAlert, IconChevron, IconPlus, IconShield, IconSpark } from "../../ui/icons";
+import { IconAlert, IconChevron, IconPlus, IconSettings, IconShield, IconSpark } from "../../ui/icons";
 import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
-import { connectorSummary, mcpProblemText, sortAccounts, sortServers } from "./connectorLibrary";
+import { connectorSummary, mcpProblemText, missingSetup, setupLine, sortAccounts, sortServers } from "./connectorLibrary";
+import OAuthSetupSheet from "./OAuthSetupSheet";
 import { confirmDialog } from "../../ui/dialog";
 import { monogramOf } from "../../lib/monogram";
-import { connectorStatus, startConnect } from "../../lib/connect";
+import { connectorAuthorizable, connectorStatus, startConnect } from "../../lib/connect";
 
 const favicon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
 const EMPTY_MCP = { name: "", url: "", token: "" };
@@ -32,6 +33,7 @@ export default function ConnectorsScreen() {
   const [mcpDraft, setMcpDraft] = useState<typeof EMPTY_MCP | null>(null);
   const [mcpBusy, setMcpBusy] = useState(false);
   const [mcpErr, setMcpErr] = useState<string | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
   const [tools, setTools] = useState<{ server: McpServerInfo; list: { name: string; description?: string }[] | null; err?: string } | null>(null);
 
   // OAuth 回调带回来的结果：提示一次后清掉
@@ -71,6 +73,7 @@ export default function ConnectorsScreen() {
     finally { setMcpBusy(false); }
   };
 
+  const shown = sortAccounts(accounts.items), missing = missingSetup(accounts.items);
   let n = 0;
   return (
     <Page header={<PageHeader title="连接器" back />}>
@@ -78,27 +81,40 @@ export default function ConnectorsScreen() {
         line="连接后我能读你的邮件、日历和代码仓库。发邮件、提交代码这类动作，永远先问你。" />
       {notice && <div className={`notice ${notice.ok ? "ok" : "err"}`} onClick={() => setNotice(null)}>{notice.text}</div>}
 
-      <Section title={accounts.items.length ? `账户 · ${accounts.items.length}` : "账户"}>
-        {accounts.loading ? <Skeleton rows={2} /> : (
-          <div className="list">
-            {sortAccounts(accounts.items).map((c) => (
-              <div key={c.id} className={`row enter ${!c.account && !c.configured ? "row-off" : ""}`} style={stagger(++n)}>
-                <span className="row-icon"><ConnectorLogo c={c} /></span>
-                <div className="row-body">
-                  <div className="row-title">{c.name}</div>
-                  <div className="row-sub">{connectorStatus(c) === "expired" && <><span className="row-problem">授权失效</span> · </>}{c.account ?? (c.configured ? c.desc : "服务器还没配置这个应用（见 .env.example）")}</div>
-                </div>
-                {c.account ? <>
-                  {connectorStatus(c) === "expired"
-                    ? <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>重新连接</button>
-                    : <span className="row-hint">已连接</span>}
-                  <button className="btn btn-ghost btn-sm" onClick={() => disconnect(c)}>断开</button>
-                </> : c.configured && <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>连接</button>}
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
+      {/* v2.90.2 只画服务器配好了的（或已连过的）；缺配置时给部署者一行，点开是引导，不放点了会失败的按钮 */}
+      {(accounts.loading || shown.length > 0 || missing.length > 0) && (
+        <Section title={shown.length ? `账户 · ${shown.length}` : "账户"}>
+          {accounts.loading ? <Skeleton rows={2} /> : (
+            <div className="list">
+              {shown.map((c) => {
+                const can = connectorAuthorizable(c), expired = connectorStatus(c) === "expired";
+                return (
+                  <div key={c.id} className="row enter" style={stagger(++n)}>
+                    <span className="row-icon"><ConnectorLogo c={c} /></span>
+                    <div className="row-body">
+                      <div className="row-title">{c.name}</div>
+                      <div className="row-sub">{expired && <><span className="row-problem">授权失效</span> · </>}{c.account ?? c.desc}</div>
+                    </div>
+                    {c.account ? <>
+                      {expired && can
+                        ? <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>重新连接</button>
+                        : <span className="row-hint">{expired ? "授权失效" : "已连接"}</span>}
+                      <button className="btn btn-ghost btn-sm" onClick={() => disconnect(c)}>断开</button>
+                    </> : <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>连接</button>}
+                  </div>
+                );
+              })}
+              {missing.length > 0 && (
+                <button className="row enter" style={stagger(++n)} onClick={() => setSetupOpen(true)}>
+                  <span className="row-icon"><IconSettings /></span>
+                  <span className="row-body"><span className="row-title">服务器还差一步</span><span className="row-sub">{setupLine(missing)}</span></span>
+                  <span className="row-trail"><IconChevron /></span>
+                </button>
+              )}
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section title={servers.items.length ? `MCP 服务器 · ${servers.items.length}` : "MCP 服务器"}
         action={servers.items.length > 0 && <button className="icon-btn sm" onClick={openMcp} aria-label="添加 MCP 服务器"><IconPlus /></button>}>
@@ -151,6 +167,8 @@ export default function ConnectorsScreen() {
           )}
         </Sheet>
       )}
+
+      {setupOpen && <OAuthSetupSheet missing={missing} onClose={() => setSetupOpen(false)} />}
 
       {mcpDraft && (
         <Sheet title="添加 MCP 服务器" onClose={() => setMcpDraft(null)} actions={<>

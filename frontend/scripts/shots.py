@@ -171,8 +171,10 @@ FIXTURES = {
         {"id": "s3", "name": "订餐", "description": "外卖下单", "body": "", "builtin": True, "enabled": False},
     ],
     "/api/connectors": [
-        {"id": "google", "name": "Google", "desc": "日历、邮件、云盘", "logo": "", "configured": True, "account": "me@example.com"},
-        {"id": "github", "name": "GitHub", "desc": "仓库与议题", "logo": "", "configured": False, "account": None},
+        {"id": "google", "name": "Google", "desc": "日历、邮件、云盘", "logo": "", "status": "connected", "account": "me@example.com", "setup": None},
+        {"id": "github", "name": "GitHub", "desc": "仓库与议题", "logo": "", "status": "unconfigured", "account": None,
+         "setup": {"console": "https://github.com/settings/developers", "callback": "https://ai.example.com/api/oauth/callback",
+                   "env": ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"]}},
     ],
     "/api/vault": [
         {"id": "v1", "kind": "api_key", "name": "DeepSeek", "username": None, "hosts": ["api.deepseek.com"], "header_name": "Authorization",
@@ -347,6 +349,12 @@ def main():
                     page.goto(base + url)
                     page.wait_for_timeout(600)
                     page.screenshot(path=str(OUT / f"{name}-{theme}-sub-{shot}.png"))
+                # v2.90.2 连接器“服务器还差一步”→ 配置引导弹层
+                page.goto(base + "/#/me/connectors")
+                page.wait_for_timeout(500)
+                page.get_by_text("服务器还差一步").first.click()
+                page.wait_for_timeout(600)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-sheet-oauth-setup.png"))
                 # 弹层：主页“创建一个新面板”、项目“新建项目”
                 page.goto(base + "/#/")
                 page.wait_for_timeout(500)

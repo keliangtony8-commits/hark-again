@@ -607,28 +607,48 @@ class SecretItem {
 }
 
 /// OAuth 连接器（Google、GitHub…）。id 就是 provider。
+/// 只认服务器给的 [status] + [setup]（判定在后端 app/connector_accounts.py）；旧字段 configured 不读（v2.90.2）。
 class Connector {
-  const Connector({required this.id, required this.name, required this.desc, required this.configured, this.account, this.serverStatus});
+  const Connector({required this.id, required this.name, required this.desc, required this.status, this.account, this.setup});
   factory Connector.fromJson(Map<String, dynamic> j) => Connector(
     id: j['id'] as String,
     name: j['name'] as String? ?? '',
     desc: j['desc'] as String? ?? '',
-    configured: j['configured'] as bool? ?? false,
     account: j['account'] as String?,
-    serverStatus: j['status'] as String?,
+    // 没有 status 的服务器（v2.36 之前）已不存在；万一缺了：有账户 = 已连接，否则按“没配”处理——宁可不显示，也不给一颗点了会失败的按钮
+    status: j['status'] as String? ?? (j['account'] != null ? 'connected' : 'unconfigured'),
+    setup: j['setup'] is Map<String, dynamic> ? ConnectorSetup.fromJson(j['setup'] as Map<String, dynamic>) : null,
   );
   final String id, name, desc;
-  final bool configured;
   final String? account;
-  /// 服务器给的状态原文；老服务器没有 = null（看 [status]）。
-  final String? serverStatus;
 
-  /// v2.36 connected | expired | available | unconfigured（判定在后端 app/connector_accounts.py）；老服务器不给 → 按账户 / 配置推。
-  String get status => serverStatus ?? (account != null ? 'connected' : (configured ? 'available' : 'unconfigured'));
+  /// connected | expired | available | unconfigured。
+  final String status;
+
+  /// v2.90.2 服务器没配这个 OAuth 应用时给部署者的引导；配好了 = null。
+  final ConnectorSetup? setup;
 
   /// 有账户（含授权失效的）。
   bool get connected => account != null;
   bool get expired => status == 'expired';
+
+  /// 连接器页显示这一行：没配又没连过的不显示（v2.90.2：不给“看起来能点、点了失败”的东西）。
+  bool get shown => status != 'unconfigured';
+
+  /// 现在点“连接 / 重新连接”真能走通：服务器配好了这个应用。
+  bool get authorizable => setup == null && status != 'unconfigured';
+}
+
+/// 服务器还差的那一步（GET /api/connectors 每项的 setup）：去哪注册应用、回调地址、.env 里要填的变量名。
+class ConnectorSetup {
+  const ConnectorSetup({required this.console, required this.callback, required this.env});
+  factory ConnectorSetup.fromJson(Map<String, dynamic> j) => ConnectorSetup(
+    console: j['console'] as String? ?? '',
+    callback: j['callback'] as String? ?? '',
+    env: [for (final e in (j['env'] as List? ?? const [])) '$e'],
+  );
+  final String console, callback;
+  final List<String> env;
 }
 
 class McpServerItem {
