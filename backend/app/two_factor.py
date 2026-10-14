@@ -28,10 +28,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
+from .version import APP_NAME
 from .models import OwnerSecurity
 from .wire_time import iso
 
-ISSUER = "私人助手"
+ISSUER = APP_NAME  # 认证器里显示的名字；改名不影响已绑定的验证码（密钥不变）
 DIGITS = 6
 STEP_S = 30
 DRIFT_STEPS = 1

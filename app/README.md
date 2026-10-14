@@ -2,6 +2,8 @@
 
 和后端只通过 `../docs/protocol.md` 对话。
 
+名字和版本：`lib/brand.dart`（appName / appVersion / appBuild）由 `../brand/sync.py` 生成，别手改；版本比较与关于页文字在 `lib/models/version.dart`，服务器版本 `serverVersionProvider`（core/session.dart）。
+
 ## 目录
 ```
 lib/

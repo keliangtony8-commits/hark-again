@@ -247,10 +247,9 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
   border: none; border-radius: var(--r-full); background: var(--tile); color: var(--text-2); font-size: var(--fs-xs); font-weight: var(--fw-title);
   cursor: pointer; flex-shrink: 0; align-self: center; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
 .model-chip:hover { color: var(--text); }
-.model-chip.strong { background: var(--ink); color: var(--on-ink); }
+.model-chip.strong, .model-chip.menu-trigger[aria-expanded="true"] { color: var(--text); box-shadow: inset 0 0 0 1px var(--glass-border); } /* v2.86：非默认档不再白底胶囊，只亮一档 */
 .model-chip-label { display: inline-flex; align-items: center; gap: var(--sp-1); animation: rise var(--dur) var(--ease); }
 .effort-chip { animation: rise var(--dur) var(--ease); } /* 换到能调的模型时浮入 */
-.model-chip select { appearance: none; border: none; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 
 /* 分享对话（ShareSheet）：链接是一块 tile，可点复制；两颗等宽胶囊；状态变化 rise 进场 */
 .share-hint { color: var(--text-2); font-size: var(--fs-sm); margin: 0 0 var(--sp-4); }

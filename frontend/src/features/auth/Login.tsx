@@ -1,3 +1,4 @@
+import { appName } from "../../brand";
 import { useState } from "react";
 import BrandMark from "../../ui/BrandMark";
 import { ApiError, api, auth, server } from "../../lib/api";
@@ -34,9 +35,9 @@ export default function Login({ onDone }: { onDone: () => void }) {
   return (
     <div className="login">
       <form className="login-card glass" onSubmit={submit}>
-        <div className="brand"><BrandMark size={28} />Assistant</div>
+        <div className="brand"><BrandMark size={28} />{appName}</div>
         <h1>欢迎回来</h1>
-        <p>登录你的私人助手</p>
+        <p>登录你的 {appName}</p>
         {showServer && <label className="form-field"><input placeholder="服务器地址，如 https://ai.example.com" value={srv}
           onChange={(e) => { setSrv(e.target.value); setNeedCode(false); }} inputMode="url" autoCapitalize="off" /></label>}
         <label className="form-field"><input placeholder="用户名" value={username} onChange={(e) => { setU(e.target.value); setNeedCode(false); }} autoComplete="username" autoCapitalize="off" /></label>

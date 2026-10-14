@@ -1,4 +1,11 @@
-# Assistant
+# Toyuis
+
+你自己的私人助手：自己的服务器、自己的模型密钥。
+
+## 名字与版本（唯一来源）
+- 产品名在 `brand/brand.json`，版本在 `VERSION`（大版本.功能轮.修复；构建号 = major*10000+minor*100+patch）。
+- 改了任一个就跑 `python3 brand/sync.py`：写 Android/iOS 名字、pubspec、网页标题/manifest/package.json、`app/lib/brand.dart`、`frontend/src/brand.ts`、`backend/app/version.py`。别处不许手写名字或版本（`--check` 只检查，`--icons` 顺带重做图标）。
+- 发版：改 VERSION → sync → 测试 → `CHANGELOG.md` 加一节 → 提交 → `bash scripts/check_version.sh vX.Y` → 打 tag vX.Y。`GET /api/version` 让客户端看到服务器版本。
 
 ```
 Caddy (HTTPS, 静态前端, 反代)

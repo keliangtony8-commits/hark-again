@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'cache.dart';
+import '../models/version.dart';
 
 class Session {
   const Session({required this.server, this.token});
@@ -66,6 +67,17 @@ final accountNameProvider = FutureProvider.autoDispose<String?>((ref) async {
     final j = await ref.read(apiProvider).get('/api/auth/me');
     final name = j is Map ? j['username'] : null;
     return name is String && name.trim().isNotEmpty ? name.trim() : null;
+  } catch (_) {
+    return null;
+  }
+});
+
+/// 服务器版本（GET /api/version，公开接口）：关于页显示两端版本、低于 min_client 时提示更新。取不到 = null。
+final serverVersionProvider = FutureProvider.autoDispose<ServerVersion?>((ref) async {
+  final s = await ref.watch(sessionProvider.future);
+  if (!s.signedIn) return null;
+  try {
+    return ServerVersion.fromJson(await ref.read(apiProvider).get('/api/version'));
   } catch (_) {
     return null;
   }

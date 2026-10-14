@@ -153,7 +153,7 @@ void main() {
     await _frames(tester);
 
     expect(find.byType(Composer), findsOneWidget); // 主页底部就有
-    expect(find.text('给助手发消息'), findsOneWidget);
+    expect(find.text('给 Toyuis 发消息'), findsOneWidget);
     expect(find.byTooltip('收起'), findsNothing);
     expect(tester.widget<FrostScrim>(find.byType(FrostScrim)).visible, isFalse);
 

@@ -5,7 +5,7 @@ name: app
 
 on:
   push:
-    paths: ["app/**", ".github/workflows/app.yml"]
+    paths: ["app/**", "VERSION", "brand/**", ".github/workflows/app.yml"]
   workflow_dispatch:
     inputs:
       ios:
@@ -23,13 +23,20 @@ jobs:
         with: { distribution: temurin, java-version: "17" }
       - uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
+      - run: bash scripts/check_version.sh   # 名字/版本与 brand/brand.json + VERSION 一致（v2.86）
+        working-directory: .
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --release --split-per-abi
+      - name: 安装包按 产品名-版本 命名（Toyuis-2.86.0-arm64-v8a.apk）
+        run: |
+          v=$(cat ../VERSION); n=$(python3 -c "import json;print(json.load(open('../brand/brand.json'))['name'])")
+          cd build/app/outputs/flutter-apk
+          for f in app-*-release.apk; do abi=${f#app-}; mv "$f" "$n-$v-${abi%-release.apk}.apk"; done
       - uses: actions/upload-artifact@v4
         with:
-          name: assistant-android
+          name: toyuis-android
           path: app/build/app/outputs/flutter-apk/*.apk
 
   ios:

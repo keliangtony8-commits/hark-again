@@ -7,6 +7,8 @@ import { IconBack, IconCard, IconClock, IconComputer, IconDoc, IconFeedback, Ico
 import { stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
 import { MeRows, type MeRow } from "./meRows";
+import { useServerVersion } from "../../hooks/useServerVersion";
+import { clientOutdated } from "../../lib/version";
 import "./me.css";
 
 /** v2.81 按 docs/home-redesign.md B 做减法（= App me_screen.dart）：两组行，每行只有 图标 + 标题 + 箭头。 */
@@ -75,6 +77,7 @@ export default function MeScreen() {
   // 从站内点头像进来 → 返回上一页；直接打开（深链接 / 刷新）→ 回到主页
   const root = !((window.history.state as { idx?: number } | null)?.idx);
   // v2.61：先让服务器作废这个 token（登录设备里就没了这台），失败不拦
+  const outdated = clientOutdated(useServerVersion());
   const logout = async () => { await http.post("/api/auth/logout", {}).catch(() => {}); auth.clear(); outbox.clear(); notifyUnauthorized(); };
   return (
     <div className="page me">
@@ -85,7 +88,7 @@ export default function MeScreen() {
         </div>
         <UsageSummary />
         <div className="enter me-group" style={stagger(2)}><MeRows rows={GROUP1} /></div>
-        <div className="enter me-group" style={stagger(3)}><MeRows rows={GROUP2} /></div>
+        <div className="enter me-group" style={stagger(3)}><MeRows rows={GROUP2.map((r) => (r.to === "/me/about" && outdated ? { ...r, value: "请更新" } : r))} /></div>
         <div className="me-logout enter" style={stagger(4)}>
           <button className="pill" onClick={() => void logout()}>退出登录</button>
         </div>

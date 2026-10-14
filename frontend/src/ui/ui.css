@@ -164,6 +164,10 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
   font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text); text-align: left; white-space: nowrap; }
 .menu-item:hover { background: var(--tile); }
 .menu-item.danger { color: var(--danger); }
+/* 选档（v2.86）：当前项右侧打勾；有说明时两行，说明用次要色 */
+.menu-item-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; white-space: normal; }
+.menu-item-text small { font-size: var(--fs-xs); font-weight: var(--fw-body); color: var(--text-2); }
+.menu-item-check { display: inline-flex; margin-left: auto; padding-left: var(--sp-3); flex: none; color: var(--text); }
 
 /* 用量与花费（设置页）。进度条用 transform 过渡，时长/曲线只取令牌 */
 .usage { display: grid; gap: var(--sp-3); }

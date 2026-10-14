@@ -1,3 +1,4 @@
+import { appName } from "../brand";
 // 两步验证（v2.58，= App models/two_factor.dart）：/api/auth/2fa* 的数据和文字规则。规则本身在后端 app/two_factor.py。
 
 export interface TwoFactorStatus { enabled: boolean; enabled_at: string | null; recovery_left: number; pending: boolean }
@@ -21,7 +22,7 @@ export function recoveryLine(left: number): string {
 }
 
 export const recoveryCodesText = (codes: string[], account = "") =>
-  [`私人助手 两步验证恢复码${account ? `（${account}）` : ""}`, "每个只能用一次；手机丢了时代替验证码登录。", "", ...codes].join("\n");
+  [`${appName} 两步验证恢复码${account ? `（${account}）` : ""}`, "每个只能用一次；手机丢了时代替验证码登录。", "", ...codes].join("\n");
 
 /** 去空格/下划线、全角数字转半角；6 位数字 = 验证码，其余按恢复码交给服务器。 */
 export const cleanCode = (raw: string) =>

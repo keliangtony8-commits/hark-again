@@ -17,6 +17,7 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'usage_screen.dart';
+import '../../models/version.dart';
 
 class MeScreen extends ConsumerWidget {
   const MeScreen({super.key});
@@ -79,7 +80,7 @@ class _MeBody extends ConsumerWidget {
           RowTile(icon: Icons.shield_outlined, title: '安全', onTap: () => context.push('/me/security')),
           RowTile(icon: Icons.tune_rounded, title: '偏好设置', onTap: () => context.push('/me/preferences')),
           RowTile(icon: Icons.feedback_outlined, title: '反馈', onTap: () => context.push('/me/feedback')),
-          RowTile(icon: Icons.info_outline_rounded, title: '关于', onTap: () => context.push('/me/about')),
+          RowTile(icon: Icons.info_outline_rounded, title: '关于', value: clientOutdated(ref.watch(serverVersionProvider).value) ? '请更新' : null, onTap: () => context.push('/me/about')),
         ]),
       ),
       const SizedBox(height: Sp.x4),

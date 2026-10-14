@@ -38,6 +38,7 @@ import '../../core/resource.dart';
 import '../projects/project_files_sheet.dart';
 import 'attachment_tray.dart';
 import 'mentions.dart';
+import '../../brand.dart';
 
 /// 正在编辑的那条用户消息。hasFiles：带附件的消息文字清空也能发（只剩附件）。
 class EditDraft {
@@ -62,7 +63,7 @@ class Composer extends ConsumerStatefulWidget {
       this.editing,
       this.onCancelEdit,
       this.accessory,
-      this.hint = '给助手发消息',
+      this.hint = '给 $appName 发消息',
       this.leading,
       this.focusNode,
       this.workspace,

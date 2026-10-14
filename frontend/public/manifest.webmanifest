@@ -1,6 +1,6 @@
 {
-  "name": "Assistant",
-  "short_name": "Assistant",
+  "name": "Toyuis",
+  "short_name": "Toyuis",
   "display": "standalone",
   "start_url": "/",
   "background_color": "#faf9f7",

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { IconBack, IconClose, IconSearch } from "./icons";
+import { IconBack, IconCheck, IconClose, IconSearch } from "./icons";
 import "./ui.css";
 
 /** 子页面的浮动玻璃标题栏（返回 + 标题 + 右侧操作），和一级页面的顶栏同位置。 */
@@ -192,10 +192,13 @@ export function Highlight({ text, q }: { text: string; q: string }) {
   return <>{out}</>;
 }
 
-export type MenuItem = { label: string; icon?: ReactNode; danger?: boolean; onSelect: () => void };
+export type MenuItem = { label: string; icon?: ReactNode; danger?: boolean; checked?: boolean; hint?: string; onSelect: () => void };
 
-/** 小弹出菜单：点触发按钮开，点外面 / Esc / 选中后关。 */
-export function Menu({ trigger, items, label = "更多" }: { trigger: ReactNode; items: MenuItem[]; label?: string }) {
+/** 小弹出菜单：点触发按钮开，点外面 / Esc / 选中后关。全站唯一的弹出选择（v2.86 起取代原生 <select>：系统下拉白底宋体，和界面割裂）。
+ *  选档用法：items 带 checked（当前项打勾）和 hint（一行说明）；triggerClass 让触发键用调用方的样式（如输入框里的模型钮）；align 决定贴左还是贴右。 */
+export function Menu({ trigger, items, label = "更多", triggerClass = "icon-btn sm", align = "right" }: {
+  trigger: ReactNode; items: MenuItem[]; label?: string; triggerClass?: string; align?: "left" | "right";
+}) {
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState<CSSProperties | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -207,11 +210,11 @@ export function Menu({ trigger, items, label = "更多" }: { trigger: ReactNode;
     const h = pop.current?.offsetHeight ?? 0;
     if (!t) return;
     const gap = 4;
-    const right = Math.max(gap, window.innerWidth - t.right);
+    const side: CSSProperties = align === "left" ? { left: Math.max(gap, t.left) } : { right: Math.max(gap, window.innerWidth - t.right) };
     const below = t.bottom + gap + h <= window.innerHeight - gap;
-    setPlace(below ? { top: t.bottom + gap, right, transformOrigin: "top right" }
-                   : { bottom: window.innerHeight - t.top + gap, right, transformOrigin: "bottom right" });
-  }, [open]);
+    setPlace(below ? { ...side, top: t.bottom + gap, transformOrigin: `top ${align}` }
+                   : { ...side, bottom: window.innerHeight - t.top + gap, transformOrigin: `bottom ${align}` });
+  }, [open, align]);
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
@@ -233,13 +236,18 @@ export function Menu({ trigger, items, label = "更多" }: { trigger: ReactNode;
   }, [open]);
   return (
     <div className={`menu ${open ? "open" : ""}`} ref={ref} onClick={(e) => e.stopPropagation()}>
-      <button className="icon-btn sm menu-trigger" aria-label={label} aria-expanded={open} onClick={() => setOpen((o) => !o)}>{trigger}</button>
+      <button className={`${triggerClass} menu-trigger`} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>{trigger}</button>
       {open && createPortal(
         <div className={`menu-pop ${place ? "placed" : ""}`} role="menu" aria-label={label} ref={pop} style={place ?? undefined}
           onClick={(e) => e.stopPropagation()}>
           {items.map((it) => (
-            <button key={it.label} role="menuitem" className={`menu-item ${it.danger ? "danger" : ""}`}
-              onClick={() => { setOpen(false); it.onSelect(); }}>{it.icon}{it.label}</button>
+            <button key={it.label} role={it.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={it.checked}
+              className={`menu-item ${it.danger ? "danger" : ""} ${it.checked ? "checked" : ""}`}
+              onClick={() => { setOpen(false); it.onSelect(); }}>
+              {it.icon}
+              {it.hint ? <span className="menu-item-text"><span>{it.label}</span><small>{it.hint}</small></span> : it.label}
+              {it.checked && <span className="menu-item-check"><IconCheck size={16} /></span>}
+            </button>
           ))}
         </div>,
         document.body,

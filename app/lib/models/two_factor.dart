@@ -1,5 +1,6 @@
 // 两步验证（v2.58，对标 Hark 设置 → 安全）：服务器 /api/auth/2fa* 的数据和这一页用到的文字规则。
 // 规则本身在后端 app/two_factor.py；这里只解析 + 决定怎么说（纯函数，test/two_factor_test.dart 覆盖）。
+import '../brand.dart';
 
 class TwoFactorStatus {
   const TwoFactorStatus({required this.enabled, this.enabledAt, this.recoveryLeft = 0, this.pending = false});
@@ -53,7 +54,7 @@ String recoveryLine(int left) => switch (left) {
 
 /// 复制 / 保存用的纯文本。
 String recoveryCodesText(List<String> codes, {String account = ''}) => [
-      '私人助手 两步验证恢复码${account.isEmpty ? '' : '（$account）'}',
+      '$appName 两步验证恢复码${account.isEmpty ? '' : '（$account）'}',
       '每个只能用一次；手机丢了时代替验证码登录。',
       '',
       ...codes,

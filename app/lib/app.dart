@@ -34,6 +34,7 @@ import 'theme/appearance.dart';
 import 'theme/look.dart';
 import 'ui/glass.dart';
 import 'theme/tokens.dart';
+import 'brand.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier(0);
@@ -114,7 +115,7 @@ class AssistantApp extends ConsumerWidget {
       return MaterialApp(theme: _light, darkTheme: _dark, themeMode: mode, home: const SizedBox.shrink());
     }
     return MaterialApp.router(
-      title: '助手',
+      title: appName,
       debugShowCheckedModeBanner: false,
       theme: _light,
       darkTheme: _dark,

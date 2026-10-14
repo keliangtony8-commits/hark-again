@@ -923,6 +923,8 @@ async def screen(name: str, format: str = "jpeg", full: bool = False, quality: i
         _forget_browser()
     if name not in _sessions:
         raise HTTPException(404)
+    if format == "jpeg" and not full:  # 有人在看实时画面 / 接管 = 在用：不让 15 分钟空闲回收把正在看的浏览器关掉（用户 18:38“动不动就断”）
+        _used[name] = time.time()
     page = await _follow(name)  # 画面跟着当前标签页（网站开的新页、崩了重开的页）
     kw: dict = {"type": format}
     if format == "jpeg":

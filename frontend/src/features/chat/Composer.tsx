@@ -1,3 +1,4 @@
+import { appName } from "../../brand";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { workspaceFilesTitle } from "../../lib/workspace";
 import { http } from "../../lib/api";
@@ -53,7 +54,7 @@ type Props = {
   /** 本机斜杠命令的执行者（返回一句提示）；不给 = 不接本机命令（打了当普通文字发）。 */
   onSlash?: (c: SlashCall, files: OutgoingFile[]) => Promise<string | undefined> | void;
 };
-export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = "给助手发消息", workspace, onSlash }: Props) {
+export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, accessory, leading, placeholder = `给 ${appName} 发消息`, workspace, onSlash }: Props) {
   const [text, setText] = useState("");
   const stash = useRef<string | null>(null);   // 进入编辑前的草稿
   const editId = editing?.id ?? null;

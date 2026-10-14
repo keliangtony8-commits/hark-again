@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .preview import PREFIX as PREVIEW_PREFIX
 
-from . import command_env, turn_journal
+from . import command_env, turn_journal, version
 from .db import SessionLocal
 from .agent.tools import load_builtin
 from .routes import auth, browser, catalog, connectors, conversations, feedback, files, preferences, home, host, inbox, jobs, memory_digest, memory_notes, pages, preview, resources, tasks, usage, vault, voice, wallet, ws
@@ -32,7 +32,7 @@ class AppCORS(CORSMiddleware):
         return await super().__call__(scope, receive, send)
 
 
-app = FastAPI(title="Assistant", lifespan=lifespan)
+app = FastAPI(title=version.APP_NAME, version=version.VERSION, lifespan=lifespan)
 app.add_middleware(AppCORS, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth.router)
 app.include_router(conversations.router)
@@ -66,3 +66,9 @@ for r in resources.routers:
 @app.get("/api/health")
 async def health():
     return {"ok": True}
+
+
+@app.get("/api/version")
+async def server_version():
+    """公开（登录前也要能比对）：服务器版本 + 最低兼容客户端。客户端只在关于页显示、低于 min_client 时提示更新。"""
+    return {"name": version.APP_NAME, "version": version.VERSION, "build": version.BUILD, "min_client": version.MIN_CLIENT}
