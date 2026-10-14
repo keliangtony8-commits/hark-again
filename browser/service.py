@@ -150,7 +150,8 @@ async def _ensure_browser() -> Browser:
             # proxy per-context：先给浏览器一个占位代理，每个会话再用自己的代理账号（被拦记到对的会话上）；
             # WebRTC 只许走代理（不然 UDP 能绕过关卡直连内网）
             _browser = await _pw.chromium.launch(proxy={"server": "http://per-context"}, args=[
-                "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
+                # 无头不需要 GPU；不关的话 SwiftShader 的 gpu-process 在 2 核 VPS 上空转吃满一核
+                "--disable-gpu", "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
         except Exception as e:
             _launch_error = (time.time(), launch_reason(e))
             raise HTTPException(503, _launch_error[1])

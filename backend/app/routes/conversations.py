@@ -4,7 +4,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import chat_search, conversation_share, conversation_title, model_router, plan_mode, quota, reasoning, turn_changes, turn_journal, usage, workspaces
+from .. import chat_search, conversation_share, conversation_title, model_router, plan_mode, quota, reasoning, run_conversations, turn_changes, turn_journal, usage, workspaces
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
@@ -34,7 +34,7 @@ async def list_conversations(project_id: str | None = None, q: str = "", db: Asy
         return [_summary(h.conversation, None if h.title_hit or not h.message_id else (h.message_id, h.snippet))
                 for h in found]
     scope = Conversation.project_id == project_id if project_id else Conversation.project_id.is_(None)
-    rows = (await db.scalars(select(Conversation).where(scope)
+    rows = (await db.scalars(select(Conversation).where(scope, run_conversations.listed())
                              .order_by(Conversation.pinned.desc(), Conversation.updated_at.desc()).limit(100))).all()
     return [_summary(c) for c in rows]
 
@@ -189,6 +189,8 @@ async def unshare(cid: str, db: AsyncSession = Depends(get_session)):
 @router.delete("/{cid}")
 async def delete_conversation(cid: str, db: AsyncSession = Depends(get_session)):
     c = await db.get(Conversation, cid)
+    if c and await run_conversations.busy(db, c):
+        raise HTTPException(409, "这个定时任务还在跑，跑完再删")
     if c:
         await db.delete(c)
         await db.commit()

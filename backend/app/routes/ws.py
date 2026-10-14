@@ -8,7 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 import logging
 
-from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, project_relay, skill_mentions, steering, user_shell, workspaces
+from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, project_relay, run_conversations, skill_mentions, steering, user_shell, workspaces
 from ..agent import approvals, context
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
@@ -85,6 +85,7 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
             db.add(conv)
             await db.flush()
         apply_choice(conv, event)
+        run_conversations.promote(conv)  # 在定时任务的运行对话里接话 = 普通对话了，进列表
         follow = await agent_mentions.follow(db, conv.id, event.get("follow"), event.get("follow_title")) if text else []
         user_msg = Message(conversation_id=conv.id, role="user",
                            blocks=(text_to_blocks(text) if text else []) + files + _skills(text) + (follow or _agents(text)))
@@ -170,6 +171,7 @@ async def _handle_regenerate(emit, event: dict, stop: asyncio.Event) -> None:
             await _add_mentions(db, conv, user_msg, text)
         if "model" in event or "reasoning" in event:  # “换个模型 / 思考强度重答”：和 user.message 一样记到对话上
             apply_choice(conv, event)
+        if run_conversations.promote(conv) or "model" in event or "reasoning" in event:  # 重答运行对话也算接话
             await db.commit()
         await emit({"type": "message.start", "conversation_id": conv.id,
                     "user_message_id": user_msg.id, "title": conv.title, "replaced": replaced,

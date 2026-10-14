@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import jobs, report_gist, task_runs, workspaces
+from . import jobs, report_gist, run_conversations, task_runs, workspaces
 from .blocks import text_to_blocks
 from .config import settings
 from .models import Conversation, HomeCard, Job, Message, Project, ScheduledTask, TaskRun
@@ -148,7 +148,7 @@ async def settle(db: AsyncSession, task: ScheduledTask, run: TaskRun, job: Job |
 async def _deliver(db: AsyncSession, task: ScheduledTask, job: Job | None, line: str) -> Conversation | None:
     """开一段对话（命令 + 任务卡 + 结论）+ 收件箱报告卡（同一任务只留最新一张）。"""
     local = datetime.now(timezone.utc).astimezone(ZoneInfo(settings.timezone))
-    conv = Conversation(title=f"{task.name} · {local:%m月%d日 %H:%M}", project_id=task.project_id)
+    conv = run_conversations.mark(Conversation(title=f"{task.name} · {local:%m月%d日 %H:%M}", project_id=task.project_id), task)
     db.add(conv)
     await db.flush()
     db.add(Message(conversation_id=conv.id, role="user",

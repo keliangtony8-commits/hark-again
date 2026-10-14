@@ -60,7 +60,11 @@ export function useConversations(projectId?: string) {
 
   const remove = useCallback(async (id: string) => {
     setItems((xs) => xs.filter((c) => c.id !== id));
-    await http.del(`/api/conversations/${id}`);
+    try {
+      await http.del(`/api/conversations/${id}`);
+    } catch (e) {  // 409：定时任务这次还在往这段对话里写（搜索里能点到运行对话）
+      void noticeDialog("删不了", e instanceof Error ? e.message : String(e));
+    }
     refresh();
   }, [refresh]);
 

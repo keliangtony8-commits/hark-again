@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import system_alerts, task_wall
+from . import run_conversations, system_alerts, task_wall
 from .config import settings
 from .models import Conversation, HomeCard, ScheduledTask, TaskRun
 from .wire_time import iso
@@ -69,6 +69,9 @@ async def finish(db: AsyncSession, task: ScheduledTask, run: TaskRun, error: str
 async def _prune(db: AsyncSession, task_id: str) -> None:
     keep = select(TaskRun.id).where(TaskRun.task_id == task_id).order_by(TaskRun.started_at.desc()).limit(KEEP)
     await db.flush()
+    old = (await db.scalars(select(TaskRun.conversation_id).where(
+        TaskRun.task_id == task_id, TaskRun.id.not_in(keep), TaskRun.conversation_id.is_not(None)))).all()
+    await run_conversations.drop(db, list(old))  # 裁掉的那几次：还藏着的运行对话跟着走
     await db.execute(delete(TaskRun).where(TaskRun.task_id == task_id, TaskRun.id.not_in(keep)))
 
 

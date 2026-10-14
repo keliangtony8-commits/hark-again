@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import delete, select, update as sql_update
 
-from . import model_router, panel_log, reasoning, schedule, script_tasks, task_runs
+from . import model_router, panel_log, reasoning, run_conversations, schedule, script_tasks, task_runs
 from .config import settings
 from .models import Conversation, HomeCard, ScheduledTask
 
@@ -34,12 +34,13 @@ def reasoning_choice(value: object) -> str | None:
 
 def conversation_for(task: ScheduledTask, title: str) -> Conversation:
     """每次运行开的新对话：带上任务自己的模型 / 思考强度（worker 只经这里开任务对话）。"""
-    return Conversation(title=title, model=task.model, reasoning=task.reasoning)
+    return run_conversations.mark(Conversation(title=title, model=task.model, reasoning=task.reasoning), task)
 
 
 async def delete_cascade(db, task: ScheduledTask) -> None:
     """删除前的清理：面板/收件箱/失败提醒卡和运行记录跟着任务走（不 commit，不删任务本身）。"""
     await db.execute(delete(HomeCard).where(HomeCard.task_id == task.id))
+    await run_conversations.drop(db, task_id=task.id)  # 卡已删：还藏着的运行对话全清（接过话的不动）
     await task_runs.remove_for(db, task.id)
     await panel_log.drop(db, [task.id])  # 记录面板的每一笔
 

@@ -28,6 +28,8 @@ class Conversation(Base):
     # 预留：Phase 3 的 Project 归属
     project_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # v2.75 定时任务 / 面板 / 定时脚本某次运行开的对话 = 开它的任务 id：不进对话列表，用户接话后清空（app/run_conversations.py）
+    task_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     # 这个对话用的聊天模型别名（settings.chat_models 的键）；None = 默认。解析见 llm.chat_model
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # 选了“自动”（model_router.AUTO）时上一轮实际路由到的别名：客户端显示“自动 · 快速”，“继续”这类接话沿用它
