@@ -4,6 +4,8 @@ import type { LinkStatus } from "../../lib/socket";
 import { formatDay, startsNewDay } from "../../lib/format";
 import type { Message, OutgoingFile } from "../../lib/types";
 import { FloatingFooter } from "../../ui/kit";
+import { IconArrowDown } from "../../ui/icons";
+import { useStickToBottom } from "./useStickToBottom";
 import Composer, { type EditDraft } from "./Composer";
 import type { SlashCall } from "../../lib/slash";
 import EmptyState from "./EmptyState";
@@ -42,9 +44,6 @@ function LinkBar({ onRetry, streaming }: { onRetry: () => void; streaming: boole
   );
 }
 
-/** 离底部多少像素以内算“在底部”（贴底跟随）。 */
-const PIN_SLACK = 32;
-
 /** 编辑最后一条用户消息：点气泡下的“编辑”（或空输入框按 ↑）→ 输入框进入编辑态，发送走 onEdit。
  *  编辑态只是界面状态，放在这里；那条消息不再可编辑（开始生成、换了对话）就自动退出。 */
 export default function ChatView({ messages, busy, error, link, canRegenerate, onRegenerate, editableId, onEdit, streaming, onStop, canSteer, focus, onFocused, accessory, onSend, onSlash, onReconnect, onResend, onDiscard, greeting, empty: emptyView, projectId }: Props) {
@@ -59,51 +58,36 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
       hasFiles: m.blocks.some((b) => b.type === "file"),
     });
   };
-  const end = useRef<HTMLDivElement>(null);
-  const thread = useRef<HTMLDivElement>(null);
-  // 平时贴底；有定位请求时滚到那条消息的中间并闪一下（.flash 动画，结束自己摘掉，重复定位能再闪）
+  // 贴底跟随（useStickToBottom 唯一规则）：流式变高只靠 ResizeObserver 贴一次；往上翻就停，出“回到最新”
+  const [footerH, setFooterH] = useState(0); // 输入胶囊浮在底部（FloatingFooter 量它的实际高度），消息从它下面滚过去
+  const empty = messages.length === 0;
+  const stick = useStickToBottom(!empty, [footerH]);
+  const thread = stick.ref;
+  // 换对话（第一条变了）或自己刚发了一条（最后一条是新的用户消息）= 回到底部；别的变化（每个 token）不动滚动位置
+  const seen = useRef<{ first?: string; last?: string }>({});
   useEffect(() => {
     const el = focus ? thread.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(focus)}"]`) : null;
-    if (!el) { pinned.current = true; end.current?.scrollIntoView({ block: "end" }); return; }
-    pinned.current = false; // 定位到某条消息：别再被贴底拉走
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-    el.classList.remove("flash");
-    void el.offsetWidth;   // 重新触发动画
-    el.classList.add("flash");
-    el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
-    onFocused();
+    if (el) { // 搜索定位：滚到那条中间闪一下（.flash 动画，结束自己摘掉，重复定位能再闪），不再被贴底拉走
+      stick.release();
+      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      el.classList.remove("flash");
+      void el.offsetWidth;   // 重新触发动画
+      el.classList.add("flash");
+      el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
+      onFocused();
+      return;
+    }
+    const first = messages[0]?.id, lastId = last?.id, prev = seen.current;
+    if (first !== prev.first || (lastId !== prev.last && last?.role === "user")) stick.pin();
+    seen.current = { first, last: lastId };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, focus, onFocused]);
 
-  // 输入胶囊浮在底部（FloatingFooter 量它的实际高度），消息从它下面滚过去
-  const [footerH, setFooterH] = useState(0);
-  // 贴底：用户在底部（差 PIN_SLACK 以内）时，内容或底部让位后来才变高（胶囊量出高度、图片加载、卡片展开）
-  // 也跟着贴回底部；往上翻了就不打扰。不然刚打开的对话，最后一张卡的按钮会压在输入胶囊下面。
-  // 只有“往上翻”才取消贴底：.thread 是平滑滚动，程序滚到底的半路也会触发 scroll，那时 scrollTop 只增不减。
-  const pinned = useRef(true);
-  const lastTop = useRef(0);
-  const onScroll = () => {
-    const el = thread.current;
-    if (!el) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < PIN_SLACK) pinned.current = true;
-    else if (el.scrollTop < lastTop.current - 1) pinned.current = false;
-    lastTop.current = el.scrollTop;
-  };
-  const empty = messages.length === 0;
-  useEffect(() => {
-    const el = thread.current;
-    const inner = el?.firstElementChild;
-    if (!el || !inner || empty) return;
-    const stick = () => { if (pinned.current) el.scrollTo({ top: el.scrollHeight, behavior: "instant" }); };
-    stick();
-    const ro = new ResizeObserver(stick);
-    ro.observe(inner);
-    return () => ro.disconnect();
-  }, [empty, footerH]);
   const pad = { ["--footer-h" as string]: `${footerH}px` } as CSSProperties;
   return (
     <>
-      <div className="thread" ref={thread} style={pad} onScroll={onScroll}>
+      <div className="thread" ref={thread} style={pad} onScroll={stick.onScroll} onWheel={stick.onWheel}>
         {messages.length === 0 ? (
           emptyView ?? <EmptyState onPick={(t) => onSend(t)} subtitle={greeting} />
         ) : (
@@ -124,11 +108,13 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
                 {canRegenerate && last?.role === "user" && <button className="btn btn-ghost btn-sm" onClick={onRegenerate}>重试</button>}
               </div>
             )}
-            <div ref={end} />
           </div>
         )}
       </div>
       <FloatingFooter onHeight={setFooterH}>
+        {stick.away && !empty && (
+          <button className="jump-latest glass raised" onClick={stick.jump}><IconArrowDown size={14} />回到最新</button>
+        )}
         {link === "down" && <LinkBar onRetry={onReconnect} streaming={!!streaming} />}
         <Composer disabled={busy} streaming={streaming} canSteer={canSteer} onStop={onStop} accessory={accessory} workspace={workspaceOf(projectId)}
           onSlash={onSlash} editing={editing} onCancelEdit={() => setDraft(null)} onEditLast={editableId ? startEdit : undefined}

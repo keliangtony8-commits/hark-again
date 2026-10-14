@@ -9,6 +9,7 @@ import 'package:assistant/app.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
+import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -51,6 +52,18 @@ class _Api implements Api {
         {'id': 't3', 'name': '晚间复盘', 'prompt': '复盘', 'cron': '30 23 * * *', 'active': true, 'output': 'report', 'run_requested': false},
         {'id': 't7', 'name': '美元兑人民币', 'prompt': '汇率', 'cron': '0 8 * * *', 'active': true, 'output': 'panel', 'run_requested': false},
       ];
+    }
+    if (path == '/api/conversations/c2') {
+      final at = now.subtract(const Duration(minutes: 3));
+      Map<String, dynamic> step(String id, String title, String detail, int ms, int sec) =>
+          {'id': id, 'tool': 'run_command', 'title': title, 'detail': detail, 'state': 'done', 'at': _wire(at.add(Duration(seconds: sec))), 'ms': ms};
+      return {'id': 'c2', 'messages': [
+        for (var i = 0; i < 6; i++) ...[
+          {'id': 'u$i', 'role': 'user', 'created_at': _wire(at), 'blocks': [{'type': 'text', 'text': '第 $i 个问题：这款耳机降噪怎么样？'}]},
+          {'id': 'a$i', 'role': 'assistant', 'created_at': _wire(at), 'blocks': [{'type': 'text', 'text': '索尼 WH-1000XM5 的降噪在同价位里最强，地铁里基本听不到报站。\n\n续航 30 小时，京东今天 ¥1899。'}],
+            if (i == 5) 'steps': [step('s1', '搜索', '索尼 XM5 价格', 2400, 0), step('s2', '打开网页', 'item.jd.com/100012', 3100, 3), step('s3', '读文件', 'notes/耳机.md', 12, 7)]},
+        ],
+      ]};
     }
     if (path.startsWith('/api/conversations')) {
       return [
@@ -97,6 +110,8 @@ Future<void> _shot(WidgetTester tester, String name) async {
   });
 }
 
+late ProviderContainer _container;
+
 Future<GoRouter> _pump(WidgetTester tester, {required bool dark}) async {
   tester.view.physicalSize = const Size(412, 915);
   tester.view.devicePixelRatio = 1;
@@ -110,6 +125,7 @@ Future<GoRouter> _pump(WidgetTester tester, {required bool dark}) async {
     chatSocketProvider.overrideWithValue(FakeSocket()),
   ]);
   addTearDown(container.dispose);
+  _container = container;
   await tester.pumpWidget(RepaintBoundary(child: UncontrolledProviderScope(container: container, child: const AssistantApp())));
   await _settle(tester);
   await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300))); // 假接口/缓存是真异步
@@ -150,5 +166,21 @@ void main() {
     await tester.tap(find.byTooltip('历史').first);
     await _settle(tester);
     await _shot(tester, 'chat-drawer-light');
+  }, skip: _out == null);
+
+  // v2.79：步骤收成一行（不到 1 秒不写用时）+ 往上翻出现“回到最新”
+  testWidgets('chat steps + jump latest', (tester) async {
+    final router = await _pump(tester, dark: false);
+    router.go('/chat');
+    await _settle(tester);
+    await tester.runAsync(() => _container.read(chatProvider('').notifier).open('c2'));
+    await _settle(tester);
+    await _shot(tester, 'chat-steps-light');
+    await tester.tap(find.textContaining('做了 3 步'));
+    await _settle(tester);
+    await _shot(tester, 'chat-steps-open-light');
+    await tester.drag(find.byType(ListView).first, const Offset(0, 700));
+    await _settle(tester);
+    await _shot(tester, 'chat-jump-latest-light');
   }, skip: _out == null);
 }

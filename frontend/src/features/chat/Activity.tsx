@@ -1,8 +1,9 @@
-// 活动时间线（v1.28，与 App features/chat/activity_view.dart 同一套）：回复上方一行“用了 4 步 · 12 秒 ›”（有没成的补“1 步没成”），
+// 活动时间线（v1.28，与 App features/chat/activity_view.dart 同一套）：回复上方一行“做了 4 步 · 12 秒 ›”（有没成的补“1 步没成”），
 // 点开是竖向时间线：状态圆点 + 标题 + 等宽摘要 + 用时，没成的下面一行原因；步骤之间一根发丝线。规则在 lib/activity.ts。
+// v2.79：默认收起，只有一轮停在出错的一步时自己展开；不到 1 秒的步骤不写用时（满屏 “0.0 秒” 像坏了）。
 // v1.34：改了文件的步骤行尾 “+3 −1”（绿/红），点这一行展开 diff（新增绿、删除红、段头淡）；像密钥的文件只有数字。
-import { useState } from "react";
-import { activitySummary, stepChange, stepDuration, stepExpandable, stepFailed, stepFileTag, stepFiles, stepSemantics, STEP_STATE_LABEL } from "../../lib/activity";
+import { useEffect, useState } from "react";
+import { activityOpensItself, activitySummary, stepChange, stepDuration, stepExpandable, stepFailed, stepFileTag, stepFiles, stepSemantics, STEP_STATE_LABEL } from "../../lib/activity";
 import type { ActivityStep } from "../../lib/types";
 import { Diff, DiffStat, FileDiffRow } from "../../ui/Diff";
 import { IconAlert, IconCheck, IconChevron, IconClose, IconHistory, IconStop } from "../../ui/icons";
@@ -18,7 +19,9 @@ function Mark({ s }: { s: ActivityStep }) {
 }
 
 export default function ActivitySummary({ steps, pending }: { steps: ActivityStep[]; pending?: boolean }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => activityOpensItself(steps, pending));
+  const stuck = activityOpensItself(steps, pending);
+  useEffect(() => { if (stuck) setOpen(true); }, [stuck]); // 刚结束、卡在出错的一步：自己展开（v2.79）
   const label = activitySummary(steps, pending);
   const bad = steps.filter(stepFailed).length;
   return (
@@ -53,7 +56,7 @@ function Step({ s, i }: { s: ActivityStep; i: number }) {
           {canOpen && <IconChevron size={12} />}
         </span>
       )}
-      {s.ms != null && s.state !== "running" && <span className="step-ms">{stepDuration(s.ms)}</span>}
+      {s.ms != null && s.state !== "running" && stepDuration(s.ms) && <span className="step-ms">{stepDuration(s.ms)}</span>}
     </>
   );
   return (

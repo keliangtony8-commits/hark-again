@@ -149,4 +149,30 @@ void main() {
     expect(user.left, greaterThan(200));
     expect(reply.left, lessThan(60));
   });
+
+  // v2.79（用户 10-14 16:02）：往上翻看前文 → 输入胶囊上方“回到最新”；点了回到最新一条，按钮消失。
+  testWidgets('往上翻出现“回到最新”，点了回到底部', (tester) async {
+    final api = _Api()..messages = _long();
+    final c = _container(api);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: MediaQuery(
+        data: const MediaQueryData(size: Size(400, 800)),
+        child: MaterialApp(theme: buildTheme(Brightness.light), home: const Scaffold(body: ChatView())),
+      ),
+    ));
+    await c.read(chatProvider('').notifier).open('c1');
+    await tester.pumpAndSettle();
+    expect(find.byType(JumpLatest), findsNothing);
+    await tester.drag(find.byType(ListView), const Offset(0, 40)); // 一点点不算离开
+    await tester.pumpAndSettle();
+    expect(find.byType(JumpLatest), findsNothing);
+    await tester.drag(find.byType(ListView), const Offset(0, 1500));
+    await tester.pumpAndSettle();
+    expect(find.text('回到最新'), findsOneWidget);
+    await tester.tap(find.byType(JumpLatest));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ListView>(find.byType(ListView)).controller!.offset, 0);
+    expect(find.byType(JumpLatest), findsNothing);
+  });
 }

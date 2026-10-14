@@ -1,4 +1,4 @@
-// v1.28 活动时间线：规则（文案/计时/合并/老服务器退化）+ 回复上方“用了 N 步”行、展开逐步、读屏、没成的步骤。
+// v1.28 活动时间线：规则（文案/计时/合并/老服务器退化）+ 回复上方“做了 N 步”行、展开逐步、读屏、没成的步骤。
 import 'package:assistant/features/chat/activity_view.dart';
 import 'package:assistant/features/chat/message_view.dart';
 import 'package:assistant/models/activity.dart';
@@ -39,10 +39,11 @@ void main() {
     expect(m.steps[2].state, ActivityState.error);
     expect(m.steps[2].failed, isTrue);
     expect(activitySpanMs(m.steps), 12000); // 05:00:00 → 05:00:05 + 7 秒
-    expect(activitySummary(m.steps), '用了 3 步 · 12 秒');
-    expect(activitySummary(m.steps.take(2).toList(), pending: true), '已用 2 步');
+    expect(activitySummary(m.steps), '做了 3 步 · 12 秒');
+    expect(activitySummary(m.steps.take(2).toList(), pending: true), '已做 2 步');
     expect(failedSteps(m.steps), 1);
-    expect(stepDuration(400), '0.4 秒');
+    expect(stepDuration(400), isNull); // 不到 1 秒不写（10-14 16:01 满屏 0.0 秒）
+    expect(stepDuration(3400), '3 秒');
     expect(stepDuration(65000), '1 分 5 秒');
     expect(stepSemantics(m.steps[2]), '运行命令 false，没成功，退出码 1，用时 7 秒');
     final old = ActivityStep.fromStatus({'id': 'x', 'name': 'web_search', 'label': '正在搜索', 'state': 'running'});
@@ -51,33 +52,55 @@ void main() {
     list = mergeStep(list, ActivityStep.fromStatus({'id': 'x', 'state': 'done', 'step': _step('x', '搜索', '天气', 'done', '2026-10-12T05:00:00+00:00', 900)}));
     expect(list.single.detail, '天气');
     expect(list.single.running, isFalse);
-    expect(activitySummary([const ActivityStep(id: 'z', title: '搜索', state: ActivityState.done)]), '用了 1 步'); // 没时间不报用时
+    expect(activitySummary([const ActivityStep(id: 'z', title: '搜索', state: ActivityState.done)]), '做了 1 步'); // 没时间不报用时
     expect(Message.fromJson({'id': 'u', 'role': 'user', 'blocks': []}).steps, isEmpty);
   });
 
-  testWidgets('回复上方一行“用了 3 步 · 12 秒 · 1 步没成”，点开逐步回看', (tester) async {
+  testWidgets('回复上方一行“做了 3 步 · 12 秒 · 1 步没成”，点开逐步回看', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(Message.fromJson(_json)));
     await tester.pumpAndSettle();
-    expect(find.text('用了 3 步 · 12 秒'), findsOneWidget);
+    expect(find.text('做了 3 步 · 12 秒'), findsOneWidget);
     expect(find.text('1 步没成'), findsOneWidget);
-    expect(find.byType(StepRow), findsNothing);
-    final row = find.text('用了 3 步 · 12 秒');
+    expect(find.byType(StepRow), findsNWidgets(3)); // 停在出错的一步：自己展开（v2.79）
+    final row = find.text('做了 3 步 · 12 秒');
     expect(tester.getTopLeft(row).dy, lessThan(tester.getTopLeft(find.text('整理好了。')).dy)); // 在回复上方
+    expect(find.text('ls -la'), findsOneWidget);
+    expect(find.text('退出码 1'), findsOneWidget);
+    expect(find.textContaining('0.4'), findsNothing);
+    expect(find.text('7 秒'), findsOneWidget);
+    expect(find.bySemanticsLabel('运行命令 ls -la，完成'), findsOneWidget);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(find.byType(StepRow), findsNothing);
     await tester.tap(row);
     await tester.pumpAndSettle();
     expect(find.byType(StepRow), findsNWidgets(3));
-    expect(find.text('ls -la'), findsOneWidget);
-    expect(find.text('退出码 1'), findsOneWidget);
-    expect(find.text('0.4 秒'), findsOneWidget);
-    expect(find.bySemanticsLabel('运行命令 ls -la，完成，用时 0.4 秒'), findsOneWidget);
-    await tester.tap(row);
+  });
+
+  test('自己展开：只有一轮停在出错的一步', () {
+    const ok = ActivityStep(id: 'a', title: '运行命令', state: ActivityState.done);
+    const bad = ActivityStep(id: 'b', title: '运行命令', state: ActivityState.error);
+    const no = ActivityStep(id: 'c', title: '运行命令', state: ActivityState.denied);
+    expect(activityOpensItself([bad, ok]), isFalse); // 换方法补救回来了
+    expect(activityOpensItself([ok, bad]), isTrue);
+    expect(activityOpensItself([ok, bad], pending: true), isFalse);
+    expect(activityOpensItself([ok, no]), isFalse); // 没批准：批准卡已在回复里
+    expect(activityOpensItself(const []), isFalse);
+  });
+
+  testWidgets('出错后补救回来了：默认收成一行', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final steps = [..._json['steps'] as List];
+    await tester.pumpWidget(_host(Message.fromJson({..._json, 'steps': [steps[2], steps[0]]})));
     await tester.pumpAndSettle();
+    expect(find.text('1 步没成'), findsOneWidget);
     expect(find.byType(StepRow), findsNothing);
   });
 
-  testWidgets('没用工具的回复没有这一行；生成中：正在跑的步骤是小条，有完成的步骤才出“已用 N 步”', (tester) async {
+  testWidgets('没用工具的回复没有这一行；生成中：正在跑的步骤是小条，有完成的步骤才出“已做 N 步”', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(const Message(id: 'p', role: 'assistant', blocks: [TextBlock('你好')])));
@@ -94,6 +117,6 @@ void main() {
     const done = ActivityStep(id: 'd', title: '读文件', detail: 'a.txt', state: ActivityState.done, ms: 30);
     await tester.pumpWidget(_host(const Message(id: 'pending', role: 'assistant', pending: true, blocks: [], steps: [done, running])));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('已用 2 步'), findsOneWidget);
+    expect(find.text('已做 2 步'), findsOneWidget);
   });
 }

@@ -47,7 +47,7 @@ void main() {
     expect(diffLines(c.diff).map((e) => e.$1).toList(),
         [DiffKind.hunk, DiffKind.context, DiffKind.remove, DiffKind.add, DiffKind.add, DiffKind.context]);
     expect(diffLines('… 还有 3 行改动没显示').single.$1, DiffKind.note);
-    expect(stepSemantics(m.steps[0]), '改文件 src/app.py，完成，增加 2 行，删除 1 行，用时 0.0 秒');
+    expect(stepSemantics(m.steps[0]), '改文件 src/app.py，完成，增加 2 行，删除 1 行');
     expect(m.steps[1].change!.semantics, '新建，增加 1 行');
   });
 
@@ -56,8 +56,10 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(Message.fromJson(_json)));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('用了 3 步'));
-    await tester.pumpAndSettle();
+    if (find.text('+2').evaluate().isEmpty) { // 停在出错的一步时时间线已自己展开（v2.79）
+      await tester.tap(find.textContaining('做了 3 步'));
+      await tester.pumpAndSettle();
+    }
     expect(find.text('+2'), findsOneWidget);
     expect(find.text(' −1'), findsOneWidget);
     expect(find.text('新建 '), findsOneWidget);

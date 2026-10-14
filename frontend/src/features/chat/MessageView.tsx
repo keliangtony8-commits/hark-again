@@ -119,7 +119,7 @@ export default function MessageView({ message, last, onResend, onDiscard, onRege
   return (
     <div className={`msg assistant ${last ? "last" : ""}`} data-msg-id={message.id}>
       {!empty && message.thought?.trim() && <ThoughtSummary message={message} />}
-      {/* 活动时间线（v1.28）：用过工具就多一行“用了 N 步”，生成中有完成的步骤就出现 */}
+      {/* 活动时间线（v1.28）：用过工具就多一行“做了 N 步”，生成中有完成的步骤就出现 */}
       {steps.length > 0 && (!message.pending || steps.some((t) => t.state !== "running")) && <ActivitySummary steps={steps} pending={message.pending} />}
       {/* 模型调用失败在自动重试 / 换了备用模型（v1.50）：只在生成中出现 */}
       {message.pending && message.retry && <RetryLine notice={message.retry} />}

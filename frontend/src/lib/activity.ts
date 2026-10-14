@@ -17,8 +17,9 @@ export function mergeStep(steps: ActivityStep[], s: ActivityStep): ActivityStep[
 
 export const stepFailed = (s: ActivityStep) => s.state === "error" || s.state === "denied" || s.state === "stopped";
 
-export function stepDuration(ms: number): string {
-  if (ms < 1000) return `${(ms / 1000).toFixed(1)} 秒`;
+/** “12 秒” / “1 分 5 秒”；不到 1 秒 → null 不写（用户 10-14 16:01：满屏 “0.0 秒” 像计时坏了）。 */
+export function stepDuration(ms: number): string | null {
+  if (ms < 1000) return null;
   const s = Math.round(ms / 1000);
   return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`;
 }
@@ -34,10 +35,15 @@ export function activitySpanMs(steps: ActivityStep[]): number | null {
 }
 
 export function activitySummary(steps: ActivityStep[], pending = false): string {
-  if (pending) return `已用 ${steps.length} 步`;
+  if (pending) return `已做 ${steps.length} 步`;
   const span = activitySpanMs(steps);
-  return span == null ? `用了 ${steps.length} 步` : `用了 ${steps.length} 步 · ${stepDuration(span)}`;
+  const d = span == null ? null : stepDuration(span);
+  return d == null ? `做了 ${steps.length} 步` : `做了 ${steps.length} 步 · ${d}`;
 }
+
+/** 时间线自己展开：一轮结束时最后一步是出错的（没补救回来）。其余默认收成一行（与 App activityOpensItself 同款）。 */
+export const activityOpensItself = (steps: ActivityStep[], pending = false) =>
+  !pending && steps.length > 0 && steps[steps.length - 1].state === "error";
 
 export const STEP_STATE_LABEL: Record<ActivityStep["state"], string> = {
   running: "进行中", done: "完成", error: "没成功", denied: "没执行", stopped: "被停止",
@@ -88,7 +94,7 @@ export function diffLines(diff: string): [DiffKind, string][] {
 
 export function stepSemantics(s: ActivityStep): string {
   return [[s.title, s.detail].filter(Boolean).join(" "), STEP_STATE_LABEL[s.state], s.note, stepFilesSemantics(s),
-    s.ms != null && s.state !== "running" ? `用时 ${stepDuration(s.ms)}` : ""].filter(Boolean).join("，");
+    s.ms != null && s.state !== "running" && stepDuration(s.ms) ? `用时 ${stepDuration(s.ms)}` : ""].filter(Boolean).join("，");
 }
 
 function stepFilesSemantics(s: ActivityStep): string {

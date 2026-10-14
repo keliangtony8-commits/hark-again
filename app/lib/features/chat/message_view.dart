@@ -209,7 +209,7 @@ class MessageView extends StatelessWidget {
           ]);
     // 思考卡收成回复上方的一行（正文开始流出时就收），用 RiseSwitcher 长出来，不是一跳
     final summary = !thinking && message.thought.trim().isNotEmpty;
-    // 活动时间线（v1.28）：用过工具就在回复上方多一行“用了 N 步”，生成中有完成的步骤时就出现（“已用 N 步”）
+    // 活动时间线（v1.28）：用过工具就在回复上方多一行“做了 N 步”，生成中有完成的步骤时就出现（“已做 N 步”）
     final activity = message.steps.isNotEmpty && (!message.pending || message.steps.any((s) => !s.running));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       ConstrainedBox(

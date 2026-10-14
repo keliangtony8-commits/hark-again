@@ -1,5 +1,5 @@
 // 活动时间线（v1.28）：一条回复里助手每次用工具 = 一步（服务器 app/activity.py 定义形状，随消息落库）。
-// 生成中由 WS tool.status 的 step 实时更新；完成后在回复上方收成一行“用了 4 步 · 12 秒 ›”，点开逐步回看。
+// 生成中由 WS tool.status 的 step 实时更新；完成后在回复上方收成一行“做了 4 步 · 12 秒 ›”，点开逐步回看。
 // 这里只放纯规则（文案、计时、读屏），界面在 features/chat/activity_view.dart；网页版同款 lib/activity.ts。
 
 enum ActivityState { running, done, error, denied, stopped }
@@ -149,9 +149,10 @@ List<ActivityStep> stepsFrom(Object? raw) => [
         if (x is Map<String, dynamic>) ActivityStep.fromJson(x),
     ];
 
-/// “0.4 秒” / “12 秒” / “1 分 5 秒”。
-String stepDuration(int ms) {
-  if (ms < 1000) return '${(ms / 1000).toStringAsFixed(1)} 秒';
+/// “12 秒” / “1 分 5 秒”。不到 1 秒 → null，不写（用户 10-14 16:01：读文件、查记忆这类步骤几毫秒，
+/// 满屏 “0.0 秒” 看着像计时坏了；用时只在真有感觉的时候出现）。
+String? stepDuration(int ms) {
+  if (ms < 1000) return null;
   final s = (ms / 1000).round();
   return s < 60 ? '$s 秒' : '${s ~/ 60} 分 ${s % 60} 秒';
 }
@@ -172,13 +173,19 @@ int? activitySpanMs(List<ActivityStep> steps) {
 
 int failedSteps(List<ActivityStep> steps) => steps.where((s) => s.failed).length;
 
-/// 回复上方那一行：“用了 4 步 · 12 秒”；生成中 “已用 2 步”。
+/// 回复上方那一行：“做了 4 步 · 12 秒”；生成中 “已做 2 步”。
 String activitySummary(List<ActivityStep> steps, {bool pending = false}) {
   final n = steps.length;
-  if (pending) return '已用 $n 步';
+  if (pending) return '已做 $n 步';
   final span = activitySpanMs(steps);
-  return span == null ? '用了 $n 步' : '用了 $n 步 · ${stepDuration(span)}';
+  final d = span == null ? null : stepDuration(span);
+  return d == null ? '做了 $n 步' : '做了 $n 步 · $d';
 }
+
+/// 时间线要不要自己展开：一轮结束时最后一步是出错的（没有后续步骤把它补救回来）——用户该看看哪里卡住了。
+/// 中途出错又换方法成功了、没批准（批准卡已在回复里）都不展开：默认收成一行（用户 10-14 16:01 “每一项都是打开的，很混乱”）。
+bool activityOpensItself(List<ActivityStep> steps, {bool pending = false}) =>
+    !pending && steps.isNotEmpty && steps.last.state == ActivityState.error;
 
 /// 一步的状态字（读屏、没成时行尾的原因前缀）。
 String stepStateLabel(ActivityState s) => switch (s) {
@@ -189,11 +196,11 @@ String stepStateLabel(ActivityState s) => switch (s) {
       ActivityState.stopped => '被停止',
     };
 
-/// 一步的读屏文案：“运行命令 ls -la，完成，用时 0.4 秒”。
+/// 一步的读屏文案：“运行命令 ls -la，完成，用时 3 秒”。
 String stepSemantics(ActivityStep s) => [
       [s.title, if (s.detail.isNotEmpty) s.detail].join(' '),
       stepStateLabel(s.state),
       if (s.note.isNotEmpty) s.note,
       if (s.files.length > 1) '改了 ${s.files.length} 个文件，${s.change!.semantics}' else if (s.change case final c?) c.semantics,
-      if (s.ms != null && !s.running) '用时 ${stepDuration(s.ms!)}',
+      if (s.ms != null && !s.running && stepDuration(s.ms!) != null) '用时 ${stepDuration(s.ms!)}',
     ].join('，');

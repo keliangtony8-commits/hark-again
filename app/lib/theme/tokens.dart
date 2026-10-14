@@ -274,6 +274,7 @@ abstract final class A11y {
 /// 布局
 abstract final class Layout {
   static const contentMax = 720.0; // 平板/折叠屏上限制阅读宽度
+  static const followSlack = 80.0; // 聊天“贴底跟随”：离最新一条这么近以内算在底部；再往上翻出“回到最新”（= 网页 FOLLOW_SLACK）
   static const topBar = 52.0; // 浮动顶栏（分段导航、头像、左侧上下文按钮）的高度
   static const gutter = 20.0; // 全 App 统一的左右留白（顶栏、页面、浮动按钮都对齐这条线）
   static const cardGap = Sp.x3; // 卡片之间的间距

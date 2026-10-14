@@ -48,7 +48,7 @@ void main() {
     expect(s.files[1].semantics, '从 src/app.py 改名，增加 1 行，删除 1 行');
     expect(stepFileTag(s.files[2]), '已删除');
     expect(stepFileTag(s.files[0]), isNull);
-    expect(stepSemantics(s), '改文件 hello.txt 等 3 个文件，完成，改了 3 个文件，增加 2 行，删除 3 行，用时 0.0 秒');
+    expect(stepSemantics(s), '改文件 hello.txt 等 3 个文件，完成，改了 3 个文件，增加 2 行，删除 3 行');
     final one = ActivityStep.fromJson({'id': 'x', 'change': {'path': 'a', 'added': 1, 'diff': ''}});
     expect((one.files.length, one.change!.path, one.expandable), (1, 'a', false));
     expect(ActivityStep.fromJson({'id': 'y'}).change, isNull);
@@ -59,7 +59,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(Message.fromJson(_json)));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('用了 1 步'));
+    await tester.tap(find.textContaining('做了 1 步'));
     await tester.pumpAndSettle();
     expect(find.text('+2'), findsOneWidget);
     expect(find.text(' −3'), findsOneWidget);

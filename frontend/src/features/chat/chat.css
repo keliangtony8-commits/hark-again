@@ -208,6 +208,10 @@ button.skill-chip { border: 0; font: inherit; font-size: var(--fs-xs); cursor: p
 /* 长连接断开提示条 */
 .link-bar { display: flex; align-items: center; gap: var(--sp-2); width: fit-content; max-width: calc(100% - 2 * var(--gutter)); margin: 0 auto var(--sp-2);
   padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); color: var(--warning); animation: float-up var(--dur) var(--ease) both; }
+/* 往上翻看前文时：输入胶囊上方一颗“回到最新”（useStickToBottom），点了平滑回到底部继续跟随 */
+.jump-latest { display: flex; align-items: center; gap: var(--sp-1); width: fit-content; margin: 0 auto var(--sp-2); padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-full); font-size: var(--fs-sm); color: var(--text-2); animation: float-up var(--dur) var(--ease) both; }
+.jump-latest:hover { color: var(--ink); }
 .link-dot { width: 8px; height: 8px; border-radius: var(--r-full); background: var(--warning); animation: blink 1.2s infinite; flex: none; }
 .link-text { flex: 1; min-width: 0; }
 

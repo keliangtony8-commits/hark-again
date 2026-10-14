@@ -47,6 +47,8 @@ llm.client.chat.completions.create = fake_create
 load_builtin()
 
 async def fake_stream(project_id, command, timeout=60, stdin=None, **kw):
+    if command == "slow":  # 用户 10-14 16:01：真跑了几秒的步骤也显示 0.0 秒 → 用时必须是真的执行时长
+        await asyncio.sleep(0.4)
     if command == "hang":
         yield {"type": "out", "data": "…\n"}
         await asyncio.sleep(3600)
@@ -92,6 +94,15 @@ assert [e["state"] for e in st if e["id"] == steps[4]["id"]] == ["denied"]  # �
 done = [e for e in events if e["type"] == "message.done"][-1]["message"]
 assert done["steps"] == steps, done
 
+# ---- 3b. 用时是真的：慢命令 ≥ 400ms（单个调用 + 和只读调用同一轮） ----
+events.clear()
+script.extend([[("run_command", {"command": "slow"})], [("run_command", {"command": "slow"}), ("list_files", {"path": "."})], "好。"])
+timed = asyncio.run(turn()).steps
+assert [s["state"] for s in timed] == ["done", "done", "done"], timed
+assert timed[0]["ms"] >= 400 and timed[1]["ms"] >= 400, timed
+live = [e["step"] for e in events if e["type"] == "tool.status" and e["state"] == "done"]
+assert live[0]["ms"] >= 400, live  # 实时推的也是真用时
+
 # ---- 4. 中途停止 ----
 events.clear()
 async def stop_midway():
@@ -119,7 +130,7 @@ assert plain.steps == [] and "steps" not in plain.to_wire()
 app = FastAPI(); app.include_router(rc.router)
 app.dependency_overrides[require_user] = lambda: "u"
 msgs = TestClient(app).get(f"/api/conversations/{cid}").json()["messages"]
-assert msgs[1]["steps"] == steps and msgs[2]["steps"] == stopped["steps"] and "steps" not in msgs[3], msgs
+assert msgs[1]["steps"] == steps and msgs[2]["steps"] == timed and msgs[3]["steps"] == stopped["steps"] and "steps" not in msgs[4], msgs
 
 # ---- 规则单测 ----
 assert activity.title("正在打开网页") == "打开网页" and activity.title("搜索") == "搜索"

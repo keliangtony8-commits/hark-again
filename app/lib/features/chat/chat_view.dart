@@ -85,10 +85,26 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
   }
 
+  /// 往上翻离最新一条超过 Layout.followSlack：输入胶囊上方出“回到最新”（v2.79，= 网页 useStickToBottom）。
+  /// reverse 列表：offset 0 = 最新一条，所以“在底部” = offset 小；只在跨过阈值时 setState。
+  bool _away = false;
+  void _onScroll() {
+    final away = _scroll.hasClients && _scroll.offset > Layout.followSlack;
+    if (away != _away) setState(() => _away = away);
+  }
+
+  /// 回到最新：平滑滚回 0（减弱动效时直接跳）。自己发消息也走这里。
+  void _toLatest() {
+    if (!_scroll.hasClients || _scroll.offset == 0) return;
+    final d = context.motion(Motion.slow);
+    d == Duration.zero ? _scroll.jumpTo(0) : _scroll.animateTo(0, duration: d, curve: Motion.ease);
+  }
+
   @override
   void initState() {
     super.initState();
     _speech; // 先取好，卸载时用
+    _scroll.addListener(_onScroll);
   }
 
   @override
@@ -135,6 +151,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           } else {
             ctl.send(text, files: files);
           }
+          _toLatest(); // 自己发的消息一定看得见
         },
       ),
     );
@@ -151,6 +168,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       // 让位都读 MediaQuery.padding（顶 = ShellPage，底 = FloatingFooter 量出的胶囊高度）。离线条浮在让位线下方，不推动列表。
       child: FloatingFooter(
         footer: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          RiseSwitcher(child: _away && chat.messages.isNotEmpty ? JumpLatest(key: const ValueKey('latest'), onTap: _toLatest) : null),
           RiseSwitcher(child: chat.error == null ? null : _ErrorBar(key: ValueKey(chat.error), text: chat.error!, onRetry: chat.canRegenerate && chat.messages.last.isUser ? ctl.regenerate : null)),
           composer,
         ]),
@@ -220,6 +238,47 @@ class _ChatViewState extends ConsumerState<ChatView> {
             ),
           ]);
         }),
+      ),
+    );
+  }
+}
+
+/// 输入胶囊上方的“↓ 回到最新”小玻璃胶囊（往上翻看前文时出现，点了平滑回到最新一条）。
+class JumpLatest extends StatelessWidget {
+  const JumpLatest({super.key, required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: Sp.x2),
+      child: Center(
+        child: Semantics(
+          button: true,
+          label: '回到最新',
+          excludeSemantics: true,
+          child: Pressable(
+            onTap: onTap,
+            scale: 0.96,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: A11y.minTap),
+              child: Center(
+                widthFactor: 1,
+                child: GlassSurface(
+                  radius: Radii.full,
+                  blur: true, // 浮在滚动的文字上：真模糊才读得清
+                  padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x2),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.arrow_downward_rounded, size: Fs.md, color: p.text2),
+                    const SizedBox(width: Sp.x1),
+                    Text('回到最新', style: context.text.labelMedium?.copyWith(color: p.text2)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

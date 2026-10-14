@@ -40,6 +40,7 @@ export const IconShield = (p: P) => <S {...p} d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.
 export const IconClip = (p: P) => <S {...p} d="M20 11.5l-8.3 8.3a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" />;
 export const IconDoc = (p: P) => <S {...p} d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4" />;
 export const IconFile = (p: P) => <S {...p} d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5" />;
+export const IconArrowDown = (p: P) => <S {...p} d="M12 5v14M6 13l6 6 6-6" />;
 export const IconDownload = (p: P) => <S size={16} {...p} d="M12 4v11M7 10l5 5 5-5M5 20h14" />;
 export const IconUpload = (p: P) => <S {...p} d="M12 20V9M7 14l5-5 5 5M5 4h14" />;
 export const IconInbox = (p: P) => <S {...p} d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5M5.5 5h13l2 8.5V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-4.5z" />;
