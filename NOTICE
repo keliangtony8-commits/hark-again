@@ -130,3 +130,4 @@
 - browser/shadow.py (open shadow DOM inlined into the snapshot): semantics after microsoft/playwright-mcp aria snapshot and Playwright's shadow-piercing CSS locators (Apache-2.0); own implementation, no code copied.
 
 - Design method in project skill hark-elegant-ui adapted from anthropics/skills skills/frontend-design (Apache-2.0), modified. Guidance only, no code.
+- v2.82 浏览器全屏接管页：只参考了思路（无代码）——Skyvern PR #4904（AGPL-3.0，仅阅读设计）、vercel-labs/agent-browser streaming（Apache-2.0）、steel-dev/steel-browser（Apache-2.0）：接管/交还门控、鼠标 down/move/up 与滚轮转发。

@@ -194,5 +194,7 @@ c = TestClient(app)
 r = c.get("/api/browser/screen?session=a-com")
 assert r.status_code == 503 and r.json()["detail"] == "缺少系统库 libatk-1.0.so.0", r.text
 assert c.post("/api/browser/mouse", json={"x": 0.5, "y": 0.5, "session": "a-com"}).status_code == 503
+assert c.post("/api/browser/scroll", json={"dy": 100, "session": "a-com"}).status_code == 503
+assert c.post("/api/browser/nav", json={"action": "reload", "session": "a-com"}).status_code == 503
 print("ok: routes")
 print("✓ smoke_browser_down 通过")

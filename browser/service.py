@@ -518,6 +518,18 @@ class LoginStateIn(BaseModel):
 class PointIn(BaseModel):
     x: float                # 0..1，相对截图宽度
     y: float
+    kind: str = "click"     # click | down | move | up（v2.82 接管页：长按拖动 = down → move… → up，拖滑块验证码）
+
+
+class ScrollIn(BaseModel):
+    x: float = 0.5          # 滚轮落在哪（0..1）：页面里可能有多个可滚区域
+    y: float = 0.5
+    dx: float = 0           # 像素，正 = 往右 / 往下
+    dy: float = 0
+
+
+class NavIn(BaseModel):
+    action: str             # back | reload
 
 
 class KeysIn(BaseModel):
@@ -928,15 +940,64 @@ async def screen(name: str, format: str = "jpeg", full: bool = False, quality: i
     return Response(await page.screenshot(**kw), media_type=f"image/{format}", headers={"X-Shot-Cut": "1" if cut else "0"})
 
 
+MOUSE_KINDS = ("click", "down", "move", "up")
+SCROLL_MAX = 3000           # 一次滚轮最多滚多少像素（手指一甩也不会一下飞到页底）
+NAV_TIMEOUT_MS = 15_000
+
+
 @app.post("/sessions/{name}/mouse", dependencies=[Depends(auth)])
 async def mouse(name: str, body: PointIn):
+    """用户在接管页里亲手操作。click = 点一下；down/move/up = 长按拖动（滑块验证码、拖地图）。
+    move 只移动不落盘（拖动中一秒几十次）；click/up 结束一次操作 → 跟新标签页 + 存登录态。"""
+    if body.kind not in MOUSE_KINDS:
+        raise HTTPException(400, f"kind 只能是 {'/'.join(MOUSE_KINDS)}")
     page = await _session(_check_name(name))
+    x, y = body.x * VIEW["width"], body.y * VIEW["height"]
+    if body.kind == "move":
+        await page.mouse.move(x, y, steps=2)
+        return {"ok": True}
+    if body.kind == "down":
+        await page.mouse.move(x, y)
+        await page.mouse.down()
+        return {"ok": True}
     _arm(name, "accept")  # 用户亲手点：弹出的确认框就是他要确认的（dialogs 规则 5）
     try:
-        await page.mouse.click(body.x * VIEW["width"], body.y * VIEW["height"])
+        if body.kind == "up":
+            await page.mouse.move(x, y, steps=2)
+            await page.mouse.up()
+        else:
+            await page.mouse.click(x, y)
     finally:
         _disarm(name)
     await _follow(name)  # 用户在画面里点开了新标签页：实时画面跟过去
+    await _save(name)
+    return {"ok": True}
+
+
+@app.post("/sessions/{name}/scroll", dependencies=[Depends(auth)])
+async def scroll(name: str, body: ScrollIn):
+    """接管页：单指拖动 / 鼠标滚轮 = 在 (x,y) 处滚动网页。"""
+    page = await _session(_check_name(name))
+    await page.mouse.move(body.x * VIEW["width"], body.y * VIEW["height"])
+    clamp = lambda v: max(-SCROLL_MAX, min(SCROLL_MAX, v))  # noqa: E731
+    await page.mouse.wheel(clamp(body.dx), clamp(body.dy))
+    return {"ok": True}
+
+
+@app.post("/sessions/{name}/nav", dependencies=[Depends(auth)])
+async def nav(name: str, body: NavIn):
+    """接管页底栏的后退 / 刷新（无头浏览器没有地址栏按钮，快捷键也不管用）。没有上一页 → back 什么也不做。"""
+    if body.action not in ("back", "reload"):
+        raise HTTPException(400, "action 只能是 back/reload")
+    page = await _session(_check_name(name))
+    try:
+        if body.action == "back":
+            await page.go_back(timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+        else:
+            await page.reload(timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+    except Exception as e:  # noqa: BLE001 —— 只吞超时（测试里 playwright 是桩，按类名认）
+        if type(e).__name__ != "TimeoutError":
+            raise  # 慢页面超时：画面会自己跟上，不当错误
     await _save(name)
     return {"ok": True}
 

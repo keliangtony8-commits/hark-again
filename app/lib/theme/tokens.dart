@@ -221,6 +221,7 @@ abstract final class Timing {
   static const screenOpening = Duration(milliseconds: 1000); // 页面正在打开
   static const screenIdle = Duration(milliseconds: 1500); // 只是看着
   static const screenPauseAfter = Duration(minutes: 2); // 只是看着超过这么久就暂停刷新（省流量），点一下继续
+  static const takeoverInput = Duration(milliseconds: 80); // 接管页：拖动/滚动时最多这么久发一次（攒起来发，不是每帧一个请求）
 }
 
 /// 玻璃材质（ui/glass.dart 只读这里）。真模糊很贵：只给浮层（顶栏、输入胶囊、弹层），列表里的卡片用“假玻璃”。

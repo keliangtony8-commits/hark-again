@@ -1,4 +1,5 @@
-"""实时画面与接管：前端看截图、点画面、打字，都经后端转发给 browser 服务（browser 服务不对外）。
+"""实时画面与接管：前端看截图、点画面、拖动、滚动、打字、后退刷新，都经后端转发给 browser 服务（browser 服务不对外）。
+v2.82 接管 = App / 网页的全屏接管页：mouse 带 kind（click|down|move|up，长按拖滑块），scroll 是滚轮 / 单指拖动，nav 是后退 / 刷新。
 每个请求带会话名（实时画面卡上的 session；旧卡没有 → main）。会话列表 / 退出登录（我的电脑 → 浏览器登录）也在这。"""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -12,16 +13,37 @@ router = APIRouter(prefix="/api/browser")
 Session = Query(browser_sessions.LEGACY, pattern=r"^[A-Za-z0-9_-]{1,40}$")
 
 
+_NAME = r"^[A-Za-z0-9_-]{1,40}$"
+
+
+def _unit(v: float) -> float:
+    return min(max(v, 0), 1)
+
+
 class Point(BaseModel):
     x: float
     y: float
-    session: str = Field(browser_sessions.LEGACY, pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    kind: str = Field("click", pattern=r"^(click|down|move|up)$")
+    session: str = Field(browser_sessions.LEGACY, pattern=_NAME)
+
+
+class Wheel(BaseModel):
+    x: float = 0.5
+    y: float = 0.5
+    dx: float = 0
+    dy: float = 0
+    session: str = Field(browser_sessions.LEGACY, pattern=_NAME)
+
+
+class Nav(BaseModel):
+    action: str = Field(pattern=r"^(back|reload)$")
+    session: str = Field(browser_sessions.LEGACY, pattern=_NAME)
 
 
 class Keys(BaseModel):
     text: str | None = None
     key: str | None = None
-    session: str = Field(browser_sessions.LEGACY, pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    session: str = Field(browser_sessions.LEGACY, pattern=_NAME)
 
 
 async def _call(session: str, method: str, path: str, json: dict | None = None):
@@ -42,7 +64,19 @@ async def screen(session: str = Session):
 
 @router.post("/mouse", dependencies=[Depends(require_user)])
 async def mouse(p: Point):
-    await _call(p.session, "POST", "/mouse", {"x": min(max(p.x, 0), 1), "y": min(max(p.y, 0), 1)})
+    await _call(p.session, "POST", "/mouse", {"x": _unit(p.x), "y": _unit(p.y), "kind": p.kind})
+    return {"ok": True}
+
+
+@router.post("/scroll", dependencies=[Depends(require_user)])
+async def scroll(w: Wheel):
+    await _call(w.session, "POST", "/scroll", {"x": _unit(w.x), "y": _unit(w.y), "dx": w.dx, "dy": w.dy})
+    return {"ok": True}
+
+
+@router.post("/nav", dependencies=[Depends(require_user)])
+async def nav(n: Nav):
+    await _call(n.session, "POST", "/nav", {"action": n.action})
     return {"ok": True}
 
 

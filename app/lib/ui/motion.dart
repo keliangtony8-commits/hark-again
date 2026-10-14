@@ -539,6 +539,15 @@ class FloatAway extends StatelessWidget {
       );
 }
 
+/// 全屏页（v2.82 浏览器接管页）：推到根导航上，淡入 + 从 0.94 放大到位（和对话框同一种动作，只是铺满屏）。
+/// 减少动态时直接出现。
+Route<T> riseRoute<T>(BuildContext context, WidgetBuilder builder) => PageRouteBuilder<T>(
+      transitionDuration: context.motion(Motion.slow),
+      reverseTransitionDuration: context.motion(Motion.base),
+      pageBuilder: (c, _, _) => builder(c),
+      transitionsBuilder: (_, a, _, child) => PopTransition(animation: a, child: child),
+    );
+
 /// 对话框的出现/消失：淡入 + 从 0.94 轻轻放大到 1（收起时反过来）。由路由的 [animation] 驱动，
 /// 时长交给路由（ui/sheets.dart 的 showAppDialog 用 context.motion(Motion.base)，减少动态时直接到位）。
 class PopTransition extends StatelessWidget {

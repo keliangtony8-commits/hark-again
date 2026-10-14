@@ -260,7 +260,17 @@ assert c.get("/api/browser/screen?session=taobao-com").content == b"jpg"
 assert c.get("/api/browser/screen").status_code == 200 and seen_calls[-1][0] == "main"  # 旧卡
 assert c.get("/api/browser/screen?session=../x").status_code == 422
 c.post("/api/browser/mouse", json={"x": 2, "y": 0.5, "session": "jd-com"})
-assert seen_calls[-1] == ("jd-com", "POST", "/mouse", {"x": 1, "y": 0.5})
+assert seen_calls[-1] == ("jd-com", "POST", "/mouse", {"x": 1, "y": 0.5, "kind": "click"})
+# v2.82 接管页：拖动（kind）、滚轮、后退刷新；写错的值 422，不转发
+c.post("/api/browser/mouse", json={"x": 0.2, "y": -1, "kind": "down", "session": "jd-com"})
+assert seen_calls[-1] == ("jd-com", "POST", "/mouse", {"x": 0.2, "y": 0, "kind": "down"})
+n = len(seen_calls)
+assert c.post("/api/browser/mouse", json={"x": 0, "y": 0, "kind": "drag"}).status_code == 422 and len(seen_calls) == n
+assert c.post("/api/browser/scroll", json={"dy": 640, "x": 0.3, "session": "jd-com"}).json() == {"ok": True}
+assert seen_calls[-1] == ("jd-com", "POST", "/scroll", {"x": 0.3, "y": 0.5, "dx": 0, "dy": 640})
+assert c.post("/api/browser/nav", json={"action": "back"}).json() == {"ok": True}
+assert seen_calls[-1] == ("main", "POST", "/nav", {"action": "back"})
+assert c.post("/api/browser/nav", json={"action": "forward"}).status_code == 422
 c.post("/api/browser/keyboard", json={"text": "hi", "session": "jd-com"})
 assert seen_calls[-1] == ("jd-com", "POST", "/keyboard", {"text": "hi", "key": None})
 print("ok: api")
