@@ -79,6 +79,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - command_guard.py 命令安全规则唯一入口（v1.20）：verdict(cmd) → block（永不执行）/ ask（弹审批卡）；拆段逐条看，参考 Codex CLI
 - deliver.py     交付唯一入口（v1.22，display_file 工具）：工作区文件/目录 → 文件卡；默认快照进 uploads（source=upload，之后改/删原文件不影响），目录自动打包 zip（跳过 .git/.jobs/node_modules…），超过 deliver_max_mb（默认 50）的普通文件退回工作区文件卡；write_file 不再出卡；v2.63 交付 .zip 时中文名没标 UTF-8（命令行 zip 在 C locale 下打的）就在快照里重写标上（GBK/加密包不碰，原件不动）
 - feedback.py    反馈唯一规则（v2.64）：回复 👍 / 👎（一条回复一份，覆盖/取消，messages.feedback 随 wire 下发）+ 问题报告；快照提问/回复/步骤/轨迹（command_env.scrub 打码）/模型，复制报告的 Markdown
+- csv_bom.py     交付 CSV 何时加 UTF-8 BOM 的唯一规则（v2.65）：.csv/.tsv、有中文且整篇是 UTF-8、没有 BOM → 快照/包里的副本加 BOM（Excel 不乱码）；GBK、纯 ASCII、已有 BOM 不碰
 - spill.py       长输出落盘唯一入口（v1.20）：工具结果超过 tool_result_max → 开头+结尾给模型、全文进工作区 .spill/（隐藏，留最近 50 个），read_file offset 读回；参考 deepseek-harness spill-policy
 - quota.py       磁盘配额唯一规则（v1.31：WORKSPACE_DISK_MB 每工作区上限，默认 3072，0 = 不限；满了拒写文件/上传/启动后台任务、停运行中的任务，命令结果提醒模型）
 - jobs.py        后台任务唯一入口（v1.19；v1.20 护栏：idle_timeout 默认 1200 秒无输出判卡住、日志超 job_log_max_mb 停，stop_reason）：工作区 .jobs/<id>/ 文件约定（run.sh/log/exit/pid/cancelled）、启动/对账/取消/丢失判定、结束后在原对话接着说（worker 每 5 秒 tick + follow_ups）
@@ -201,6 +202,7 @@ docker compose --profile build-only build sandbox-image                      # �
 - 第十二轮修复（v2.60）：web_fetch 读到登录页（browser_sessions.login_page 同一条规则：密码框 / 登录网址 / 过期字样）→ 结果开头指向 browser_open（保险箱有账号就说会自动登录），登录页不缓存；定时任务时间带“今天 / 明天 / 周X”（clock.near_day）；浏览器编号参数 pattern=tool_args.DIGITS，模型写成 "[3]" / "#3" / "ref=3" 在审批之前就取出数字（风险判断也看得到真名字）；schedule_task 的 prompt 要保留“登录后看 / 用浏览器 / 哪个账号”。冒烟 tests/smoke_round12.py
 - v2.61 登录设备（我的 → 安全 → 登录设备）：看哪些手机/电脑/浏览器登着（设备名、最近活动、登录日期），退出某一台或一键“退出其他所有设备”，立刻生效（REST、文件链接、WebSocket 都认）；“退出登录”会让服务器作废本机 token；打开两步验证顺手退出其他设备。升级前登录的设备不用重登，但一键退出也会踢掉它们。规则 backend/app/login_sessions.py，迁移 0059，冒烟 tests/smoke_login_sessions.py
 - v2.64 反馈（回复下 👍 / 👎 + 我的 → 反馈）：👎 选原因（答错了 / 没做完 / 太慢或卡住了 / 别的问题）+ 一句补充，就存一份能复现的报告：提问、回复、每一步做了什么、工具轨迹（截短、打码）、用的模型/思考强度/模式、回复怎么结束的；对话删了报告还在。“我的 → 反馈”里报告问题、回看、一键复制成 Markdown 贴给要修它的人、标已解决。规则 backend/app/feedback.py，迁移 0060，冒烟 tests/smoke_feedback.py
+- v2.65 表格交付不乱码：让助手做的 CSV 发到手机/电脑后用 Excel 直接打开，中文不再变乱码（交付时自动加 UTF-8 BOM，打包文件夹里的 CSV 也一样；工作区原文件不动，真 GBK 文件不碰）。规则 backend/app/csv_bom.py，冒烟 tests/smoke_csv_bom.py
 - 工具参数猜错时第一次就把真正的参数表给模型（v2.38，tool_args.Streak.signature_once），省一次 describe；排版把输出名写成源文件时点名已有的 .md（doc_render.output_mixup）
 - 云浏览器拦截所有内网/回环地址；付款、下单、发送类按钮需审批；密码和验证码由你在实时画面里自己输
 - Pages 用 CSP sandbox 提供，页面脚本拿不到 App 登录信息；元数据（含 published 下线状态）只经 pages_store 读写，公开访问只走 public_html（下线与不存在同一个 404），改内容保留发布状态
