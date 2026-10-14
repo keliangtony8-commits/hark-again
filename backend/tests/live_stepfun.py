@@ -9,14 +9,14 @@ if not key:
 base = os.environ.get("STEP_BASE_URL", "https://api.stepfun.ai/step_plan/v1")
 os.environ.update(DATABASE_URL="sqlite+aiosqlite:///:memory:", LLM_BASE_URL=base, LLM_API_KEY=key,
   STEP_BASE_URL=base, OWNER_USERNAME="u", OWNER_PASSWORD="p", JWT_SECRET="s"*32,
-  MODEL_MAP=json.dumps({"fast": os.environ.get("LIVE_MODEL", "step-3.5-flash")}), VOICE_PROVIDER="stepfun")
+  MODEL_MAP=json.dumps({"fast": os.environ.get("LIVE_MODEL", "step-3.7-flash")}), VOICE_PROVIDER="stepfun")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import llm, usage, voice
 from app.llm import Reasoning, Turn
 
 recorded = []
-async def fake_record(model, kind, p, c):
+async def fake_record(model, kind, p, c, **_):
     recorded.append((model, kind, p, c))
 usage.record = fake_record
 
