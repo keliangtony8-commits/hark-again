@@ -7,6 +7,7 @@
 所有 /api 请求由下面的 FIXTURES 应答，WebSocket 被接住但不回消息（连接显示为在线）。
 时间固定在 Asia/Shanghai 白天，免得问候语和日期分隔随跑的时刻变。
 """
+import atexit
 import json
 import os
 import sys
@@ -22,6 +23,32 @@ OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/shots/web")
 NOW = "2026-10-11T10:30:00+08:00"
 
 TEXT = lambda t: {"type": "text", "text": t}
+
+
+def _job(i, title, cmd, state="running", elapsed=96, tail=""):
+    """后台任务快照（frontend/src/lib/types.ts 的 JobInfo）。"""
+    return {"id": i, "title": title, "command": cmd, "state": state, "followup": "none", "elapsed": elapsed,
+            "tail": tail, "started_at": "2026-10-11T10:20:00+08:00", "finished_at": None, "exit_code": None}
+
+
+# 电脑（沙盒）状态：项目首屏和“我的电脑”页共用（ComputerStatus）。运行中、一个后台任务、一个常驻预览服务。
+COMPUTER = {
+    "workspace": "pr1", "name": "考研数学",
+    "sandbox": {"state": "running", "memory_used": 268435456, "memory_limit": 1073741824,
+                "started_at": "2026-10-11T09:40:00+08:00", "last_used_at": NOW, "idle_minutes": 3,
+                "cpu_percent": 12.5, "oom_kills": 0, "outdated": False,
+                "processes": [{"pid": 4211, "cpu": 8.5, "memory": 96468992, "elapsed": 420,
+                               "command": "python -m http.server 8000"}]},
+    "disk_used": 73400320, "disk_partial": False, "disk_limit": 536870912, "disk_level": "ok",
+    "running_jobs": [_job("j3", "跑第三章习题", "python run_ch3.py", tail="正在算第 7 题…")],
+    "services": [{**_job("s1", "预览服务", "python -m http.server 8000", elapsed=600), "health": "up", "ports": [8000], "uptime": 600}],
+    "storage": {"files": 12582912, "installed": 31457280, "logs": 2097152, "spill": 0, "cache": 5242880, "cleanable": 7340032},
+    "tools": [{"kind": "pip", "name": "sympy", "version": "1.13.3"}],
+    "ports": [{"port": 8000, "loopback": False, "pid": 4211, "command": "python -m http.server 8000"}],
+    "memory": {"used": 268435456, "limit": 1073741824, "other": 12582912, "rows": [
+        {"kind": "process", "title": "python -m http.server 8000", "memory": 96468992, "processes": 1, "share": 0.36, "pid": 4211},
+        {"kind": "job", "title": "跑第三章习题", "memory": 33554432, "processes": 1, "share": 0.12, "id": "j3"}]},
+}
 INBOX_IDLE = {"unread": 2, "latest": None}
 BANNER_ITEM = {"id": "r9", "kind": "report", "title": "晚间复盘", "conversation_id": "c1", "task_id": "t3",
                "headline": "今天完成 4 件", "gist": "高数第三章刷完，错题 6 道已进错题本；明早 8 点图书馆抢座。",
@@ -77,6 +104,9 @@ FIXTURES = {
         {"id": "t8", "name": "健身打卡", "prompt": "", "cron": "0 19 * * *", "active": False, "output": "report",
          "run_requested": False, "last_run_at": None, "last_status": None, "next_run_at": None},
     ],
+    "/api/preferences": {"reply_language": "auto", "reply_languages": [
+        {"code": "auto", "label": "跟随我的语言"}, {"code": "zh-Hans", "label": "简体中文"},
+        {"code": "zh-Hant", "label": "繁體中文"}, {"code": "en", "label": "English"}]},
     "/api/projects": [
         {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW,
          "conversation_count": 12, "last_active_at": NOW},
@@ -139,6 +169,9 @@ FIXTURES = {
         {"path": "背景.png", "name": "背景.png", "size": 820000, "mime": "image/png", "modified": 1790900000},
     ],
     "/api/projects/pr1": {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW},
+    # 项目首屏的“电脑”一节（v1.25）。形状照 frontend/src/lib/computer.ts 的 ComputerStatus；
+    # 缺了它页面会白屏（读 s.sandbox.state 时炸），所以这张图以前一直拍不出来。
+    "/api/projects/pr1/computer": COMPUTER,
     "/api/conversations/c1/usage": {"currency": "CNY", "priced": ["fast"], "total": {"calls": 4, "tokens": 5200, "cost": 0.012, "models": []}},
     "/api/usage": {"currency": "CNY", "budget": 30, "priced": ["fast"],
                    "today": {"calls": 18, "tokens": 42000, "cost": 0.41, "models": []},
@@ -231,6 +264,22 @@ def image(route):
     route.fulfill(status=200, content_type="image/svg+xml", body=OFFER_IMAGE)
 
 
+# 页面请求了、但没有假数据的接口。这些会拿到 []，页面上少见一个字段就可能整屏白掉——
+# 所以跑完把清单打出来（补 FIXTURES 时照这个清单补，别靠猜）；跑挂了也要打（atexit）。
+MISSING: list[str] = []
+
+
+def _report_missing() -> None:
+    if not MISSING:
+        return
+    print("这页请求了但没有假数据（照这个清单补 FIXTURES）：")
+    for m in sorted(set(MISSING)):
+        print("  -", m)
+
+
+atexit.register(_report_missing)
+
+
 def api(route):
     path = route.request.url.split("://", 1)[1].split("/", 1)[1]
     path = "/" + path.split("?", 1)[0]
@@ -247,6 +296,8 @@ def api(route):
                 "size": 1840, "mime": "text/markdown"}
         return route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
     body = FIXTURES.get(path, [] if route.request.method == "GET" else {})
+    if path not in FIXTURES:
+        MISSING.append(f"{route.request.method} {path}")
     route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
 
@@ -301,7 +352,9 @@ def main():
                 (page.get_by_text("DeepSeek 和 GPT 的价格对比").first if name == "desktop"
                  else page.locator(".project-home button.row", has_text="DeepSeek 和 GPT 的价格对比")).click()
                 page.wait_for_timeout(800)
-                page.locator(".msg.assistant.last").get_by_label("存到项目文件").click()
+                # v2.90.2：“存到项目文件”已经收进回复的 ⋯ 菜单（MessageView 的 actions），点菜单项叫“存成文件”
+                page.locator(".msg.assistant.last").get_by_label("这条回复的操作").click()
+                page.get_by_role("menuitem", name="存成文件").click()
                 page.wait_for_timeout(500)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-project-saved.png"))
                 page.get_by_label("添加附件").first.click()

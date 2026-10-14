@@ -13,7 +13,8 @@ export default function ReplyLanguageRow() {
     http.get<Preferences>("/api/preferences").then((j) => { if (live) setP(j); }).catch(() => {});
     return () => { live = false; };
   }, []);
-  if (!p || p.reply_languages.length === 0) return null;
+  // 老服务器 / 形状不对时 reply_languages 可能没有：这时不画这一行，别让整个页面白掉
+  if (!p || !p.reply_languages?.length) return null;
   const pick = (code: string) => {
     if (code === p.reply_language) return;
     const old = p;
