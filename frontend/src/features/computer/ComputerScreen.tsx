@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { computerIntro, computerStateLabel } from "../../lib/computer";
 import { PERSONAL_WORKSPACE, isPersonalWorkspace } from "../../lib/workspace";
 import { IconLayout } from "../../ui/icons";
-import { ListGroup, ListRow, Page, PageHeader, PageIntro } from "../../ui/kit";
+import { ListGroup, ListRow, Page, PageHeader, PageIntro, Spot } from "../../ui/kit";
 import ProjectFiles from "../projects/ProjectFiles";
 import BrowserSessionsSection from "./BrowserSessionsSection";
 import HostSection from "./HostSection";
@@ -29,11 +29,11 @@ export default function ComputerScreen() {
       <PortsSection ws={ws} ctl={ctl} enter={2} />
       <MemorySection ctl={ctl} enter={3} />
       <ProcessSection ctl={ctl} enter={4} />
-      <StorageSection ws={ws} ctl={ctl} enter={5} onFiles={() => setFiles(true)} />
+      <Spot id="disk"><StorageSection ws={ws} ctl={ctl} enter={5} onFiles={() => setFiles(true)} /></Spot>
       <DiskJobsSection ctl={ctl} enter={6} />
       {personal && <ListGroup className="me-group" enter={7}><ListRow to="/me/pages" icon={<IconLayout />} title="Pages" /></ListGroup>}
-      {personal && <BrowserSessionsSection enter={7} />}
-      {personal && <HostSection enter={8} />}
+      {personal && <Spot id="browser-logins"><BrowserSessionsSection enter={7} /></Spot>}
+      {personal && <Spot id="host"><HostSection enter={8} /></Spot>}
       {files && <ProjectFiles projectId={ws} onClose={() => setFiles(false)} />}
     </Page>
   );

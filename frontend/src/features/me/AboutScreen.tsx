@@ -16,7 +16,7 @@ export default function AboutScreen() {
     <Page header={<PageHeader title="关于" back />}>
       <PageIntro line={`${appName} 是你自己的私人助手：运行在你自己的服务器上，用你自己的模型密钥，数据只在那里。`} />
       <ListGroup enter={1}>
-        <ListRow title="版本" value={clientVersionLabel(sv)} />
+        <ListRow spot="version" title="版本" value={clientVersionLabel(sv)} />
         <ListRow title="服务器" value={host} />
         {sv && <ListRow title="服务器版本" value={sv.version} />}
       </ListGroup>

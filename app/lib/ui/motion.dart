@@ -382,8 +382,13 @@ class SidePaneSwitcher extends StatelessWidget {
 /// 一次性高亮：play 变成新的正数就在 child 背后铺一层强调色，停一会儿再淡出（搜索命中跳到的消息）。
 /// 底色向外多出一圈（不占布局，不挤动消息）。减少动态时：底色直接出现、到点直接消失。
 class FlashHighlight extends StatefulWidget {
-  const FlashHighlight({super.key, required this.child, this.play = 0});
+  const FlashHighlight({super.key, required this.child, this.play = 0, this.outset = Sp.x2, this.radius = Radii.inner});
   final Widget child;
+
+  /// 底色向外多出多少、圆角多大：消息外扩一圈（默认 8 / 16）；v3.0 设置搜索定位时，分组里的一行给 0 / 0（贴着行、不压分隔线），
+  /// 整块卡片给 8 / 卡片圆角 + 8（底色是卡片外一圈等宽的光环）。
+  final double outset;
+  final double radius;
 
   /// 0 = 不闪；每换一个新的正数闪一次。
   final int play;
@@ -434,10 +439,10 @@ class _FlashHighlightState extends State<FlashHighlight> with SingleTickerProvid
     // 依赖拉伸的布局（例如用户消息靠右的 Column）缩成一团靠左。
     return Stack(clipBehavior: Clip.none, fit: StackFit.passthrough, children: [
       Positioned.fill(
-        left: -Sp.x2,
-        right: -Sp.x2,
-        top: -Sp.x2,
-        bottom: -Sp.x2,
+        left: -widget.outset,
+        right: -widget.outset,
+        top: -widget.outset,
+        bottom: -widget.outset,
         child: IgnorePointer(
           child: AnimatedBuilder(
             animation: fade,
@@ -446,7 +451,7 @@ class _FlashHighlightState extends State<FlashHighlight> with SingleTickerProvid
                 : DecoratedBox(
                     decoration: BoxDecoration(
                       color: tint.withValues(alpha: tint.a * (1 - fade.value)),
-                      borderRadius: BorderRadius.circular(Radii.inner),
+                      borderRadius: BorderRadius.circular(widget.radius),
                     ),
                   ),
           ),

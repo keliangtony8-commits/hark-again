@@ -23,7 +23,7 @@ export default function ReplyLanguageRow() {
     http.patch<Preferences>("/api/preferences", { reply_language: code }).then(setP).catch(() => { setP(old); setFailed(true); });
   };
   return (
-    <div className="row me-appearance me-language">
+    <div className="row me-appearance me-language" data-spot="reply-language">
       <div className="row-body">
         <div className="row-title">回复语言</div>
         <div aria-live="polite">{failed && <div className="row-sub danger-text">没改成，稍后再试</div>}</div>

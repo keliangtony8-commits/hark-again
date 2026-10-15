@@ -45,7 +45,7 @@ class SecurityScreen extends ConsumerWidget {
             _ => const SkeletonList(key: ValueKey('loading'), rows: 2),
           },
         ),
-        LoginSessionsSection(delay: Motion.stagger(2)),
+        Spotlight(id: 'sessions', child: LoginSessionsSection(delay: Motion.stagger(2))),
       ]),
     );
   }
@@ -69,19 +69,28 @@ class _Body extends ConsumerWidget {
       FadeSlideIn(
         delay: Motion.stagger(1),
         child: ListGroup(children: [
+          // v3.0 设置搜索直达“两步验证 / 恢复码”：亮这组的第一行（开着是状态行，关着是“打开两步验证”）
           if (!s.enabled)
-            ListRow(
-              key: const Key('tf-enable'),
-              icon: Icons.shield_outlined,
-              title: '打开两步验证',
-              subtitle: s.pending ? '上次没设置完，重新扫一次码' : '大约一分钟，需要一个验证器 App',
-              onTap: () => enableTwoFactor(context, ref),
+            Spotlight(
+              id: 'two-factor',
+              row: true,
+              child: ListRow(
+                key: const Key('tf-enable'),
+                icon: Icons.shield_outlined,
+                title: '打开两步验证',
+                subtitle: s.pending ? '上次没设置完，重新扫一次码' : '大约一分钟，需要一个验证器 App',
+                onTap: () => enableTwoFactor(context, ref),
+              ),
             )
           else ...[
-            ListRow(
-              icon: Icons.verified_user_outlined,
-              title: '两步验证',
-              subtitle: s.enabledAt == null ? '已开' : '${formatDate(s.enabledAt!)} 打开',
+            Spotlight(
+              id: 'two-factor',
+              row: true,
+              child: ListRow(
+                icon: Icons.verified_user_outlined,
+                title: '两步验证',
+                subtitle: s.enabledAt == null ? '已开' : '${formatDate(s.enabledAt!)} 打开',
+              ),
             ),
             ListRow(
               key: const Key('tf-recovery'),

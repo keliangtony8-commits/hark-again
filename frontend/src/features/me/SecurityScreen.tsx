@@ -7,7 +7,7 @@ import {
 } from "../../lib/twoFactor";
 import CopyButton from "../../ui/CopyButton";
 import { IconKey, IconLock, IconShield } from "../../ui/icons";
-import { ListGroup, ListRow, Page, PageHeader, PageIntro, Section, Sheet, Skeleton } from "../../ui/kit";
+import { ListGroup, ListRow, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, Spot } from "../../ui/kit";
 import LoginSessions from "./LoginSessions";
 
 /** 安全（v2.58，= App features/me/security_screen.dart；对标 Hark 设置 → 安全 → 两步验证）。
@@ -50,10 +50,10 @@ export default function SecurityScreen() {
         <Section enter={1}>
           <ListGroup key={String(s.enabled)} className="fade-swap">
             {!s.enabled ? (
-              <ListRow onClick={start} icon={<IconShield />} title="打开两步验证"
+              <ListRow spot="two-factor" onClick={start} icon={<IconShield />} title="打开两步验证"
                 sub={s.pending ? "上次没设置完，重新扫一次码" : "大约一分钟，需要一个验证器 App"} />
             ) : (<>
-              <ListRow icon={<IconLock />} title="两步验证"
+              <ListRow spot="two-factor" icon={<IconLock />} title="两步验证"
                 sub={s.enabled_at ? `${new Date(s.enabled_at).toLocaleDateString("zh-CN")} 打开` : "已开"} />
               <ListRow onClick={() => setAsk({ kind: "recovery" })} icon={<IconKey />} title="恢复码"
                 sub={<>{s.recovery_left <= RECOVERY_LOW && <span className="warn-text">{s.recovery_left === 0 ? "用完了" : "快用完了"} · </span>}{recoveryLine(s.recovery_left)}</>} />
@@ -63,7 +63,7 @@ export default function SecurityScreen() {
           </ListGroup>
         </Section>
       )}
-      <LoginSessions enter={2} reloadKey={devicesKey} onNote={setNote} />
+      <Spot id="sessions"><LoginSessions enter={2} reloadKey={devicesKey} onNote={setNote} /></Spot>
       {setup && <SetupSheet setup={setup} onClose={() => { setSetup(null); load(); }}
         onDone={(r) => {
           if (r.token) auth.set(r.token); // 本机是升级前的老登录：服务器换发了新 token

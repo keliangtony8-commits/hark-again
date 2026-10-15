@@ -20,6 +20,13 @@
 .me-usage-budget { color: var(--text-3); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .me-usage-go { margin-left: auto; flex: none; }
 .me-group { margin-top: var(--card-gap); }
+/* v3.0 底部设置搜索（= App me_screen.dart _SearchBar）：和输入胶囊同一位置（.composer-wrap 的留白、同一阅读宽度）、同一玻璃（.glass），
+   单行所以全圆角、和输入胶囊同高；聚焦只把发丝边加深一点（= .composer:focus-within）。结果区紧跟页头，和用量卡同一节奏。 */
+.me-search { max-width: var(--content-w); margin: 0 auto; padding: 0 var(--gutter) calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+.me-search .search-field.glass { height: 56px; padding: 0 var(--sp-2) 0 var(--sp-5); background: var(--glass); border-color: var(--glass-border); }
+.me-search .search-field.glass:focus-within { border-color: color-mix(in srgb, var(--text) 22%, var(--glass-border)); }
+.me-search .search-field input { font-size: var(--fs-md); }
+.me-head + .section { margin-top: 0; }
 .pref-avatar { overflow: visible; position: relative; z-index: 2; }
 .pref-avatar-box { position: relative; }
 .pref-avatar-box .avatar-pop { left: auto; right: 0; translate: none; top: calc(100% + var(--sp-2)); transform-origin: top right; }

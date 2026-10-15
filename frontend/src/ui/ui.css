@@ -154,6 +154,16 @@ button.row-body { text-align: left; }
 .search-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: var(--fs-sm); color: var(--text); }
 .search-field input::placeholder { color: var(--text-3); }
 
+/* 闪一下（kit flashOnce，v3.0 合并原 .msg.flash）：聊天里搜索命中 / 点引用跳到的消息、设置搜索直达的那一项共用。
+   底色先停住再淡出（keyframes flash 在 base.css）。默认向外多出 8px 的圆角底；分组里的一行铺满本行（不外扩、不压分隔线）；
+   整块卡片 / 分区（kit Spot）是卡片外一圈等宽的光环。减少动态时 .hold：不放动画，底色直接出现，到点由 flashOnce 摘掉。 */
+.flash { position: relative; isolation: isolate; }
+.flash::before { content: ""; position: absolute; inset: calc(var(--sp-2) * -1); z-index: -1; border-radius: var(--r-inner); pointer-events: none;
+  background: var(--accent-soft); opacity: 0; animation: flash var(--dur-flash) var(--ease); }
+.row.flash::before { inset: 0; border-radius: 0; }
+.spot.flash::before { border-radius: calc(var(--r-card) + var(--sp-2)); }
+.flash.hold::before { animation: none; opacity: 1; }
+
 /* 搜索命中标亮 */
 mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3px; padding: 0 1px; }
 

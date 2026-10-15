@@ -28,25 +28,38 @@ class PreferencesScreen extends ConsumerWidget {
         FadeSlideIn(
           delay: Motion.stagger(1),
           child: ListGroup(children: [
-            ListRow(
-              key: const Key('appearance'),
-              icon: appearance.icon,
-              title: '外观',
-              value: appearance.label,
-              onTap: () => _pickAppearance(context, ref, appearance),
+            // v3.0：四行都可被“我的”页设置搜索直达（id 与 me_index.dart 的定位 id 相同）
+            Spotlight(
+              id: 'appearance',
+              row: true,
+              child: ListRow(
+                key: const Key('appearance'),
+                icon: appearance.icon,
+                title: '外观',
+                value: appearance.label,
+                onTap: () => _pickAppearance(context, ref, appearance),
+              ),
             ),
-            ListRow(
-              icon: Icons.blur_off_rounded,
-              title: '减少透明度',
-              trailing: AppSwitch(key: const Key('solid'), value: look.solid, onChanged: (v) => ref.read(lookProvider.notifier).setSolid(v)),
+            Spotlight(
+              id: 'solid',
+              row: true,
+              child: ListRow(
+                icon: Icons.blur_off_rounded,
+                title: '减少透明度',
+                trailing: AppSwitch(key: const Key('solid'), value: look.solid, onChanged: (v) => ref.read(lookProvider.notifier).setSolid(v)),
+              ),
             ),
-            ListRow(
-              icon: Icons.palette_outlined,
-              title: '头像颜色',
-              trailing: Avatar(initial: '', onTap: null, size: Sp.x5, color: look.avatar, tooltip: '当前头像颜色'),
-              onTap: () => showAvatarColorSheet(context),
+            Spotlight(
+              id: 'avatar-color',
+              row: true,
+              child: ListRow(
+                icon: Icons.palette_outlined,
+                title: '头像颜色',
+                trailing: Avatar(initial: '', onTap: null, size: Sp.x5, color: look.avatar, tooltip: '当前头像颜色'),
+                onTap: () => showAvatarColorSheet(context),
+              ),
             ),
-            const ReplyLanguageTile(),
+            const Spotlight(id: 'reply-language', row: true, child: ReplyLanguageTile()),
           ]),
         ),
       ]),

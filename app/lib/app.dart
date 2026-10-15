@@ -32,6 +32,7 @@ import 'theme/app_theme.dart';
 import 'theme/appearance.dart';
 import 'theme/look.dart';
 import 'ui/glass.dart';
+import 'ui/kit.dart' show SpotlightScope;
 import 'ui/motion.dart';
 import 'theme/tokens.dart';
 import 'brand.dart';
@@ -90,16 +91,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         ]),
         GoRoute(path: 'connectors', builder: (_, s) => ConnectorsScreen(oauth: OAuthResult.fromQuery(s.uri.queryParameters))),
         GoRoute(path: 'wallet', builder: (_, _) => const WalletScreen()),
-        GoRoute(path: 'security', builder: (_, _) => const SecurityScreen()),
+        GoRoute(path: 'security', builder: (_, s) => _spot(s, const SecurityScreen())),
         GoRoute(path: 'feedback', builder: (_, _) => const FeedbackScreen(), routes: [
           GoRoute(path: ':id', builder: (_, s) => FeedbackDetailScreen(id: s.pathParameters['id']!)),
         ]),
-        GoRoute(path: 'computer', builder: (_, _) => const ComputerScreen()),
+        GoRoute(path: 'computer', builder: (_, s) => _spot(s, const ComputerScreen())),
         GoRoute(path: 'pages', builder: (_, _) => const PagesScreen()),
         GoRoute(path: 'usage', builder: (_, _) => const UsageScreen()),
         GoRoute(path: 'profile', builder: (_, _) => const MeHubScreen(hub: MeHub.profile)),
-        GoRoute(path: 'preferences', builder: (_, _) => const PreferencesScreen()),
-        GoRoute(path: 'about', builder: (_, _) => const AboutScreen()),
+        GoRoute(path: 'preferences', builder: (_, s) => _spot(s, const PreferencesScreen())),
+        GoRoute(path: 'about', builder: (_, s) => _spot(s, const AboutScreen())),
         GoRoute(path: 'skills', builder: (_, _) => const SkillsScreen(), routes: [
           GoRoute(path: ':id', builder: (_, s) => SkillEditorScreen(id: s.pathParameters['id']!, starter: s.extra is SkillStarter ? s.extra as SkillStarter : null)),
         ]),
@@ -107,6 +108,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// v3.0 设置搜索直达：带 `?focus=<id>` 进这几页时，页里对应的 Spotlight 滚到那一项并闪一下（索引在 features/me/me_index.dart）。
+Widget _spot(GoRouterState s, Widget page) => SpotlightScope(focus: s.uri.queryParameters['focus'], child: page);
 
 final _light = buildTheme(Brightness.light);
 final _dark = buildTheme(Brightness.dark);
