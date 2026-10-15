@@ -112,7 +112,7 @@ class GlassSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: solid || card ? p.surface : p.glass,
         borderRadius: shape,
-        border: Border.all(color: borderColor ?? (card ? p.surface.withValues(alpha: 0) : (solid ? p.border : p.glassBorder)), width: 1),
+        border: Border.all(color: borderColor ?? (card ? p.surface.withValues(alpha: 0) : (solid ? p.border : p.chromeEdge)), width: 1),
       ),
       padding: padding,
       child: child,
@@ -306,13 +306,13 @@ class Avatar extends StatelessWidget {
           height: size,
           alignment: Alignment.center,
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(color: bg, shape: BoxShape.circle, border: Border.all(color: p.glassBorder)),
+          decoration: BoxDecoration(color: bg, shape: BoxShape.circle, border: Border.all(color: p.chromeEdge)),
           child: ExcludeSemantics(
             child: Stack(fit: StackFit.expand, children: [
               Center(
                 child: AnimatedDefaultTextStyle(
                   duration: context.motion(Motion.base),
-                  style: context.text.displaySmall!.copyWith(color: ink, fontSize: size * 0.42, height: 1, letterSpacing: 0),
+                  style: context.text.displaySmall!.copyWith(color: ink, fontSize: size * 0.4, fontWeight: Weights.title, height: 1, letterSpacing: 0),
                   child: Text(initial),
                 ),
               ),

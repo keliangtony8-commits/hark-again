@@ -247,3 +247,14 @@
 **看过没问题**：搜索结果 / 无结果 / 胶囊明暗、桌面宽度居中、定位后位置。**仍未看**：App 截图（需中文字体环境）、真机。
 **另记（未改，属既有问题）**：手机宽度 400 下项目聊天输入框带“快速”芯片时，占位符“给 Toyuis 发消息”被截成“给 Toyuis 发消”。
 
+
+
+## 2026-10-15 19:45 v3.1 视觉细腻度（用户 7 张 Hark/Toyuis 真机对比截图）
+全局判断（宗旨 #1）：差距不在某个页面，而在全局 token —— 只改 token + 两处读取点，不加组件。实测同机像素：
+- 字：Hark 气泡/分段字形高 ≈38px，我们 ≈46–48px（大 ~20%）→ Fs 全档降一档 xs12 sm14 md16 lg19 xl30 display32（web --fs-* 同步）。
+- 色：Hark 暗色卡/回复气泡 #1E2029、输入胶囊 #1B1D25；我们 #0A0D16 近黑，在海军蓝底上是“黑块”→ dark surface #1E2029、surface2 #272A34、border #2E313C、accentSoft #2A2D38、glass E01B1D25、glassSheet F51E2029（web 同值，配色守门通过）。
+- 边：Hark 深色浮层无描边；我们顶栏胶囊/圆钮/输入胶囊/头像一圈 8% 白 → 新增 Palette.chromeEdge（浅 = glassBorder，深 = 透明；solid = border），glassBorder 继续只做分隔线。web --chrome-edge 只用在 .glass / .avatar / 顶部搜索胶囊。
+- 位：Hark 输入胶囊左右内收 ~38dp，我们 12 → Composer 外边距改 Layout.gutter(24)，与全 App 留白同线（不新加常量）。
+- 选中段未读点：白点压在白胶囊上只剩 surface 色描边 → 像“°”；选中时改 onPillOn。
+- 头像首字 w600→Weights.title、0.42→0.4。
+未动（有意）：“已思考 N 秒”行（功能）、主页卡标题字体（v2.83 已定无衬线）、输入框 ⊕/快速/模式 芯片的布局（属交互改动，需单独全局评估）。

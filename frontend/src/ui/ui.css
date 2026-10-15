@@ -7,7 +7,7 @@
 .page-head { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--topbar-h); padding: 0 var(--sp-1);
   position: sticky; top: calc(var(--topbar-top) + env(safe-area-inset-top)); z-index: 4;
   width: min(calc(100% - 2 * var(--gutter)), calc(var(--content-w) - 2 * var(--gutter))); margin: calc(var(--topbar-top) + env(safe-area-inset-top)) auto 0;
-  border-radius: var(--r-full); background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--elev-float);
+  border-radius: var(--r-full); background: var(--glass); border: 1px solid var(--chrome-edge); box-shadow: var(--elev-float);
   -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); animation: float-in var(--dur) var(--ease) both; }
 .page-head + .page-inner { padding-top: var(--sp-5); }
 .page-head h1 { flex: 1; margin: 0; font-size: var(--fs-md); font-weight: var(--fw-strong); }

@@ -8,7 +8,7 @@
  * .wide-pill    整行宽的玻璃胶囊入口（“＋ 创建一个新面板”）
  * .avatar       圆形头像，颜色来自 --avatar（lib/look.ts） */
 .glass {
-  background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--elev-float);
+  background: var(--glass); border: 1px solid var(--chrome-edge); box-shadow: var(--elev-float);
   -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost);
 }
 /* 盖在内容上的真玻璃（弹层、横幅）：更明显的一层投影把它和下面分开 */
@@ -50,7 +50,7 @@
 .wide-pill:active { transform: scale(0.99); }
 
 .avatar { width: 40px; height: 40px; border-radius: var(--r-full); flex: none; display: grid; place-items: center; font-weight: var(--fw-title);
-  background: var(--avatar); color: var(--on-avatar); box-shadow: 0 0 0 1px var(--glass-border);
+  background: var(--avatar); color: var(--on-avatar); box-shadow: 0 0 0 1px var(--chrome-edge);
   transition: background var(--dur) var(--ease), transform var(--dur) var(--ease); }
 button.avatar:active { transform: scale(0.94); }
 .avatar.lg { width: 76px; height: 76px; }

@@ -356,7 +356,7 @@ class _ComposerState extends ConsumerState<Composer> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(Sp.x3, Sp.x2, Sp.x3, Sp.x3),
+        padding: const EdgeInsets.fromLTRB(Layout.gutter, Sp.x2, Layout.gutter, Sp.x3), // v3.1 和全 App 左右留白同一条线（Hark 输入胶囊明显内收）
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: Layout.contentMax),

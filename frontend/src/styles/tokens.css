@@ -26,6 +26,7 @@
   --backdrop-3: #efece7;
   --glass: rgba(255, 255, 255, 0.85);        /* 玻璃着色（下面是模糊后的内容） */
   --glass-border: rgba(28, 27, 26, 0.07);    /* 玻璃的 1px 发丝边 */
+  --chrome-edge: var(--glass-border); /* v3.1 浮层外圈（顶栏 / 圆钮 / 输入胶囊 / 头像）：浅色要发丝边，深色 Hark 不描边（= App Palette.chromeEdge） */
   --glass-highlight: transparent; /* v2.1：卡片顶边 1px 内高光（卡片不要外投影，靠发丝边 + 高光分层） */
   /* v2.1「墨色」：主按钮、用户气泡、导航选中块、发送键、开关。强调色一屏最多两处（未读点、进度、链接） */
   --ink: #111111;
@@ -44,12 +45,12 @@
   --font-sans: "Inter", "MiSans", "PingFang SC", "HarmonyOS Sans SC", "Noto Sans CJK SC", "Noto Sans SC",
     -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
-  --fs-xs: 13px;
-  --fs-sm: 15px;
-  --fs-md: 17px;
-  --fs-lg: 20px;
-  --fs-xl: 32px;
-  --fs-display: 34px;  /* 页面主标题（无衬线 600、收紧字距） */
+  --fs-xs: 12px;
+  --fs-sm: 14px;
+  --fs-md: 16px;
+  --fs-lg: 19px;
+  --fs-xl: 30px;
+  --fs-display: 32px;  /* 页面主标题（无衬线 600、收紧字距） */
   --lh: 1.3;        /* 界面文字（= App Fs.lineHeight） */
   --lh-prose: 1.6;  /* 只给要“读”的正文：聊天回复、记忆、文档（= App Fs.prose） */
   /* 字重降一档（v2.1，= App Weights）：正文 400、标题/按钮/导航 500、只有页面主标题和大数字 600 */
@@ -138,14 +139,14 @@
 :root[data-theme="dark"] {
   /* v2.80 Hark 式（home-redesign.md F）：海军蓝渐变底 → 近黑不透明卡无描边 → 白字；唯一强调色 = 白（= App Palette.dark） */
   --bg: #0d1226;
-  --surface: #0a0d16;
-  --surface-2: #141824;
-  --border: #1d2130;
+  --surface: #1e2029; /* v3.1 实测 Hark 暗色卡 / 回复气泡：中性炭灰 */
+  --surface-2: #272a34;
+  --border: #2e313c;
   --text: #ffffff;
   --text-2: #a0a4af;
   --text-3: #7f8390;
   --accent: #ffffff;
-  --accent-soft: #1e2230;
+  --accent-soft: #2a2d38;
   --on-accent: #0a0d16; /* 亮橙底配深字（6.8:1） */
   --danger: #e5675f;
   --warning: #e0a040;
@@ -158,8 +159,9 @@
   --backdrop-1: #0e1428;   /* 蓝灰炭 → 近黑 → 灰紫 */
   --backdrop-2: #121a33;
   --backdrop-3: #1b2342;
-  --glass: rgba(10, 13, 22, 0.85);
+  --glass: rgba(27, 29, 37, 0.88); /* 实测 Hark 输入胶囊 #1B1D25 */
   --glass-border: rgba(255, 255, 255, 0.08);
+  --chrome-edge: transparent;
   --glass-highlight: transparent;
   --ink: #ffffff;
   --on-ink: #0a0d16;
@@ -168,7 +170,7 @@
   --avatar-neutral: #232838;
   --tile: rgba(255, 255, 255, 0.06);
   --glass-scrim: rgba(8, 11, 22, 0.6);
-  --glass-sheet: rgba(12, 16, 32, 0.95);
+  --glass-sheet: rgba(30, 32, 41, 0.96);
   color-scheme: dark;
 }
 
@@ -176,6 +178,7 @@
 :root[data-solid] {
   --glass: var(--surface);
   --glass-border: var(--border);
+  --chrome-edge: var(--border);
   --tile: var(--surface-2);
   --glass-scrim: var(--scrim);
   --glass-sheet: var(--surface);

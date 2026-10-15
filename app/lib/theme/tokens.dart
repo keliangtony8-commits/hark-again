@@ -25,6 +25,7 @@ class Palette {
     required this.backdrop,
     required this.glass,
     required this.glassBorder,
+    required this.chromeEdge,
     required this.ink,
     required this.onInk,
     required this.userBubble,
@@ -48,6 +49,10 @@ class Palette {
   /// glassHighlight = 玻璃卡片顶边 1px 的内高光（v2.1：卡片不要外投影，靠发丝边 + 这条高光分层）。
   final List<Color> backdrop;
   final Color glass, glassBorder, glassHighlight;
+
+  /// v3.1 浮层（顶栏胶囊、圆钮、输入胶囊、头像）的外圈：浅色要一圈发丝边才和暖白底分得开；
+  /// 深色 Hark 不描边（实测截图 1000035474），靠玻璃与海军蓝底的明度差分层 → 透明。分隔线仍是 glassBorder。
+  final Color chromeEdge;
 
   /// 设计 v2.1「墨色」：主按钮、用户气泡、导航选中块、发送键用它，不用强调色（强调色一屏最多两处：未读点、进度、链接）。
   /// 浅色 = 近黑，深色 = 暖白；onInk 是压在上面的字（≥ 4.5:1，test/contrast_test.dart 查）。
@@ -90,6 +95,7 @@ class Palette {
     backdrop: [Color(0xFFF3F1ED), Color(0xFFF7F6F3), Color(0xFFEFECE7)], // 三档暖白，几乎看不出渐变
     glass: Color(0xD9FFFFFF),
     glassBorder: Color(0x121C1B1A), // = 分隔线
+    chromeEdge: Color(0x121C1B1A),
     glassHighlight: Color(0x00FFFFFF), // F.2：不要玻璃描边/高光
     ink: Color(0xFF111111),
     onInk: Color(0xFFFFFFFF),
@@ -122,6 +128,7 @@ class Palette {
       backdrop: [for (var i = 0; i < a.backdrop.length; i++) l(a.backdrop[i], b.backdrop[i])],
       glass: l(a.glass, b.glass),
       glassBorder: l(a.glassBorder, b.glassBorder),
+      chromeEdge: l(a.chromeEdge, b.chromeEdge),
       glassHighlight: l(a.glassHighlight, b.glassHighlight),
       ink: l(a.ink, b.ink),
       onInk: l(a.onInk, b.onInk),
@@ -137,22 +144,23 @@ class Palette {
   /// v2.80「Hark 式」深色（home-redesign.md F）：深海军蓝渐变底 → 近黑不透明卡（无描边）→ 白字；唯一强调色 = 白。
   static const dark = Palette(
     bg: Color(0xFF0D1226),
-    surface: Color(0xFF0A0D16),
-    surface2: Color(0xFF141824),
-    border: Color(0xFF1D2130),
+    surface: Color(0xFF1E2029), // v3.1 实测 Hark 暗色卡 / 回复气泡 #1E2029：中性炭灰，不是近黑（截图 1000035474）
+    surface2: Color(0xFF272A34),
+    border: Color(0xFF2E313C),
     text: Color(0xFFFFFFFF),
     text2: Color(0xFFA0A4AF), // ≈ 60% 白
     text3: Color(0xFF7F8390),
     accent: Color(0xFFFFFFFF), // 唯一强调色 = 白：未读点、进度、链接
-    accentSoft: Color(0xFF1E2230),
+    accentSoft: Color(0xFF2A2D38),
     onAccent: Color(0xFF0A0D16),
     danger: Color(0xFFE5675F),
     warning: Color(0xFFE0A040),
     success: Color(0xFF62BD86),
     shadow: Color(0x80000000),
     backdrop: [Color(0xFF0E1428), Color(0xFF121A33), Color(0xFF1B2342)], // 深海军蓝
-    glass: Color(0xD90A0D16),
+    glass: Color(0xE01B1D25), // v3.1 实测 Hark 输入胶囊 #1B1D25
     glassBorder: Color(0x14FFFFFF), // 8% 白 = 分隔线
+    chromeEdge: Color(0x00FFFFFF), // Hark 深色浮层不描边
     glassHighlight: Color(0x00FFFFFF),
     ink: Color(0xFFFFFFFF), // 主按钮 = 白胶囊黑字
     onInk: Color(0xFF0A0D16),
@@ -161,7 +169,7 @@ class Palette {
     avatar: Color(0xFF232838),
     scrim: Color(0x99080B16),
     tile: Color(0x0FFFFFFF),
-    glassSheet: Color(0xF20C1020),
+    glassSheet: Color(0xF51E2029),
   );
 }
 
@@ -177,7 +185,7 @@ abstract final class Radii {
 
 /// 字号。display = 问候语这类页面主标题（衬线、偏细）；xl = 大数字。
 abstract final class Fs {
-  static const xs = 13.0, sm = 15.0, md = 17.0, lg = 20.0, xl = 32.0, display = 34.0; // v2.80 F.4：字少而大
+  static const xs = 12.0, sm = 14.0, md = 16.0, lg = 19.0, xl = 30.0, display = 32.0; // v3.1 对着 Hark 真机截图降一档（同一台手机上我们的字大约大 20%）
   static const lineHeight = 1.3; // v2.83 §G：界面文字（标题、行、按钮、标签）紧凑 = 网页 --lh
   static const prose = 1.6; // 只给要“读”的正文：聊天回复（AppMarkdown）、记忆摘要、项目档案 = 网页 --lh-prose
 }

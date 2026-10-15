@@ -105,7 +105,7 @@ class _Segment extends StatelessWidget {
         // 未读点在这一段的右上角（胶囊内侧），不压在字上；字始终居中
         child: DotBadge(
           visible: tab.badge > 0,
-          color: p.accent,
+          color: selected ? p.onPillOn : p.accent, // v3.1 选中段是白胶囊：白点会只剩一圈描边，像“°”
           size: Sp.x2,
           right: Sp.x3,
           top: Sp.x3,
