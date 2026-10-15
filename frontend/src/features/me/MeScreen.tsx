@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { auth, http, notifyUnauthorized, server } from "../../lib/api";
 import { outbox } from "../../lib/outbox";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, type UsageReport } from "../../lib/usage";
-import { IconBack, IconCard, IconClock, IconComputer, IconDoc, IconFeedback, IconPlug, IconSettings, IconShield, IconUser } from "../../ui/icons";
-import { ListGroup, ListRow, stagger } from "../../ui/kit";
+import { IconBack, IconCard, IconClock, IconComputer, IconDoc, IconFeedback, IconGauge, IconPlug, IconSearch, IconSettings, IconShield, IconUser } from "../../ui/icons";
+import { Highlight, Hint, ListGroup, ListRow, Page, SearchField, Section, stagger } from "../../ui/kit";
+import { meLocation, meWhere, searchMe, type MeEntry, type MeSection } from "./meIndex";
 import CountUp from "../../ui/CountUp";
 import ProfileSheet from "./ProfileSheet";
 import { profileName, useProfile } from "../../lib/profile";
@@ -77,7 +78,38 @@ function Identity() {
   );
 }
 
-/** “我的”（v2.81 一屏）：页头一行（返回 + 名字/域名）→ 用量卡 → 两组行 → 退出登录胶囊。外观、头像颜色、回复语言都在“偏好设置”。 */
+/** 结果行行首图标：所在分区的图标（= “我的”两组行用的那几个；App 在 me_index.dart 的 MeSection.icon）。 */
+const SECTION_ICON: Record<MeSection, ComponentType> = {
+  me: IconUser, profile: IconUser, tasks: IconClock, connectors: IconPlug, wallet: IconCard, computer: IconComputer,
+  usage: IconGauge, security: IconShield, preferences: IconSettings, feedback: IconFeedback, about: IconDoc,
+};
+
+/** 底部设置搜索胶囊（v3.0，= App me_screen.dart _SearchBar）：和输入胶囊同一位置、同一玻璃，单行所以全圆角。Esc 清空，回车打开第一条。 */
+function MeSearch({ q, setQ, onFirst }: { q: string; setQ: (v: string) => void; onFirst: () => void }) {
+  return (
+    <div className="me-search">
+      <SearchField className="glass" value={q} onChange={setQ} placeholder="搜索设置" onEnter={onFirst} />
+    </div>
+  );
+}
+
+/** 搜索结果（= App _MeResults）：一组行，行首 = 分区图标，标题里命中的词标亮，副标题 = 在哪。没命中：一句说明，不回显输入。 */
+function MeResults({ q, hits }: { q: string; hits: MeEntry[] }) {
+  if (!hits.length) return <div className="fade-in"><Hint icon={<IconSearch />} title="没有找到相关设置" text="换个说法试试；要找聊天内容，请在历史记录里搜索。" /></div>;
+  return (
+    <Section title="搜索结果" action={<span className="section-count">{hits.length}</span>}>
+      <ListGroup className="fade-in">
+        {hits.map((x) => {
+          const Icon = SECTION_ICON[x.section];
+          return <ListRow key={x.id} to={meLocation(x)} icon={<Icon />} title={<Highlight text={x.title} q={q} />} sub={meWhere(x)} label={`${x.title}，在${meWhere(x)}`} />;
+        })}
+      </ListGroup>
+    </Section>
+  );
+}
+
+/** “我的”（v2.81 一屏）：页头一行（返回 + 名字/域名）→ 用量卡 → 两组行 → 退出登录胶囊。外观、头像颜色、回复语言都在“偏好设置”。
+ *  v3.0：底部设置搜索（全站唯一，索引 meIndex.ts）——输入即筛，页头保留，下面换成结果；Page 的 footer 量胶囊实高，滚到底不挡“退出登录”。 */
 export default function MeScreen() {
   const nav = useNavigate();
   // 从站内点头像进来 → 返回上一页；直接打开（深链接 / 刷新）→ 回到主页
@@ -85,20 +117,25 @@ export default function MeScreen() {
   // v2.61：先让服务器作废这个 token（登录设备里就没了这台），失败不拦
   const outdated = clientOutdated(useServerVersion());
   const logout = async () => { await http.post("/api/auth/logout", {}).catch(() => {}); auth.clear(); outbox.clear(); notifyUnauthorized(); };
+  const [q, setQ] = useState("");
+  const searching = q.trim() !== "";
+  const hits = searchMe(q);
   return (
-    <div className="page me">
-      <div className="page-inner">
-        <div className="me-head enter">
-          <button className="glass-btn glass" onClick={() => (root ? nav("/") : nav(-1))} aria-label={root ? "回到主页" : "返回"} title={root ? "回到主页" : "返回"}><IconBack /></button>
-          <Identity />
-        </div>
-        <UsageSummary />
-        <ListGroup className="me-group" enter={2}>{rows(GROUP1)}</ListGroup>
-        <ListGroup className="me-group" enter={3}>{rows(GROUP2.map((r) => (r.to === "/me/about" && outdated ? { ...r, value: "请更新" } : r)))}</ListGroup>
-        <div className="me-logout enter" style={stagger(4)}>
-          <button className="pill" onClick={() => void logout()}>退出登录</button>
-        </div>
+    <Page className="me" footer={<MeSearch q={q} setQ={setQ} onFirst={() => { if (hits[0]) nav(meLocation(hits[0])); }} />}>
+      <div className="me-head enter">
+        <button className="glass-btn glass" onClick={() => (root ? nav("/") : nav(-1))} aria-label={root ? "回到主页" : "返回"} title={root ? "回到主页" : "返回"}><IconBack /></button>
+        <Identity />
       </div>
-    </div>
+      {searching ? <MeResults q={q} hits={hits} /> : (
+        <div className="fade-in">
+          <UsageSummary />
+          <ListGroup className="me-group" enter={2}>{rows(GROUP1)}</ListGroup>
+          <ListGroup className="me-group" enter={3}>{rows(GROUP2.map((r) => (r.to === "/me/about" && outdated ? { ...r, value: "请更新" } : r)))}</ListGroup>
+          <div className="me-logout enter" style={stagger(4)}>
+            <button className="pill" onClick={() => void logout()}>退出登录</button>
+          </div>
+        </div>
+      )}
+    </Page>
   );
 }

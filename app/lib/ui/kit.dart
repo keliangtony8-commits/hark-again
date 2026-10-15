@@ -23,13 +23,86 @@ class PageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     // 安全区（含一级页面的浮动顶栏，见 shell/shell_page.dart）叠加在自己的留白上：内容能滚到顶栏下面
     final safe = MediaQuery.paddingOf(context);
+    // 有待定位的设置项（v3.0 设置搜索直达）时多建一些屏外内容：长页（我的电脑）底部的区块才会被建出来、才找得到它
+    final spot = SpotlightScope.maybeOf(context)?.pending ?? false;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: Layout.contentMax),
-        child: ListView(padding: padding + EdgeInsets.only(top: safe.top, bottom: safe.bottom), children: children),
+        child: ListView(
+            scrollCacheExtent: spot ? const ScrollCacheExtent.pixels(Layout.spotlightReach) : null,
+            padding: padding + EdgeInsets.only(top: safe.top, bottom: safe.bottom),
+            children: children),
       ),
     );
   }
+}
+
+/// 设置搜索直达（v3.0，“我的”页底部搜索，见 features/me/me_index.dart）：路由带 `?focus=<id>` 时，app.dart 在这页外面套一层，
+/// 页里对应的 [Spotlight] 出现时滚到它并闪一下。同一次进页只亮一次（数据刷新、换态重建都不再亮）。
+class SpotlightScope extends StatefulWidget {
+  const SpotlightScope({super.key, required this.focus, required this.child});
+  final String? focus;
+  final Widget child;
+
+  static SpotlightData? maybeOf(BuildContext context) => context.getInheritedWidgetOfExactType<SpotlightData>();
+
+  @override
+  State<SpotlightScope> createState() => _SpotlightScopeState();
+}
+
+class _SpotlightScopeState extends State<SpotlightScope> {
+  final _done = <String>{};
+
+  @override
+  Widget build(BuildContext context) => SpotlightData._(widget.focus, _done, child: widget.child);
+}
+
+class SpotlightData extends InheritedWidget {
+  const SpotlightData._(this.focus, this._done, {required super.child});
+  final String? focus;
+  final Set<String> _done;
+
+  /// 还有一项等着被亮。
+  bool get pending => focus != null && !_done.contains(focus);
+
+  /// 是这一项、且还没亮过 → 记下并返回 true。
+  bool claim(String id) => id == focus && _done.add(id);
+
+  @override
+  bool updateShouldNotify(SpotlightData old) => old.focus != focus;
+}
+
+/// 可被设置搜索定位的一项：[id] 与索引里的定位 id 相同。出现时（数据异步加载完才出现也行）滚到视口约 1/3 处，
+/// 再用 [FlashHighlight] 闪一下（与搜索命中消息同一个高亮；减少动态时不滚动动画、底色直接出现到点消失）。
+/// [row] = 分组里的一行：高亮铺满这一行（不外扩、不压分隔线）；否则是一整块（卡片 / 分区），底色是卡片外一圈等宽的光环。
+class Spotlight extends StatefulWidget {
+  const Spotlight({super.key, required this.id, required this.child, this.row = false});
+  final String id;
+  final Widget child;
+  final bool row;
+
+  @override
+  State<Spotlight> createState() => _SpotlightState();
+}
+
+class _SpotlightState extends State<Spotlight> {
+  int _play = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+  }
+
+  Future<void> _reveal() async {
+    if (!mounted || !(SpotlightScope.maybeOf(context)?.claim(widget.id) ?? false)) return;
+    await Scrollable.ensureVisible(context, alignment: Layout.spotlightAt, duration: context.motion(Motion.slow), curve: Motion.ease);
+    if (mounted) setState(() => _play++);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      FlashHighlight(play: _play, outset: widget.row ? 0 : Sp.x2, radius: widget.row ? 0 : Radii.card + Sp.x2, child: widget.child);
 }
 
 class SectionTitle extends StatelessWidget {
@@ -472,26 +545,33 @@ List<TextSpan> highlightSpans(String text, String query, TextStyle hit) {
   return out;
 }
 
-/// 圆角搜索框：右侧在加载时转圈、有字时给清除键。历史和记忆页共用。
+/// 圆角搜索框：右侧在加载时转圈、有字时给清除键。历史、记忆页和“我的”页底部设置搜索共用。
+/// [floating]：放在玻璃胶囊里（“我的”页底部，v3.0）——不再叠一层 tile 底和聚焦描边，材质交给外面的玻璃。
 class SearchField extends StatelessWidget {
-  const SearchField({super.key, required this.controller, required this.hint, required this.onChanged, required this.onClear, this.loading = false});
+  const SearchField(
+      {super.key, required this.controller, required this.hint, required this.onChanged, required this.onClear, this.loading = false, this.floating = false, this.focusNode, this.onSubmitted});
   final TextEditingController controller;
   final String hint;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
   final bool loading;
+  final bool floating;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       onChanged: onChanged,
+      onSubmitted: onSubmitted,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         hintText: hint,
-        isDense: true,
-        filled: true,
+        isDense: !floating,
+        filled: !floating,
         fillColor: context.tileFill,
         prefixIcon: Icon(Icons.search_rounded, color: p.text3),
         suffixIcon: AnimatedSwitcher(
@@ -508,7 +588,7 @@ class SearchField extends StatelessWidget {
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.full), borderSide: BorderSide.none),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.full), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.full), borderSide: BorderSide(color: p.text3)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.full), borderSide: floating ? BorderSide.none : BorderSide(color: p.text3)),
       ),
     );
   }

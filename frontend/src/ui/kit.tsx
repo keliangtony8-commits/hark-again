@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { IconBack, IconCheck, IconChevron, IconClose, IconSearch } from "./icons";
 import "./ui.css";
 
@@ -34,17 +34,66 @@ export function FloatingFooter({ children, onHeight }: { children: ReactNode; on
   return <div ref={ref} className="floating-footer">{children}</div>;
 }
 
-/** 页面骨架：可滚动内容 + 可选的子页面标题栏 + 可选的底部浮层（一级页面的输入胶囊）。所有页同一阅读宽度 --content-w、居中
- *  （v2.94 删掉了宽版 wide：宽屏两栏 / 项目网格都已不在，留着只会让内容贴左、右边空一块）。 */
-export function Page({ children, header, footer }: { children: ReactNode; header?: ReactNode; footer?: ReactNode }) {
+/** 页面骨架：可滚动内容 + 可选的子页面标题栏 + 可选的底部浮层（一级页面的输入胶囊、“我的”页的设置搜索）。所有页同一阅读宽度 --content-w、居中
+ *  （v2.94 删掉了宽版 wide：宽屏两栏 / 项目网格都已不在，留着只会让内容贴左、右边空一块）。
+ *  v3.0：地址带 ?focus=<id>（“我的”页设置搜索直达，索引 features/me/meIndex.ts）时，等页里 data-spot=<id> 的那一项出现，滚到它并闪一下。 */
+export function Page({ children, header, footer, className = "" }: { children: ReactNode; header?: ReactNode; footer?: ReactNode; className?: string }) {
   const [h, setH] = useState(0);
+  const box = useRef<HTMLDivElement>(null);
+  useSpotlight(box);
   const style = footer ? ({ ["--footer-h" as string]: `${h}px` } as CSSProperties) : undefined;
   return (
     <>
-      <div className={`page ${footer ? "has-composer" : ""}`} style={style}>{header}<div className="page-inner">{children}</div></div>
+      <div ref={box} className={["page", className, footer ? "has-composer" : ""].filter(Boolean).join(" ")} style={style}>{header}<div className="page-inner">{children}</div></div>
       {footer && <FloatingFooter onHeight={setH}>{footer}</FloatingFooter>}
     </>
   );
+}
+
+/** 让一个元素闪一下（.flash：底色先停住再淡出，keyframes 在 base.css，时长 --dur-flash）。重复调用会重新闪。
+ *  聊天里搜索命中 / 点引用跳到的消息、设置搜索直达的那一项共用。减少动态时不放动画：底色直接出现，到点消失（.flash.hold）。 */
+export function flashOnce(el: HTMLElement) {
+  el.classList.remove("flash", "hold");
+  void el.offsetWidth; // 重新触发动画
+  el.classList.add("flash");
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    el.classList.add("hold");
+    const ms = parseFloat(getComputedStyle(el).getPropertyValue("--dur-flash")) || 0;
+    window.setTimeout(() => el.classList.remove("flash", "hold"), ms);
+  } else {
+    el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
+  }
+}
+
+/** 等设置项出现最多多久（数据是异步取的：安全页的两步验证、电脑页的各节）。超时就停在页面顶部，不再找。 */
+const SPOT_WAIT_MS = 5000;
+
+function useSpotlight(root: RefObject<HTMLElement | null>) {
+  const { search, pathname } = useLocation();
+  useEffect(() => {
+    const id = new URLSearchParams(search).get("focus");
+    const node = root.current;
+    if (!id || !node) return;
+    const reveal = () => {
+      const el = node.querySelector<HTMLElement>(`[data-spot="${CSS.escape(id)}"]`);
+      if (!el) return false;
+      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      flashOnce(el);
+      return true;
+    };
+    if (reveal()) return;
+    const mo = new MutationObserver(() => { if (reveal()) stop(); });
+    const timer = window.setTimeout(() => stop(), SPOT_WAIT_MS);
+    const stop = () => { mo.disconnect(); window.clearTimeout(timer); };
+    mo.observe(node, { childList: true, subtree: true });
+    return stop;
+  }, [search, pathname, root]);
+}
+
+/** 可被设置搜索定位的一整块（分区 / 卡片）：只加一个 data-spot 外壳，不改里面的版式。分组里的一行用 ListRow 的 spot。 */
+export function Spot({ id, children }: { id: string; children: ReactNode }) {
+  return <div className="spot" data-spot={id}>{children}</div>;
 }
 
 /** 错峰入场的序号（配 .enter：延迟 = --stagger × --i，封顶 10，= App Motion.stagger）。 */
@@ -87,9 +136,11 @@ export function ListGroup({ children, enter, className = "", label, role }: { ch
  *  control = 行尾的控件（开关、分段按钮、头像），原样放、不套次要色的 .row-trail。
  *  v2.98：href = 站外链接（新标签页，默认不带箭头）；disabled = 整行按钮禁用；role="group" 时正文 aria-hidden（读屏只念 label）；
  *  iconClass = 行首图标位的额外类（file-ext 扩展名方块）。 */
-export function ListRow({ icon, iconClass, title, sub, problem, value, trail, control, to, href, onClick, disabled, off, className = "", enter, label, role }: {
+export function ListRow({ icon, iconClass, title, sub, problem, value, trail, control, to, href, onClick, disabled, off, className = "", enter, label, role, spot }: {
   icon?: ReactNode; iconClass?: string; title: ReactNode; sub?: ReactNode; problem?: string; value?: string; trail?: ReactNode; control?: ReactNode;
   to?: string; href?: string; onClick?: () => void; disabled?: boolean; off?: boolean; className?: string; enter?: number; label?: string; role?: string;
+  /** v3.0 设置搜索直达的定位 id（= meIndex.ts 的 focus）：Page 找到 data-spot 后滚到这一行闪一下。 */
+  spot?: string;
 }) {
   const cls = ["row", className, off ? "row-off" : "", enter === undefined ? "" : "enter"].filter(Boolean).join(" ");
   const style = enter === undefined ? undefined : stagger(enter);
@@ -106,10 +157,10 @@ export function ListRow({ icon, iconClass, title, sub, problem, value, trail, co
       {tail && <span className="row-trail">{tail}</span>}
     </>
   );
-  if (to) return <Link to={to} className={cls} style={style} aria-label={label}>{inner}</Link>;
-  if (href) return <a href={href} target="_blank" rel="noreferrer" className={cls} style={style} aria-label={label}>{inner}</a>;
-  if (onClick) return <button type="button" className={cls} style={style} onClick={onClick} disabled={disabled} aria-label={label}>{inner}</button>;
-  return <div className={cls} style={style} aria-label={label} role={role}>{inner}</div>;
+  if (to) return <Link to={to} className={cls} style={style} aria-label={label} data-spot={spot}>{inner}</Link>;
+  if (href) return <a href={href} target="_blank" rel="noreferrer" className={cls} style={style} aria-label={label} data-spot={spot}>{inner}</a>;
+  if (onClick) return <button type="button" className={cls} style={style} onClick={onClick} disabled={disabled} aria-label={label} data-spot={spot}>{inner}</button>;
+  return <div className={cls} style={style} aria-label={label} role={role} data-spot={spot}>{inner}</div>;
 }
 
 /** 起步卡（= App StarterCard）：列表为空时代替空状态——标题 + 引导 + 一排起步按钮。 */
@@ -222,12 +273,12 @@ export function Sheet({ title, onClose, children, actions }: { title: string; on
 }
 
 /** 圆角搜索框（对话历史、记忆页共用）：有字时给清空键，Esc 清空。与 App SearchField 同款。 */
-export function SearchField({ value, onChange, placeholder, className = "" }: { value: string; onChange: (v: string) => void; placeholder: string; className?: string }) {
+export function SearchField({ value, onChange, placeholder, className = "", onEnter }: { value: string; onChange: (v: string) => void; placeholder: string; className?: string; onEnter?: () => void }) {
   return (
     <label className={`search-field ${className}`}>
       <IconSearch />
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder}
-        onKeyDown={(e) => e.key === "Escape" && onChange("")} />
+      <input enterKeyHint="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder}
+        onKeyDown={(e) => { if (e.key === "Escape") onChange(""); else if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }} />
       {value && <button className="icon-btn sm" aria-label="清空" onClick={() => onChange("")}><IconClose /></button>}
     </label>
   );

@@ -19,9 +19,9 @@ export default function PreferencesScreen() {
     <Page header={<PageHeader title="偏好设置" back />}>
       <PageIntro line="界面的样子和我回你的语言，改了立刻生效。" />
       <ListGroup enter={1}>
-        <ListRow className="me-appearance" title="外观" control={<Segmented label="外观" value={appearance} options={APPEARANCES} onChange={setAppearance} />} />
-        <ListRow title="减少透明度" control={<Toggle on={solid} onChange={setSolid} label="减少透明度" />} />
-        <ListRow className="pref-avatar" title="头像颜色" control={
+        <ListRow spot="appearance" className="me-appearance" title="外观" control={<Segmented label="外观" value={appearance} options={APPEARANCES} onChange={setAppearance} />} />
+        <ListRow spot="solid" title="减少透明度" control={<Toggle on={solid} onChange={setSolid} label="减少透明度" />} />
+        <ListRow spot="avatar-color" className="pref-avatar" title="头像颜色" control={
           <div className="pref-avatar-box" ref={box}>
             <Avatar onClick={() => setPop((v) => !v)} label="换头像颜色" />
             {pop && <AvatarColorPop onClose={closePop} boundary={box} />}

@@ -44,7 +44,7 @@ class ComputerScreen extends ConsumerWidget {
           PortsSection(ws: ws, delay: Motion.stagger(1)),
           MemorySection(ws: ws, delay: Motion.stagger(2)),
           ProcessSection(ws: ws, delay: Motion.stagger(3)),
-          StorageSection(ws: ws, delay: Motion.stagger(4), onFiles: () => showProjectFiles(context, ws)),
+          Spotlight(id: 'disk', child: StorageSection(ws: ws, delay: Motion.stagger(4), onFiles: () => showProjectFiles(context, ws))),
           DiskJobsSection(ws: ws, delay: Motion.stagger(5)),
           if (personal) // v2.81：Pages 从“我的”首屏收进这里——它们就是这台电脑替你做好、发布出去的网页
             FadeSlideIn(
@@ -54,8 +54,8 @@ class ComputerScreen extends ConsumerWidget {
                 child: ListGroup(children: [ListRow(icon: Icons.web_rounded, title: 'Pages', onTap: () => context.push('/me/pages'))]),
               ),
             ),
-          if (personal) BrowserSessionsSection(delay: Motion.stagger(7)),
-          if (personal) HostSection(delay: Motion.stagger(8)),
+          if (personal) Spotlight(id: 'browser-logins', child: BrowserSessionsSection(delay: Motion.stagger(7))),
+          if (personal) Spotlight(id: 'host', child: HostSection(delay: Motion.stagger(8))),
         ]),
       ),
     );

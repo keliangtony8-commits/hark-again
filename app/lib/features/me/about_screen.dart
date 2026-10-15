@@ -27,7 +27,7 @@ class AboutScreen extends ConsumerWidget {
         FadeSlideIn(
           delay: Motion.stagger(1),
           child: ListGroup(children: [
-            ListRow(icon: Icons.tag_rounded, title: '版本', value: clientVersionLabel(sv)),
+            Spotlight(id: 'version', row: true, child: ListRow(icon: Icons.tag_rounded, title: '版本', value: clientVersionLabel(sv))),
             ListRow(icon: Icons.dns_outlined, title: '服务器', value: host.isEmpty ? '未设置' : host),
             if (sv != null) ListRow(icon: Icons.update_rounded, title: '服务器版本', value: sv.version),
             ListRow(

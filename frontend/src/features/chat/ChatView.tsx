@@ -4,7 +4,7 @@ import type { LinkStatus } from "../../lib/socket";
 import { formatDay, startsNewDay } from "../../lib/format";
 import type { Message, MessageQuote, OutgoingFile } from "../../lib/types";
 import { quotable, quoteOf, showsQuote } from "../../lib/quote";
-import { FloatingFooter } from "../../ui/kit";
+import { FloatingFooter, flashOnce } from "../../ui/kit";
 import { IconArrowDown } from "../../ui/icons";
 import { useStickToBottom } from "./useStickToBottom";
 import Composer, { type EditDraft } from "./Composer";
@@ -68,17 +68,14 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
   const thread = stick.ref;
   // 换对话（第一条变了）或自己刚发了一条（最后一条是新的用户消息）= 回到底部；别的变化（每个 token）不动滚动位置
   const seen = useRef<{ first?: string; last?: string }>({});
-  // 滚到某条中间闪一下（.flash 动画，结束自己摘掉，重复定位能再闪），不再被贴底拉走：搜索定位、点引用行都走这里
+  // 滚到某条中间闪一下（kit flashOnce，v3.0 与设置搜索直达共用；重复定位能再闪），不再被贴底拉走：搜索定位、点引用行都走这里
   const reveal = (id: string) => {
     const el = thread.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"], [data-server-id="${CSS.escape(id)}"]`);
     if (!el) return false;
     stick.release();
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-    el.classList.remove("flash");
-    void el.offsetWidth;   // 重新触发动画
-    el.classList.add("flash");
-    el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
+    flashOnce(el);
     return true;
   };
   useEffect(() => {

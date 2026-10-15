@@ -348,5 +348,7 @@ abstract final class Layout {
   static const nowDot = 6.0; // 主页“今天”的“现在”标记：细线起头的小圆点
   static const agendaTime = 48.0; // 主页“今天”行首钟点列的宽（HH:MM 等宽数字，上下对齐）
   static const orderThumb = 40.0; // 订单卡每行商品小图的边长
+  static const spotlightAt = 0.3; // v3.0 设置搜索直达：被定位的那一项滚到视口从上往下 30% 处（避开顶部标题栏，又不贴底）
+  static const spotlightReach = 4000.0; // 有待定位项时列表多建多远的屏外内容（长页底部的区块也能被找到）
   static const seekPagesMax = 60; // 定位消息时最多往上翻多少屏（防止死循环）
 }
