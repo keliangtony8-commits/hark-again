@@ -264,3 +264,8 @@
 全局判断：字形不统一是根因，不是字号。Flutter 在安卓按名字取不到系统 MiSans → 中文落到思源黑体，拉丁是 Inter，两套 x 高/笔画/字距不同；Hark（原生）中英同一套系统字。另外两处让字“散”：全局 tabularFigures（正文数字一格一格）、labelSmall 字距 0.5。
 决定（替换不叠加）：唯一字族 = 打包的 MiSans（许可：免费商用可嵌入，须注明，不得改字形；子集不改字形），删 Inter（App+网页）；数字比例宽为默认，等宽只留在网页已有 tabular-nums 的类和 App 钟点列/计时/任务时间；删 labelTracking token 与全部引用。子集 8762 码位（GB2312 + 源码用字 + 标点/符号），ttf 1.7MB×3（APK +~5MB），woff2 0.93MB×3（网页首访一次、之后缓存，font-display: swap）。注明：两端「关于 → 字体 MiSans（小米）」。
 - 正文行距 Fs.prose/--lh-prose 1.6→1.4（Hark 约 1.33）。
+
+## 2026-10-15 22:00 v3.2.1 交接文档三处小尾巴（用户：“做啊”“不要停下来”）
+- 历史搜索：原来面板 scope=None 只搜主聊天，项目那段根本搜不到（HANDOFF 写的“无 project_id”实为搜不到）。对标 Hark 顶部搜索“搜全部”：面板改 scope=ALL（= search_history 工具同一范围，不新增分支），项目那段的结果带 project_id/project_name；任务运行对话不带（照旧按 id 打开，v2.75 规则不变）。客户端：结果行加项目名（.conv-where / 摘录前缀），点开走唯一跳转入口（App openConversation、Web openElsewhere）+ focus 定位；项目行不给菜单（项目对话 DELETE 409，改名归项目）。openProjectChat 接受 focus。
+- 占位符截断：Web 输入框档位钮在 ≤480px 只留图标（.chip-text 隐藏，aria-label 不变）；App 本来就窄，不动。
+- shots.py 补 /api/connectors/mcp、/api/memory-notes、/api/version 假数据（跑完不再列缺失清单）。

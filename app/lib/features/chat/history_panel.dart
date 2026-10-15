@@ -22,6 +22,7 @@ import 'chat_controller.dart';
 import 'conversation_files.dart';
 import 'conversation_share.dart';
 import 'history.dart';
+import 'open_conversation.dart';
 
 class HistoryPanel extends ConsumerStatefulWidget {
   const HistoryPanel({super.key, this.docked = false});
@@ -135,8 +136,13 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel> {
   }
 
   void _open(ConversationSummary c) {
-    _ctl.open(c.id, focus: c.messageId); // 内容命中：打开后滚到那条消息
+    final pid = c.projectId;
     if (!widget.docked) Navigator.pop(context);
+    if (pid != null) {
+      openConversation(context, ref, c.id, focus: c.messageId, projectId: pid); // v3.2.1：命中项目那段 → 跳进项目
+    } else {
+      _ctl.open(c.id, focus: c.messageId); // 内容命中：打开后滚到那条消息
+    }
   }
 
   @override
@@ -213,7 +219,8 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel> {
           id: c.id,
           confirm: () => _confirmDelete(c),
           onDelete: () => _run(() => _ctl.remove(c.id)),
-          child: _ConversationRow(c: c, active: c.id == activeId, query: query, onTap: () => _open(c), onLongPress: () => _menu(c)),
+          child: _ConversationRow(c: c, active: c.id == activeId, query: query, onTap: () => _open(c),
+              onLongPress: c.projectId == null ? () => _menu(c) : null), // 项目那段归项目管：搜索结果里只能打开
         ),
       );
 }
@@ -223,7 +230,8 @@ class _ConversationRow extends StatelessWidget {
   final ConversationSummary c;
   final bool active;
   final String query;
-  final VoidCallback onTap, onLongPress;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -244,9 +252,11 @@ class _ConversationRow extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 HighlightText(c.title, query: query, style: titleStyle),
-                if (snippet != null) ...[
+                if (c.projectName != null || snippet != null) ...[
                   const SizedBox(height: Sp.x1 / 2),
-                  HighlightText(snippet, query: query, style: context.text.bodySmall, maxLines: 2),
+                  // v3.2.1：命中在哪个项目（= 网页 .conv-where），后面接摘录
+                  HighlightText([?c.projectName, ?snippet].join(' · '),
+                      query: query, style: context.text.bodySmall, maxLines: 2),
                 ],
               ]),
             ),

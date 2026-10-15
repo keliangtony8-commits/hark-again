@@ -15,7 +15,7 @@ export default function ModelChip({ model, routed, onChange }: { model: string |
   if (cat.models.length > 2) {
     return (
       <Menu label={`模型：${label}`} align="left" triggerClass={`model-chip ${strong ? "strong" : ""}`}
-        trigger={<>{eff.auto ? <IconSwap size={14} /> : <IconSpark size={14} />}{label}</>}
+        trigger={<>{eff.auto ? <IconSwap size={14} /> : <IconSpark size={14} />}<span className="chip-text">{label}</span></>}
         items={cat.models.map((m) => ({ label: m.label, hint: m.id === eff.id ? autoHint(cat, eff) ?? undefined : undefined,
           checked: m.id === eff.id, onSelect: () => pick(m.id) }))} />
     );
@@ -24,7 +24,7 @@ export default function ModelChip({ model, routed, onChange }: { model: string |
   return (
     <button className={`model-chip ${strong ? "strong" : ""}`} onClick={() => pick(next.id)}
       aria-label={`模型：${eff.label}，点按切换到${next.label}`} title={`切换到${next.label}`}>
-      <span key={eff.id} className="model-chip-label">{strong ? <IconSpark size={14} /> : <IconBolt />}{eff.label}</span>
+      <span key={eff.id} className="model-chip-label">{strong ? <IconSpark size={14} /> : <IconBolt />}<span className="chip-text">{eff.label}</span></span>
     </button>
   );
 }

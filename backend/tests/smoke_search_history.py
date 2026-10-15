@@ -142,6 +142,11 @@ x = c.get("/api/conversations", params={"q": "Manner 号线"}).json()
 assert [y["id"] for y in x] == ["c2"] and x[0]["message_id"] == "m22" and "Manner" in x[0]["snippet"], x
 x = c.get("/api/conversations", params={"q": "Seesaw", "project_id": "p1"}).json()
 assert [y["id"] for y in x] == ["c3"]
+# v3.2.1：面板搜全部——项目那段对话也能搜到，带 project_id / project_name（客户端跳进项目）；主聊天的不带
+x = c.get("/api/conversations", params={"q": "几点开门"}).json()
+assert [y["id"] for y in x] == ["c3"] and x[0]["project_id"] == "p1" and x[0]["project_name"] == "搬家" and x[0]["message_id"] == "m31", x
+x = c.get("/api/conversations", params={"q": "Seesaw"}).json()
+assert {y["id"] for y in x} == {"c1", "c2", "c3", "c4"} and all("project_id" not in y for y in x if y["id"] != "c3"), x
 
 # --- 一轮对话 ---
 load_builtin()

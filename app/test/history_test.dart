@@ -46,4 +46,12 @@ void main() {
     final long = highlightSpans('咖啡店', '咖啡 咖啡店', hit);
     expect([for (final s in long) s.text], ['咖啡店']);
   });
+
+  test('v3.2.1 搜索结果带项目：解析 project_id / project_name，改标题不丢', () {
+    final c = ConversationSummary.fromJson({'id': 'c3', 'title': '新家', 'project_id': 'p1', 'project_name': '搬家', 'message_id': 'm31', 'snippet': '几点开门'});
+    expect((c.projectId, c.projectName, c.messageId), ('p1', '搬家', 'm31'));
+    final t = c.withTitle('新标题');
+    expect((t.projectId, t.projectName), ('p1', '搬家'));
+    expect(ConversationSummary.fromJson({'id': 'c1', 'title': 'x'}).projectId, isNull);
+  });
 }

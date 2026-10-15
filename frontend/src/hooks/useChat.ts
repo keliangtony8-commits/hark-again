@@ -401,11 +401,11 @@ export function useChat(projectId?: string) {
 
   /** 从别处跳进项目（转交卡、“来自 X”、反馈、指向项目的建议卡）：不管带来的是哪个对话 id
    *  （老消息里的 id 可能是迁移时合并掉的那段），项目里只有这一段——刷新并打开它（= App openProjectChat）。 */
-  const openProjectChat = useCallback(async () => {
+  const openProjectChat = useCallback(async (focus?: string) => {
     if (!projectId) return;
     const items = await list.refresh().catch(() => null);
     const id = items?.[0]?.id;
-    if (id && threadRef.current.id !== id) await open(id);
+    if (id && (threadRef.current.id !== id || focus)) await open(id, focus); // focus：搜索命中的那条消息（v3.2.1）
   }, [projectId, list.refresh, open]);
 
   const busy = streaming || thread.messages.some((m) => m.outbox === "queued");

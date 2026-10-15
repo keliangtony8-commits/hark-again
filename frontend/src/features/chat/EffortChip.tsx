@@ -17,7 +17,7 @@ export default function EffortChip({ model, effort, onChange }: {
   const strong = eff.id !== def;
   return (
     <Menu label={`思考强度：${eff.label}`} align="left" triggerClass={`model-chip effort-chip ${strong ? "strong" : ""}`}
-      trigger={<><IconBrain size={14} />{eff.label}</>}
+      trigger={<><IconBrain size={14} /><span className="chip-text">{eff.label}</span></>}
       items={levels.map((l) => ({
         label: l.id === def ? `${l.label}（默认）` : l.label, hint: l.description, checked: l.id === eff.id,
         onSelect: () => { if (l.id !== eff.id) onChange(toEffortChoice(opt, l.id)); },

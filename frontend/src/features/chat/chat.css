@@ -41,6 +41,7 @@
   animation: rise 220ms var(--ease) both; }
 .conv-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .conv-pin { display: inline-flex; vertical-align: -1px; margin-right: var(--sp-1); color: var(--text-3); }
+.conv-where { color: var(--text-2); } /* 搜索结果：命中在哪个项目（v3.2.1） */
 .conv-snippet { font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .conv-item .menu-trigger { opacity: 0; color: var(--text-3); transition: opacity var(--dur) var(--ease); }
 .conv-item:hover .menu-trigger, .conv-item .menu.open .menu-trigger { opacity: 1; }
@@ -272,6 +273,9 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
   cursor: pointer; flex-shrink: 0; align-self: center; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
 .model-chip:hover { color: var(--text); }
 .model-chip { white-space: nowrap; }
+/* v3.2.1：手机宽度下输入框里的档位钮只留图标（名字仍在 aria-label / 菜单里），把宽度让给占位符——
+   否则带“快速”芯片时“给 Toyuis 发消息”被截成“给 Toyuis 发消”。 */
+@media (max-width: 480px) { .composer-row .chip-text { display: none; } .composer-row .model-chip { padding: 0 var(--sp-2); } }
 .model-chip.strong, .model-chip.menu-trigger[aria-expanded="true"] { color: var(--text); } /* v2.86.2：非默认档只把字提亮，不加白底、不加描边圈 */
 .model-chip-label { display: inline-flex; align-items: center; gap: var(--sp-1); animation: rise var(--dur) var(--ease); }
 .effort-chip { animation: rise var(--dur) var(--ease); } /* 换到能调的模型时浮入 */

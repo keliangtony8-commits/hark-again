@@ -43,11 +43,11 @@ export default function ChatScreen({ projectId, emptyGreeting, caption, switcher
   // 项目里不认带来的对话 id（老消息里的 id 可能是迁移时合并掉的那段）：打开的永远是项目那一段，带话就在那段里发。
   // 用完清掉路由状态防止重复
   useEffect(() => {
-    const st = location.state as { draft?: string; files?: OutgoingFile[]; open?: string } | null;
+    const st = location.state as { draft?: string; files?: OutgoingFile[]; open?: string; focus?: string } | null;
     if (!st || consumed.current === location.key) return;
     consumed.current = location.key;
-    if (projectId) chat.openProjectChat().then(() => { if (st.draft?.trim() || st.files?.length) chat.send(st.draft ?? "", st.files); });
-    else if (st.open) chat.open(st.open).then(() => { if (st.draft?.trim()) chat.send(st.draft); });
+    if (projectId) chat.openProjectChat(st.focus).then(() => { if (st.draft?.trim() || st.files?.length) chat.send(st.draft ?? "", st.files); });
+    else if (st.open) chat.open(st.open, st.focus).then(() => { if (st.draft?.trim()) chat.send(st.draft); });
     else if (st.draft || st.files?.length) chat.send(st.draft ?? "", st.files);
     nav(location.pathname, { replace: true, state: null });
   }, [location, chat, nav, projectId]);
@@ -70,10 +70,11 @@ export default function ChatScreen({ projectId, emptyGreeting, caption, switcher
   // 项目切换栏：打开时刷新一次项目列表（状态胶囊以服务器为准；挂起的卡片出现在一轮中途）
   const showList = () => { setDrawer(true); switcher?.onOpen?.(); };
   // v2.23 转交卡 / “来自 X”：主聊天里的对话直接打开；指向项目的统一进那个项目的那一段（同一项目 = 已经在看它，只确保打开）
-  const openElsewhere = (id: string, pid: string | null) => {
-    if (!pid && !projectId) open(id);
-    else if (pid && pid === projectId) void chat.openProjectChat();
-    else nav(pid ? `/projects/${pid}` : "/chat", { state: { open: id } });
+  // v3.2.1 历史搜索命中项目那段对话也走这里（带 focus = 命中的那条消息）
+  const openElsewhere = (id: string, pid: string | null, focus?: string) => {
+    if (!pid && !projectId) open(id, focus);
+    else if (pid && pid === projectId) { void chat.openProjectChat(focus); setDrawer(false); }
+    else nav(pid ? `/projects/${pid}` : "/chat", { state: { open: id, focus } });
   };
   // /status 打开标题的本对话用量面板：每次 +1，ChatTitle 看到变化就打开
   const [statusAsk, setStatusAsk] = useState(0);
@@ -89,7 +90,7 @@ export default function ChatScreen({ projectId, emptyGreeting, caption, switcher
       <div className={`chat floating ${projectId ? "project" : ""} ${drawer ? "drawer-open" : ""}`}>
         {switcher
           ? switcher.render(() => setDrawer(false))
-          : <ConversationList title="对话" list={chat.list} activeId={chat.activeId} onOpen={open} onDelete={chat.remove} onClose={() => setDrawer(false)} />}
+          : <ConversationList title="对话" list={chat.list} activeId={chat.activeId} onOpen={(id, focus, pid) => (pid ? openElsewhere(id ?? "", pid, focus) : open(id, focus))} onDelete={chat.remove} onClose={() => setDrawer(false)} />}
         <div className="scrim" onClick={() => setDrawer(false)} />
         <section className="chat-main">
           <ShellLead>

@@ -125,7 +125,7 @@ class ModelEfforts {
 }
 
 class ConversationSummary {
-  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId, this.routedModel, this.planMode = false, this.status});
+  const ConversationSummary({required this.id, required this.title, this.updatedAt, this.pinned = false, this.model, this.reasoning, this.snippet, this.messageId, this.routedModel, this.planMode = false, this.status, this.projectId, this.projectName});
   factory ConversationSummary.fromJson(Map<String, dynamic> j) => ConversationSummary(
     id: j['id'] as String,
     title: j['title'] as String? ?? '新对话',
@@ -138,6 +138,8 @@ class ConversationSummary {
     routedModel: j['routed_model'] as String?,
     planMode: j['mode'] == 'plan',
     status: ConversationStatus.parse(j['status']),
+    projectId: j['project_id'] as String?,
+    projectName: j['project_name'] as String?,
   );
   final String id, title;
   final DateTime? updatedAt;
@@ -145,7 +147,7 @@ class ConversationSummary {
 
   /// 服务器自动起了标题（conversation.title 事件）：只换标题，其余照旧。
   ConversationSummary withTitle(String t) => ConversationSummary(
-    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId, routedModel: routedModel, planMode: planMode, status: status);
+    id: id, title: t, updatedAt: updatedAt, pinned: pinned, model: model, reasoning: reasoning, snippet: snippet, messageId: messageId, routedModel: routedModel, planMode: planMode, status: status, projectId: projectId, projectName: projectName);
 
   /// 这个对话选的聊天模型别名；null = 服务器默认。
   final String? model;
@@ -167,6 +169,9 @@ class ConversationSummary {
 
   /// v2.91 §N 项目对话列表的状态（后端 app/conversation_status.py）；主聊天列表、搜索结果、不认识的值 → null（不画胶囊）。
   final ConversationStatus? status;
+
+  /// 只在搜索结果里（v3.2.1 搜全部）：命中的是某个项目的那段对话 → 点开跳进那个项目（openConversation）。
+  final String? projectId, projectName;
 }
 
 /// 对话状态胶囊的三种值（服务器 status 字段）。

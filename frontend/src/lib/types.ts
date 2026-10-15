@@ -177,7 +177,9 @@ export type MessageQuote = { id: string; role?: Role; text?: string; missing?: b
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
 /** v2.91 §N 对话状态（后端 app/conversation_status.py）：项目那段对话 / 项目列表带；主聊天列表、搜索结果不带。 */
 export type ConversationStatus = "running" | "waiting" | "done";
-export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; routed_model?: string | null; mode?: string | null; updated_at: string; snippet?: string; message_id?: string; status?: ConversationStatus | null };
+export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; routed_model?: string | null; mode?: string | null; updated_at: string; snippet?: string; message_id?: string; status?: ConversationStatus | null;
+  /** 只在搜索结果里：命中的是某个项目的那段对话（v3.2.1）→ 点开跳进那个项目。 */
+  project_id?: string; project_name?: string };
 
 /** v1.61 续传：一轮里的事件都带 turn_id + 从 1 起连续的 seq（老服务器没有）。 */
 export type TurnCursor = { turn_id?: string; seq?: number };

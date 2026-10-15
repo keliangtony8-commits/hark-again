@@ -222,6 +222,15 @@ FIXTURES = {
         {"id": "v1", "kind": "api_key", "name": "DeepSeek", "username": None, "hosts": ["api.deepseek.com"], "header_name": "Authorization",
          "header_prefix": "Bearer ", "preview": "a3f9", "created_at": NOW},
     ],
+    # v3.2.1：补上这几份（缺了「连接的账号」MCP 区和「记忆 → 笔记」两屏是空的）；形状 = lib/types.ts McpServerInfo / MemoryNote
+    "/api/version": {"version": "3.2.1", "min_client": "0.0.0"},  # 关于页 / “我的 → 关于”行尾
+    "/api/connectors/mcp": [
+        {"id": "mcp1", "name": "Notion", "url": "https://mcp.notion.com/sse", "has_token": True, "problem": None},
+    ],
+    "/api/memory-notes": [
+        {"id": "n1", "path": "people/mom.md", "title": "妈妈", "kind": "contact", "body": "生日 3 月 12 日；喜欢兰花，不吃辣。", "created_at": NOW, "updated_at": NOW},
+        {"id": "n2", "path": "kaoyan.md", "title": "考研计划", "kind": "project", "body": "数学一，每天一章，错题进错题本。", "created_at": NOW, "updated_at": NOW},
+    ],
     "/api/pages": [
         {"id": "pg1", "slug": "trip", "title": "日本旅行计划", "url": "https://example.com/p/trip", "updated": 1791680000, "published": True},
         {"id": "pg2", "slug": "cv", "title": "个人简历", "url": "https://example.com/p/cv", "updated": 1791500000, "published": False},

@@ -1,7 +1,8 @@
 """在过去的对话里找字：唯一的规则（v2.09 大脑 (at)，对标 Hark“记得以前聊过什么”）。
 
 两个出口共用这一处：
-- 历史面板的搜索框（GET /api/conversations?q=，routes/conversations.py）——按主聊天 / 某个项目分范围；
+- 历史面板的搜索框（GET /api/conversations?q=，routes/conversations.py）——v3.2.1 起搜全部（主聊天 + 各项目），
+  命中项目那段对话的结果带 project_id / project_name，客户端据此跳进那个项目；
 - 模型的 search_history 工具（agent/builtin/history.py）——默认搜全部，可按时间窗口，能翻开某段对话读原文。
 
 规则：

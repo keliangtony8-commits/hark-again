@@ -12,8 +12,8 @@ type Props = {
   title: string;
   list: Conversations;
   activeId: string | null;
-  /** focus：搜索命中正文时那条消息的 id，打开后定位过去。 */
-  onOpen: (id: string | null, focus?: string) => void;
+  /** focus：搜索命中正文时那条消息的 id，打开后定位过去；projectId：命中的是项目那段对话（v3.2.1 搜全部）→ 跳进那个项目。 */
+  onOpen: (id: string | null, focus?: string, projectId?: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
 };
@@ -47,7 +47,7 @@ export default function ConversationList({ title, list, activeId, onOpen, onDele
             <div className="conv-label">{g.label}</div>
             {g.items.map((c, i) => (
               <ConversationRow key={c.id} c={c} q={q} index={i} active={c.id === activeId} editing={editing === c.id}
-                onOpen={() => onOpen(c.id, c.message_id)}
+                onOpen={() => onOpen(c.id, c.message_id, c.project_id)}
                 onEdit={(on) => setEditing(on ? c.id : null)}
                 onRename={(t) => { setEditing(null); list.rename(c.id, t); }}
                 onPin={() => list.setPinned(c.id, !c.pinned)}
@@ -92,8 +92,11 @@ function ConversationRow({ c, q, index, active, editing, onOpen, onEdit, onRenam
       style={{ animationDelay: `calc(var(--stagger) * ${Math.min(index, 8)})` }}>
       <div className="conv-body">
         <span className="conv-title">{c.pinned && <span className="conv-pin"><IconPin size={12} /></span>}<Highlight text={c.title} q={q} /></span>
-        {c.snippet && <span className="conv-snippet"><Highlight text={c.snippet} q={q} /></span>}
+        {(c.snippet || c.project_name) && <span className="conv-snippet">
+          {c.project_name && <span className="conv-where">{c.project_name}{c.snippet ? " · " : ""}</span>}
+          {c.snippet && <Highlight text={c.snippet} q={q} />}</span>}
       </div>
+      {!c.project_id && /* 项目那段对话归项目管（改名 / 删除在项目里），搜索结果里只能打开 */
       <Menu trigger={<IconMore />} items={[
         { label: c.pinned ? "取消置顶" : "置顶", icon: <IconPin />, onSelect: onPin },
         { label: "重命名", icon: <IconEdit />, onSelect: () => onEdit(true) },
@@ -101,7 +104,7 @@ function ConversationRow({ c, q, index, active, editing, onOpen, onEdit, onRenam
         { label: "分享为网页", icon: <IconGlobe />, onSelect: onShare },
         { label: "导出 Markdown", icon: <IconDownload />, onSelect: onExport },
         { label: "删除", icon: <IconTrash />, danger: true, onSelect: onDelete },
-      ]} />
+      ]} />}
     </div>
   );
 }

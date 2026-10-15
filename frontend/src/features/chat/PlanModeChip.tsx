@@ -7,7 +7,7 @@ export default function PlanModeChip({ on, onChange }: { on: boolean; onChange: 
   return (
     <button type="button" className={`model-chip plan-chip${on ? " strong is-on" : ""}`} aria-pressed={on}
       aria-label={on ? PLAN_MODE_ON : PLAN_MODE_OFF} title={on ? PLAN_MODE_ON : PLAN_MODE_OFF} onClick={() => onChange(!on)}>
-      <span key={String(on)} className="model-chip-label"><IconMap size={14} />{on && "计划"}</span>
+      <span key={String(on)} className="model-chip-label"><IconMap size={14} />{on && <span className="chip-text">计划</span>}</span>
     </button>
   );
 }

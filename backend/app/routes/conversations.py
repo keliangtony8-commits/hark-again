@@ -16,18 +16,22 @@ from .inbox import mark_read
 router = APIRouter(prefix="/api/conversations", tags=["conversations"], dependencies=[Depends(require_user)])
 
 
-def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
-    """hit = (命中的消息 id, 摘录)：客户端据此打开对话后滚到那条消息并闪一下。"""
+def _summary(c: Conversation, hit: tuple[str, str] | None = None, project_name: str | None = None) -> dict:
+    """hit = (命中的消息 id, 摘录)：客户端据此打开对话后滚到那条消息并闪一下。
+    project_name 只在搜索结果里给：命中的是某个项目那段对话（带 project_id，客户端跳进那个项目）。"""
     out = {"id": c.id, "title": c.title, "pinned": c.pinned, "model": c.model, "reasoning": c.reasoning,
            "routed_model": c.routed_model, "mode": c.mode or "default", "updated_at": iso(c.updated_at)}
     if hit:
         out["message_id"], out["snippet"] = hit
+    if project_name is not None:
+        out["project_id"], out["project_name"] = c.project_id, project_name
     return out
 
 
 @router.get("")
 async def list_conversations(project_id: str | None = None, q: str = "", db: AsyncSession = Depends(get_session)):
-    """不带 project_id = 主聊天的对话（q = 按标题和消息内容搜索，空格分开的词都要有；置顶在前）。
+    """不带 project_id = 主聊天的对话（q = 按标题和消息内容搜索，空格分开的词都要有；置顶在前；
+    v3.2.1 搜索范围 = 全部（主聊天 + 各项目），项目那段对话的结果带 project_id / project_name）。
     带 project_id = 这个项目的那段对话（v2.95 项目 = 一段对话：≤1 项、带 status；没有就当场建，幂等；不搜索）。"""
     if project_id:
         project = await db.get(Project, project_id)
@@ -39,8 +43,12 @@ async def list_conversations(project_id: str | None = None, q: str = "", db: Asy
         return [{**_summary(conv), "status": status.get(conv.id)}]
     q = q.strip()
     if q:  # 规则在 chat_search（拆词 AND、摘录、最佳命中消息）；标题已含全部词的不带摘录/定位
-        found = await chat_search.search(db, q, scope=None, limit=50)
-        return [_summary(h.conversation, None if h.title_hit or not h.message_id else (h.message_id, h.snippet))
+        found = await chat_search.search(db, q, scope=chat_search.ALL, limit=50)
+        names = await chat_search.project_names(db, {h.conversation.project_id for h in found})
+
+        def where(c: Conversation) -> str | None:  # 项目那段对话 → 项目名；任务在项目里开的运行对话照旧按 id 直接打开
+            return names.get(c.project_id) if c.project_id and not run_conversations.hidden(c) else None
+        return [_summary(h.conversation, None if h.title_hit or not h.message_id else (h.message_id, h.snippet), where(h.conversation))
                 for h in found]
     rows = (await db.scalars(select(Conversation).where(Conversation.project_id.is_(None), run_conversations.listed())
                              .order_by(Conversation.pinned.desc(), Conversation.updated_at.desc()).limit(100))).all()

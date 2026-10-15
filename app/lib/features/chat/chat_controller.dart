@@ -210,11 +210,11 @@ class ChatController extends Notifier<ChatState> {
   }
 
   /// 从别处跳进项目（转交卡、“来自 X”、反馈、建议卡）：不管带来的是哪个对话 id，项目里只有这一段——刷新并打开它。
-  Future<void> openProjectChat() async {
+  Future<void> openProjectChat({String? focus}) async {
     if (projectId.isEmpty) return;
     await refreshList();
     final id = state.conversations.firstOrNull?.id;
-    if (id != null && state.activeId != id) await open(id);
+    if (id != null && (state.activeId != id || focus != null)) await open(id, focus: focus); // focus：搜索命中的那条（v3.2.1）
   }
 
   /// 发件箱持久化：同一个对话里未发出的消息（id + 状态）一变就整份写。
