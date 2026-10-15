@@ -281,8 +281,12 @@ class WidePill extends StatelessWidget {
 
 /// 圆形玻璃图标按钮，尺寸 = 顶栏高度（≥ A11y.minTap）。tooltip 同时是读屏名字。
 class GlassIconButton extends StatelessWidget {
-  const GlassIconButton({super.key, required this.icon, required this.tooltip, required this.onTap, this.size = Layout.topBar});
-  final IconData icon;
+  const GlassIconButton({super.key, required IconData this.icon, required this.tooltip, required this.onTap, this.size = Layout.topBar}) : glyph = null;
+
+  /// 图标不是字体图标时（v2.93 项目左上的 ≡/+ MenuPlusIcon）。
+  const GlassIconButton.glyph({super.key, required Widget this.glyph, required this.tooltip, required this.onTap, this.size = Layout.topBar}) : icon = null;
+  final IconData? icon;
+  final Widget? glyph;
   final String tooltip;
   final VoidCallback? onTap;
   final double size;
@@ -297,7 +301,7 @@ class GlassIconButton extends StatelessWidget {
           scale: 0.92,
           child: SizedBox.square(
             dimension: size,
-            child: GlassSurface(blur: true, radius: Radii.full, child: Center(child: Icon(icon, color: context.palette.text))),
+            child: GlassSurface(blur: true, radius: Radii.full, child: Center(child: glyph ?? Icon(icon, color: context.palette.text))),
           ),
         ),
       );

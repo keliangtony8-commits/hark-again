@@ -33,6 +33,7 @@ import 'theme/app_theme.dart';
 import 'theme/appearance.dart';
 import 'theme/look.dart';
 import 'ui/glass.dart';
+import 'ui/motion.dart';
 import 'theme/tokens.dart';
 import 'brand.dart';
 
@@ -61,7 +62,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [GoRoute(path: '/chat', builder: (_, _) => const ChatScreen())]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/projects', builder: (_, _) => const ProjectsScreen(), routes: [
-              GoRoute(path: ':id', builder: (_, s) => ProjectDetailScreen(id: s.pathParameters['id']!), routes: [
+              // v2.93 §Q 项目页自带转场（淡入 + 浮上，Motion.morph）：左上 +/≡ 的 Hero 飞行要骑在一条真的路由动画上。
+              // 其余路由沿用 go_router 默认页（实测在本 App 里是无转场页，见 devlog v2.93），不在这一轮改全局手感。
+              GoRoute(
+                  path: ':id',
+                  pageBuilder: (_, s) => CustomTransitionPage<void>(
+                        key: s.pageKey,
+                        transitionDuration: Motion.morph,
+                        reverseTransitionDuration: Motion.morph,
+                        transitionsBuilder: (ctx, a, _, child) => pageRiseTransition(ctx, a, child),
+                        child: ProjectDetailScreen(id: s.pathParameters['id']!),
+                      ),
+                  routes: [
                 GoRoute(path: 'brief', builder: (_, s) => ProjectBriefScreen(id: s.pathParameters['id']!)),
                 GoRoute(path: 'computer', builder: (_, s) => ComputerScreen(ws: s.pathParameters['id']!)),
               ]),

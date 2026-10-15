@@ -332,9 +332,9 @@ class _Api implements Api {
     }
     if (path == '/api/projects') {
       return [
-        {'id': 'p1', 'name': '考研复习', 'emoji': '📚', 'rules': '每天 8 点提醒我背单词', 'conversation_count': 12, 'last_active_at': _ago(const Duration(hours: 2))},
-        {'id': 'p2', 'name': '找实习', 'emoji': '💼', 'rules': '', 'conversation_count': 3, 'last_active_at': _ago(const Duration(days: 1))},
-        {'id': 'p3', 'name': '国庆旅行', 'emoji': '🏔️', 'rules': '预算 3000 以内', 'conversation_count': 0, 'last_active_at': _ago(const Duration(days: 9))},
+        {'id': 'p1', 'name': '考研复习', 'emoji': '📚', 'rules': '每天 8 点提醒我背单词', 'conversation_count': 12, 'status': 'running', 'last_active_at': _ago(const Duration(hours: 2))},
+        {'id': 'p2', 'name': '找实习', 'emoji': '💼', 'rules': '', 'conversation_count': 3, 'status': 'waiting', 'last_active_at': _ago(const Duration(days: 1))},
+        {'id': 'p3', 'name': '国庆旅行', 'emoji': '🏔️', 'rules': '预算 3000 以内', 'conversation_count': 0, 'status': 'done', 'last_active_at': _ago(const Duration(days: 9))},
       ];
     }
     if (path == '/api/projects/p1/files') {
@@ -511,6 +511,13 @@ Future<void> _loadFonts() async {
   await load('MaterialIcons', '$sdk/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf');
 }
 
+/// 等动画走完：不用 pumpAndSettle——“进行中”胶囊的呼吸点是无限动画（v2.93 项目列表也画它），永远等不到静止。
+Future<void> _calm(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
 Future<void> _shot(WidgetTester tester, String name) async {
   for (var i = 0; i < 12; i++) {
     await tester.pump(const Duration(milliseconds: 100));
@@ -572,23 +579,23 @@ void main() {
       await _shot(tester, '$mode-chat');
       // 主聊天里存回复 → 先选项目（v1.16；v2.90 起「存成文件」在回复的操作菜单里，长按那条回复打开，项多了还得先点“更多”）
       await tester.longPress(find.textContaining('今天的日额度', findRichText: true).first);
-      await tester.pumpAndSettle();
+      await _calm(tester);
       if (find.text('更多').evaluate().isNotEmpty) {
         await tester.tap(find.text('更多').last);
-        await tester.pumpAndSettle();
+        await _calm(tester);
       }
       await tester.tap(find.text(saveReplyLabel).last);
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200))); // 项目列表是真异步
-      await tester.pumpAndSettle();
+      await _calm(tester);
       expect(find.text('存到哪里'), findsOneWidget);
       await _shot(tester, '$mode-save-picker');
       Navigator.of(tester.element(find.text('存到哪里'))).pop();
-      await tester.pumpAndSettle();
+      await _calm(tester);
       // 点一下较早的回复 → 露出它自己的操作行（v1.17）；先往回翻让它整条在视野里
       await tester.dragFrom(const Offset(200, 400), const Offset(0, 500));
-      await tester.pumpAndSettle();
+      await _calm(tester);
       await tester.tap(find.textContaining('今天的日额度', findRichText: true).first, warnIfMissed: false);
-      await tester.pumpAndSettle();
+      await _calm(tester);
       await _shot(tester, '$mode-chat-revealed');
       await tester.runAsync(() => container.read(chatProvider('').notifier).open('c2'));
       await _shot(tester, '$mode-chat-shop');
@@ -610,7 +617,7 @@ void main() {
       ]));
       await _shot(tester, '$mode-sheet-form');
       Navigator.of(nav).pop();
-      await tester.pumpAndSettle();
+      await _calm(tester);
       unawaited(showActionSheet<int>(nav, title: '毕业论文', actions: const [
         SheetAction(Icons.edit_outlined, '改名', value: 1),
         SheetAction(Icons.folder_outlined, '文件', value: 2),
@@ -618,12 +625,12 @@ void main() {
       ]));
       await _shot(tester, '$mode-sheet-actions');
       Navigator.of(nav).pop();
-      await tester.pumpAndSettle();
+      await _calm(tester);
       // 对话框（GlassDialog + 磨砂遮罩）：危险确认盖在项目页上
       unawaited(confirmDanger(nav, title: '删除“毕业论文”？', text: '项目里的对话、档案和文件会一起删掉，找不回来。'));
       await _shot(tester, '$mode-dialog');
       Navigator.of(nav).pop();
-      await tester.pumpAndSettle();
+      await _calm(tester);
       router.push('/me');
       await _shot(tester, '$mode-me');
       router.push('/me/connectors'); // 连接器：MCP 行上的问题（v0.97）
@@ -646,20 +653,24 @@ void main() {
       router.pop();
       router.push('/me/usage'); // 子页面（SubPage 玻璃标题栏）
       await _shot(tester, '$mode-usage');
-      router.go('/projects/p1'); // 项目详情（v1.08）；v1.10 首屏 = 名字 + 规则 + 最近对话
+      router.go('/projects/p1'); // 项目详情：v2.93 §Q 仍在一级外壳下，首屏 = 本项目对话列表
       await tester.pump();
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200))); // 项目对话列表先过一遍缓存（真异步）
       await _shot(tester, '$mode-project');
+      await tester.tap(find.byTooltip('项目对话')); // v2.93 §Q 抽屉从 header 行下面滑出，左上 ≡ 转成 +
+      await _shot(tester, '$mode-project-drawer');
+      await tester.tap(find.byTooltip('新对话'));
+      await _calm(tester);
       // 引用项目文件（v1.14）：+ → 项目文件 → 选两个 → 托盘里两张名片
       await tester.tap(find.byTooltip('添加附件'));
-      await tester.pumpAndSettle();
+      await _calm(tester);
       await tester.tap(find.text('项目文件'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('2024 数一.pdf').last); // 首屏“文件”一节也有同名行，弹层在上面
+      await _calm(tester);
+      await tester.tap(find.text('2024 数一.pdf').last);
       await tester.tap(find.text('单词表.csv').last);
       await _shot(tester, '$mode-project-picker');
       await tester.tap(find.text('引用 2 个文件'));
-      await tester.pumpAndSettle();
+      await _calm(tester);
       FocusManager.instance.primaryFocus?.unfocus();
       await _shot(tester, '$mode-project-refs');
       router.go('/projects/p1/brief');

@@ -15,10 +15,12 @@ import 'glass.dart';
 import 'motion.dart';
 
 // 弹层一律开在根导航器上（v2.78）：盖住外壳的浮动顶栏和底部输入胶囊，遮罩也盖住它们——以前开在 Tab 自己的导航器里，
-// 顶栏浮在遮罩上面“叠在一起”。
+// 顶栏浮在遮罩上面“叠在一起”。v2.93：isScrollControlled 的弹层再加 useSafeArea——长表单 / 键盘弹起时最高只到状态栏下面，
+// 不再顶进状态栏和顶栏的位置（和网页 Sheet 修遮挡同一轮）。
 Future<T?> showAppSheet<T>(BuildContext context, {required WidgetBuilder builder}) => showModalBottomSheet<T>(
       context: context,
       useRootNavigator: true,
+      useSafeArea: true,
       isScrollControlled: true, // 让表单能随键盘长高；高度仍随内容
       builder: (ctx) => GlassSheet(child: builder(ctx)),
     );
@@ -34,6 +36,7 @@ Future<T?> showAppScrollSheet<T>(
     showModalBottomSheet<T>(
       context: context,
       useRootNavigator: true,
+      useSafeArea: true,
       isScrollControlled: true,
       builder: (ctx) => ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * max),
@@ -121,29 +124,34 @@ class _FormSheetState extends State<_FormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // 字段在可滚区里，提交钮钉在下面（v2.93）：键盘弹起、字段多时按钮也始终看得见，不用先往下滚
     return Padding(
       padding: EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, MediaQuery.viewInsetsOf(context).bottom + Sp.x5),
-      child: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(widget.title, style: context.text.titleLarge),
-          if (widget.subtitle != null) ...[const SizedBox(height: Sp.x1), Text(widget.subtitle!, style: context.text.bodySmall)],
-          for (final (i, f) in widget.fields.indexed) ...[
-            const SizedBox(height: Sp.x3),
-            TextField(
-              controller: _c[f.key],
-              autofocus: i == 0,
-              obscureText: f.obscure,
-              keyboardType: f.keyboard,
-              minLines: f.lines,
-              maxLines: f.obscure ? 1 : (f.lines == 1 ? 1 : f.lines * 2),
-              decoration: InputDecoration(labelText: f.label, hintText: f.hint),
-            ),
-          ],
-          if (widget.extra != null) ...[const SizedBox(height: Sp.x3), widget.extra!],
-          const SizedBox(height: Sp.x4),
-          FilledButton(onPressed: _valid ? _done : null, child: Text(widget.submit)),
-        ]),
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Flexible(
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text(widget.title, style: context.text.titleLarge),
+              if (widget.subtitle != null) ...[const SizedBox(height: Sp.x1), Text(widget.subtitle!, style: context.text.bodySmall)],
+              for (final (i, f) in widget.fields.indexed) ...[
+                const SizedBox(height: Sp.x3),
+                TextField(
+                  controller: _c[f.key],
+                  autofocus: i == 0,
+                  obscureText: f.obscure,
+                  keyboardType: f.keyboard,
+                  minLines: f.lines,
+                  maxLines: f.obscure ? 1 : (f.lines == 1 ? 1 : f.lines * 2),
+                  decoration: InputDecoration(labelText: f.label, hintText: f.hint),
+                ),
+              ],
+              if (widget.extra != null) ...[const SizedBox(height: Sp.x3), widget.extra!],
+            ]),
+          ),
+        ),
+        const SizedBox(height: Sp.x4),
+        FilledButton(onPressed: _valid ? _done : null, child: Text(widget.submit)),
+      ]),
     );
   }
 }

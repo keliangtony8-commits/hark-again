@@ -208,7 +208,9 @@ export type ServerEvent = TurnCursor & (
 /** conversation_count / last_active_at：服务器算好的只读字段（旧服务器没有）。 */
 /** brief = 项目档案（Markdown 活文档，用户和助手都能改）；brief_by = 最后谁改的。老服务器没有这三个字段。 */
 export type Project = { id: string; name: string; emoji: string; rules: string; updated_at: string;
-  brief?: string; brief_by?: "user" | "assistant" | null; brief_updated_at?: string | null; conversation_count?: number; last_active_at?: string | null };
+  brief?: string; brief_by?: "user" | "assistant" | null; brief_updated_at?: string | null; conversation_count?: number; last_active_at?: string | null;
+  /** v2.93 §Q 项目汇总状态（服务器算，规则在后端 conversation_status.summarize；老服务器没有 = 不画胶囊） */
+  status?: ConversationStatus | null };
 export type Memory = { id: string; category: string; content: string; updated_at: string };
 export type ScheduledTask = { id: string; name: string; prompt: string; cron: string; active: boolean; output: "report" | "panel"; run_requested: boolean; last_run_at: string | null; last_status: "ok" | "error" | null;
   /** 连着失败几次（成功归零）；paused_reason "failures" = 连续失败被自动暂停，"ended" = 运行里按指令结束了自己，手动停 = null（老服务器没有这两个字段） */

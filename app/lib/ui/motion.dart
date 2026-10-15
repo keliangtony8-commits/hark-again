@@ -735,12 +735,28 @@ class FadeSwitcher extends StatelessWidget {
 }
 
 
-/// §N 项目对话左上钮的图标：plus=false 是“≡”（三条横线），true 是“+”。
+/// §N 项目左上钮的图标：plus=false 是“≡”（三条横线），true 是“+”。
 /// 切换时上下两条线平移到中线、分别旋转 ±90° 合成竖线，中线不动 → 十字（Motion.morph，easeInOut 对称）。
-/// 只动 transform；减少动态时直接换到终态。
+/// 只动 transform；减少动态时直接换到终态。画线在 [MenuPlusGlyph]（按进度画），这里只负责补间。
 class MenuPlusIcon extends StatelessWidget {
   const MenuPlusIcon({super.key, required this.plus, this.size = 24, this.color});
   final bool plus;
+  final double size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+        tween: Tween(end: plus ? 1 : 0),
+        duration: context.motion(Motion.morph),
+        curve: Motion.morphCurve,
+        builder: (_, t, _) => MenuPlusGlyph(t: t, size: size, color: color),
+      );
+}
+
+/// ≡ → + 的某一帧：t = 0 是 ≡，1 是 +。补间（MenuPlusIcon）和跨页飞行（MenuPlusHero）共用这一份画法。
+class MenuPlusGlyph extends StatelessWidget {
+  const MenuPlusGlyph({super.key, required this.t, this.size = 24, this.color});
+  final double t;
   final double size;
   final Color? color;
 
@@ -749,7 +765,7 @@ class MenuPlusIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = color ?? IconTheme.of(context).color ?? context.palette.text;
-    Widget line(double t, double dy, double turn) => Transform(
+    Widget line(double dy, double turn) => Transform(
           alignment: Alignment.center,
           transform: Matrix4.identity()
             ..translateByDouble(0, dy * (1 - t), 0, 1)
@@ -763,17 +779,66 @@ class MenuPlusIcon extends StatelessWidget {
         );
     return SizedBox.square(
       dimension: size,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(end: plus ? 1 : 0),
-        duration: context.motion(Motion.morph),
-        curve: Motion.morphCurve,
-        builder: (_, t, _) => Stack(alignment: Alignment.center, children: [
-          line(t, -_gap, 1),
-          line(t, 0, 0),
-          line(t, _gap, -1),
-        ]),
-      ),
+      child: Stack(alignment: Alignment.center, children: [line(-_gap, 1), line(0, 0), line(_gap, -1)]),
     );
+  }
+}
+
+/// v2.93 §Q 进出项目页的转场（app.dart 的 CustomTransitionPage 用它）：新页淡入 + 从下方 Motion.pageRise 浮上来，
+/// 与左上钮的 morph 同一个 Motion.morph 时长和曲线，钮的 Hero 飞行就骑在这条路由动画上。底下那页由 [FadeUnderCover] 淡出，
+/// 两页都是透明底（外壳的壁纸在下面），不交叉淡化会叠字。只动 opacity / transform；减少动态时直接到位。
+Widget pageRiseTransition(BuildContext context, Animation<double> animation, Widget child) {
+  if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return child;
+  final t = CurvedAnimation(parent: animation, curve: Motion.morphCurve);
+  return FadeTransition(
+    opacity: t,
+    child: AnimatedBuilder(
+      animation: t,
+      child: child,
+      builder: (_, c) => Transform.translate(offset: Offset(0, (1 - t.value) * Motion.pageRise), child: c),
+    ),
+  );
+}
+
+/// 被新页盖住时淡出（读本页路由的 secondaryAnimation）：项目列表在进项目时让位，返回时淡回来。
+class FadeUnderCover extends StatelessWidget {
+  const FadeUnderCover({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = ModalRoute.of(context)?.secondaryAnimation;
+    if (cover == null || (MediaQuery.maybeDisableAnimationsOf(context) ?? false)) return child;
+    return FadeTransition(opacity: ReverseAnimation(CurvedAnimation(parent: cover, curve: Motion.morphCurve)), child: child);
+  }
+}
+
+/// v2.93 §Q “同一颗钮”跨页面：项目列表的 +（新建项目）和项目页的 ≡（对话列表）挂同一个 [tag]。
+/// 切页时这颗钮不随页面滑动，飞行途中按路由进度从上一页的形状画到下一页的形状（push +→≡，pop / 预测式返回 ≡→+，跟手）。
+/// [frame] 把图标装进按钮外框（玻璃圆钮），飞行中的那颗也用它画，所以外观一致。减少动态：过半直接换到终态。
+class MenuPlusHero extends StatelessWidget {
+  const MenuPlusHero({super.key, required this.tag, required this.plus, required this.frame});
+  final Object tag;
+  final bool plus;
+  final Widget Function(Widget glyph) frame;
+
+  @override
+  Widget build(BuildContext context) => Hero(tag: tag, flightShuttleBuilder: _shuttle, child: frame(MenuPlusIcon(plus: plus)));
+
+  static Widget _shuttle(BuildContext context, Animation<double> animation, HeroFlightDirection direction, BuildContext from, BuildContext to) {
+    MenuPlusHero? face(BuildContext c) => c.findAncestorWidgetOfExactType<MenuPlusHero>();
+    final a = face(from), b = face(to);
+    if (a == null || b == null) return (to.widget as Hero).child;
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final t0 = a.plus ? 1.0 : 0.0, t1 = b.plus ? 1.0 : 0.0;
+    return b.frame(AnimatedBuilder(
+      animation: animation,
+      builder: (_, _) {
+        // push 时 animation 0→1；pop 时它是要离开那一页的动画 1→0：都换算成“从 from 走到 to 的进度”
+        final p = direction == HeroFlightDirection.push ? animation.value : 1 - animation.value;
+        return MenuPlusGlyph(t: reduce ? (p < 0.5 ? t0 : t1) : t0 + (t1 - t0) * p);
+      },
+    ));
   }
 }
 

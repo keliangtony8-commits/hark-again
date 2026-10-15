@@ -201,6 +201,7 @@ class Project {
     this.updatedAt,
     this.conversationCount = 0,
     this.lastActiveAt,
+    this.status,
   });
   factory Project.fromJson(Map<String, dynamic> j) => Project(
     id: j['id'] as String,
@@ -213,6 +214,7 @@ class Project {
     updatedAt: _date(j['updated_at']),
     conversationCount: (j['conversation_count'] as num?)?.toInt() ?? 0,
     lastActiveAt: _date(j['last_active_at']),
+    status: ConversationStatus.parse(j['status']),
   );
   final String id, name, emoji, rules;
   final DateTime? updatedAt;
@@ -222,18 +224,12 @@ class Project {
   final String? briefBy;
   final DateTime? briefUpdatedAt;
 
-  /// 档案里第一行正文（跳过标题和空行），给列表卡片当副标题。
-  String get briefLine {
-    for (final l in brief.split('\n')) {
-      final t = l.trim().replaceFirst(RegExp(r'^([-*+]|\d+\.)\s+'), '');
-      if (t.isNotEmpty && !t.startsWith('#')) return t;
-    }
-    return '';
-  }
-
   /// 服务端算的只读字段（老服务端没有 → 0 / null，卡片退回用 updatedAt）。
   final int conversationCount;
   final DateTime? lastActiveAt;
+
+  /// v2.93 §Q 项目汇总状态（服务器算，规则在后端 conversation_status.summarize；老服务端没有 → null，不画胶囊）。
+  final ConversationStatus? status;
 
   DateTime? get activeAt => lastActiveAt ?? updatedAt;
 }

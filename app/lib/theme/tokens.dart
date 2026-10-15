@@ -216,6 +216,7 @@ abstract final class Motion {
   // §N 项目页（v2.91）
   static const morph = Duration(milliseconds: 280); // 左上 ≡ ↔ +：三条线旋转成十字
   static const morphCurve = Cubic(0.65, 0, 0.35, 1); // easeInOutCubic：来回对称（= 网页 --ease-morph）
+  static const pageRise = 8.0; // v2.93 §Q 进出项目页：新页从下方 8px 浮上来 + 淡入（与 ≡/+ 同一个 Motion.morph 时长）
   static const pillDrop = 8.0; // 标题药丸从上方落下的距离（出现用 spring，过冲约 2–3%）
   static const pillReveal = 24.0; // 往上翻看历史累计超过这么多像素，药丸浮出
   static const pillHide = 4.0; // 往下滑超过这么多像素，药丸收起（滚动回弹的抖动不算）
@@ -341,7 +342,6 @@ abstract final class Layout {
   static const productTileMin = 148.0; // 商品宫格每格最窄多宽（手机两列、平板更多列）
   static const offerImageRatio = 2.0; // 主页建议卡顶部配图的宽高比（宽图，不把卡撑太高）
   static const nowDot = 6.0; // 主页“今天”的“现在”标记：细线起头的小圆点
-  static const projectMark = 56.0; // 项目首屏的字标方块（v1.10；列表卡里是 A11y.minTap）
   static const agendaTime = 48.0; // 主页“今天”行首钟点列的宽（HH:MM 等宽数字，上下对齐）
   static const orderThumb = 40.0; // 订单卡每行商品小图的边长
   static const seekPagesMax = 60; // 定位消息时最多往上翻多少屏（防止死循环）

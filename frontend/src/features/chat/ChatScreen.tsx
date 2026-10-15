@@ -20,20 +20,21 @@ import "./chat.css";
 type Props = {
   projectId?: string;       // 有值 = 项目内聊天
   listTitle?: string;
-  leading?: ReactNode;      // 有值 = 页面自带浮动标题栏（项目页：返回/文件/设置）；没有 = 主聊天，标题是外壳顶栏下的一行小字
-  trailing?: ReactNode;     // 浮动标题栏右侧（项目页：文件/设置），左右对称让标题居中
+  back?: ReactNode;         // 标题行最左（项目页：返回项目列表）；和 trailing 对称，标题居中
+  trailing?: ReactNode;     // 标题行最右（项目页：项目菜单 ⋯）
   headerTitle?: string;
   emptyGreeting?: string;
-  /** 没有消息时的首屏（项目首屏 ProjectHome）：拿到发消息 / 打开对话 / 打开历史抽屉和对话列表。 */
+  /** 没有消息时的首屏（项目首屏 ProjectHome）：拿到打开对话和对话列表。 */
   empty?: (c: EmptyContext) => ReactNode;
 };
 
-export type EmptyContext = { send: (t: string) => void; open: (id: string) => void; showAll: () => void; conversations: ConversationSummary[] };
+export type EmptyContext = { open: (id: string) => void; conversations: ConversationSummary[] };
 
-/** 聊天屏：主聊天和项目内对话共用（设计 v2）。
- *  主聊天：外壳的浮动顶栏在上，标题是它下面居中的一行小字，窄屏的“历史”按钮传进顶栏左槽；
- *  项目对话：没有外壳顶栏，同一位置换成本页的玻璃标题栏。新对话在历史面板顶部。 */
-export default function ChatScreen({ projectId, listTitle = "对话", leading, trailing, headerTitle, emptyGreeting, empty }: Props) {
+/** 聊天屏：主聊天和项目内对话共用（设计 v2；v2.93 §Q 起两者都在一级外壳下）。
+ *  外壳的浮动顶栏在上，标题是它下面的一行小字（标题行，= App ChatScaffold header）；窄屏左上钮传进顶栏左槽：
+ *  主聊天 = 历史（抽屉盖全屏）；项目 = ≡（本项目对话列表，从标题行下面滑出，开着时同一颗钮转成 + = 新对话）。
+ *  项目的标题行左 ‹ 返回项目列表、右 ⋯ 项目菜单。新对话在历史面板顶部（项目抽屉里由那颗 + 承担）。 */
+export default function ChatScreen({ projectId, listTitle = "对话", back, trailing, headerTitle, emptyGreeting, empty }: Props) {
   const chat = useChat(projectId);
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
@@ -86,31 +87,23 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
 
   return (
     <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval, replyForm: chat.replyForm, onJobSettled: chat.refreshActive, undoChanges: chat.undoChanges, followUp: chat.followUp, openConversation: (id, pid) => openElsewhere(id, pid) }}>
-      <div className={`chat ${leading ? "with-bar" : "floating"} ${drawer ? "drawer-open" : ""}`}>
+      <div className={`chat floating ${projectId ? "project" : ""} ${drawer ? "drawer-open" : ""}`}>
         <ConversationList title={listTitle} list={chat.list} activeId={chat.activeId}
           onOpen={open} onDelete={chat.remove} onClose={() => setDrawer(false)} />
         <div className="scrim" onClick={() => setDrawer(false)} />
         <section className="chat-main">
-          {leading ? (
-            <header className="chat-top chat-bar glass">
-              <div className="chat-bar-side">
-                {leading}
-                {/* v2.91 §N：≡ 打开项目对话列表（从标题栏下面滑出）；开着时同一颗钮转成 + = 本项目新对话 */}
-                <MenuPlus plus={drawer} onClick={() => (drawer ? open(null) : showList())} />
-              </div>
-              <ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} />
-              <div className="chat-bar-side end">{trailing}</div>
-            </header>
-          ) : (
-            <>
-              <ShellLead>
-                <button className="glass-btn glass mobile-only" onClick={() => setDrawer(true)} aria-label="历史"><IconHistory /></button>
-              </ShellLead>
-              <header className="chat-top chat-caption"><ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} /></header>
-            </>
-          )}
-          <ChatView empty={empty?.({ send: (t) => chat.send(t), open: (id) => open(id), showAll: showList, conversations: chat.list.items })}
-            pill={leading ? { id: chat.activeId, title: convTitle } : undefined}
+          <ShellLead>
+            {projectId
+              ? <MenuPlus mobileOnly plus={drawer} label={drawer ? "新对话" : "项目对话"} onClick={() => (drawer ? open(null) : showList())} />
+              : <button className="glass-btn glass mobile-only" onClick={() => setDrawer(true)} aria-label="历史"><IconHistory /></button>}
+          </ShellLead>
+          <header className={`chat-top chat-caption ${back || trailing ? "with-sides" : ""}`}>
+            {(back || trailing) && <div className="chat-caption-side">{back}</div>}
+            <ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} />
+            {(back || trailing) && <div className="chat-caption-side end">{trailing}</div>}
+          </header>
+          <ChatView empty={empty?.({ open: (id) => open(id), conversations: chat.list.items })}
+            pill={projectId ? { id: chat.activeId, title: convTitle } : undefined}
             projectId={projectId} messages={chat.messages} busy={chat.busy} error={chat.error} link={chat.link} greeting={emptyGreeting}
             canRegenerate={chat.canRegenerate} onRegenerate={chat.regenerate}
             editableId={chat.editableId} onEdit={chat.edit}

@@ -1,4 +1,4 @@
-// 项目档案：模型解析（老服务器没有字段 → 空；briefLine 跳过标题和列表符号）；
+// 项目档案：模型解析（老服务器没有字段 → 空；v2.93 起列表不再画档案摘要行，briefLine 随之删除）；
 // 档案页进页静默 reload（拿到助手刚改的版本）、显示“助手更新于”；编辑 → 保存走 PATCH {brief}，回到查看；
 // 空档案显示空态 + “自己写”；改了没保存点取消要确认；规则行点开表单改 rules。
 import 'package:assistant/core/api.dart';
@@ -72,13 +72,13 @@ Future<ProviderContainer> pump(WidgetTester tester, FakeApi api) async {
 }
 
 void main() {
-  test('模型：老服务器没有档案字段；briefLine 取第一行正文', () {
+  test('模型：老服务器没有档案字段；新服务器带档案、谁改的、何时改的', () {
     final old = Project.fromJson({'id': 'x', 'name': 'n'});
     expect(old.brief, '');
     expect(old.briefBy, isNull);
-    expect(old.briefLine, '');
     final p = Project.fromJson(proj(brief: '## 目标\n\n- 12 月考研\n- 每晚复盘', by: 'assistant'));
-    expect(p.briefLine, '12 月考研');
+    expect(p.brief, startsWith('## 目标'));
+    expect(p.briefBy, 'assistant');
     expect(p.briefUpdatedAt, isNotNull);
   });
 

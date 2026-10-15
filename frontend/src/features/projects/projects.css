@@ -1,22 +1,22 @@
-/* 项目网格：矮玻璃卡（App 同款 _ProjectTile.height 112），宽了自动多列（电脑宽屏页面放宽到 --content-wide → 三列）；骨架与卡片同高同圆角，换成内容不跳版 */
-.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--card-gap); }
-.project-skel { height: 112px; margin: 0 !important; border-radius: var(--r-card); }
-.project-card { position: relative; min-height: 112px; --project-pad: calc(var(--sp-4) + 4px); --project-emoji: 36px;
-  background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-card); box-shadow: var(--elev-card);
-  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
-.project-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
-.project-card:active { transform: scale(.98); transition-duration: var(--dur-fast); }
-.project-card-link { display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-1); height: 100%; min-height: 112px;
-  padding: var(--project-pad); padding-right: calc(var(--sp-4) + 36px); color: var(--text); border-radius: inherit; }
-.project-card > .menu { position: absolute; top: calc(var(--project-pad) + (var(--project-emoji) - 30px) / 2); right: var(--sp-3); } /* 与图标同一中线（触发键 .icon-btn.sm 30px） */
-.project-card > .menu .menu-trigger { color: var(--text-3); }
-.project-card:has(.menu.open) { z-index: 3; } /* 入场动画让每张卡自成层叠上下文：菜单打开时抬高本卡，弹出层才盖得住下一张 */
-.project-card-head { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
-.project-emoji { flex: none; display: grid; place-items: center; width: var(--project-emoji); height: var(--project-emoji); border-radius: var(--r-inner); background: var(--tile); font-size: 20px; }
-.project-name { font-weight: var(--fw-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-rules { font-size: var(--fs-sm); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-meta { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
+/* v2.93 §Q 项目列表（= App _ProjectRow）：一行一个大字项目名，行尾状态胶囊 + ⋯；不是“当前”的项目名用三级色（静态，不做颜色动画）。
+   骨架与行同高，换成内容不跳版 */
+.project-hero { padding-bottom: var(--sp-3); }
+.project-list { display: flex; flex-direction: column; max-width: var(--content-w); }
+.project-skel { height: 48px; margin: var(--sp-2) 0 !important; border-radius: var(--r-inner); }
+.project-row { position: relative; display: flex; align-items: center; gap: var(--sp-2); min-height: 64px; }
+.project-row:has(.menu.open) { z-index: 3; } /* 入场动画让每行自成层叠上下文：菜单打开时抬高本行，弹出层才盖得住下一行 */
+.project-row-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-3); min-height: 64px; color: var(--text); border-radius: var(--r-inner);
+  transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease); }
+.project-row-link:hover { transform: translateX(2px); }
+.project-row-link:active { transform: scale(.98); transition-duration: var(--dur-fast); }
+.project-row-emoji { flex: none; font-size: 22px; }
+.project-row-name { flex: 1; min-width: 0; font-weight: var(--fw-strong); font-size: var(--fs-xl); line-height: 1.2; letter-spacing: var(--display-tracking);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-row.is-quiet .project-row-name { color: var(--text-3); }
+.project-row.is-quiet .project-row-emoji { opacity: .5; }
+.project-row > .menu .menu-trigger { color: var(--text-3); }
 .project-new { flex: none; padding: 0 var(--sp-5); }
+@media (prefers-reduced-motion: reduce) { .project-row-link, .project-row-link:hover { transition: none; transform: none; } }
 
 /* 项目档案（ProjectBrief）：查看 = 一张浅底卡里排 Markdown；编辑 = 等宽大输入框；查看/编辑切换时整块 rise 一下 */
 .brief-stamp { display: inline-block; margin-bottom: var(--sp-3); padding: 2px var(--sp-3); border-radius: var(--r-full); background: var(--tile); color: var(--text-2); font-size: var(--fs-xs); }
@@ -27,28 +27,12 @@
 .form-field small.danger, .brief-error { color: var(--danger); }
 .brief-note { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--text-3); }
 
-/* 项目首屏（v1.10，= App ProjectHome）：靠左、从标题栏下往下排，宽度同聊天正文 */
+/* 项目首屏（v2.93 §Q，= App ProjectHome）：只列本项目对话，宽度同聊天正文；宽屏对话列表常驻左侧，只留一行提示 */
 .project-home { max-width: var(--content-w); width: 100%; margin: 0 auto;
-  padding: calc(var(--thread-top) + var(--sp-3)) var(--gutter) calc(var(--footer-h, 88px) + var(--sp-4)); } /* v1.12：首屏标题离浮动标题栏多留一档 */
-.project-home-head { display: flex; align-items: center; gap: var(--sp-4); }
-.project-home-mark { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-inner); background: var(--tile); font-size: 26px; }
-.project-home-titles { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
-.project-home-titles h1 { margin: 0; font-weight: var(--fw-strong); font-size: calc(var(--fs-xl) - 4px); line-height: 1.2;
-  letter-spacing: var(--display-tracking); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.project-home-line { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; margin-top: var(--sp-3);
-  text-align: left; color: var(--text-2); border-radius: var(--r-inner); transition: color var(--dur) var(--ease); }
-.project-home-line > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.project-home-line > svg { flex: none; color: var(--text-3); transition: transform var(--dur) var(--ease); }
-.project-home-line:hover { color: var(--text); }
-.project-home-line:hover > svg { transform: translateX(2px); }
-.project-home .section:first-of-type { margin-top: var(--sp-5); }
-.project-home-starters { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-.project-starter { min-height: 40px; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm);
-  background: var(--glass); border: 1px solid var(--glass-border); transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
-.project-starter:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
-.project-starter:active { transform: scale(.97); transition-duration: var(--dur-fast); }
-@media (min-width: 861px) { .project-home-recent { display: none; } } /* 宽屏历史栏常驻左侧，不重复 */
-@media (prefers-reduced-motion: reduce) { .project-home-line > svg, .project-starter { transition: none; } .project-starter:hover { transform: none; } }
+  padding: calc(var(--thread-top) + var(--sp-2)) var(--gutter) calc(var(--footer-h, 88px) + var(--sp-4)); }
+.project-home-hint { margin: 0; color: var(--text-2); font-size: var(--fs-sm); }
+.project-home-hint.wide-only { display: none; }
+@media (min-width: 861px) { .project-home-hint.wide-only { display: block; } .project-home-list { display: none; } }
 
 /* v1.13 引用项目文件选择器 */
 .pick-note { margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); transition: color var(--dur-fast) var(--ease); }

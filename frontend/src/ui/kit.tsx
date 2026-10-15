@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { IconBack, IconCheck, IconClose, IconSearch } from "./icons";
@@ -117,10 +117,37 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
 /** 打开着的弹层（最上面的在末尾）：Esc 只关最上面那层（v1.16）。 */
 const openSheets: symbol[] = [];
 
+/** 遮罩贴住“真正看得见的那块”（v2.93）：手机浏览器的工具栏、软键盘会把可见区域缩小，而 position: fixed; inset: 0 仍按整块布局视口算，
+ *  弹层底部的取消 / 创建就被挡住。这里把 visualViewport 的偏移和高度写进遮罩的 --vv-top / --vv-h（ui.css 用它们定位）；
+ *  没有 visualViewport 的浏览器不写，CSS 退回 100dvh。 */
+function useVisualViewport(el: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const node = el.current;
+    if (!vv || !node) return;
+    let frame = 0;
+    const apply = () => {
+      frame = 0;
+      node.style.setProperty("--vv-top", `${vv.offsetTop}px`);
+      node.style.setProperty("--vv-h", `${vv.height}px`);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(apply); };
+    apply();
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
+    return () => { vv.removeEventListener("resize", schedule); vv.removeEventListener("scroll", schedule); cancelAnimationFrame(frame); };
+  }, [el]);
+}
+
+/** 底部弹层（手机）/ 居中玻璃卡（桌面）。v2.93：portal 到 body——以前渲染在页面树里，页面的顶部渐隐 mask 和入场 transform
+ *  各自形成层叠上下文，z-index 50 也压不过外壳顶栏（20）和底部输入胶囊（16），弹层被顶栏压住、输入框浮在弹层上。
+ *  层级统一在 ui.css：输入胶囊 16 < 顶栏 20 < 抽屉 30 < 弹层 50 < 对话框 60。按钮行（actions 或子内容里的 .sheet-actions）贴底常驻。 */
 export function Sheet({ title, onClose, children, actions }: { title: string; onClose: () => void; children: ReactNode; actions?: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
+  const scrim = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
+  useVisualViewport(scrim);
   // v1.16：弹层是模态框——打开时焦点移进来（键盘/读屏从标题开始），Esc 关最上面一层，关掉后焦点回到打开它的键。
   useEffect(() => {
     const me = Symbol("sheet");
@@ -139,15 +166,16 @@ export function Sheet({ title, onClose, children, actions }: { title: string; on
       if (back?.isConnected) back.focus({ preventScroll: true });
     };
   }, []);
-  return (
-    <div className="sheet-scrim" onClick={onClose}>
+  return createPortal(
+    <div ref={scrim} className="sheet-scrim" onClick={onClose}>
       <div ref={box} tabIndex={-1} className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
         <div className="sheet-grip" />
         <h2>{title}</h2>
         {children}
         {actions && <div className="sheet-actions">{actions}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

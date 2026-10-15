@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, select
 
 from ..models import Conversation, HomeCard, Job, Memory, Project, ScheduledTask
-from .. import task_brief, card_snooze, panel_trash, project_brief, sandbox_client, schedule, script_tasks, task_store
+from .. import task_brief, card_snooze, conversation_status, panel_trash, project_brief, sandbox_client, schedule, script_tasks, task_store
 from ..storage import PROJECTS
 from .crud import crud_router
 
@@ -130,17 +130,19 @@ async def _delete_project_conversations(db, project: Project) -> None:
 
 
 async def _project_activity(db, projects: list[Project]) -> dict[str, dict]:
-    """项目卡片上的“x 个对话 · 更新于…”：对话数 + 最近活动（项目本身或其中任一对话的最后更新）。一条 GROUP BY。"""
+    """项目的只读统计：对话数 + 最近活动（项目本身或其中任一对话的最后更新，一条 GROUP BY）
+    + v2.93 汇总状态 status（规则在 conversation_status.summarize）。"""
     ids = [p.id for p in projects]
     rows = (await db.execute(
         select(Conversation.project_id, func.count(Conversation.id), func.max(Conversation.updated_at))
         .where(Conversation.project_id.in_(ids)).group_by(Conversation.project_id))).all()
     stats = {pid: (n, last) for pid, n, last in rows}
+    status = await conversation_status.for_projects(db, ids)
     out = {}
     for p in projects:
         n, last = stats.get(p.id, (0, None))
         times = [(t if t.tzinfo else t.replace(tzinfo=timezone.utc)) for t in (p.updated_at, last) if t is not None]
-        out[p.id] = {"conversation_count": n, "last_active_at": max(times) if times else None}
+        out[p.id] = {"conversation_count": n, "last_active_at": max(times) if times else None, "status": status.get(p.id)}
     return out
 
 

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../lib/api";
-import type { Project, ProjectFile } from "../../lib/types";
-import { IconBack, IconDoc, IconEdit, IconFile, IconMore, IconTrash } from "../../ui/icons";
+import type { Project } from "../../lib/types";
+import { IconBack, IconComputer, IconDoc, IconEdit, IconFile, IconMore, IconTrash } from "../../ui/icons";
 import { Menu, Sheet } from "../../ui/kit";
 import ChatScreen from "../chat/ChatScreen";
 import ProjectBrief from "./ProjectBrief";
@@ -11,10 +11,9 @@ import ProjectForm from "./ProjectForm";
 import ProjectHome from "./ProjectHome";
 import { confirmDialog } from "../../ui/dialog";
 
-const SUGGESTIONS = ["总结一下这个项目现在的进度", "帮我列个下一步计划"];
-
-/** 项目详情 = 带项目上下文的聊天屏（含文件与沙盒工具）+ 文件面板 + 项目档案 + 项目设置（名称/图标/规则）。
- *  v1.10：标题栏右侧只留一颗 ⋯（文件 / 规则与档案 / 设置 / 删除，= App showProjectMenu）；没打开对话时是项目首屏 ProjectHome。 */
+/** 项目详情（v2.93 §Q）= 带项目上下文的聊天屏，仍在一级外壳下（顶栏不让位）。
+ *  标题行：‹ 返回项目列表 + 项目名 + ⋯（文件 / 电脑 / 规则与档案 / 编辑 / 删除，= App showProjectMenu）；
+ *  窄屏左上 ≡ = 本项目对话列表（ChatScreen）。没打开对话时是项目首屏 ProjectHome（本项目对话列表）。 */
 export default function ProjectScreen() {
   const { pid = "" } = useParams();
   const nav = useNavigate();
@@ -22,9 +21,6 @@ export default function ProjectScreen() {
   const [editing, setEditing] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
-  const [files, setFiles] = useState<ProjectFile[] | null>(null); // 首屏“文件”一节；关掉文件面板后重读
-  const loadFiles = useCallback(() => { http.get<ProjectFile[]>(`/api/projects/${pid}/files`).then(setFiles).catch(() => setFiles(null)); }, [pid]);
-  useEffect(loadFiles, [loadFiles]);
 
   useEffect(() => { http.get<Project>(`/api/projects/${pid}`).then(setProject).catch(() => nav("/projects")); }, [pid, nav]);
   if (!project) return null;
@@ -40,19 +36,18 @@ export default function ProjectScreen() {
         key={pid}
         projectId={pid}
         listTitle={`${project.emoji} ${project.name}`}
-        headerTitle={project.name}
-        empty={(c) => <ProjectHome project={project} conversations={c.conversations} suggestions={SUGGESTIONS}
-          onSend={c.send} onOpen={c.open} onShowAll={c.showAll} onBrief={() => setShowBrief(true)}
-          files={files} onFiles={() => setShowFiles(true)} />}
-        leading={<button className="icon-btn" onClick={() => nav("/projects")} aria-label="返回"><IconBack /></button>}
+        headerTitle={`${project.emoji} ${project.name}`}
+        empty={(c) => <ProjectHome conversations={c.conversations} onOpen={c.open} />}
+        back={<button className="icon-btn" onClick={() => nav("/projects")} aria-label="返回项目列表" title="返回项目列表"><IconBack /></button>}
         trailing={<Menu label="项目菜单" trigger={<IconMore size={20} />} items={[
           { label: "项目文件", icon: <IconFile />, onSelect: () => setShowFiles(true) },
+          { label: "电脑", icon: <IconComputer size={16} />, onSelect: () => nav(`/projects/${pid}/computer`) },
           { label: "规则与档案", icon: <IconDoc size={16} />, onSelect: () => setShowBrief(true) },
           { label: "编辑项目", icon: <IconEdit />, onSelect: () => setEditing(true) },
           { label: "删除项目", icon: <IconTrash />, danger: true, onSelect: () => { void remove(); } },
         ]} />}
       />
-      {showFiles && <ProjectFiles projectId={pid} onClose={() => { setShowFiles(false); loadFiles(); }} />}
+      {showFiles && <ProjectFiles projectId={pid} onClose={() => setShowFiles(false)} />}
       {showBrief && <ProjectBrief project={project} onSaved={setProject} onClose={() => setShowBrief(false)} />}
       {editing && (
         <Sheet title="项目设置" onClose={() => setEditing(false)}>

@@ -78,3 +78,28 @@
 5. **界面**：头像 = 已有 Avatar 组件（App 本来就画首字母；网页把人形图标换成首字母），有上传的头像就盖一张图、到了才淡入（只动 opacity）。“我”页页头：头像 + 名字整块是一颗键 → 个人资料弹层（App `features/me/profile_sheet.dart`，网页 `ProfileSheet.tsx`）：大头像（相册/拍照/移除）+ 称呼 + 助手名 + 保存，只送改了的字段。头像颜色仍在偏好设置（它是没有图时的底色）。
 **替换 / 删除**：GET /api/auth/me、smoke_auth_me.py、App accountNameProvider、网页 Identity 里自己请求 /api/auth/me 的代码、网页 Avatar 的人形图标、config 里写死的“你是 Toyuis”。
 **成本**：无迁移；问候零模型调用；引导句只在问候对话的前 6 条里出现（约 120 字）；改名后一轮提示缓存失效一次。
+
+## 2026-10-15 v2.93 §Q 项目页按 Hark 重做（两端）+ 手机弹层不再被挡
+用户认可的规格：项目页全程留在一级外壳（顶栏“主页 / 聊天 / 项目”+ 头像不消失）；左上 + ↔ ≡ 一颗钮；项目列表是大字项目名 + 项目汇总状态胶囊、不活跃的变灰、不放输入框；项目内只看对话列表，文件 / 电脑 / 规则与档案收进 ⋯。另修手机网页弹层三处被挡。
+**全局决定（先写后做）**
+1. **项目在一级外壳下**：`/projects` 与 `/projects/:id` 都显示浮动顶栏；项目里的“规则与档案”“电脑”仍是子页面（自带标题栏，顶栏让位）——它们是项目的设置 / 工具页，不是导航层级。判定只有一条：`/projects/<id>` 这一层（App `shellBarShown()` 在 `shell/app_shell.dart`，Web `isShellRoot()` 在 `shell/TopBar.tsx`，同一条正则）。项目对话从 SubPage 改成和主聊天一样的 ShellPage + lead + header 行（ChatScaffold 只剩一种外框）。
+2. **左上是同一颗钮**：项目列表 = +（新建项目）；进项目 = ≡（本项目对话列表）；列表开着 ≡ 再转成 +（本项目新对话，v2.91 行为保留）。
+   - App：列表页和项目页的钮挂同一个 Hero tag（`projectLeadHero`），切页时钮不随页面滑动，飞行途中按**项目页路由动画**画 `MenuPlusGlyph(t)`（push：+→≡，pop / 预测式返回：≡→+，跟手）。图标拆成“按进度画”的 `MenuPlusGlyph` + 自己补间的 `MenuPlusIcon` 两层，morph 仍只动 transform。减弱动效：路由动画照常但图标按 0.5 取整直接到位。
+   - Web：页面各自把钮传进顶栏左槽（ShellLead，不变），钮从“上一颗钮的形状”挂上、下一帧转到自己的形状，CSS 过渡完成 morph（形状记在 `features/chat/MenuPlus.tsx` 模块里一份）。减弱动效由 base.css 把过渡压到 1ms。
+   - 双栏 / 宽屏：项目历史栏常驻，App 左上 = 收起 / 展开（同主聊天），Web 宽屏左上不放钮（同主聊天）。
+3. **怎么回到项目列表**：顶栏下那一行（header 行）= 左 ‹（“返回项目列表”）+ 中间项目名（点开本对话用量，同主聊天标题）+ 右 ⋯（项目菜单），左右各一颗，标题居中。另外再点一次顶栏“项目”也回列表（已有：点当前 Tab = 回根）。不把返回塞进左上钮：它已经承担 ≡ / + 两件事，再加一件就猜不到了。对话标题仍由 v2.91 的药丸负责（header 行写项目名，不重复）。
+4. **项目对话抽屉在 header 行下面滑出**：App 抽屉放进 ShellPage 里层的 Scaffold，左上钮和 header 行画在它上面，顶栏不再因项目抽屉淡出（不碰 ShellCover）；Web 抽屉 top 让出顶栏 + header 行、遮罩同样从那里开始。主聊天抽屉仍盖全屏、顶栏让位（不变）。
+5. **项目汇总状态**（唯一规则 `backend/app/conversation_status.py`）：新纯函数 `summarize(按最近更新排序的状态)`——任一 waiting → waiting；否则任一 running → running；否则最近那段（排第一）done → done；否则 null（不画）。`for_projects(db, ids)` 取每个项目里与项目对话列表同口径的可见对话（`run_conversations.listed()`，每项目最近 100 段），复用 `for_list` 判定，不另起一套。`GET /api/projects`（列表与单个）每项加 `status`；不改表、无迁移。
+6. **项目列表**：一行一个大字项目名（displaySmall 级别，前面小 emoji），行尾状态胶囊 + ⋯，长按 = 同一份菜单；不用卡片 / GlassCard 网格，不放输入框（删 LaunchComposer）；顶上只留一行小标签“N 个项目 · 最近 …”（顶栏“项目”已是页名，不再画大标题“项目”）。**灰化规则 `projectIsCurrent(index, project)`**：按最近活动排第一的项目、以及状态是“进行中 / 等你回复”的项目用正文色；其余（包括“已完成”的）项目名用三级色。理由：Hark 的列表是“现在在忙什么”一眼可见，做完的和很久没动的退到背景；只看“第一个”会把另一个正在跑的项目也压灰，所以 running / waiting 一律算当前。App `features/projects/projects_screen.dart`、Web `projectHomeRules.ts`，同一规则、各有测试 / 守门。
+7. **项目内 = 对话列表**：项目首屏（ProjectHome，即“本项目新对话”的空白态）只列本项目全部对话（置顶在前，再按更新时间），行尾状态胶囊（没有状态写相对时间），点开续聊；底下输入框 = 在本项目开新对话。双栏时对话列表已常驻左侧，首屏只留一行提示，不重复列。文件、电脑、规则与档案、编辑、删除都在 ⋯（新增“电脑”一项）。
+8. **弹层不被挡**：
+   - Web `Sheet` 改为 portal 到 `document.body`：以前它渲染在页面树里，页面的 mask（顶部渐隐）和入场 transform 各自形成层叠上下文，z-index 50 也压不过外壳顶栏（20）和底部输入胶囊（16）——这就是“弹层压在顶栏下面”“输入框浮在弹层上”的根因。层级统一：输入胶囊 16 < 顶栏 20 < 抽屉 30 < 弹层 50 < 对话框 60。
+   - 遮罩按 `visualViewport` 定位（`--vv-top` / `--vv-h` 写在遮罩上，没有 visualViewport 时 = 100dvh），键盘、手机浏览器工具栏出现时弹层底边跟着可见区域走；`.sheet-actions` 在弹层里 `position: sticky; bottom: 0`，底部留 `env(safe-area-inset-bottom)`，内容再长取消 / 创建也始终看得见。
+   - App：弹层本来就开在根导航器（v2.78，已在顶栏和输入胶囊之上）。查出同类问题两处：`isScrollControlled` 的弹层没开 `useSafeArea`，长表单会顶进状态栏 / 顶栏位置；表单弹层的提交钮在滚动区里，键盘弹起时会被挤到看不见。改为 `useSafeArea: true`，表单把字段放进可滚区、提交钮钉在下面。
+**实现中发现、按实际改的地方**
+- **App 原来没有页面转场**：go_router 18 在本 App 的导航器上下文里判不出 MaterialApp，所有 `builder:` 路由都退回 `NoTransitionPage`（实测路由类型 `_CustomTransitionPageRoute`、时长 0）——子页面进出一直是瞬切，Hero 也就飞不起来。本轮不动全局手感（那是另一个决定，写进 HANDOFF 待定），只给 `/projects/:id` 一个 `CustomTransitionPage`：新页淡入 + 从下方 8px 浮上（`pageRiseTransition`，Motion.morph 280ms，同 ≡/+ 的曲线），项目列表用 `FadeUnderCover` 按 secondaryAnimation 淡出（两页都是透明底，不交叉淡化会叠字），左上钮的 Hero 飞行就骑在这条动画上。减弱动效：转场和 morph 都直接到位。
+- 测试收尾时 `ChatView.dispose → SpeechController.stop` 会碰已释放的 Notifier（项目页现在常驻在一级分支里更容易触发），`stop()` 先看 `ref.mounted`。
+**替换 / 删除**
+- App：项目列表的卡片网格（`_Grid` / `_ProjectTile`）与 LaunchComposer、大标题“项目”；ProjectHome 的字标头、规则行、文件节、电脑节、起步建议，以及 `projectRecentFiles` / `projectFilesMax` / `projectRecentMax`（首屏不再截 3 条）；ChatScaffold 的 SubPage 分支（项目对话不再是子页面）与 `ProjectDetailScreen.suggestions`；`MenuPlusIcon` 内部画线逻辑并入 `MenuPlusGlyph`。
+- Web：`project-grid` / `project-card` 卡片样式与 LaunchComposer；ProjectHome 的文件 / 电脑 / 建议节和 `projectRecentFiles` / `PROJECT_*_MAX`；ChatScreen 的 `with-bar` 玻璃标题栏分支（`leading` / `trailing` 合并为 header 行的 `back` / `trailing`）及 `.chat-bar` 样式；`Sheet` 不再在页面树内渲染。
+**成本**：`GET /api/projects` 多三次查询（各项目可见对话 + for_list 的两次），单用户 ≤ 几百行；无迁移、无模型调用；客户端无新请求（项目页不再拉文件列表和电脑状态，反而少两个）。

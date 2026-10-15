@@ -1,16 +1,18 @@
-// 项目列表（v0.73）：页头“N 个项目 · 最近 …” + 衬线大标题；按最近活动排序；
-// 卡片 ⋯ 菜单：编辑名称和图标（只 PATCH 改过的字段，没改不发请求）、删除（先确认，确认后 DELETE 并从列表消失）；
-// 加载中是和卡片同高的骨架；新建表单的图标选择会带进 POST。
+// 项目页（v2.93 §Q 按 Hark）：列表 = 页头“N 个项目 · 最近 …” + 一行一个大字项目名，按最近活动排序，行尾项目汇总状态胶囊，
+// 不是当前的项目变灰（projectIsCurrent）、没有输入框；⋯ 菜单：编辑（只 PATCH 改过的字段）、删除（先确认）、电脑；
+// 进项目仍在一级外壳下（顶栏在），左上 + → ≡ 同一颗钮，header 行 ‹ 返回列表；项目首屏只列本项目对话。
 import 'package:assistant/app.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/title_pill.dart';
+import 'package:assistant/features/projects/project_files_sheet.dart' show projectFileLine;
 import 'package:assistant/features/projects/project_form.dart';
 import 'package:assistant/features/projects/project_home.dart';
 import 'package:assistant/features/projects/projects_screen.dart';
 import 'package:assistant/models/resources.dart';
+import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/motion.dart';
 import 'package:flutter/material.dart';
@@ -28,7 +30,7 @@ class _SignedIn extends SessionNotifier {
 class _Api implements Api {
   final now = DateTime.now();
   late final projects = <Map<String, dynamic>>[
-    {'id': 'p1', 'name': '考研', 'emoji': '📚', 'rules': '回答用中文', 'conversation_count': 3, 'last_active_at': now.subtract(const Duration(days: 3)).toIso8601String()},
+    {'id': 'p1', 'name': '考研', 'emoji': '📚', 'rules': '回答用中文', 'conversation_count': 3, 'status': 'done', 'last_active_at': now.subtract(const Duration(days: 3)).toIso8601String()},
     {'id': 'p2', 'name': '找实习', 'emoji': '💼', 'rules': '', 'conversation_count': 0, 'last_active_at': now.subtract(const Duration(minutes: 5)).toIso8601String()},
   ];
   late final convs = <Map<String, dynamic>>[
@@ -36,14 +38,6 @@ class _Api implements Api {
     {'id': 'c2', 'title': '单词计划', 'status': 'running', 'updated_at': now.subtract(const Duration(hours: 1)).toIso8601String()},
     {'id': 'c3', 'title': '择校', 'status': 'waiting', 'pinned': true, 'updated_at': now.subtract(const Duration(days: 9)).toIso8601String()},
     {'id': 'c4', 'title': '政治大纲', 'updated_at': now.subtract(const Duration(days: 4)).toIso8601String()},
-  ];
-  int sec(Duration d) => now.subtract(d).millisecondsSinceEpoch ~/ 1000;
-  late var files = <Map<String, dynamic>>[
-    {'path': 'notes/大纲.md', 'name': '大纲.md', 'size': 2048, 'mime': 'text/markdown', 'modified': sec(const Duration(hours: 2))},
-    {'path': '真题 2024.pdf', 'name': '真题 2024.pdf', 'size': 3 << 20, 'mime': 'application/pdf', 'modified': sec(const Duration(minutes: 10))},
-    {'path': '旧计划.txt', 'name': '旧计划.txt', 'size': 100, 'mime': 'text/plain', 'modified': sec(const Duration(days: 30))},
-    {'path': '词表.csv', 'name': '词表.csv', 'size': 900, 'mime': 'text/csv', 'modified': sec(const Duration(days: 1))},
-    {'path': '照片.png', 'name': '照片.png', 'size': 5000, 'mime': 'image/png', 'modified': sec(const Duration(days: 20))},
   ];
   final calls = <String>[];
   final bodies = <Object?>[];
@@ -53,7 +47,6 @@ class _Api implements Api {
     if (path == '/api/inbox') return {'unread': 0, 'latest': null};
     if (path == '/api/projects') return [...projects];
     if (path == '/api/conversations?project_id=p1') return [...convs];
-    if (path == '/api/projects/p1/files') return [...files];
     if (path.startsWith('/api/conversations/')) {
       final id = path.split('/').last;
       return {'id': id, 'title': id, 'messages': [{'id': 'm-$id', 'role': 'user', 'blocks': [{'type': 'text', 'text': '续聊 $id'}]}]};
@@ -96,13 +89,12 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-Future<_Api> _pump(WidgetTester tester, {String at = '/projects', List<Map<String, dynamic>>? files}) async {
+Future<_Api> _pump(WidgetTester tester, {String at = '/projects'}) async {
   tester.view.physicalSize = const Size(400, 860);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues({});
   final api = _Api();
-  if (files != null) api.files = files;
   final container = ProviderContainer(overrides: [
     sessionProvider.overrideWith(_SignedIn.new),
     apiProvider.overrideWithValue(api),
@@ -126,22 +118,69 @@ Finder _menuOf(String name) => find.descendant(
       matching: find.byTooltip('更多'),
     );
 
+Color? _colorOf(WidgetTester tester, String text) => tester.widget<Text>(find.text(text)).style?.color;
+
 void main() {
   test('byActivity：最近活动在前，没有时间的排最后', () {
-    final a = Project.fromJson({'id': 'a', 'name': 'a', 'last_active_at': '2026-10-01T00:00:00Z'});
-    final b = Project.fromJson({'id': 'b', 'name': 'b', 'last_active_at': '2026-10-10T00:00:00Z'});
+    final a = Project.fromJson({'id': 'a', 'name': 'a', 'last_active_at': '2026-10-01T08:00:00+08:00'});
+    final b = Project.fromJson({'id': 'b', 'name': 'b', 'last_active_at': '2026-10-10T08:00:00+08:00'});
     final c = Project.fromJson({'id': 'c', 'name': 'c'});
     expect(byActivity([a, c, b]).map((p) => p.id), ['b', 'a', 'c']);
   });
 
-  testWidgets('页头摘要 + 按最近活动排序', (tester) async {
+  test('v2.93 projectIsCurrent：第一个、进行中、等你回复用正文色；已完成和其余变灰；status 解析', () {
+    Project p(String? st) => Project.fromJson({'id': 'x', 'status': st});
+    expect(projectIsCurrent(0, p(null)), isTrue);
+    expect(projectIsCurrent(0, p('done')), isTrue);
+    expect(projectIsCurrent(3, p('running')), isTrue);
+    expect(projectIsCurrent(3, p('waiting')), isTrue);
+    expect(projectIsCurrent(1, p('done')), isFalse);
+    expect(projectIsCurrent(1, p(null)), isFalse);
+    expect(p('waiting').status, ConversationStatus.waiting);
+    expect(p('weird').status, isNull);
+  });
+
+  testWidgets('列表：页头摘要、大字名按最近活动排序、汇总状态胶囊、不是当前的变灰、没有输入框', (tester) async {
     await _pump(tester);
     expect(find.text('2 个项目 · 最近 5 分钟前'), findsOneWidget);
-    expect(find.text('项目'), findsWidgets); // 顶栏标签 + 衬线大标题
+    expect(find.text('项目'), findsOneWidget); // 只有顶栏分段，不再画大标题
     final y1 = tester.getTopLeft(find.text('找实习')).dy;
     final y2 = tester.getTopLeft(find.text('考研')).dy;
     expect(y1, lessThan(y2), reason: '刚动过的“找实习”排在前面');
-    expect(find.text('3 个对话 · 更新于 3 天前'), findsOneWidget);
+    expect(find.text('已完成'), findsOneWidget); // 考研的汇总状态
+    final ctx = tester.element(find.text('考研'));
+    expect(_colorOf(tester, '找实习'), ctx.palette.text);
+    expect(_colorOf(tester, '考研'), ctx.palette.text3, reason: '已完成且不是最近的：变灰');
+    expect(find.byType(TextField), findsNothing, reason: '项目列表不放输入框');
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isTrue);
+  });
+
+  testWidgets('进项目：顶栏仍在，左上 + 转成 ≡（同一颗钮）；header 行 ‹ 返回列表，钮转回 +', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text('考研'));
+    await _settle(tester);
+    expect(find.byType(ProjectHome), findsOneWidget);
+    expect(find.text('主页'), findsOneWidget, reason: '一级外壳顶栏不淡出');
+    expect(find.byTooltip('我的'), findsOneWidget);
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon).last).plus, isFalse);
+    expect(find.byTooltip('项目对话'), findsOneWidget);
+    await tester.tap(find.byTooltip('返回项目列表'));
+    await _settle(tester);
+    expect(find.byType(ProjectHome), findsNothing);
+    expect(find.text('2 个项目 · 最近 5 分钟前'), findsOneWidget);
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isTrue);
+  });
+
+  testWidgets('切页途中：钮停在原地，按路由进度从 + 画到 ≡（Hero 飞行）', (tester) async {
+    await _pump(tester);
+    final before = tester.getCenter(find.byTooltip('新项目'));
+    await tester.tap(find.text('考研'));
+    await tester.pump();
+    await tester.pump(Motion.morph ~/ 2);
+    final glyphs = tester.widgetList<MenuPlusGlyph>(find.byType(MenuPlusGlyph)).map((g) => g.t).toList();
+    expect(glyphs.any((t) => t > 0.01 && t < 0.99), isTrue, reason: '飞行中是半路形状：$glyphs');
+    await _settle(tester);
+    expect(tester.getCenter(find.byTooltip('项目对话')), before);
   });
 
   testWidgets('⋯ 菜单编辑：只发改过的字段；什么都没改不发请求', (tester) async {
@@ -203,35 +242,28 @@ void main() {
     expect(projectEmojis, contains('✈️'));
   });
 
-  test('projectRecent：置顶在前，再按更新新→旧，最多 3 条；projectLine 规则 > 档案 > 引导', () {
+  test('projectConversations：置顶在前，再按更新新→旧，不截断；projectFileLine 带文件夹', () {
     ConversationSummary c(String id, {int? daysAgo, bool pinned = false}) => ConversationSummary(
         id: id, title: id, pinned: pinned, updatedAt: daysAgo == null ? null : DateTime(2026, 10, 12).subtract(Duration(days: daysAgo)));
     final list = [c('old', daysAgo: 9), c('none'), c('new', daysAgo: 0), c('pin', daysAgo: 30, pinned: true), c('mid', daysAgo: 3)];
-    expect(projectRecent(list).map((e) => e.id), ['pin', 'new', 'mid']);
-    expect(projectRecent(list, max: 9).map((e) => e.id), ['pin', 'new', 'mid', 'old', 'none']);
-    expect(projectLine(Project.fromJson({'id': 'a', 'rules': '回答用中文\n第二行', 'brief': '# 档案\n目标 985'})), '回答用中文');
-    expect(projectLine(Project.fromJson({'id': 'a', 'brief': '# 档案\n- 目标 985'})), '目标 985');
-    expect(projectLine(Project.fromJson({'id': 'a'})), startsWith('还没有规则和档案'));
+    expect(projectConversations(list).map((e) => e.id), ['pin', 'new', 'mid', 'old', 'none']);
+    ProjectFile f(String p) => ProjectFile.fromJson({'path': p, 'name': p.split('/').last, 'size': 2048, 'mime': 'text/plain', 'modified': 1});
+    expect(projectFileLine(f('notes/sub/大纲.md')), 'notes/sub · 2 KB');
+    expect(projectFileLine(f('大纲.md')), '2 KB');
   });
 
-  testWidgets('项目内：标题栏只有“项目对话”和 ⋯；首屏有名字、规则、最近 3 条对话和起步建议', (tester) async {
+  testWidgets('项目内：首屏只列本项目全部对话（置顶在前），没有文件 / 电脑 / 规则 / 起步建议；header 行 ‹ 和 ⋯', (tester) async {
     await _pump(tester, at: '/projects/p1');
     expect(find.byTooltip('项目对话'), findsOneWidget);
     expect(find.byTooltip('项目菜单'), findsOneWidget);
-    expect(find.byTooltip('项目文件'), findsNothing);
-    expect(find.byTooltip('编辑项目'), findsNothing);
+    expect(find.byTooltip('返回项目列表'), findsOneWidget);
     expect(find.text('今天想做点什么？'), findsNothing);
-    expect(find.byType(ProjectHome), findsOneWidget);
-    expect(find.text('回答用中文'), findsOneWidget);
-    expect(find.text('最近的对话'), findsOneWidget);
-    expect(find.text('全部 4 个'), findsOneWidget);
-    final ys = [for (final t in ['择校', '单词计划', '真题第一轮']) tester.getTopLeft(find.text(t)).dy];
+    final ys = [for (final t in ['择校', '单词计划', '真题第一轮', '政治大纲']) tester.getTopLeft(find.text(t)).dy];
     expect(ys, orderedEquals([...ys]..sort()));
-    expect(find.text('政治大纲'), findsNothing);
-    await tester.drag(find.byType(ProjectHome), const Offset(0, -400));
-    await _settle(tester);
-    expect(find.text('或者新开一段'), findsOneWidget);
-    expect(find.text('总结一下这个项目现在的进度'), findsOneWidget);
+    for (final gone in ['文件', '电脑', '回答用中文', '或者新开一段', '总结一下这个项目现在的进度']) {
+      expect(find.text(gone), findsNothing, reason: gone);
+    }
+    expect(find.byType(TextField), findsOneWidget, reason: '底下的输入框 = 本项目新对话');
   });
 
   testWidgets('v2.91 §N 项目首屏最近对话：有状态画胶囊代替时间；打开对话后标题栏下浮出总结标题药丸', (tester) async {
@@ -258,7 +290,7 @@ void main() {
     expect(find.byType(ProjectHome), findsNothing);
     await tester.tap(find.byTooltip('项目菜单'));
     await _settle(tester);
-    for (final t in ['编辑名称和图标', '规则与档案', '项目文件', '删除项目']) {
+    for (final t in ['项目文件', '电脑', '规则与档案', '编辑名称和图标', '删除项目']) {
       expect(find.text(t), findsOneWidget);
     }
   });
@@ -274,41 +306,5 @@ void main() {
     expect(api.calls, ['DELETE /api/projects/p1']);
     expect(find.byType(ProjectHome), findsNothing);
     expect(find.text('1 个项目 · 最近 5 分钟前'), findsOneWidget);
-  });
-
-  test('projectRecentFiles：按修改时间新→旧，没时间排后；projectFileLine 带文件夹', () {
-    ProjectFile f(String p, int? t) => ProjectFile.fromJson({'path': p, 'name': p.split('/').last, 'size': 2048, 'mime': 'text/plain', 'modified': t});
-    final list = [f('a', 100), f('b', null), f('c', 300), f('d', 200), f('e', 50)];
-    expect(projectRecentFiles(list).map((x) => x.path), ['c', 'd', 'a']);
-    expect(projectRecentFiles([f('b', null), f('x', null)], max: 5).map((x) => x.path), ['b', 'x']);
-    expect(projectFileLine(f('notes/sub/大纲.md', 1)), 'notes/sub · 2 KB');
-    expect(projectFileLine(f('大纲.md', 1)), '2 KB');
-    expect(ProjectFile.fromJson({'path': 'a', 'modified': 1.5}).modified, DateTime.fromMillisecondsSinceEpoch(1500));
-  });
-
-  testWidgets('项目首屏“文件”：最近改过的 3 个，全部 5 个 → 文件抽屉', (tester) async {
-    await _pump(tester, at: '/projects/p1');
-    await tester.drag(find.byType(ProjectHome), const Offset(0, -300));
-    await _settle(tester);
-    expect(find.text('文件'), findsOneWidget);
-    final ys = [for (final t in ['真题 2024.pdf', '大纲.md', '词表.csv']) tester.getTopLeft(find.text(t)).dy];
-    expect(ys, orderedEquals([...ys]..sort()));
-    expect(find.text('旧计划.txt'), findsNothing);
-    expect(find.text('notes · 2 KB'), findsOneWidget);
-    await tester.tap(find.text('全部 5 个'));
-    await _settle(tester);
-    expect(find.text('项目文件'), findsOneWidget);
-    expect(find.text('旧计划.txt'), findsOneWidget);
-  });
-
-  testWidgets('项目首屏“文件”：空文件夹给一行上传入口', (tester) async {
-    await _pump(tester, at: '/projects/p1', files: []);
-    await tester.drag(find.byType(ProjectHome), const Offset(0, -300));
-    await _settle(tester);
-    expect(find.text('放点资料进来'), findsOneWidget);
-    expect(find.text('管理'), findsNothing);
-    await tester.tap(find.text('放点资料进来'));
-    await _settle(tester);
-    expect(find.text('文件夹是空的'), findsOneWidget);
   });
 }

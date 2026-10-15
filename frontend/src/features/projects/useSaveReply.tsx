@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { http } from "../../lib/api";
 import { formatWhen } from "../../lib/format";
@@ -43,7 +42,7 @@ export function useSaveReply(messageId: string, projectId?: string) {
   return {
     busy, note,
     start: () => { if (!busy) void (projectId ? save(projectId) : choose()); },
-    picker: picking ? createPortal(<ProjectPicker onPick={save} onClose={() => setPicking(false)} />, document.body) : null,
+    picker: picking ? <ProjectPicker onPick={save} onClose={() => setPicking(false)} /> : null,
   };
 }
 

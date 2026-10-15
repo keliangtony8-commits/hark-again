@@ -166,6 +166,7 @@ class SpeechController extends Notifier<SpeechState> {
 
   Future<void> stop() async {
     _round++;
+    if (!ref.mounted) return; // 整个容器先拆了（退出登录 / 测试收尾）：聊天区卸载时不再碰已释放的状态
     if (state.id == null) return; // 没在读：不碰引擎（卸载时也不必建插件）
     state = SpeechState.idle;
     await _engine.stop();

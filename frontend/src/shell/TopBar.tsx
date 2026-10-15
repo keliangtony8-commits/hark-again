@@ -9,15 +9,21 @@ export const SEGMENTS = [
   { to: "/projects", label: "项目" },
 ];
 
-/** 只有在这些路径上才显示浮动顶栏；进项目对话、“我的”及其子页面时让位给页面自己的标题栏。 */
-export const isShellRoot = (path: string) => SEGMENTS.some((s) => s.to === path);
+const PROJECT_PAGE = /^\/projects\/[^/]+$/;
+
+/** 浮动顶栏在这些路径上显示：三个一级栏目 + 项目页（v2.93 §Q 项目对话也在一级外壳下，= App shellBarShown）；
+ *  项目的“电脑”、“我的”及其子页面让位给页面自己的标题栏。 */
+export const isShellRoot = (path: string) => SEGMENTS.some((s) => s.to === path) || PROJECT_PAGE.test(path);
+
+/** 当前路径属于哪个栏目（滑块位置）：/projects/:pid 仍算“项目”。 */
+const segmentOf = (path: string) => Math.max(0, SEGMENTS.findIndex((s) => (s.end ? s.to === path : path === s.to || path.startsWith(`${s.to}/`))));
 
 /** 浮动顶栏：左 = 页面的上下文按钮槽，中 = 分段导航（实心胶囊滑过去），右 = 头像 → 我的。 */
 export default function TopBar({ leadRef }: { leadRef: (el: HTMLDivElement | null) => void }) {
   const { pathname } = useLocation();
   const nav = useNavigate();
   const { summary } = useInbox();
-  const i = Math.max(0, SEGMENTS.findIndex((s) => s.to === pathname));
+  const i = segmentOf(pathname);
   return (
     <header className="topbar">
       <div className="topbar-lead" ref={leadRef} />

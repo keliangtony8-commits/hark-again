@@ -75,15 +75,21 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .segmented button { position: relative; padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text-2); transition: color var(--dur) var(--ease); }
 .segmented button.on { color: var(--on-ink); }
 
-.sheet-scrim { position: fixed; inset: 0; z-index: 50; background: var(--glass-scrim); -webkit-backdrop-filter: blur(var(--blur-scrim)); backdrop-filter: blur(var(--blur-scrim)); display: flex; align-items: flex-end; justify-content: center; animation: fade var(--dur) var(--ease); }
-.sheet { width: 100%; max-width: 560px; max-height: 88dvh; overflow-y: auto; background: var(--glass-sheet); border: 1px solid var(--glass-border); border-bottom: 0;
+/* 弹层（v2.93 修手机遮挡）：Sheet 已 portal 到 body，层级 输入胶囊 16 < 顶栏 20 < 抽屉 30 < 弹层 50 < 对话框 60；
+   遮罩贴住 visualViewport 给的可见区域（--vv-top / --vv-h，由 ui/kit.tsx 写；没有时 = 100dvh），浏览器工具栏 / 软键盘出来时弹层底边跟着走；
+   按钮行 .sheet-actions 在弹层里 sticky 贴底，内容再长取消 / 创建也看得见 */
+.sheet-scrim { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100dvh); z-index: 50; background: var(--glass-scrim); -webkit-backdrop-filter: blur(var(--blur-scrim)); backdrop-filter: blur(var(--blur-scrim)); display: flex; align-items: flex-end; justify-content: center; animation: fade var(--dur) var(--ease); }
+.sheet { width: 100%; max-width: 560px; max-height: calc(var(--vv-h, 100dvh) - var(--sp-5) - env(safe-area-inset-top)); overflow-y: auto; overscroll-behavior: contain; background: var(--glass-sheet); border: 1px solid var(--glass-border); border-bottom: 0;
   border-radius: var(--r-card) var(--r-card) 0 0; padding: var(--sp-2) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom)); box-shadow: var(--elev-raised);
   -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); animation: slideup calc(var(--dur) * 1.5) var(--ease); }
 .sheet:focus { outline: none; } /* 打开时程序把焦点放进来，不画焦点框 */
 .sheet-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--glass-border); margin: var(--sp-1) auto var(--sp-4); }
 .sheet h2 { margin: 0 0 var(--sp-4); font-size: var(--fs-lg); font-weight: var(--fw-title); }
 .sheet .desc { margin-left: 0; margin-right: 0; }
-.sheet-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-5); }
+.sheet-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-5);
+  position: sticky; bottom: 0; z-index: 1;
+  margin-left: calc(-1 * var(--sp-5)); margin-right: calc(-1 * var(--sp-5)); margin-bottom: calc(-1 * (var(--sp-5) + env(safe-area-inset-bottom)));
+  padding: var(--sp-3) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom)); background: var(--glass-sheet); }
 /* 桌面：居中浮起的玻璃卡，四角同圆、没有拖动条（拖动条只是手机上“可下滑关闭”的暗示） */
 @media (min-width: 861px) { .sheet-scrim { align-items: center; } .sheet { border-radius: var(--r-card); border-bottom: 1px solid var(--glass-border); padding-top: var(--sp-5); animation-name: pop; } .sheet-grip { display: none; } }
 

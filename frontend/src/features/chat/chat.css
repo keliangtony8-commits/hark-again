@@ -1,10 +1,10 @@
 /* ---------- 聊天屏布局（设计 v2）：宽屏 = 左侧玻璃历史面板 + 对话；窄屏 = 抽屉。
- * 对话铺满，标题（主聊天：顶栏下的一行小字；项目：玻璃标题栏）和输入胶囊都浮在上面，消息从下面滚过 ---------- */
+ * 对话铺满，标题行（顶栏下的一行小字；v2.93 §Q 起项目对话也是这一行）和输入胶囊都浮在上面，消息从下面滚过 ---------- */
 .chat { flex: 1; min-height: 0; display: flex; --thread-top: calc(var(--shell-top) + 44px); }
-.chat.with-bar { --thread-top: var(--shell-top); }
 .chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .chat-top { position: absolute; z-index: 6; left: 0; right: 0; }
-/* 主聊天：顶栏下居中的小标题 + 本对话用量（点开明细 / 改名在历史面板里） */
+/* 标题行：顶栏下居中的小标题 + 本对话用量（点开明细 / 改名在历史面板里）；--caption-bottom = 标题行底边（项目抽屉从这里滑出） */
+.chat { --caption-bottom: calc(var(--shell-top) + 36px); }
 .chat-caption { top: calc(var(--shell-top) - 8px); display: flex; justify-content: center; pointer-events: none; padding: 0 var(--gutter); }
 .chat-caption .chat-top-title { pointer-events: auto; align-items: center; text-align: center; max-width: min(100%, 420px); }
 .chat-caption .chat-top-name { font-size: var(--fs-xs); color: var(--text-2); font-weight: var(--fw-title); }
@@ -14,13 +14,13 @@
   .chat-caption { top: var(--shell-top); height: var(--topbar-h); align-items: center; } /* 与历史面板的标题行同高同中线 */
   .chat-caption .chat-top-title { width: min(100%, var(--content-w)); max-width: none; align-items: flex-start; text-align: left; padding: 0 var(--gutter); }
   .chat-caption .chat-top-name { font-size: var(--fs-sm); color: var(--text); }
+  .chat { --caption-bottom: calc(var(--shell-top) + var(--topbar-h)); }
+  .chat-caption.with-sides .chat-top-title { justify-self: stretch; padding: 0 var(--sp-2); width: auto; }
 }
-/* 项目对话：没有外壳顶栏，同一位置换成本页的玻璃标题栏 */
-.chat-bar { top: calc(var(--topbar-top) + env(safe-area-inset-top)); left: var(--gutter); right: var(--gutter); height: var(--topbar-h); border-radius: var(--r-full);
-  display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; align-items: center; padding: 0 var(--sp-1); animation: float-in var(--dur) var(--ease) both; }
-.chat-bar-side { display: flex; align-items: center; min-width: 0; }
-.chat-bar-side.end { justify-content: flex-end; }
-.chat-bar .chat-top-title { align-items: center; text-align: center; }
+/* v2.93 §Q 项目对话的标题行：左 ‹ 返回项目列表、右 ⋯ 项目菜单，左右同宽，标题居中（= App ChatScaffold header） */
+.chat-caption.with-sides { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; justify-items: center; padding: 0 calc(var(--gutter) - var(--sp-2)); }
+.chat-caption-side { pointer-events: auto; justify-self: start; display: flex; align-items: center; }
+.chat-caption-side.end { justify-self: end; }
 .chat-top-title { min-width: 0; padding: 0 var(--sp-2); display: flex; flex-direction: column; justify-content: center; }
 .chat-top-name { font-weight: var(--fw-title); font-size: var(--fs-sm); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 本对话用量：标题下一行小字，可点开明细；值变化时 key 变 → 重新 rise */
@@ -65,7 +65,7 @@
 .status-dot { width: 6px; height: 6px; border-radius: var(--r-full); background: currentColor; animation: breathe var(--dur-pulse) ease-in-out infinite; }
 .conv-item .status-capsule { margin-right: var(--sp-1); }
 
-/* v2.91 §N 项目对话左上钮 ≡ ↔ +（= App MenuPlusIcon）：上下两条平移到中线、各转 ±90° 成竖线，中线不动；只动 transform */
+/* v2.91 §N / v2.93 §Q 项目左上钮 ≡ ↔ +（= App MenuPlusIcon）：上下两条平移到中线、各转 ±90° 成竖线，中线不动；只动 transform */
 .morph-icon { position: relative; display: block; width: 18px; height: 14px; }
 .morph-icon i { position: absolute; left: 0; top: 6px; width: 18px; height: 2px; border-radius: 1px; background: currentColor;
   transition: transform var(--dur-morph) var(--ease-morph); }
@@ -76,7 +76,7 @@
 .morph-icon.plus i:nth-child(3) { transform: rotate(-90deg) scaleX(.9); }
 
 /* v2.91 §N 项目对话的标题药丸：标题栏下方居中；出现 = 从上方 8px 落下 + 淡入（--spring 轻微回弹），收起 = 反向不回弹；只动 transform/opacity */
-.title-pill-slot { position: absolute; z-index: 5; left: var(--gutter); right: var(--gutter); top: calc(var(--topbar-top) + var(--topbar-h) + var(--sp-2) + env(safe-area-inset-top));
+.title-pill-slot { position: absolute; z-index: 5; left: var(--gutter); right: var(--gutter); top: calc(var(--caption-bottom) + var(--sp-2));
   display: flex; justify-content: center; pointer-events: none; }
 .title-pill { max-width: min(100%, 320px); padding: var(--sp-2) var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transform: translateY(calc(var(--pill-drop) * -1));
@@ -90,11 +90,11 @@
   .chat.drawer-open .convs { transform: none; }
   .chat.drawer-open .scrim { display: block; position: fixed; inset: 0; z-index: 25; background: var(--glass-scrim); animation: fade var(--dur) var(--ease); }
   .conv-item .menu-trigger { opacity: 1; }
-  /* v2.91 §N 项目对话：列表从标题栏下面滑出，标题栏留在遮罩之上（左上 ≡ 变 + 才看得见、点得到）；
-     新对话 = 那颗 +，关闭 = 遮罩 / 再点 +，抽屉里不再重复“新对话”和关闭钮 */
-  .chat.with-bar .convs { top: calc(var(--topbar-top) + var(--topbar-h) + var(--sp-2) + env(safe-area-inset-top)); }
-  .chat.with-bar.drawer-open .chat-bar { z-index: 31; }
-  .chat.with-bar .convs .new-chat, .chat.with-bar .convs-head .icon-btn { display: none; }
+  /* v2.93 §Q 项目对话：列表和遮罩都从标题行下面开始（顶栏、左上 ≡/+、标题行都不被盖住，≡ 变 + 才看得见、点得到）；
+     新对话 = 那颗 +，关闭 = 遮罩 / 再点 +，抽屉里不再重复“新对话”和关闭钮。主聊天抽屉仍盖全屏。 */
+  .chat.project .convs { top: var(--caption-bottom); }
+  .chat.project.drawer-open .scrim { top: var(--caption-bottom); }
+  .chat.project .convs .new-chat, .chat.project .convs-head .icon-btn { display: none; }
 }
 
 /* 消息流：铺满，上面让出标题，下面让出输入胶囊（--footer-h 由 FloatingFooter 量出）；内容在标题下方淡出 */
@@ -308,8 +308,8 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .speak-btn.playing { color: var(--text); }
 .speak-dot { width: 7px; height: 7px; border-radius: var(--r-full); background: currentColor; animation: blink var(--dur-pulse) var(--ease) infinite; }
 @media (prefers-reduced-motion: reduce) { .speak-dot { animation: none; opacity: .6; } .effort-chip { animation: none; } }
-/* v1.12：标题栏里的 ⋯ 和返回/历史同一档（40px 触发区、20px 图标），不再比两边小一号 */
-.chat-bar-side .menu-trigger { width: 40px; height: 40px; }
+/* v1.12 / v2.93：标题行两侧的 ⋯ 和 ‹ 同一档（40px 触发区、20px 图标） */
+.chat-caption-side .menu-trigger, .chat-caption-side .icon-btn { width: 40px; height: 40px; }
 
 /* v1.13 引用的项目文件：扩展名徽标角上的文件夹记号；项目对话里“添加附件”是菜单，触发键与左右圆钮同尺寸 */
 .attach-ext { position: relative; }

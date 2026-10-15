@@ -28,7 +28,7 @@ import AppShell from "./shell/AppShell";
 import { DialogHost } from "./ui/dialog";
 
 /** 路由表 = App 的地图。新增页面只在这里登记一行。HashRouter 兼容安卓 WebView。
- *  “我的”不是栏目（顶栏头像进入），外壳只在 / /chat /projects 上显示浮动顶栏（shell/TopBar isShellRoot）。 */
+ *  “我的”不是栏目（顶栏头像进入），外壳在 / /chat /projects 和项目页 /projects/:pid 上显示浮动顶栏（shell/TopBar isShellRoot，v2.93 §Q）。 */
 export default function App() {
   const [authed, setAuthed] = useState(!!auth.get());
   useEffect(() => onUnauthorized(() => { auth.clear(); resetProfile(); setAuthed(false); }), []);

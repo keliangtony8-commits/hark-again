@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { http } from "../../lib/api";
 import { FEEDBACK_GOOD, FEEDBACK_REASONS, feedbackPath, feedbackToast, isBadFeedback } from "../../lib/feedback";
 import { IconThumbDown, IconThumbUp } from "../../ui/icons";
@@ -36,7 +35,7 @@ export function useReplyRating(messageId: string, initial?: string | null) {
   return {
     items,
     note: note ? <span key={note.text} className={`msg-saved fade-in${note.err ? " is-err" : ""}`} role="status">{note.text}</span> : null,
-    sheet: asking ? createPortal(<ReasonSheet onPick={(k, t) => void send(k, t)} onClose={() => setAsking(false)} />, document.body) : null,
+    sheet: asking ? <ReasonSheet onPick={(k, t) => void send(k, t)} onClose={() => setAsking(false)} /> : null,
   };
 }
 

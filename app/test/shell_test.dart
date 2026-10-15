@@ -75,7 +75,7 @@ void main() {
     expect(_barShown(tester), isTrue);
   });
 
-  testWidgets('顶栏：一级页面显示、子页面隐藏；左侧按钮随 Tab 变', (tester) async {
+  testWidgets('顶栏：一级页面和项目页显示（v2.93）、子页面隐藏；左侧按钮随 Tab 变', (tester) async {
     final router = await _pump(tester);
     expect(find.byType(FloatingTopBar), findsOneWidget);
     expect(_barShown(tester), isTrue);
@@ -88,12 +88,16 @@ void main() {
 
     router.go('/projects/p1');
     await _settle(tester);
-    expect(_barShown(tester), isFalse);
-    expect(find.byTooltip('项目对话'), findsOneWidget); // 子页面有自己的 AppBar
+    expect(_barShown(tester), isTrue); // v2.93 §Q 项目页仍在一级外壳下
+    expect(find.byTooltip('项目对话'), findsOneWidget); // 左上 ≡
+
+    router.go('/projects/p1/brief');
+    await _settle(tester);
+    expect(_barShown(tester), isFalse); // 规则与档案是子页面，自带标题栏
 
     await tester.tapAt(tester.getCenter(find.text('聊天'))); // 隐藏的顶栏不挡也不接点击
     await _settle(tester);
-    expect(router.state.uri.path, '/projects/p1');
+    expect(router.state.uri.path, '/projects/p1/brief');
 
     router.go('/chat');
     await _settle(tester);
