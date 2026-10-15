@@ -1,4 +1,4 @@
-# Toyuis 交接文档（2026-10-15，v2.93.0）
+# Toyuis 交接文档（2026-10-15，v2.94.0）
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
@@ -22,8 +22,10 @@
 9. 学习参考：先找 1–2 个开源（MIT/Apache）实现学习再动手，移植时保留许可证头并注明 “Ported from <repo>/<path> (<license>)”，在 `NOTICE` 记一行。主要参考 deepseek-harness、openai/codex、gemini-cli。**绝不使用泄露的 Claude Code 源码**。不泄露/不打听 Hark 内部实现，只学公开表现。
 10. **实践是检验真理的唯一标准**：每次改动后跑真实测试（含真模型 E2E），bug 优先于新功能。
 11. 用中文回复用户；优先低成本方案，费 token 的功能要先说明。
+12. **不主动部署、不主动编 APK**（用户 2026-10-15 13:03）：版本照常提交/tag/push，部署和 APK 等用户开口（“更新服务器”/要 APK）。
 
 ## 三、工程规矩（看代码 / 改代码时）
+- **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**
 - Flutter：颜色/时长只在 `app/lib/theme/tokens.dart`，动效只在 `app/lib/ui/motion.dart`；弹层只在 `ui/sheets.dart`，子页面 `ui/sub_page.dart`；**不要 `dart format lib`**；测试用 `package:assistant/...` 导入。
 - Web：只用 `tokens.css` 变量，keyframes 只在 `styles/base.css`；`npm run build`（含 check-arch）必须过。
 - 后端：改表必须 Alembic 迁移（当前到 0064）；SQLite 下 ctx.db 写入要在下次模型调用前 commit；runner._run_turn 先读完 conv 属性再 build_history。
@@ -36,7 +38,7 @@
 - 已发布：v2.85–v2.92（v2.90.1 用户气泡改灰；v2.90.3 已部署过一次，见下）。
 - v2.89：浏览器实时推流（CDP screencast，单条 WS，取代截图轮询）。
 - v2.90：运行中连发“按件回复”（`backend/app/message_intake.py` 单入口；补充并入 / 附和不回 / 问进度一句话 / 新问题并行一路；`messages.answered_by` 账本，迁移 0064；回复离原话远才画引用线）。
-- 已发布到 git：v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**未出 APK**。
+- 已发布到 git：v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，2026-10-15，主页三个 bug，见第五节 6a；未部署、未出 APK——按新规则等用户说）**。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
 - VPS：GreenCloud 2C/3.8G Debian 12，IP 172.93.163.240，域名 toyuis.itsllm.com。部署方式见 `deploy/`（git archive → 上传 → `deploy/update.sh`）。
   - **2026-10-15 约 11:05 已部署 v2.92.0**（`/api/version` = 2.92.0，容器全部 Up）。旧版备份 `/root/app-v2911-backup.tgz`，.env 备份 `/root/env.bak.v292`；`docker builder prune` 后磁盘 80%。
   - 真模型（StepFun）验证通过：主聊天说“以后叫我小测，你就叫阿星”→ 调用 set_names（步骤“保存称呼”），profile 变为 小测 / 阿星；验证后已删测试对话和 identity 行，greet 恢复为 true（保留用户自己的首次问候体验）。
@@ -45,7 +47,7 @@
 
 ## 五、用户提过但还没完成的要求（按优先级）
 > 完整原话与决定见 `docs/home-redesign.md`（A–P 各节）和 `docs/devlog.md`；凡标注“剩/待/未做”的都算未完成，接手后先逐节核对一遍。
-1. ~~重新部署 VPS~~ 已完成 v2.90.1。剩：真机打开网页确认标题是 Toyuis、实时画面和连发回复在服务器上能用；之后**每批改动都要重新部署**（用户原话：“你要把这版推上去啊，更新到服务器上去”）。
+1. ~~重新部署 VPS~~ 已完成 v2.90.1。剩：真机打开网页确认标题是 Toyuis、实时画面和连发回复在服务器上能用；~~之后每批改动都要重新部署~~ **已被 2026-10-15 13:03 新规则取代：只有用户说“更新服务器”才部署，APK 也只在用户要时才编**（见第三节顶部）。
 2. ~~**用户气泡截图验收**（v2.90.1 只改了颜色 token，未截图）：App 浅/深 + 网页，与 Hark 截图 1000035386 并排对比；a11y 对比度 ≥4.5 补测试。编辑中/引用条/长按聚焦也要跟随新颜色（home-redesign §L）。~~ 2026-10-15 做完：气泡 13.80:1（浅）/14.84:1（深），App 6 个新测试 + 网页构建期守门；顺带修了浅色警示色 3.62→4.93。**剩用户自己拿 Hark 截图并排看一眼**（图在 `shots-2.90.2/`）。
 2a. **连接器“点一下就能授权”**（用户 15:27 原话：“连接器没用，根本就连不上…人家是点一下就能够直接授个权”；更早：“连接 GitHub、Gmail…全面与你对标”“为什么现在连接不了 GitHub 还有 Gmail，显示还没有做”）。**v2.90.2 已做“按钮诚实化 + 引导页 + docs/oauth-setup.md”（未部署）；剩：在 GitHub / Google 后台注册应用、填 VPS `.env`、重启、真机走通授权。** 原因：OAuth 代码在 `backend/app/connectors/oauth.py`，但 VPS `.env` 的 GOOGLE_/GITHUB_CLIENT_ID/SECRET 是空的，点了必失败。要做：
    - 在 VPS 注册 GitHub OAuth App、Google OAuth（测试模式，把用户自己加为测试用户），回调地址 `https://toyuis.itsllm.com/...`（看 oauth.py），填进 `.env` 后重启，真机走通 GitHub、Gmail 一键授权。
@@ -67,11 +69,21 @@
    - [ ] Web 截图核对（手机宽度：列表 / 项目 / 抽屉 / 新建项目弹层 / 新面板弹层）
    - [x] 测试（最终代码上）：flutter analyze 0、flutter test 671 过（8 跳过）、npm run build 过、后端 smoke 201/201（不含需真密钥的 smoke_stepfun）；protocol/CHANGELOG/VERSION 2.93.0、tag v2.93、push
    - [x] 部署 VPS（2026-10-15 11:41）
-   - [ ] 出 APK（v2.92 的也没出，直接出 2.93）
+   - [x] 出 APK：2026-10-15 12:54 VPS 上 `deploy/build-apk.sh` 编好 v2.93.0（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）
    - [ ] 真机看 App 项目页 +↔≡ 切换手感、明/暗；手机浏览器验弹层三处不再被挡
    - [ ] App 截图回归里 emoji 无字体显示为空白（仅测试环境）
+5b. **【v2.95 最高优先级，下一版做；v2.94 不碰】项目 = 一段对话**（用户 2026-10-15 12:48 原话大意：“Hark 里一个项目就是一段对话，不能在项目里开多个会话”；附 Hark 截图（在 Hark 项目工作区 `files/uploads/1000035393.png`，不在仓库里）：点进项目直接就是聊天，顶栏下方药丸显示项目名，左上 ≡，底部输入框）。**v2.93 的“项目内对话列表 / 抽屉 / 新建本项目对话”方向错了。**
+   - 要被替换的 v2.93/v2.91 部分：ProjectHome 对话列表（App `features/projects/project_home.dart` 相关、Web `ProjectHome.tsx`）；项目对话抽屉（App ShellPage 内层 Scaffold 抽屉、Web 项目抽屉 + 遮罩）；“+ = 本项目新对话”与 ≡↔+ 的第三态；header 行 ‹ / 项目名 / ⋯ 是否保留待定；双栏项目历史栏；`conversation_status.for_projects/summarize` 的多对话汇总（单对话后项目状态 = 那段对话的状态，summarize 可删）；`GET /api/conversations?project_id=` 的项目内列表用法。
+   - 待定设计要点（先在 devlog 写决定再动手）：①项目 = 唯一对话（建项目即建这段对话，项目 id ↔ 对话 id 一一对应，需迁移或约束）；②点项目直接进聊天，药丸显示项目名（v2.91 药丸当前显示对话总结标题，要改成项目名）；③**现有多对话项目的数据怎么并成一段**（按时间合并消息进最早那段？还是保留最近一段、其余归档进主聊天？需用户定，迁移不可逆要先备份）；④左上 ≡ 改作什么（Hark 截图里 ≡ 在项目里——候选：回项目列表 / 项目菜单（文件、电脑、规则）；需定）；⑤后端 / 协议（docs/protocol.md）/ 状态胶囊随之简化，删掉多对话专用代码与测试。
+   - 状态：[ ] 设计决定 [ ] 数据合并方案（用户确认）[ ] 后端 [ ] App [ ] Web [ ] 测试 [ ] 部署
+6a. **v2.94 主页三个 bug（第 6 项里拆出来，本轮做）**——进度如实记录：
+   - [x] devlog 写全局决定 / 替换删除 / 成本（docs/devlog.md「2026-10-15 v2.94 主页三个 bug」，含三条根因调查结论）
+   - [x] ① 天气面板重复：**根因是数据重复，不是渲染**。(a) 面板内容收的是整轮回复全部块，每一步说过的话各是一块（先写一遍→show_stats→再写一遍/被“继续”再补）→ 新 `worker.panel_blocks()`：文字只留最后一块、相同展示卡只留一张；(b) create_panel 不查重 → `task_store.panel_twin()`（同标题去标点 / 同指令即同一个，不建第二张，回告用 manage_home update）。Toyuis 没有“内置天气卡”（从没做过），天气只有面板一条路，无可删；不新增。smoke_manage_home 加查重 + panel_blocks 用例，相关 7 个 smoke 已过。**没做**：线上库已存在的重复面板没清（不碰 VPS）——部署后 `manage_home list` 看一眼，手动移除多余的；旧内容下次刷新按新规则重写。
+   - [x] ② Composer 遮住最后一张面板：查明两端现有机制是对的（App FloatingFooter 量胶囊实际高度→MediaQuery.padding.bottom→PageBody；Web Page footer ResizeObserver→`--footer-h`，胶囊高已含安全区），本机 1080×2340 / 2560×1440 实渲 App 主页滚到底不遮；该 bug 是 v2.78 主页重做前报的。做了：新 `app/test/home_footer_test.dart`（手机含手势条、电脑宽屏各滚到底，最后一张卡底边 ≤ 胶囊顶边；已做变异验证——把留白改坏两条都红）；删 Web 三处 `var(--footer-h, 88px)` 写死兜底，check-arch 加第 6 条禁兜底。**没做**：Web 没能实际截图（本机 arm64 下不到 Chromium），只靠构建 + 代码核对；真机/手机浏览器未看。
+   - [x] ③ 电脑端割裂 / 左半屏空：原根因是 v2.78 前 Web 宽屏两栏（v2.78 已改居中单列）；残留的宽版残路 `Page wide`/`.page-inner.wide`/`--content-wide`（只剩项目列表在用，≥1100px 时 720 宽列表贴在 1080 区域左边、右边空一块）**整条删掉**，所有页同一 720 居中。App 宽屏实渲是居中单列，无割裂；顺手统一 App 建议卡配图：窗口 ≥ `Layout.contentMax` 用 5:2（`Layout.offerImageRatioWide`，= Web ≥720px），手机仍 2:1（offer_media_test 加用例）。**没做**：宽屏顶栏左 + / 右头像贴屏幕两角、不跟内容列对齐——是否改要连同聊天双栏一起定，留作后续；Web 宽屏未实际截图。
+   - [x] 测试 + 发布 v2.94：flutter analyze 0、flutter test 674 过（8 跳过）、npm run build 过（架构守卫 218 文件）、后端 smoke 201/201（不含需真密钥的 smoke_stepfun）；VERSION 2.94.0、CHANGELOG、tag v2.94、push。不部署 VPS、不出 APK（按 13:03 新规则，等用户开口）
 5. ✅（v2.92.0 已做，存 app_settings 的 identity 一行而非 users 表——只有一个主人；详见 devlog 2026-10-15 v2.92）**v2.92 §P 名字与头像**：首次进对话由助手**在聊天里**问称呼和是否给助手取名（不做表单引导页）；不取名默认叫 Toyuis；`users.display_name`、`users.avatar`、`app_settings.assistant_name`；头像可上传，无图=纯色圆+首字母（复用 Avatar）；“我”页点名字/头像可改；助手名进系统提示词。**语气**：正式、不开玩笑，但初次打招呼可亲切。定稿开场：“你好，我是 Toyuis，很高兴为你服务。请问我该如何称呼你？如果你愿意，也可以为我取一个名字；不取的话，我就继续叫 Toyuis。”
-6. home-redesign 剩余：E1 收尾（ListRow/ListGroup/PageHeader 统一、附件弹层高度）、E4 ImageStack + 震动反馈、主页内置天气卡去重（天气面板同一报告重复 3 次的 bug）、连接器按钮诚实化 + OAuth 指南、“我的”页底部搜索、电脑端主页排版割裂/左半屏空（`work/vps/README.md` 顶部 bug）、Composer 遮住最后一张面板。
+6. home-redesign 剩余：E1 收尾（ListRow/ListGroup/PageHeader 统一、附件弹层高度）、E4 ImageStack + 震动反馈、连接器按钮诚实化 + OAuth 指南、“我的”页底部搜索。（天气重复 / 电脑端割裂 / Composer 遮挡三项已拆到 6a，v2.94 做完。）
 7. 后台任务/定时任务的运行对话不要出现在主对话列表（用户叫“子对话”，嫌乱）——确认 v2.75 修复在 VPS 上生效。
 8. Web 截图重拍、banner“稍后再看”。
 9. SearXNG 集成测试（需 VPS）；关闭 VPS SSH 密码登录。
@@ -93,7 +105,7 @@
 | 连接不了 GitHub、Gmail；点一下登录再确认授权 | ⚠️ v2.90.2 按钮诚实化 + 配置引导已提交；OAuth 应用未注册、未部署 | 见第五节 2a、docs/oauth-setup.md |
 | 删了的对话又蹦出来；子对话（定时任务运行对话）不要放主列表 | ⚠️ v2.75 修了，需在服务器上确认 | devlog v2.75 |
 | CPU 60%～100%、内存占用高，要优化 | ❓ | 服务器上 `docker stats` 核实；APK 构建已改为限流脚本 |
-| 电脑端主页割裂、左边空一大块；天气报告重复 3 次；输入框遮住面板 | ❓ 部分 | work/vps/README.md 顶部；home-redesign 第 8 项 |
+| 电脑端主页割裂、左边空一大块；天气报告重复 3 次；输入框遮住面板 | ⚠️ v2.94 已修并提交（面板只收结果 + 面板查重；删宽版残路；输入框留白加回归测试），未部署、线上已有的重复面板未清、未真机看 | 第五节 6a，devlog v2.94 |
 | 主页对比 Hark“又乱” → 整体重设计 | ⚠️ 进行中 | home-redesign A–E，E1/E4 收尾未完 |
 | 历史抽屉被顶栏压住“还叠在一起” | ✅ v2.78 | |
 | 步骤耗时都显示 0.0 秒、步骤默认展开很乱 | ✅ v2.79 | |

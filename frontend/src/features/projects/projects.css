@@ -29,7 +29,7 @@
 
 /* 项目首屏（v2.93 §Q，= App ProjectHome）：只列本项目对话，宽度同聊天正文；宽屏对话列表常驻左侧，只留一行提示 */
 .project-home { max-width: var(--content-w); width: 100%; margin: 0 auto;
-  padding: calc(var(--thread-top) + var(--sp-2)) var(--gutter) calc(var(--footer-h, 88px) + var(--sp-4)); }
+  padding: calc(var(--thread-top) + var(--sp-2)) var(--gutter) calc(var(--footer-h) + var(--sp-4)); }
 .project-home-hint { margin: 0; color: var(--text-2); font-size: var(--fs-sm); }
 .project-home-hint.wide-only { display: none; }
 @media (min-width: 861px) { .project-home-hint.wide-only { display: block; } .project-home-list { display: none; } }

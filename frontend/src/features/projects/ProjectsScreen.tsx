@@ -46,7 +46,7 @@ export default function ProjectsScreen() {
   };
 
   return (
-    <Page wide>
+    <Page>
       <ShellLead><MenuPlus plus label="新建项目" onClick={() => setCreating(true)} /></ShellLead>
       <div className="page-hero project-hero">
         <span key={label} className="page-hero-label enter">{label}</span>

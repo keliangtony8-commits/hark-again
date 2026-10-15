@@ -34,14 +34,14 @@ export function FloatingFooter({ children, onHeight }: { children: ReactNode; on
   return <div ref={ref} className="floating-footer">{children}</div>;
 }
 
-/** 页面骨架：可滚动内容 + 可选的子页面标题栏 + 可选的底部浮层（一级页面的输入胶囊）。 */
-/** 页面骨架。wide = 宽屏放宽到 --content-wide（项目网格三列），窄屏不变。 */
-export function Page({ children, header, footer, wide }: { children: ReactNode; header?: ReactNode; footer?: ReactNode; wide?: boolean }) {
+/** 页面骨架：可滚动内容 + 可选的子页面标题栏 + 可选的底部浮层（一级页面的输入胶囊）。所有页同一阅读宽度 --content-w、居中
+ *  （v2.94 删掉了宽版 wide：宽屏两栏 / 项目网格都已不在，留着只会让内容贴左、右边空一块）。 */
+export function Page({ children, header, footer }: { children: ReactNode; header?: ReactNode; footer?: ReactNode }) {
   const [h, setH] = useState(0);
   const style = footer ? ({ ["--footer-h" as string]: `${h}px` } as CSSProperties) : undefined;
   return (
     <>
-      <div className={`page ${footer ? "has-composer" : ""}`} style={style}>{header}<div className={wide ? "page-inner wide" : "page-inner"}>{children}</div></div>
+      <div className={`page ${footer ? "has-composer" : ""}`} style={style}>{header}<div className="page-inner">{children}</div></div>
       {footer && <FloatingFooter onHeight={setH}>{footer}</FloatingFooter>}
     </>
   );

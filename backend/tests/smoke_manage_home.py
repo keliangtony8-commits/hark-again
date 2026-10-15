@@ -1,5 +1,5 @@
 # 冒烟：Home 管理（模拟模型，不打真接口）。
-# create_panel 走 task_store（坏 cron 拒绝）；接口 PATCH 面板任务改名 → 卡片标题跟着改（crud after_update 钩子）；
+# create_panel 走 task_store（坏 cron 拒绝、同标题/同指令不建第二张）；面板只收结果（panel_blocks）；接口 PATCH 面板任务改名 → 卡片标题跟着改（crud after_update 钩子）；
 # 工具 manage_home：list 分组带 id 与 cron、只列未隐藏；refresh 置 run_requested；update 改名/cron（卡片同步、坏 cron 拒绝、
 # 非面板拒绝）；dismiss 建议 = 隐藏并清未读，dismiss 面板 = 删任务、卡进最近移除；未知 id 提示先 list。
 # 运行：python tests/smoke_manage_home.py
@@ -34,6 +34,21 @@ async def call(name, **kw):
 assert "无效" in asyncio.run(call("create_panel", title="坏", prompt="x", cron="每天"))
 assert "已放到 Home" in asyncio.run(call("create_panel", title="天气", prompt="查上海天气", cron="0 8 * * *"))
 assert "已放到 Home" in asyncio.run(call("create_panel", title="比分", prompt="查比分", cron="0 * * * *"))
+# v2.94 面板查重（task_store.panel_twin）：同标题（空白/标点不计）或同指令 → 不建第二张，指向已有那张
+dup = asyncio.run(call("create_panel", title="天气。", prompt="查北京天气", cron="0 9 * * *"))
+assert "已经有这个面板「天气」" in dup and "manage_home update" in dup, dup
+dup = asyncio.run(call("create_panel", title="今日气温", prompt=" 查上海天气 ", cron="0 9 * * *"))
+assert "已经有这个面板「天气」" in dup, dup
+assert sum(x["kind"] == "panel" for x in c.get("/api/cards").json()) == 2
+
+# v2.94 面板只收结果（worker.panel_blocks）：中间步骤的话不进面板，相同展示卡只留一张
+from app.worker import panel_blocks
+T = lambda t: {"type": "text", "text": t}
+S = {"type": "stats", "items": [{"label": "气温", "value": "22°C"}]}
+assert panel_blocks([T("上海 22°C 晴"), S, T("上海 22°C 晴"), T("  "), S, T("上海 22°C 晴，傍晚有风")]) == [S, T("上海 22°C 晴，傍晚有风")]
+assert panel_blocks([T("上海 22°C"), S]) == [T("上海 22°C"), S]
+assert panel_blocks([]) == []
+
 panel = lambda title: next(x for x in c.get("/api/cards").json() if x["kind"] == "panel" and x["title"] == title)
 weather = panel("天气")
 task = c.get(f"/api/tasks/{weather['task_id']}").json()

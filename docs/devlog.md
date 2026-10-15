@@ -103,3 +103,20 @@
 - App：项目列表的卡片网格（`_Grid` / `_ProjectTile`）与 LaunchComposer、大标题“项目”；ProjectHome 的字标头、规则行、文件节、电脑节、起步建议，以及 `projectRecentFiles` / `projectFilesMax` / `projectRecentMax`（首屏不再截 3 条）；ChatScaffold 的 SubPage 分支（项目对话不再是子页面）与 `ProjectDetailScreen.suggestions`；`MenuPlusIcon` 内部画线逻辑并入 `MenuPlusGlyph`。
 - Web：`project-grid` / `project-card` 卡片样式与 LaunchComposer；ProjectHome 的文件 / 电脑 / 建议节和 `projectRecentFiles` / `PROJECT_*_MAX`；ChatScreen 的 `with-bar` 玻璃标题栏分支（`leading` / `trailing` 合并为 header 行的 `back` / `trailing`）及 `.chat-bar` 样式；`Sheet` 不再在页面树内渲染。
 **成本**：`GET /api/projects` 多三次查询（各项目可见对话 + for_list 的两次），单用户 ≤ 几百行；无迁移、无模型调用；客户端无新请求（项目页不再拉文件列表和电脑状态，反而少两个）。
+
+## 2026-10-15 v2.94 主页三个 bug（HANDOFF 第五节 6a）
+本轮不碰 VPS（不查线上库、不部署），不出 APK；项目“一段对话”的改向（HANDOFF 5b）留给 v2.95，不和本轮混。
+**先查根因（查到的事实）**
+1. **天气报告重复 3 次 —— 是数据重复，不是渲染重复。** 两端面板都只是 `BlockList(card.blocks)` / `<BlockRenderer blocks={p.blocks}>` 原样画，没有重复渲染。重复写进了库，有两条源头：
+   - **面板内容 = 整轮回复的全部块**（`worker._deliver_panel` 收 `reply.blocks`）。agent 循环每次调工具前会 `break_text()`，所以一轮里每一步说过的话都是一个独立文字块。面板刷新提示（PANEL_STYLE）要求“数字用 show_stats”，模型的常见走法是：先写一遍天气 → 调 show_stats → 再写一遍；若“用完工具一句没说/说了要做没做”被 next_speaker 补一句“继续”，还会再写一遍——同一份天气报告进面板 2～3 次，每次刷新都重来。聊天里中间步骤的话是过程，面板里它就是重复。
+   - **create_panel 没有查重**（`task_store.twin` 注释明写“面板不在这查”）：模型没先 `manage_home list`、或一轮里重试，就会再建一个同名/同指令的面板，主页上出现几张一样的天气面板。
+   - “内置天气卡”：Toyuis **没有**内置天气卡（Hark 有，我们从没做过），主页上的天气只有面板这一条路径；早间简报是收件箱报告（prep-my-day 技能里“有天气就加一行”），不是第二套天气功能。所以没有“两套只留一套”可删——不新增内置天气卡（那才是叠加）。
+2. **Composer 遮住最后一张面板**：两端现有机制本身是对的——App `FloatingFooter` 量胶囊实际高度写进 `MediaQuery.padding.bottom`，`PageBody` 加到列表底部留白；Web `Page footer` 用 ResizeObserver 量出 `--footer-h`，`.page.has-composer .page-inner` 底部留 `--footer-h + sp-5`（胶囊高度已含 `env(safe-area-inset-bottom)`）。本机按 1080×2340（手机）和 2560×1440（电脑）实际渲染 App 主页并滚到底，最后一颗“创建一个新面板”在胶囊上方完整露出。这条 bug 是 v2.78 主页重做前（旧的分节主页）报的。**本轮不重写机制**，只做两件：①把几何关系钉成测试（手机、电脑两种宽度滚到底，最后一张卡底边 ≤ 胶囊顶边），以后谁改坏会红；②删掉 Web CSS 里 `var(--footer-h, 88px)` 的写死兜底（`--footer-h` 由量高的组件必给，88px 是魔法数，兜底只会掩盖“忘了量”）。
+3. **电脑端主页割裂 / 左半屏空**：根因是 v2.78 以前的 Web 宽屏两栏（`.home-grid` 主列 + 360px 右栏，主列卡少时左边一大块空），v2.78 已改成居中单列，但留下了**宽版页面这条残路**：`Page wide` / `.page-inner.wide` / `--content-wide: 1080px`，v2.93 删掉项目卡片网格后只剩项目列表在用——而 `.project-list` 只有 `max-width: 720px` 没居中，≥1100px 时列表贴在 1080 宽区域的左边，右边空一块，正是同一种“割裂”。App 宽屏实际渲染是居中 720 单列，没问题；但 App 建议卡配图在电脑宽度仍是 2:1（Web ≥720px 已压到 5:2），一张图占大半屏。
+**全局决定**
+- 面板只收“结果”：新规则 `panel_blocks(blocks)` 放在投递处（`worker.py`，面板投递唯一入口）：展示卡（show_stats / 表格 / 图…）保留、完全相同的只留最后一张；文字只留**最后一个**文字块（最后一步的成稿）。不改 agent 循环（聊天里过程话仍要显示），不改提示词去“求”模型别重复（规则比提示词可靠）。报告卡不动：报告保留对话、点开可追问，过程本来就该在。
+- 面板查重并进 `task_store` 的同一处“同一件事”规则：`panel_twin(title, prompt)`——还在主页上（卡没被移除、任务启用）的面板里，标题（去空白/标点、不分大小写）相同或指令相同即算同一个；create_panel 遇到就不建，回告诉模型“已有面板 X（id），要改用 manage_home update”。`twin` 注释里“面板不在这查”一并改掉。只拦智能体工具，用户界面不走这条路。
+- 宽版页面整条删：`Page` 的 `wide` 参数、`.page-inner.wide`、`--content-wide`；项目列表跟所有页一样居中 720。App 配图加 `Layout.offerImageRatioWide = 2.5`，宽度 ≥ `Layout.contentMax` 时用（= Web 的 720 断点）。
+**替换 / 删除**：`twin` 里“面板不查重”的例外；面板投递里“整轮回复原样进卡”；Web `Page wide` / `.page-inner.wide` / `--content-wide`；Web 三处 `var(--footer-h, 88px)` 兜底魔法数。不新增内置天气卡。
+**成本**：无迁移、无新接口、无模型调用；查重多一次查面板任务（单用户十几行）。
+**没做 / 待验**：线上库里已经重复的面板与重复内容本轮没清（规定不碰 VPS）——下次部署后在服务器上 `manage_home list` 看一眼，重复面板手动移除一个即可，旧内容下次刷新就按新规则重写。

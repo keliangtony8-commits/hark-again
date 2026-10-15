@@ -171,6 +171,9 @@ class ActionCard extends ConsumerWidget {
   }
 }
 
+/// 配图宽高比：窗口宽到阅读宽度上限（电脑 / 平板）就用更扁的 5:2，和网页同一断点（Layout.contentMax = 720）。
+double offerImageRatioFor(double windowWidth) => windowWidth >= Layout.contentMax ? Layout.offerImageRatioWide : Layout.offerImageRatio;
+
 /// 建议卡顶部配图：宽图圆角，加载完淡入，打不开显示占位；有原页时点图去原页。
 class OfferImage extends StatelessWidget {
   const OfferImage({super.key, required this.card});
@@ -180,7 +183,7 @@ class OfferImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final image = ClipRRect(
       borderRadius: BorderRadius.circular(Radii.inner),
-      child: AspectRatio(aspectRatio: Layout.offerImageRatio, child: NetImage(card.imageUrl!)),
+      child: AspectRatio(aspectRatio: offerImageRatioFor(MediaQuery.sizeOf(context).width), child: NetImage(card.imageUrl!)),
     );
     final link = card.linkUrl;
     return link == null

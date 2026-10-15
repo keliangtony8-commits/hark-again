@@ -74,7 +74,7 @@ async def twin(db, *, prompt: str, cron: str = "", run_at: datetime | None = Non
                project_id: str | None = None) -> ScheduledTask | None:
     """“同一件事已经安排过了”的唯一规则（v2.41，E2E B14：模型为了加个参数又 create 一遍 → 到点提醒两次）：
     还会再跑的（启用、一次性的没跑过）、同类型、同计划（cron 一样或 run_at 同一分钟）、内容一样（prompt / 命令，空白不计）的
-    报告类任务算同一个；名字不看（模型换个说法起名很常见）。面板不在这查（create_panel 自有标题）。
+    报告类任务算同一个；名字不看（模型换个说法起名很常见）。面板看 panel_twin（面板有标题、没有“同一时刻”）。
     只给智能体工具用：用户在界面上自己建两个一样的，是他的事。"""
     for t in await same_job(db, prompt=prompt, kind=kind, project_id=project_id):
         if (t.cron or "").split() == (cron or "").split() and _utc(t.run_at) == _utc(run_at):
@@ -105,10 +105,29 @@ async def create(db, *, name: str, prompt: str, cron: str = "", run_at: datetime
     return task
 
 
+def _title_key(s: str | None) -> str:
+    """面板标题比较用：去掉空白和标点、不分大小写（“天气”“天气 ”“天气。”是同一个）。"""
+    return re.sub(r"[\W_]+", "", s or "").casefold()
+
+
+async def panel_twin(db, *, title: str, prompt: str) -> ScheduledTask | None:
+    """“主页上已经有这个面板了”的唯一规则（v2.94，天气面板重复的源头之一）：主页上的模型刷新面板（kind=agent，
+    暂停的也在主页上，算；移除的任务已不在）里，标题相同（_title_key）或刷新指令相同（_same_text）即同一个。
+    只给智能体工具 create_panel 用。"""
+    rows = (await db.scalars(select(ScheduledTask).where(ScheduledTask.output == "panel",
+                                                         ScheduledTask.kind == "agent"))).all()
+    key = _title_key(title)
+    return next((t for t in rows if (key and _title_key(t.name) == key) or _same_text(t.prompt, prompt)), None)
+
+
 async def create_panel(db, *, title: str, prompt: str, cron: str) -> ScheduledTask:
-    """面板：任务 + 占位卡，并请求立即跑第一次（worker 半分钟内领走）。"""
+    """面板：任务 + 占位卡，并请求立即跑第一次（worker 半分钟内领走）。主页上已有同一个面板 → ValueError（不再建第二张）。"""
     from .blocks import text_to_blocks
     schedule.check(cron, None)
+    if same := await panel_twin(db, title=title, prompt=prompt):
+        card = await db.scalar(select(HomeCard.id).where(HomeCard.task_id == same.id, HomeCard.kind == "panel"))
+        raise ValueError(f"主页上已经有这个面板「{same.name}」（id {card or same.id}），没有再建。"
+                         "要改刷新内容或频率，用 manage_home update 改它。")
     task = ScheduledTask(name=title, prompt=prompt, cron=cron.strip(), output="panel", run_requested=True)
     db.add(task)
     await db.flush()

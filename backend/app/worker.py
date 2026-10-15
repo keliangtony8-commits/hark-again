@@ -4,7 +4,7 @@
 - report：作为卡片放进 Home 收件箱（同一任务只保留最新一张），对话保留，点开可追问；
   碰到登录 / 连接器 / 付费墙这类壁时助手用 report_wall 记下：这次算失败，原因是那堵壁，面板保留旧内容（app/task_wall.py）；
   回复以 [[SILENT]] 开头 = 这次没东西可报，不发卡，运行记录写原因（app/task_brief.py；每次开头读到做法 / 观察 / 最近几次）
-- panel：原地更新面板卡的内容，执行用的对话随即删除（面板每小时刷新，不能把聊天列表刷满）
+- panel：原地更新面板卡的内容（只收结果：panel_blocks），执行用的对话随即删除（面板每小时刷新，不能把聊天列表刷满）
 kind=log 的记录面板也不调模型：到点按记下的笔重算（app/panel_log.py）。
 kind=script 的定时脚本不调模型：到点当后台任务跑命令，结束后按 notify 决定告不告诉用户（app/script_tasks.py）。
 顺带叫醒“稍后提醒”到点的 Home 卡片（app/card_snooze.py），并照看项目沙盒里的后台任务（app/jobs.py：结束了就在原对话里接着说一轮）。
@@ -46,11 +46,28 @@ async def _deliver_report(db, task: ScheduledTask, conv: Conversation, blocks: l
                     blocks=blocks, headline=headline, gist=line))
 
 
+def panel_blocks(blocks: list[dict]) -> list[dict]:
+    """面板只放这一轮的“结果”（v2.94，天气面板同一份报告重复 3 次的根因）：agent 循环每次调工具前断开文字，
+    一轮里每一步说过的话各是一个文字块——先写一遍、调 show_stats、再写一遍（被“继续”再补一遍）就全进了面板。
+    规则：文字只留最后一个文字块（最后一步的成稿）；展示卡保留原顺序，完全相同的只留最后一张。
+    报告不走这里：报告保留对话、点开能追问，过程本来就该在。"""
+    texts = [i for i, b in enumerate(blocks) if b.get("type") == "text" and (b.get("text") or "").strip()]
+    out: list[dict] = []
+    for i, b in enumerate(blocks):
+        if b.get("type") == "text":
+            if texts and i == texts[-1]:
+                out.append(b)
+        elif b not in blocks[i + 1:]:
+            out.append(b)
+    return out
+
+
 async def _deliver_panel(db, task: ScheduledTask, conv: Conversation, blocks: list[dict], walled: bool = False) -> None:
     card = await db.scalar(select(HomeCard).where(HomeCard.task_id == task.id, HomeCard.kind == "panel"))
     if card is None:  # 面板被用户删了卡但任务还在：补一张
         card = HomeCard(kind="panel", title=task.name, task_id=task.id, blocks=[])
         db.add(card)
+    blocks = panel_blocks(blocks)
     if blocks and not (walled and card.blocks):  # 失败 / 碰壁时保留上一次的内容，比空白或“登录不了”有用
         card.blocks = blocks
         card.updated_at = datetime.now(timezone.utc)

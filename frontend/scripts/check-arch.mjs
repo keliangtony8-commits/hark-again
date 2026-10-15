@@ -7,6 +7,8 @@
 //      var(--shadow-*) / backdrop-filter / var(--surface-2)，投影用 var(--elev-card|float|raised|knob)，模糊用 .glass / .glass.raised / .glass-drawer。
 //   5. 强调色克制（= App design_test「accent 只出现在登记过的信号位」）：var(--accent*) 只在 ACCENT 登记的文件里、且不超过登记次数
 //      （未读点、进度/运行中、链接/搜索命中、焦点环、唯一关键状态）；其余用 --ink / --text-2。
+//   6. 让出底部输入胶囊只用量出来的 --footer-h（ui/kit.tsx Page / FloatingFooter、ChatView），不许写死兜底数
+//      var(--footer-h, 88px)——兜底只会掩盖“忘了量”，胶囊长高（附件、多行、建议）就盖住最后一张卡（v2.94）。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +41,8 @@ for (const f of files) {
       bad.push(`${rel}:${i + 1} @keyframes 只能写在 styles/base.css`);
     if (f.endsWith(".css") && /^(blocks|features\/chat)\//.test(rel) && /var\(--(surface-2|bg)\)/.test(line))
       bad.push(`${rel}:${i + 1} 玻璃上的填充用 var(--tile)，不用 --surface-2 / --bg`);
+    if (f.endsWith(".css") && /var\(--footer-h\s*,/.test(line))
+      bad.push(`${rel}:${i + 1} --footer-h 是量出来的胶囊高度，不写兜底数 → var(--footer-h)，并确认外层由 Page footer / ChatView 给值`);
     if (f.endsWith(".css") && !/^(styles|ui)\//.test(rel)) {
       if (/var\(--shadow-/.test(line)) bad.push(`${rel}:${i + 1} 投影用 var(--elev-*)，不直接写 --shadow-*`);
       if (/backdrop-filter/.test(line)) bad.push(`${rel}:${i + 1} 页面不写 backdrop-filter → 拼 .glass / .glass.raised / .glass-drawer`);

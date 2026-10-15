@@ -33,11 +33,17 @@ void main() {
     });
     expect(find.byType(OfferImage), findsOneWidget);
     final ratio = tester.widget<AspectRatio>(find.descendant(of: find.byType(OfferImage), matching: find.byType(AspectRatio)));
-    expect(ratio.aspectRatio, Layout.offerImageRatio);
+    expect(ratio.aspectRatio, offerImageRatioFor(tester.view.physicalSize.width / tester.view.devicePixelRatio));
     expect(find.text('来源 · shop.example.com'), findsOneWidget);
     expect(tester.getSize(find.byType(OfferSource)).height, greaterThanOrEqualTo(A11y.minTap));
     // 图在标题上方
     expect(tester.getTopLeft(find.byType(OfferImage)).dy, lessThan(tester.getTopLeft(find.text('续费校园网')).dy));
+  });
+
+  test('配图宽高比：手机 2:1，电脑 / 平板（≥ 阅读宽度上限）5:2，和网页同一断点', () {
+    expect(offerImageRatioFor(412), Layout.offerImageRatio);
+    expect(offerImageRatioFor(Layout.contentMax), Layout.offerImageRatioWide);
+    expect(offerImageRatioFor(1440), 2.5);
   });
 
   testWidgets('plain offer card has neither', (tester) async {
