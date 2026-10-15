@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { VaultSecret } from "../../lib/types";
 import { withRetried } from "../../lib/taskLabels";
 import { IconEdit, IconMore, IconShield, IconTerminal, IconTrash, IconUser } from "../../ui/icons";
-import { Menu, Sheet, stagger } from "../../ui/kit";
+import { ListGroup, ListRow, Menu, Sheet } from "../../ui/kit";
 import { ENV_VALUE_MIN, envName, envNameError, secretHint, secretWhere } from "./connectorLibrary";
 import { confirmDialog } from "../../ui/dialog";
 import type { useResource } from "../../hooks/useResource";
@@ -24,24 +24,19 @@ export function SecretRows({ items, secrets, onEdit, from }: { items: VaultSecre
     if (await confirmDialog({ title: `删除「${s.name}」？`, text: "用到它的任务会拿不到这把钥匙，直到你重新存入。" })) void secrets.remove(s.id);
   };
   return (
-    <div className="list">
+    <ListGroup>
       {items.map((s, i) => {
         const hint = secretHint(s);
         return (
-          <div key={s.id} className="row enter" style={stagger(from + i)}>
-            <span className="row-icon">{secretKindIcon(s.kind)}</span>
-            <div className="row-body">
-              <div className="row-title">{s.name}</div>
-              <div className="row-sub">{secretWhere(s)}</div>
-            </div>
+          <ListRow key={s.id} enter={from + i} icon={secretKindIcon(s.kind)} title={s.name} sub={secretWhere(s)} control={<>
             {hint && <span className="row-hint">{hint}</span>}
             <Menu trigger={<IconMore />} label={`${s.name} 的操作`} items={[
               ...(s.kind === "env" ? [{ label: "换个值", icon: <IconEdit />, onSelect: () => onEdit({ kind: "env", name: s.name }) }] : []),
               { label: "删除", icon: <IconTrash />, danger: true, onSelect: () => void remove(s) }]} />
-          </div>
+          </>} />
         );
       })}
-    </div>
+    </ListGroup>
   );
 }
 

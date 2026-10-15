@@ -85,7 +85,7 @@ class PageRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Dimmed(
       dimmed: !pg.published,
-      child: RowTile(
+      child: ListRow(
         icon: pg.published ? Icons.web_rounded : Icons.visibility_off_outlined,
         title: pg.title,
         subtitle: '${hostOf(pg.url)} · ${formatAgo(pg.updatedAt)}',

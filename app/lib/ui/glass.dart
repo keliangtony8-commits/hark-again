@@ -3,7 +3,6 @@
 //   Backdrop      整个 App 的底（一级页面和“我的”透明，透出它）
 //   GlassSurface  玻璃面：着色 + 发丝边 + 可选真模糊（只给浮层：顶栏、输入胶囊、弹层；列表卡片 blur: false）
 //   GlassCard     列表里的大卡片（假玻璃、Radii.card、统一内边距）：主页的建议卡/面板、项目卡、“我的”用量卡
-//   GlassGroup    分组列表卡：一张玻璃卡里多行，行间内缩的发丝分隔线（“我的”、主页收件箱）
 //   ValueTile     卡片里再嵌一层的 标签 + 大数字 小块（面板的关键数字）
 //   PillButton    卡片里的胶囊按钮：主按钮实心强调色，次按钮是一层 tile 色——等高、并排时等宽
 //   WidePill      整行宽的玻璃胶囊入口（“＋ 创建一个新面板”）
@@ -144,37 +143,6 @@ class GlassCard extends StatelessWidget {
     return onTap == null && onLongPress == null
         ? card
         : Pressable(onTap: onTap, onLongPress: onLongPress, semanticLabel: semanticLabel, child: card);
-  }
-}
-
-/// 分组列表卡：行之间是从图标右侧开始的发丝线（和行首图标对齐），整卡一个大圆角。
-class GlassGroup extends StatelessWidget {
-  const GlassGroup({super.key, required this.children, this.separator});
-  final List<Widget> children;
-
-  /// 第 i 行（i ≥ 1）上方的分隔；返回 null 用默认细线（缩进到行首图标之后）。
-  /// 用途：行首不是图标的列表把细线对齐到自己的标题边，或在两行之间放一条标记（主页“今天”的“现在”）。
-  final Widget? Function(int i)? separator;
-
-  @override
-  Widget build(BuildContext context) {
-    final line = context.hairline;
-    return GlassSurface(
-      shadow: false,
-      padding: const EdgeInsets.symmetric(vertical: Sp.x1),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(Radii.card),
-        child: Material(
-          type: MaterialType.transparency, // 行里的 InkWell 水波纹画在玻璃上
-          child: Column(children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i > 0) separator?.call(i) ?? Divider(indent: Sp.x4 + Layout.rowIcon + Sp.x4, endIndent: 0, color: line),
-              children[i],
-            ],
-          ]),
-        ),
-      ),
-    );
   }
 }
 

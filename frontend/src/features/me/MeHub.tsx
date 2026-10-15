@@ -1,6 +1,6 @@
 import { IconBrain, IconSpark } from "../../ui/icons";
-import { Page, PageHeader, stagger } from "../../ui/kit";
-import { MeRows, type MeRow } from "./meRows";
+import type { ComponentType } from "react";
+import { ListGroup, ListRow, Page, PageHeader, PageIntro } from "../../ui/kit";
 
 /** “我的”里收拢入口的二级页（v2.81，= App me_hub.dart）：个人资料 = 记忆 + 技能。
  *  （v2.96 “账户”收拢页删除：连接器与保险箱合成“连接的账号”一页，“我的”直达。）
@@ -10,7 +10,7 @@ const HUBS = {
     { to: "/me/memory", icon: IconBrain, title: "记忆" },
     { to: "/me/skills", icon: IconSpark, title: "技能" },
   ] },
-} satisfies Record<string, { title: string; line: string; rows: MeRow[] }>;
+} satisfies Record<string, { title: string; line: string; rows: { to: string; icon: ComponentType; title: string }[] }>;
 
 export type MeHubKind = keyof typeof HUBS;
 
@@ -18,8 +18,8 @@ export default function MeHub({ hub }: { hub: MeHubKind }) {
   const h = HUBS[hub];
   return (
     <Page header={<PageHeader title={h.title} back />}>
-      <p className="desc sub-line enter">{h.line}</p>
-      <div className="enter" style={stagger(1)}><MeRows rows={h.rows} /></div>
+      <PageIntro line={h.line} />
+      <ListGroup enter={1}>{h.rows.map(({ to, icon: Icon, title }) => <ListRow key={to} to={to} icon={<Icon />} title={title} />)}</ListGroup>
     </Page>
   );
 }

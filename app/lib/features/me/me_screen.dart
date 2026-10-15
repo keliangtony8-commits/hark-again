@@ -91,22 +91,22 @@ class _MeBody extends ConsumerWidget {
       gap,
       FadeSlideIn(
         delay: Motion.stagger(2),
-        child: GlassGroup(children: [
-          RowTile(icon: Icons.person_outline_rounded, title: '个人资料', onTap: () => context.push('/me/profile')),
-          RowTile(icon: Icons.schedule_rounded, title: '定时任务', onTap: () => context.push('/me/tasks')),
-          RowTile(icon: Icons.hub_outlined, title: '连接的账号', onTap: () => context.push('/me/connectors')),
-          RowTile(icon: Icons.credit_card_rounded, title: '钱包', onTap: () => context.push('/me/wallet')),
-          RowTile(icon: Icons.computer_rounded, title: '我的电脑', onTap: () => context.push('/me/computer')),
+        child: ListGroup(children: [
+          ListRow(icon: Icons.person_outline_rounded, title: '个人资料', onTap: () => context.push('/me/profile')),
+          ListRow(icon: Icons.schedule_rounded, title: '定时任务', onTap: () => context.push('/me/tasks')),
+          ListRow(icon: Icons.hub_outlined, title: '连接的账号', onTap: () => context.push('/me/connectors')),
+          ListRow(icon: Icons.credit_card_rounded, title: '钱包', onTap: () => context.push('/me/wallet')),
+          ListRow(icon: Icons.computer_rounded, title: '我的电脑', onTap: () => context.push('/me/computer')),
         ]),
       ),
       gap,
       FadeSlideIn(
         delay: Motion.stagger(3),
-        child: GlassGroup(children: [
-          RowTile(icon: Icons.shield_outlined, title: '安全', onTap: () => context.push('/me/security')),
-          RowTile(icon: Icons.tune_rounded, title: '偏好设置', onTap: () => context.push('/me/preferences')),
-          RowTile(icon: Icons.feedback_outlined, title: '反馈', onTap: () => context.push('/me/feedback')),
-          RowTile(icon: Icons.info_outline_rounded, title: '关于', value: clientOutdated(ref.watch(serverVersionProvider).value) ? '请更新' : null, onTap: () => context.push('/me/about')),
+        child: ListGroup(children: [
+          ListRow(icon: Icons.shield_outlined, title: '安全', onTap: () => context.push('/me/security')),
+          ListRow(icon: Icons.tune_rounded, title: '偏好设置', onTap: () => context.push('/me/preferences')),
+          ListRow(icon: Icons.feedback_outlined, title: '反馈', onTap: () => context.push('/me/feedback')),
+          ListRow(icon: Icons.info_outline_rounded, title: '关于', value: clientOutdated(ref.watch(serverVersionProvider).value) ? '请更新' : null, onTap: () => context.push('/me/about')),
         ]),
       ),
       const SizedBox(height: Sp.x4),

@@ -57,31 +57,13 @@ class _MemoRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final p = context.palette;
     final preview = memo.text.split('\n').where((l) => l.trim().isNotEmpty).take(2).join('\n');
-    return Semantics(
-      container: true,
-      button: true,
-      label: '${memo.title}：$preview，点按看全文',
-      excludeSemantics: true,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(Radii.inner),
-        onTap: () => _open(context, ref),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(width: Sp.x6, height: Sp.x6, child: Center(child: Icon(memo.icon, size: Sp.x5, color: p.text2))),
-            const SizedBox(width: Sp.x3),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(memo.title, style: context.text.titleMedium),
-                Text(preview, style: context.text.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
-              ]),
-            ),
-            Padding(padding: const EdgeInsets.only(top: Sp.x1), child: Icon(Icons.chevron_right_rounded, color: p.text3)),
-          ]),
-        ),
-      ),
+    return ListRow(
+      icon: memo.icon,
+      title: memo.title,
+      subtitle: preview,
+      semanticLabel: '${memo.title}：$preview，点按看全文',
+      onTap: () => _open(context, ref),
     );
   }
 

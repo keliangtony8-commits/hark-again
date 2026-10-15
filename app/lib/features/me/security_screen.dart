@@ -68,9 +68,9 @@ class _Body extends ConsumerWidget {
       const SizedBox(height: Sp.x4),
       FadeSlideIn(
         delay: Motion.stagger(1),
-        child: GlassGroup(children: [
+        child: ListGroup(children: [
           if (!s.enabled)
-            RowTile(
+            ListRow(
               key: const Key('tf-enable'),
               icon: Icons.shield_outlined,
               title: '打开两步验证',
@@ -78,12 +78,12 @@ class _Body extends ConsumerWidget {
               onTap: () => enableTwoFactor(context, ref),
             )
           else ...[
-            RowTile(
+            ListRow(
               icon: Icons.verified_user_outlined,
               title: '两步验证',
               subtitle: s.enabledAt == null ? '已开' : '${formatDate(s.enabledAt!)} 打开',
             ),
-            RowTile(
+            ListRow(
               key: const Key('tf-recovery'),
               icon: Icons.key_outlined,
               title: '恢复码',
@@ -91,7 +91,7 @@ class _Body extends ConsumerWidget {
               subtitle: recoveryLine(s.recoveryLeft),
               onTap: () => regenerateCodes(context, ref),
             ),
-            RowTile(
+            ListRow(
               key: const Key('tf-disable'),
               icon: Icons.remove_moderator_outlined,
               title: '关闭两步验证',

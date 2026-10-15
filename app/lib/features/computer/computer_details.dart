@@ -31,7 +31,6 @@ import '../../models/preview.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
@@ -55,9 +54,9 @@ class ProcessSection extends ConsumerWidget {
               delay: delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 SectionTitle('正在运行的程序', count: list.length),
-                GlassGroup(children: [
+                ListGroup(children: [
                   for (final p in list)
-                    RowTile(
+                    ListRow(
                       key: ValueKey('proc-${p.pid}'),
                       icon: Icons.terminal_rounded,
                       title: processTitle(p),
@@ -103,7 +102,7 @@ class MemorySection extends ConsumerWidget {
                 excludeSemantics: true,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const SectionTitle('内存'),
-                  GlassGroup(children: [
+                  ListGroup(children: [
                     _MemoryHead(v),
                     for (final (i, r) in v.rows.indexed)
                       _MemoryRowTile(
@@ -149,7 +148,7 @@ class _MemoryHead extends StatelessWidget {
     final note = memoryTightNote(v);
     final color = v.tight ? p.warning : p.text2;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2), // 与 RowTile 同一条行首线
+      padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2), // 与 ListRow 同一条行首线
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(Icons.memory_rounded, size: Layout.rowIcon, color: color),
         const SizedBox(width: Sp.x4),
@@ -245,7 +244,7 @@ class DiskJobsSection extends ConsumerWidget {
                 excludeSemantics: true,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const SectionTitle(diskJobsTitle),
-                  GlassGroup(children: [
+                  ListGroup(children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3 - 2, Sp.x4, 0),
                       child: SwapSwitcher(
@@ -313,9 +312,9 @@ class _PortsSectionState extends ConsumerState<PortsSection> {
               delay: widget.delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 SectionTitle('正在监听的端口', count: list.length),
-                GlassGroup(children: [
+                ListGroup(children: [
                   for (final p in list)
-                    RowTile(
+                    ListRow(
                       key: ValueKey('port-${p.port}'),
                       icon: Icons.language_rounded,
                       title: portTitle(p.port),
@@ -393,10 +392,10 @@ class _StorageSectionState extends ConsumerState<StorageSection> {
                       child: Text(_cleaning ? '正在清理' : label),
                     ),
             )),
-        GlassGroup(children: [
+        ListGroup(children: [
           if (s.diskLimit != null) _QuotaTile(s),
           for (final (key, name, line, bytes) in storageRows(s.storage))
-            RowTile(
+            ListRow(
               key: ValueKey('disk-$key'),
               icon: _icons[key],
               title: name,
@@ -404,7 +403,7 @@ class _StorageSectionState extends ConsumerState<StorageSection> {
               trailing: SwapSwitcher(child: RowHint(formatSize(bytes), key: ValueKey('$key-$bytes'))),
               onTap: key == 'files' ? widget.onFiles : null,
             ),
-          RowTile(
+          ListRow(
             icon: Icons.handyman_outlined,
             title: '装过的工具',
             subtitle: toolsSummary(s.tools),
@@ -431,7 +430,7 @@ class _QuotaTile extends StatelessWidget {
       label: [line, ?note].join('，'),
       excludeSemantics: true,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2), // 与 RowTile 同一条行首线
+        padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2), // 与 ListRow 同一条行首线
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(Icons.storage_rounded, size: Layout.rowIcon, color: s.diskTight ? p.warning : p.text2),
           const SizedBox(width: Sp.x4),
@@ -471,12 +470,12 @@ void _showTools(BuildContext context, List<InstalledTool> tools) => showAppScrol
           child: Text('装在工作区 ~/.local 里，以后的对话和后台任务都能直接用；不含系统预装的。', style: ctx.text.bodySmall),
         ),
         SheetList(children: [
-          GlassGroup(children: [
+          ListGroup(children: [
             for (final (i, t) in tools.indexed)
               FadeSlideIn(
                 key: ValueKey('tool-${t.kind}-${t.name}'),
                 delay: Motion.stagger(i.clamp(0, 8)),
-                child: RowTile(
+                child: ListRow(
                   icon: t.kind == 'npm' ? Icons.javascript_rounded : Icons.code_rounded,
                   title: t.name,
                   subtitle: t.kind,

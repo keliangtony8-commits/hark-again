@@ -9,6 +9,9 @@
 //      （未读点、进度/运行中、链接/搜索命中、焦点环、唯一关键状态）；其余用 --ink / --text-2。
 //   6. 让出底部输入胶囊只用量出来的 --footer-h（ui/kit.tsx Page / FloatingFooter、ChatView），不许写死兜底数
 //      var(--footer-h, 88px)——兜底只会掩盖“忘了量”，胶囊长高（附件、多行、建议）就盖住最后一张卡（v2.94）。
+//   7. 列表行 / 分组 / 子页说明只走 ui/kit.tsx 的 ListRow / ListGroup / PageIntro（= App ListRow / ListGroup / PageIntro，v2.97 E1）：
+//      页面里手写 className="row …" / "list …" 只许出现在 RAW_ROWS 登记的旧文件里、且不超过登记次数（只减不增，迁完删登记）；
+//      .sub-line 段落只由 PageIntro 输出。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +29,33 @@ const ACCENT = {
   "features/home/home.css": 1, // 收件箱未读点
   "shell/shell.css": 1, // 导航未读点
 };
+// v2.97 E1 时尚未迁到 ListRow 的手写行（多为“行内再套按钮 + 开关”的分体行、电脑页状态行），下一版继续收；数只许变小。
+const RAW_ROWS = {
+  "features/chat/ConversationFilesSheet.tsx": 3,
+  "features/computer/BrowserSessionsSection.tsx": 3,
+  "features/computer/ComputerDetails.tsx": 19,
+  "features/computer/ComputerSection.tsx": 6,
+  "features/computer/HostSection.tsx": 5,
+  "features/home/HomeScreen.tsx": 1,
+  "features/home/InboxRow.tsx": 1,
+  "features/me/ConnectorsScreen.tsx": 7,
+  "features/me/LoginSessions.tsx": 3,
+  "features/me/ModelUsageList.tsx": 2,
+  "features/me/OAuthSetupSheet.tsx": 2,
+  "features/me/ReplyLanguageRow.tsx": 1,
+  "features/me/RouterUsageCard.tsx": 1,
+  "features/me/SecurityScreen.tsx": 5,
+  "features/me/SkillsScreen.tsx": 2,
+  "features/me/TaskDetailScreen.tsx": 5,
+  "features/me/TaskMemory.tsx": 2,
+  "features/me/TasksScreen.tsx": 2,
+  "features/me/TopConversations.tsx": 3,
+  "features/me/UsageCard.tsx": 2,
+  "features/projects/ProjectFilePicker.tsx": 2,
+  "features/projects/ProjectFiles.tsx": 2,
+  "features/projects/useSaveReply.tsx": 3,
+};
+const RAW_ROW = /className=\{?[`"](row|list)[ `"]/g;
 const bad = [];
 for (const f of files) {
   const rel = relative(root, f).replaceAll("\\", "/"); // 规则按 / 写，Windows 的 relative() 给的是 \
@@ -33,6 +63,11 @@ for (const f of files) {
   if (!rel.startsWith("styles/tokens")) {
     const n = (src.match(/var\(--accent/g) || []).length;
     if (n > (ACCENT[rel] ?? 0)) bad.push(`${rel} 用了 ${n} 处 var(--accent*)（登记 ${ACCENT[rel] ?? 0}）→ 非信号位用 --ink / --text-2，确需新增先在 ACCENT 登记角色`);
+  }
+  if (f.endsWith(".tsx") && rel !== "ui/kit.tsx") {
+    const n = (src.match(RAW_ROW) || []).length;
+    if (n > (RAW_ROWS[rel] ?? 0)) bad.push(`${rel} 手写了 ${n} 处 className="row/list"（登记 ${RAW_ROWS[rel] ?? 0}）→ 用 ui/kit.tsx 的 ListRow / ListGroup`);
+    if (/sub-line/.test(src)) bad.push(`${rel} 手写 .sub-line 说明 → 用 PageIntro（不给 summary）`);
   }
   src.split("\n").forEach((line, i) => {
     if (/\.(tsx?|jsx?)$/.test(f) && rel !== "ui/dialog.tsx" && /(^|[^\w.])(window\.)?(confirm|alert|prompt)\(/.test(line))

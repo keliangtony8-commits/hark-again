@@ -55,37 +55,32 @@ class SectionTitle extends StatelessWidget {
       );
 }
 
-/// 子页面页头（v0.75 起各“我的”子页共用）：一行小标签摘要（变化时换一下）+ 一句说明（也可变化）。
+/// 子页面页头（全 App 唯一，v2.97 E1 并入原“子页一句说明”组件）：一行小标签摘要（变化时换一下）+ 一句说明（也可变化）。
 /// 子页面不再放大标题；层级 = 摘要小字 → 说明正文 text2 → 下面的分区。
+/// 没有摘要（静态页：关于、偏好、“我的”分组页）时只有那句说明，下面留一个区块间距（列表行不带副标题，这一页是干什么的只在这里说一次）。
 class PageIntro extends StatelessWidget {
-  const PageIntro({super.key, required this.summary, required this.line});
-  final String summary, line;
-
-  @override
-  Widget build(BuildContext context) => FadeSlideIn(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, 0),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SwapSwitcher(child: Text(summary, key: ValueKey(summary), style: context.text.labelSmall)),
-            const SizedBox(height: Sp.x2),
-            SwapSwitcher(child: Text(line, key: ValueKey(line), style: context.text.bodyMedium?.copyWith(color: context.palette.text2))),
-          ]),
-        ),
-      );
-}
-
-/// 子页顶部的一句说明（v2.81）：列表行不带副标题，这一页“是干什么的”只在这里说一次。下面留一个区块间距。
-class SubPageLine extends StatelessWidget {
-  const SubPageLine(this.line, {super.key});
+  const PageIntro({super.key, this.summary, required this.line});
+  final String? summary;
   final String line;
 
   @override
-  Widget build(BuildContext context) => FadeSlideIn(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, Sp.x5),
-          child: Text(line, style: context.text.bodyMedium?.copyWith(color: context.palette.text2)),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final text = Text(line, key: ValueKey(line), style: context.text.bodyMedium?.copyWith(color: context.palette.text2));
+    final s = summary;
+    if (s == null) {
+      return FadeSlideIn(child: Padding(padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, Sp.x5), child: text));
+    }
+    return FadeSlideIn(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x2, Sp.x1, 0),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SwapSwitcher(child: Text(s, key: ValueKey(s), style: context.text.labelSmall)),
+          const SizedBox(height: Sp.x2),
+          SwapSwitcher(child: text),
+        ]),
+      ),
+    );
+  }
 }
 
 /// 起步卡：列表为空时代替“空空如也”——标题 + 一句引导 + 一排起步按钮（PillButton）。
@@ -132,14 +127,35 @@ class AppCard extends StatelessWidget {
   }
 }
 
-/// iOS 设置风格的分组列表 = GlassGroup（一张玻璃卡里多行，行间发丝线和行首图标对齐）。
-/// 保留这个名字是为了子页面读起来顺；实现只有一份，在 ui/glass.dart。
+/// 分组列表（全 App 唯一，v2.97 E1）：一张玻璃卡里多行（行用 [ListRow]），行之间是从图标右侧开始的发丝线（和行首图标对齐），整卡一个大圆角。
 class ListGroup extends StatelessWidget {
-  const ListGroup({super.key, required this.children});
+  const ListGroup({super.key, required this.children, this.separator});
   final List<Widget> children;
 
+  /// 第 i 行（i ≥ 1）上方的分隔；返回 null 用默认细线（缩进到行首图标之后）。
+  /// 用途：行首不是图标的列表把细线对齐到自己的标题边，或在两行之间放一条标记（主页“今天”的“现在”）。
+  final Widget? Function(int i)? separator;
+
   @override
-  Widget build(BuildContext context) => GlassGroup(children: children);
+  Widget build(BuildContext context) {
+    final line = context.hairline;
+    return GlassSurface(
+      shadow: false,
+      padding: const EdgeInsets.symmetric(vertical: Sp.x1),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(Radii.card),
+        child: Material(
+          type: MaterialType.transparency, // 行里的 InkWell 水波纹画在玻璃上
+          child: Column(children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) separator?.call(i) ?? Divider(indent: Sp.x4 + Layout.rowIcon + Sp.x4, endIndent: 0, color: line),
+              children[i],
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 /// 下拉刷新：转圈从让位线（浮动顶栏 / 玻璃标题栏下面）出来，而不是被它挡住。所有列表页用它，不直接用 RefreshIndicator。
@@ -153,10 +169,21 @@ class PullRefresh extends StatelessWidget {
       RefreshIndicator(onRefresh: onRefresh, edgeOffset: MediaQuery.paddingOf(context).top, child: child);
 }
 
-class RowTile extends StatelessWidget {
-  const RowTile(
-      {super.key, this.icon, required this.title, this.subtitle, this.value, this.problem, this.trailing, this.onTap, this.onLongPress, this.leading, this.dimmed = false});
+/// 列表行（全 App 唯一，v2.97 E1）：行首图标 + 标题（+ 副标题 / 问题）+ 行尾值 / 控件 / 箭头。放在 [ListGroup] 里。
+/// 各页不再自己拼 InkWell + Padding + Row 的行；需要高亮搜索词或多行正文时用 [titleWidget] / [titleMaxLines]。
+class ListRow extends StatelessWidget {
+  const ListRow(
+      {super.key, this.icon, required this.title, this.titleWidget, this.titleMaxLines = 1, this.subtitle, this.value, this.problem, this.trailing, this.onTap, this.onLongPress, this.leading, this.dimmed = false, this.semanticLabel});
   final IconData? icon;
+
+  /// 代替标题文字的部件（记忆 / 笔记搜索时的 HighlightText）；[title] 仍要给，读屏和测试按它找。
+  final Widget? titleWidget;
+
+  /// 标题最多几行：设置类 1 行；记忆这类正文行给 3。
+  final int titleMaxLines;
+
+  /// 整行读屏念的一句（给了就合并成一个按钮节点，不逐个念子元素）。
+  final String? semanticLabel;
 
   /// 行尾的当前值（“跟随系统”“中文”“toyuis.com”）：一行、次要色、放不下就省略，后面照常跟箭头——
   /// 设置类列表用它代替副标题，行高保持单行（v2.81 “我的”页减法）。
@@ -196,7 +223,7 @@ class RowTile extends StatelessWidget {
         ],
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: context.text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+            titleWidget ?? Text(title, style: context.text.titleMedium, maxLines: titleMaxLines, overflow: TextOverflow.ellipsis),
             if (problem != null)
               Text.rich(
                 TextSpan(children: [
@@ -226,9 +253,10 @@ class RowTile extends StatelessWidget {
       ]),
       ),
     );
-    return onTap == null && onLongPress == null
+    final tile = onTap == null && onLongPress == null
         ? row
         : InkWell(onTap: onTap, onLongPress: onLongPress, borderRadius: BorderRadius.circular(Radii.inner), child: row);
+    return semanticLabel == null ? tile : Semantics(container: true, button: onTap != null, label: semanticLabel, excludeSemantics: true, child: tile);
   }
 }
 

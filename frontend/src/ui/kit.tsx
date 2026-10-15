@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
-import { IconBack, IconCheck, IconClose, IconSearch } from "./icons";
+import { Link, useNavigate } from "react-router-dom";
+import { IconBack, IconCheck, IconChevron, IconClose, IconSearch } from "./icons";
 import "./ui.css";
 
 /** 子页面的浮动玻璃标题栏（返回 + 标题 + 右侧操作），和一级页面的顶栏同位置。 */
@@ -60,14 +60,52 @@ export function Section({ title, action, children, enter }: { title?: string; ac
   );
 }
 
-/** 子页页头（= App PageIntro）：一行小标签摘要（变化时重新入场）+ 一句说明。loading 时留位不闪。 */
-export function PageIntro({ summary, line, loading }: { summary: string; line: string; loading?: boolean }) {
+/** 子页页头（全站唯一，= App PageIntro；v2.97 E1 并入原 .sub-line 手写段落）：一行小标签摘要（变化时重新入场）+ 一句说明。
+ *  没有 summary（静态页：关于、偏好、“我的”分组页）时只有那句说明，下面留一个区块间距。loading 时留位不闪。 */
+export function PageIntro({ summary, line, loading }: { summary?: string; line: string; loading?: boolean }) {
+  if (summary === undefined) return <p className="desc sub-line enter">{line}</p>;
   return (
     <div className="page-intro enter">
       <span key={loading ? "" : summary} className="page-hero-label enter">{loading ? "" : summary}</span>
       <p key={loading ? "" : line} className="desc enter">{loading ? "\u00a0" : line}</p>
     </div>
   );
+}
+
+/** 分组列表（全站唯一，= App ListGroup，v2.97 E1）：一张卡里多行 [ListRow]，行间发丝线。enter = 错峰入场序号。 */
+export function ListGroup({ children, enter, className = "" }: { children: ReactNode; enter?: number; className?: string }) {
+  return (
+    <div className={["list", className, enter === undefined ? "" : "enter"].filter(Boolean).join(" ")} style={enter === undefined ? undefined : stagger(enter)}>
+      {children}
+    </div>
+  );
+}
+
+/** 列表行（全站唯一，= App ListRow，v2.97 E1）：行首图标 + 标题（+ 副标题 / 问题）+ 行尾值 / 控件 / 箭头。
+ *  to = 站内链接；onClick = 整行是按钮；都没有 = 静态行。可点的行默认带箭头，trail 给了就用 trail（null = 什么都不放）。
+ *  control = 行尾的控件（开关、分段按钮、头像），原样放、不套次要色的 .row-trail。 */
+export function ListRow({ icon, title, sub, problem, value, trail, control, to, onClick, off, className = "", enter, label }: {
+  icon?: ReactNode; title: ReactNode; sub?: ReactNode; problem?: string; value?: string; trail?: ReactNode; control?: ReactNode;
+  to?: string; onClick?: () => void; off?: boolean; className?: string; enter?: number; label?: string;
+}) {
+  const cls = ["row", className, off ? "row-off" : "", enter === undefined ? "" : "enter"].filter(Boolean).join(" ");
+  const style = enter === undefined ? undefined : stagger(enter);
+  const tail = trail !== undefined ? trail : (to || onClick) ? <IconChevron /> : null;
+  const inner = (
+    <>
+      {icon && <span className="row-icon">{icon}</span>}
+      <div className="row-body">
+        <div className="row-title">{title}</div>
+        {(sub || problem) && <div className="row-sub">{problem && <span className="row-problem">{problem}</span>}{problem && sub ? " · " : ""}{sub}</div>}
+      </div>
+      {value && <span className="row-value">{value}</span>}
+      {control}
+      {tail && <span className="row-trail">{tail}</span>}
+    </>
+  );
+  if (to) return <Link to={to} className={cls} style={style} aria-label={label}>{inner}</Link>;
+  if (onClick) return <button type="button" className={cls} style={style} onClick={onClick} aria-label={label}>{inner}</button>;
+  return <div className={cls} style={style} aria-label={label}>{inner}</div>;
 }
 
 /** 起步卡（= App StarterCard）：列表为空时代替空状态——标题 + 引导 + 一排起步按钮。 */

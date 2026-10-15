@@ -58,36 +58,14 @@ class _NoteRow extends StatelessWidget {
   final String query;
 
   @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Semantics(
-      button: true,
-      label: noteSemantics(n),
-      excludeSemantics: true,
-      child: InkWell(
+  Widget build(BuildContext context) => ListRow(
+        icon: noteKindIcon(n.kind),
+        title: n.title,
+        titleWidget: HighlightText(n.title, query: query.trim().split(RegExp(r'\s+')).first, style: context.text.bodyLarge),
+        subtitle: noteSubtitle(n),
+        semanticLabel: noteSemantics(n),
         onTap: () => context.push('/me/memory/notes/${n.id}'),
-        borderRadius: BorderRadius.circular(Radii.inner),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: A11y.minTap),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
-            child: Row(children: [
-              Icon(noteKindIcon(n.kind), color: p.text2),
-              const SizedBox(width: Sp.x3),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  HighlightText(n.title, query: query.trim().split(RegExp(r'\s+')).first, style: context.text.bodyLarge),
-                  const SizedBox(height: Sp.x1),
-                  Text(noteSubtitle(n), maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall?.copyWith(color: p.text3)),
-                ]),
-              ),
-              Icon(Icons.chevron_right_rounded, color: p.text3),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
+      );
 }
 
 /// 单篇笔记：id == 'new' 为新建（直接是表单），否则先阅读。

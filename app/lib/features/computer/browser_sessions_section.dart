@@ -11,7 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../models/browser_session.dart';
 import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
@@ -80,9 +79,9 @@ class _BrowserSessionsSectionState extends ConsumerState<BrowserSessionsSection>
               delay: widget.delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 const SectionTitle('浏览器登录'),
-                GlassGroup(children: [
+                ListGroup(children: [
                   if (list.isEmpty)
-                    const RowTile(icon: Icons.public_rounded, title: browserSessionsEmpty, subtitle: browserSessionsEmptyLine)
+                    const ListRow(icon: Icons.public_rounded, title: browserSessionsEmpty, subtitle: browserSessionsEmptyLine)
                   else
                     for (final (i, s) in list.indexed)
                       FadeSlideIn(
@@ -108,7 +107,7 @@ class _SessionRow extends StatelessWidget {
     final hint = browserSessionHint(session);
     return Semantics(
       label: browserSessionSemantics(session),
-      child: RowTile(
+      child: ListRow(
         icon: session.expired ? Icons.public_off_rounded : Icons.public_rounded,
         title: session.label,
         subtitle: browserSessionDetail(session),

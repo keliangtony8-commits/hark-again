@@ -8,7 +8,6 @@ import '../../brand.dart';
 import '../../core/session.dart';
 import '../../models/version.dart';
 import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sub_page.dart';
@@ -24,14 +23,14 @@ class AboutScreen extends ConsumerWidget {
     return SubPage(
       title: const Text('关于'),
       body: PageBody(children: [
-        const SubPageLine('$appName 是你自己的私人助手：运行在你自己的服务器上，用你自己的模型密钥，数据只在那里。'),
+        const PageIntro(line: '$appName 是你自己的私人助手：运行在你自己的服务器上，用你自己的模型密钥，数据只在那里。'),
         FadeSlideIn(
           delay: Motion.stagger(1),
-          child: GlassGroup(children: [
-            RowTile(icon: Icons.tag_rounded, title: '版本', value: clientVersionLabel(sv)),
-            RowTile(icon: Icons.dns_outlined, title: '服务器', value: host.isEmpty ? '未设置' : host),
-            if (sv != null) RowTile(icon: Icons.update_rounded, title: '服务器版本', value: sv.version),
-            RowTile(
+          child: ListGroup(children: [
+            ListRow(icon: Icons.tag_rounded, title: '版本', value: clientVersionLabel(sv)),
+            ListRow(icon: Icons.dns_outlined, title: '服务器', value: host.isEmpty ? '未设置' : host),
+            if (sv != null) ListRow(icon: Icons.update_rounded, title: '服务器版本', value: sv.version),
+            ListRow(
               icon: Icons.description_outlined,
               title: '开源许可',
               onTap: () => showLicensePage(context: context, applicationName: appName, applicationVersion: '$appVersion ($appBuild)'),

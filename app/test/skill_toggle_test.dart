@@ -67,7 +67,7 @@ bool dimmedOf(WidgetTester tester, String name) =>
     tester.widget<Dimmed>(find.ancestor(of: find.text(name), matching: find.byType(Dimmed))).dimmed;
 
 Finder switchIn(String name) =>
-    find.descendant(of: find.ancestor(of: find.text(name), matching: find.byType(RowTile)), matching: find.byType(Switch));
+    find.descendant(of: find.ancestor(of: find.text(name), matching: find.byType(ListRow)), matching: find.byType(Switch));
 
 void main() {
   test('旧服务器没有 enabled 字段 = 启用', () {

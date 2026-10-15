@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { auth, http, notifyUnauthorized, server } from "../../lib/api";
 import { outbox } from "../../lib/outbox";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, type UsageReport } from "../../lib/usage";
 import { IconBack, IconCard, IconClock, IconComputer, IconDoc, IconFeedback, IconPlug, IconSettings, IconShield, IconUser } from "../../ui/icons";
-import { stagger } from "../../ui/kit";
+import { ListGroup, ListRow, stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
-import { MeRows, type MeRow } from "./meRows";
 import ProfileSheet from "./ProfileSheet";
 import { profileName, useProfile } from "../../lib/profile";
 import { Avatar } from "../../ui/glass";
@@ -14,7 +13,9 @@ import { useServerVersion } from "../../hooks/useServerVersion";
 import { clientOutdated } from "../../lib/version";
 import "./me.css";
 
-/** v2.81 按 docs/home-redesign.md B 做减法（= App me_screen.dart）：两组行，每行只有 图标 + 标题 + 箭头。 */
+/** v2.81 按 docs/home-redesign.md B 做减法（= App me_screen.dart）：两组行，每行只有 图标 + 标题 + 箭头（ListRow，v2.97 起不再有私有 MeRows）。 */
+type MeRow = { to: string; icon: ComponentType; title: string; value?: string };
+const rows = (list: MeRow[]) => list.map(({ to, icon: Icon, title, value }) => <ListRow key={to} to={to} icon={<Icon />} title={title} value={value} />);
 const GROUP1: MeRow[] = [
   { to: "/me/profile", icon: IconUser, title: "个人资料" },
   { to: "/me/tasks", icon: IconClock, title: "定时任务" },
@@ -92,8 +93,8 @@ export default function MeScreen() {
           <Identity />
         </div>
         <UsageSummary />
-        <div className="enter me-group" style={stagger(2)}><MeRows rows={GROUP1} /></div>
-        <div className="enter me-group" style={stagger(3)}><MeRows rows={GROUP2.map((r) => (r.to === "/me/about" && outdated ? { ...r, value: "请更新" } : r))} /></div>
+        <ListGroup className="me-group" enter={2}>{rows(GROUP1)}</ListGroup>
+        <ListGroup className="me-group" enter={3}>{rows(GROUP2.map((r) => (r.to === "/me/about" && outdated ? { ...r, value: "请更新" } : r)))}</ListGroup>
         <div className="me-logout enter" style={stagger(4)}>
           <button className="pill" onClick={() => void logout()}>退出登录</button>
         </div>

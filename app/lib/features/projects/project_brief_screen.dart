@@ -130,7 +130,7 @@ class _ProjectBriefScreenState extends ConsumerState<ProjectBriefScreen> {
                 children: [
                   ListGroup(
                     children: [
-                      RowTile(
+                      ListRow(
                         icon: Icons.tune_rounded,
                         title: '项目规则',
                         subtitle: project.rules.trim().isEmpty ? '还没有：比如“回答都用英文”' : project.rules.trim(),

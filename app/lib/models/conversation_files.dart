@@ -84,7 +84,7 @@ class ConversationFiles {
   }
 }
 
-/// 一行副标题：来源 · 种类 · 大小（不在了 → 由 RowTile.problem 显示“已不在”，这里只给来源）。
+/// 一行副标题：来源 · 种类 · 大小（不在了 → 由 ListRow.problem 显示“已不在”，这里只给来源）。
 String conversationFileLine(ConversationFile f) => f.gone
     ? '${fileOriginLabel(f.origin)} · ${f.isWorkspace ? '已从工作区删除或挪走' : '存储里已清掉'}'
     : [fileOriginLabel(f.origin), fileKind(f.name, f.mime), formatSize(f.size)].where((s) => s.isNotEmpty).join(' · ');

@@ -3,7 +3,7 @@ import { useResource } from "../../hooks/useResource";
 import { BRAND_NAMES, cardBrand, cardDigits, cardLine, cardNumberError, cvcError, expiryError, formatExpiry, groupCardNumber,
   maskedNumber, parseExpiry, walletSummary, type PaymentCard } from "../../lib/wallet";
 import { IconCard, IconEdit, IconMore, IconPlus, IconTrash } from "../../ui/icons";
-import { Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+import { ListGroup, ListRow, Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard } from "../../ui/kit";
 import { confirmDialog } from "../../ui/dialog";
 
 const EMPTY = { number: "", exp: "", cvc: "", holder: "", postal_code: "", label: "" };
@@ -70,20 +70,14 @@ export default function WalletScreen() {
         </StarterCard>
       ) : (
         <Section title={`付款卡 · ${cards.items.length}`}>
-          <div className="list">
+          <ListGroup>
             {cards.items.map((c, i) => (
-              <div key={c.id} className="row enter" style={stagger(i + 1)}>
-                <span className="row-icon"><IconCard /></span>
-                <div className="row-body">
-                  <div className="row-title">{c.label}</div>
-                  <div className="row-sub">{c.expired && <><span className="row-problem">已过期</span> · </>}{cardLine(c)}</div>
-                </div>
+              <ListRow key={c.id} enter={i + 1} icon={<IconCard />} title={c.label} problem={c.expired ? "已过期" : undefined} sub={cardLine(c)} control={
                 <Menu trigger={<IconMore />} label={`${c.label} 的操作`} items={[
                   { label: "改名", icon: <IconEdit />, onSelect: () => setRename({ id: c.id, label: c.label }) },
-                  { label: "删除", icon: <IconTrash />, danger: true, onSelect: () => void remove(c) }]} />
-              </div>
+                  { label: "删除", icon: <IconTrash />, danger: true, onSelect: () => void remove(c) }]} />} />
             ))}
-          </div>
+          </ListGroup>
         </Section>
       )}
       {draft && (

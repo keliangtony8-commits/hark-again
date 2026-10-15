@@ -9,7 +9,6 @@ import '../../core/session.dart';
 import '../../models/login_session.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
@@ -89,7 +88,7 @@ class _LoginSessionsSectionState extends ConsumerState<LoginSessionsSection> {
               delay: widget.delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 SectionTitle('登录设备', trailing: Text(loginSessionsSummary(list), style: context.text.labelSmall)),
-                GlassGroup(children: [
+                ListGroup(children: [
                   for (final (i, s) in list.indexed)
                     FadeSlideIn(
                       key: ValueKey('ls-${s.id}'),
@@ -97,7 +96,7 @@ class _LoginSessionsSectionState extends ConsumerState<LoginSessionsSection> {
                       child: _Row(session: s, busy: _busy.contains(s.id), onRevoke: () => _revoke(s)),
                     ),
                   if (list.any((s) => !s.current))
-                    RowTile(
+                    ListRow(
                       key: const Key('ls-others'),
                       icon: Icons.logout_rounded,
                       title: _busy.contains(_all) ? '正在退出…' : '退出其他所有设备',
@@ -120,7 +119,7 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = session;
-    return RowTile(
+    return ListRow(
       icon: switch (s.kind) {
         'app' => Icons.smartphone_rounded,
         'browser' => Icons.laptop_rounded,

@@ -183,7 +183,7 @@ class ModelUsageList extends StatelessWidget {
     final p = context.palette;
     return ListGroup(children: [
       for (final m in models)
-        RowTile(
+        ListRow(
           icon: Icons.memory_rounded,
           title: m.model,
           subtitle: [
@@ -217,7 +217,7 @@ class TopConversationList extends ConsumerWidget {
   Widget _row(BuildContext context, WidgetRef ref, UsageConversation c, Palette p, bool money) {
     final share = report.shareOf(c);
     final body = Column(mainAxisSize: MainAxisSize.min, children: [
-      RowTile(
+      ListRow(
         icon: c.deleted ? Icons.delete_outline_rounded : Icons.chat_bubble_outline_rounded,
         title: c.title ?? '已删除的对话',
         subtitle: '${formatTokens(c.tokens)} token · ${c.calls} 次 · 占本月 ${(share * 100).round()}%',

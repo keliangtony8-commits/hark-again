@@ -4,7 +4,7 @@ import { filterNotes, NOTE_KINDS, noteKindLabel, notePathPreview, noteSubtitle, 
 import type { MemoryNote } from "../../lib/types";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
 import { IconFile, IconPlace, IconUser } from "../../ui/icons";
-import { Highlight, Section, Sheet, stagger } from "../../ui/kit";
+import { Highlight, ListGroup, ListRow, Section, Sheet } from "../../ui/kit";
 import Markdown from "../../ui/Markdown";
 
 /** 记忆笔记（v2.21）：记忆页里的“主题笔记”一节 + 一篇笔记的阅读 / 编辑弹层。与 App features/me/memory_notes.dart 同规则：
@@ -20,18 +20,13 @@ export function MemoryNotesSection({ query, from = 1 }: { query: string; from?: 
     <>
       {shown.length > 0 && (
         <Section title={`主题笔记 · ${shown.length}`}>
-          <div className="list">
+          <ListGroup>
             {shown.map((n, i) => (
-              <button key={n.id} className="row memory-row note-row enter" style={stagger(Math.min(from + i, 10))} onClick={() => setOpen(n)}
-                aria-label={`笔记 ${n.title}，${noteKindLabel(n.kind)}`}>
-                <span className="note-row-icon" aria-hidden>{kindIcon(n.kind)}</span>
-                <div className="row-body">
-                  <div className="row-title"><Highlight text={n.title} q={firstWord} /></div>
-                  <div className="row-sub">{noteSubtitle(n)}</div>
-                </div>
-              </button>
+              <ListRow key={n.id} className="memory-row note-row" enter={Math.min(from + i, 10)} onClick={() => setOpen(n)}
+                label={`笔记 ${n.title}，${noteKindLabel(n.kind)}`} icon={kindIcon(n.kind)}
+                title={<Highlight text={n.title} q={firstWord} />} sub={noteSubtitle(n)} />
             ))}
-          </div>
+          </ListGroup>
         </Section>
       )}
       {open && <NoteSheet note={open} onClose={() => setOpen(null)} />}

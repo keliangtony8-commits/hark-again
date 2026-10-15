@@ -112,7 +112,7 @@ void main() {
   testWidgets('list shows last failure and opens detail', (tester) async {
     final api = FakeApi(tasks: [taskJson()], runs: [runJson('r1', 'error', error: '模型调用失败：401')]);
     await pump(tester, api, '/me/tasks');
-    // v1.06：失败和自动暂停一样，问题字在前染警示色（RowTile.problem），计划在后
+    // v1.06：失败和自动暂停一样，问题字在前染警示色（ListRow.problem），计划在后
     expect(find.byWidgetPredicate((w) => w is RichText && w.text.toPlainText() == '上次失败 · 每天 08:00'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('上次运行失败')), findsOneWidget);
     await tester.tap(find.text('每日新闻'));

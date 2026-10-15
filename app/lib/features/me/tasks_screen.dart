@@ -98,7 +98,7 @@ class _TaskRow extends ConsumerWidget {
     final state = taskStateLabel(task);
     final parts = [scheduleLabel(task), if (state.isNotEmpty) state];
     final idle = taskIdle(task);
-    // 失败 / 自动暂停 = 这一行的问题：问题那几个字放前面染警示色（RowTile.problem），后面计划原色（v1.06 两种一致）
+    // 失败 / 自动暂停 = 这一行的问题：问题那几个字放前面染警示色（ListRow.problem），后面计划原色（v1.06 两种一致）
     final problem = task.autoPaused || (task.lastFailed && !task.runRequested);
     return SwipeToDelete(
       id: task.id,
@@ -107,7 +107,7 @@ class _TaskRow extends ConsumerWidget {
       onDelete: () => ref.read(tasksProvider.notifier).remove(task.id),
       child: FadeSlideIn(
         delay: delay,
-        child: RowTile(
+        child: ListRow(
             dimmed: idle,
             leading: _TaskBadge(task: task),
             title: task.name,

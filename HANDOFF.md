@@ -1,4 +1,4 @@
-# Toyuis 交接文档（2026-10-15，v2.96.0）
+# Toyuis 交接文档（2026-10-15，v2.97.0）
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
@@ -26,7 +26,7 @@
 
 ## 三、工程规矩（看代码 / 改代码时）
 - **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**
-- Flutter：颜色/时长只在 `app/lib/theme/tokens.dart`，动效只在 `app/lib/ui/motion.dart`；弹层只在 `ui/sheets.dart`，子页面 `ui/sub_page.dart`；**不要 `dart format lib`**；测试用 `package:assistant/...` 导入。
+- Flutter：颜色/时长只在 `app/lib/theme/tokens.dart`，动效只在 `app/lib/ui/motion.dart`；弹层只在 `ui/sheets.dart`，子页面 `ui/sub_page.dart`；列表行 / 分组 / 子页说明只用 `ui/kit.dart` 的 `ListRow` / `ListGroup` / `PageIntro`（网页同名在 `ui/kit.tsx`，v2.97，两端守卫：`test/list_kit_test.dart`、check-arch 第 7 条）；**不要 `dart format lib`**；测试用 `package:assistant/...` 导入。
 - Web：只用 `tokens.css` 变量，keyframes 只在 `styles/base.css`；`npm run build`（含 check-arch）必须过。
 - 后端：改表必须 Alembic 迁移（当前到 0067）；SQLite 下 ctx.db 写入要在下次模型调用前 commit；runner._run_turn 先读完 conv 属性再 build_history。
 - 协议变更同步 `docs/protocol.md`。
@@ -38,7 +38,7 @@
 - 已发布：v2.85–v2.92（v2.90.1 用户气泡改灰；v2.90.3 已部署过一次，见下）。
 - v2.89：浏览器实时推流（CDP screencast，单条 WS，取代截图轮询）。
 - v2.90：运行中连发“按件回复”（`backend/app/message_intake.py` 单入口；补充并入 / 附和不回 / 问进度一句话 / 新问题并行一路；`messages.answered_by` 账本，迁移 0064；回复离原话远才画引用线）。
-- 已发布到 git：**v2.96（tag v2.96，2026-10-15，“我 → 连接的账号”一页：连接器 + 保险箱合并，见 5·2a；含迁移 0067，只改旧卡去处 vault→connectors）**、v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95/v2.96 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
+- 已发布到 git：**v2.97（tag v2.97，2026-10-15，E1 收尾：ListRow / ListGroup / PageIntro 两端统一 + App 附件弹层高度修复，见第五节第 6 项；无后端 / 迁移变化）**、**v2.96（tag v2.96，2026-10-15，“我 → 连接的账号”一页：连接器 + 保险箱合并，见 5·2a；含迁移 0067，只改旧卡去处 vault→connectors）**、v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95/v2.96/v2.97 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
 - VPS：GreenCloud 2C/3.8G Debian 12，IP 172.93.163.240，域名 toyuis.itsllm.com。部署方式见 `deploy/`（git archive → 上传 → `deploy/update.sh`）。
   - **2026-10-15 约 11:05 已部署 v2.92.0**（`/api/version` = 2.92.0，容器全部 Up）。旧版备份 `/root/app-v2911-backup.tgz`，.env 备份 `/root/env.bak.v292`；`docker builder prune` 后磁盘 80%。
   - 真模型（StepFun）验证通过：主聊天说“以后叫我小测，你就叫阿星”→ 调用 set_names（步骤“保存称呼”），profile 变为 小测 / 阿星；验证后已删测试对话和 identity 行，greet 恢复为 true（保留用户自己的首次问候体验）。
@@ -100,6 +100,16 @@
    - [x] 测试 + 发布 v2.94：flutter analyze 0、flutter test 674 过（8 跳过）、npm run build 过（架构守卫 218 文件）、后端 smoke 201/201（不含需真密钥的 smoke_stepfun）；VERSION 2.94.0、CHANGELOG、tag v2.94、push。不部署 VPS、不出 APK（按 13:03 新规则，等用户开口）
 5. ✅（v2.92.0 已做，存 app_settings 的 identity 一行而非 users 表——只有一个主人；详见 devlog 2026-10-15 v2.92）**v2.92 §P 名字与头像**：首次进对话由助手**在聊天里**问称呼和是否给助手取名（不做表单引导页）；不取名默认叫 Toyuis；`users.display_name`、`users.avatar`、`app_settings.assistant_name`；头像可上传，无图=纯色圆+首字母（复用 Avatar）；“我”页点名字/头像可改；助手名进系统提示词。**语气**：正式、不开玩笑，但初次打招呼可亲切。定稿开场：“你好，我是 Toyuis，很高兴为你服务。请问我该如何称呼你？如果你愿意，也可以为我取一个名字；不取的话，我就继续叫 Toyuis。”
 6. home-redesign 剩余：E1 收尾（ListRow/ListGroup/PageHeader 统一、附件弹层高度）、E4 ImageStack + 震动反馈、连接器按钮诚实化 + OAuth 指南、“我的”页底部搜索。（天气重复 / 电脑端割裂 / Composer 遮挡三项已拆到 6a，v2.94 做完。）
+   - **v2.97 E1 收尾进度（2026-10-15，按块如实记录）**：标准与删除清单见 docs/devlog.md「2026-10-15 v2.97 E1 收尾」（home-redesign.md 不在仓库，按代码现状归纳）。
+     - [x] devlog：现状、标准、删除清单、成本、附件弹层根因
+     - [x] App：`ListGroup`（GlassGroup 搬进 kit 改名，删 GlassGroup + 别名）/ `ListRow`（RowTile 改名，加 titleWidget/titleMaxLines/semanticLabel）/ `PageIntro`（并入 SubPageLine）；记忆 / 笔记 / 任务备忘三处手写行改用 ListRow；附件弹层高度修根因（来源 Column 缺 mainAxisSize.min 把弹层撑到全屏）
+     - [x] Web：kit.tsx 新增 `ListGroup` / `ListRow`、`PageIntro` summary 可选；删 meRows.tsx 与 3 处手写 sub-line；迁了我的 / 个人资料 / 电脑 Pages 行 / 关于 / 偏好 / 钱包 / 反馈 / Pages / 密钥行 / 记忆 / 记忆笔记（手写 row/list 104 → 81 行）；check-arch 第 7 条只减不增
+     - [x] 测试：flutter analyze 0、flutter test 678 过（8 跳过；新增 list_kit_test 3 例含旧名 / 手写行守卫，project_file_refs_test 加附件弹层高度 1 例并做过变异验证）、npm run build 过（架构守卫 216 文件，含第 7 条）、后端 smoke 202/202（不含 smoke_stepfun；smoke_stop 与 npm build 同时跑时 5 秒等待超时一次，单跑过；后端本版未改）
+     - [x] 发布 v2.97：VERSION 2.97.0、CHANGELOG、check_version、commit + tag v2.97 + push（不部署、不出 APK）
+     - [ ] Web 剩 23 个文件仍手写 row/list（登记在 check-arch RAW_ROWS：任务 / 技能分体行、电脑页、连接器、用量、项目文件等）——下一版继续迁，迁完删登记
+     - [ ] App 仍自己画行的 6 个文件（登记在 test/list_kit_test.dart：抽屉对话 / 项目行、电脑页状态行、运行记录、用量分享行）——判断为富内容行，是否再收要先定版式
+     - [ ] 浏览器 / 真机截图核对（本机无 Chromium；App 明暗、Web 手机宽度）
+     - [ ] 本版不做：E4 ImageStack + 震动、“我的”页底部搜索、连接器 OAuth（见 2a）
 7. 后台任务/定时任务的运行对话不要出现在主对话列表（用户叫“子对话”，嫌乱）——确认 v2.75 修复在 VPS 上生效。
 8. Web 截图重拍、banner“稍后再看”。
 9. SearXNG 集成测试（需 VPS）；关闭 VPS SSH 密码登录。
@@ -123,13 +133,13 @@
 | CPU 60%～100%、内存占用高，要优化 | ❓ | 服务器上 `docker stats` 核实；APK 构建已改为限流脚本 |
 | 一个项目就是一段对话，项目内不能开多个会话（10-15 12:48） | ⚠️ v2.95 已做并提交（点项目即聊天、≡ 项目切换、旧多段迁移合并可回退），未部署、未真机看 | 第五节 5b，devlog v2.95 |
 | 电脑端主页割裂、左边空一大块；天气报告重复 3 次；输入框遮住面板 | ⚠️ v2.94 已修并提交（面板只收结果 + 面板查重；删宽版残路；输入框留白加回归测试），未部署、线上已有的重复面板未清、未真机看 | 第五节 6a，devlog v2.94 |
-| 主页对比 Hark“又乱” → 整体重设计 | ⚠️ 进行中 | home-redesign A–E，E1/E4 收尾未完 |
+| 主页对比 Hark“又乱” → 整体重设计 | ⚠️ 进行中 | home-redesign A–E；E1 收尾 v2.97 做了大半（两端 ListRow/ListGroup/PageIntro 统一，网页剩 23 个文件未迁，见第五节第 6 项）；E4 未做 |
 | 历史抽屉被顶栏压住“还叠在一起” | ✅ v2.78 | |
 | 步骤耗时都显示 0.0 秒、步骤默认展开很乱 | ✅ v2.79 | |
 | 电脑端回复滚动 bug（往上看会被拉回底部） | ✅ v2.79 | |
 | 服务器状态是不是真实的 | ✅ v2.85（写清是沙盒容器 + 整台服务器一行） | |
 | “我”页太长不好看，学 Hark 个人页 | ✅ v2.81（底部搜索 ❌） | |
-| 加号附件弹层很丑 | ⚠️ 高度按内容未做 | home-redesign E1 |
+| 加号附件弹层很丑 | ⚠️ v2.97 修了高度（根因：来源 Column 缺 mainAxisSize.min 把弹层撑满全屏，已加回归测试），未部署、未真机看 | 第五节第 6 项，devlog v2.97 |
 | Hark 发图片的排布（ImageStack） | ❌ | home-redesign E4 |
 | 每句话单独回复并关联引用 | ✅ v2.87 + v2.90 | |
 | 用新图标 | ✅ v2.80 | |

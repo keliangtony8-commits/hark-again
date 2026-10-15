@@ -138,8 +138,8 @@ void main() {
     expect(find.text('me.example'), findsOneWidget);
     expect(find.text('¥12.30'), findsOneWidget);
     expect(find.text('预算 ¥50.00'), findsOneWidget);
-    expect(find.byType(RowTile), findsNWidgets(9)); // 一屏：两组 9 行，行里没有副标题
-    for (final r in tester.widgetList<RowTile>(find.byType(RowTile))) {
+    expect(find.byType(ListRow), findsNWidgets(9)); // 一屏：两组 9 行，行里没有副标题
+    for (final r in tester.widgetList<ListRow>(find.byType(ListRow))) {
       expect(r.subtitle, isNull);
     }
 

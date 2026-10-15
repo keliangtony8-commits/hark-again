@@ -144,7 +144,7 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Dimmed(
         dimmed: f.resolved,
-        child: RowTile(
+        child: ListRow(
           icon: feedbackIcon(f),
           title: f.excerpt.isEmpty ? f.kindLabel : f.excerpt,
           subtitle: feedbackLine(f),

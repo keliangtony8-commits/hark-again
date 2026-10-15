@@ -4,7 +4,7 @@ import { formatWhen } from "../../lib/format";
 import { useMemories } from "../../lib/memoryStore";
 import type { Memory } from "../../lib/types";
 import { IconPlus, IconSearch } from "../../ui/icons";
-import { Highlight, Hint, Page, PageHeader, PageIntro, SearchField, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+import { Highlight, Hint, ListGroup, ListRow, Page, PageHeader, PageIntro, SearchField, Section, Sheet, Skeleton, StarterCard } from "../../ui/kit";
 import MemoryDigestCard from "./MemoryDigestCard";
 import { filterNotes, useMemoryNotes } from "../../lib/memoryNotes";
 import { MemoryNotesSection, NoteSheet } from "./MemoryNotes";
@@ -66,27 +66,22 @@ export default function MemoryScreen() {
             action={<button className="btn btn-ghost" onClick={() => { setQuery(""); setFilter(null); }}>清除筛选</button>} />
         ) : groups.map(([cat, items]) => (
           <Section key={cat} title={`${categoryLabel(cat)} · ${items.length}`}>
-            <div className="list">
+            <ListGroup>
               {items.map((m) => (
-                <button key={m.id} className="row memory-row enter" style={stagger(Math.min(++n, 10))} onClick={() => setEditing(m)}>
-                  <div className="row-body">
-                    <div className="row-title"><Highlight text={m.content} q={firstWord} /></div>
-                    {m.updated_at && <div className="row-sub">{formatWhen(m.updated_at)}</div>}
-                  </div>
-                </button>
+                <ListRow key={m.id} className="memory-row" enter={Math.min(++n, 10)} onClick={() => setEditing(m)}
+                  title={<Highlight text={m.content} q={firstWord} />} sub={m.updated_at ? formatWhen(m.updated_at) : undefined} />
               ))}
-            </div>
+            </ListGroup>
           </Section>
         ))}
       </>)}
       {adding && (
         <Sheet title="新增" onClose={() => setAdding(false)}>
-          <div className="list">
-            <button className="row" onClick={() => { setAdding(false); setEditing({ category: category ?? "general", content: "" }); }}>
-              <div className="row-body"><div className="row-title">一句话记忆</div><div className="row-sub">一条偏好或事实，比如“我对花生过敏”</div></div></button>
-            <button className="row" onClick={() => { setAdding(false); setNewNote(true); }}>
-              <div className="row-body"><div className="row-title">主题笔记</div><div className="row-sub">关于一个人、地方或项目的一串细节</div></div></button>
-          </div>
+          <ListGroup>
+            <ListRow trail={null} onClick={() => { setAdding(false); setEditing({ category: category ?? "general", content: "" }); }}
+              title="一句话记忆" sub="一条偏好或事实，比如“我对花生过敏”" />
+            <ListRow trail={null} onClick={() => { setAdding(false); setNewNote(true); }} title="主题笔记" sub="关于一个人、地方或项目的一串细节" />
+          </ListGroup>
         </Sheet>
       )}
       {newNote && <NoteSheet note={null} onClose={() => setNewNote(false)} />}

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { http } from "../../lib/api";
 import { formatWhen } from "../../lib/format";
 import { FEEDBACK_GOOD, groupFeedback, type FeedbackItem, type FeedbackList } from "../../lib/feedback";
-import { IconChevron, IconFeedback, IconThumbDown, IconThumbUp } from "../../ui/icons";
-import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+import { IconFeedback, IconThumbDown, IconThumbUp } from "../../ui/icons";
+import { ListGroup, ListRow, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard } from "../../ui/kit";
 
 export const FEEDBACK_PATH = "/api/feedback";
 
@@ -31,16 +30,12 @@ export default function FeedbackScreen() {
   const g = groupFeedback(items);
   let n = 0;
   const rows = (fs: FeedbackItem[]) => (
-    <div className="list">
+    <ListGroup>
       {fs.map((f) => (
-        <Link key={f.id} to={`/me/feedback/${f.id}`} className={`row enter ${f.status === "resolved" ? "row-off" : ""}`} style={stagger(++n)}>
-          <span className="row-icon">{feedbackIcon(f)}</span>
-          <div className="row-body"><div className="row-title">{f.excerpt || f.kind_label}</div>
-            <div className="row-sub">{[f.kind_label, formatWhen(f.created_at), f.status === "resolved" ? "已解决" : ""].filter(Boolean).join(" · ")}</div></div>
-          <span className="row-trail"><IconChevron /></span>
-        </Link>
+        <ListRow key={f.id} to={`/me/feedback/${f.id}`} off={f.status === "resolved"} enter={++n} icon={feedbackIcon(f)} title={f.excerpt || f.kind_label}
+          sub={[f.kind_label, formatWhen(f.created_at), f.status === "resolved" ? "已解决" : ""].filter(Boolean).join(" · ")} />
       ))}
-    </div>
+    </ListGroup>
   );
 
   return (

@@ -81,7 +81,7 @@ class _ProjectPicker extends StatelessWidget {
             children: [
               ListGroup(children: [
                 FadeSlideIn(
-                  child: RowTile(
+                  child: ListRow(
                     icon: Icons.folder_outlined,
                     title: workspaceFilesTitle(personalWorkspace),
                     subtitle: '主聊天的云端电脑',
@@ -91,7 +91,7 @@ class _ProjectPicker extends StatelessWidget {
                 for (final (i, p) in projects.indexed)
                   FadeSlideIn(
                     delay: Motion.stagger(i + 1),
-                    child: RowTile(
+                    child: ListRow(
                       leading: SizedBox.square(
                         dimension: Layout.rowIcon,
                         child: Center(child: Text(p.emoji, style: context.text.titleMedium?.copyWith(fontSize: Fs.lg))),

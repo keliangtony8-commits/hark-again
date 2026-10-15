@@ -3,7 +3,7 @@ import { useResource } from "../../hooks/useResource";
 import { copyLink, isLive, shareLink } from "../../lib/pages";
 import type { SitePage } from "../../lib/types";
 import { IconCheck, IconCopy, IconExternal, IconLayout, IconMore, IconSpark } from "../../ui/icons";
-import { Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+import { ListGroup, ListRow, Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
 import { useAskInNewChat } from "../../shell/LaunchComposer";
 import { formatWhen } from "../../lib/format";
 import { PAGE_STARTERS, groupPages, pagesSummary } from "./pageLibrary";
@@ -27,14 +27,12 @@ export default function PagesScreen() {
   const g = groupPages(pages.items);
   let n = 0; // 整页错峰序号
   const rows = (items: SitePage[]) => (
-    <div className="list">
+    <ListGroup>
       {items.map((p) => {
         const live = isLive(p);
         return (
-          <div key={p.id} className={`row enter ${live ? "" : "row-off"}`} style={stagger(++n)}>
-            <span className="row-icon"><IconLayout /></span>
-            <div className="row-body"><div className="row-title">{p.title}</div>
-              <div className="row-sub">{formatWhen(new Date(p.updated * 1000).toISOString())} · /p/{p.slug}</div></div>
+          <ListRow key={p.id} off={!live} enter={++n} icon={<IconLayout />} title={p.title}
+            sub={`${formatWhen(new Date(p.updated * 1000).toISOString())} · /p/${p.slug}`} control={<>
             {live ? (<>
               <button className="icon-btn" aria-label="复制链接" onClick={() => copy(p)}>
                 <span key={copied === p.slug ? "ok" : "copy"} className="icon-pop">{copied === p.slug ? <IconCheck /> : <IconCopy />}</span></button>
@@ -50,10 +48,10 @@ export default function PagesScreen() {
                 : { label: "重新发布", onSelect: () => { void patch(p.id, { published: true }); } },
               { label: "删除", danger: true, onSelect: async () => { if (await confirmDialog({ title: `删除「${p.title}」？`, text: "链接会失效。只想暂时不让人看，可以用“下线”。" })) void pages.remove(p.id); } },
             ]} />
-          </div>
+          </>} />
         );
       })}
-    </div>
+    </ListGroup>
   );
 
   return (

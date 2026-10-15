@@ -170,33 +170,15 @@ class _MemoryRow extends StatelessWidget {
   final String query;
   final VoidCallback onTap;
 
+  // 搜索时每个词都可能命中，高亮整串里的第一个词就够指路；记忆是正文，标题最多 3 行
   @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(Radii.inner),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: A11y.minTap),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // 搜索时每个词都可能命中，高亮整串里的第一个词就够指路
-                HighlightText(m.content, query: query.trim().split(RegExp(r'\s+')).first, style: context.text.bodyLarge, maxLines: 3),
-                if (m.updatedAt != null) ...[
-                  const SizedBox(height: Sp.x1),
-                  Text(formatWhen(m.updatedAt), style: context.text.bodySmall?.copyWith(color: p.text3)),
-                ],
-              ]),
-            ),
-            Icon(Icons.chevron_right_rounded, color: p.text3),
-          ]),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ListRow(
+        title: m.content,
+        titleMaxLines: 3,
+        titleWidget: HighlightText(m.content, query: query.trim().split(RegExp(r'\s+')).first, style: context.text.bodyLarge, maxLines: 3),
+        subtitle: m.updatedAt == null ? null : formatWhen(m.updatedAt),
+        onTap: onTap,
+      );
 }
 
 /// 横向滚动的分类筛选条：全部 + 每个分类（带条数）。

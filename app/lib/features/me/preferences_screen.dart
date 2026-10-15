@@ -24,23 +24,23 @@ class PreferencesScreen extends ConsumerWidget {
     return SubPage(
       title: const Text('偏好设置'),
       body: PageBody(children: [
-        const SubPageLine('界面的样子和我回你的语言，改了立刻生效。'),
+        const PageIntro(line: '界面的样子和我回你的语言，改了立刻生效。'),
         FadeSlideIn(
           delay: Motion.stagger(1),
-          child: GlassGroup(children: [
-            RowTile(
+          child: ListGroup(children: [
+            ListRow(
               key: const Key('appearance'),
               icon: appearance.icon,
               title: '外观',
               value: appearance.label,
               onTap: () => _pickAppearance(context, ref, appearance),
             ),
-            RowTile(
+            ListRow(
               icon: Icons.blur_off_rounded,
               title: '减少透明度',
               trailing: Switch(key: const Key('solid'), value: look.solid, onChanged: (v) => ref.read(lookProvider.notifier).setSolid(v)),
             ),
-            RowTile(
+            ListRow(
               icon: Icons.palette_outlined,
               title: '头像颜色',
               trailing: Avatar(initial: '', onTap: null, size: Sp.x5, color: look.avatar, tooltip: '当前头像颜色'),

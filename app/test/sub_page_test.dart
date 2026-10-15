@@ -23,7 +23,7 @@ Widget _page() => SubPage(
           onRefresh: () async {},
           child: const PageBody(children: [
             AppCard(child: Text('卡片')),
-            ListGroup(children: [RowTile(icon: Icons.key, title: '一行'), RowTile(icon: Icons.key, title: '两行')]),
+            ListGroup(children: [ListRow(icon: Icons.key, title: '一行'), ListRow(icon: Icons.key, title: '两行')]),
           ]),
         );
       }),
@@ -41,7 +41,7 @@ void main() {
     expect(_bodyTop, greaterThanOrEqualTo(kToolbarHeight)); // extendBodyBehindAppBar：让位线 = 标题栏底
     final refresh = tester.widget<RefreshIndicator>(find.byType(RefreshIndicator));
     expect(refresh.edgeOffset, _bodyTop); // 转圈从标题栏下面出来
-    expect(find.byType(GlassGroup), findsOneWidget); // ListGroup 只是 GlassGroup 的别名
+    expect(find.byType(ListGroup), findsOneWidget); // 分组只有 ListGroup 一种实现（v2.97 E1）
     // 第一张卡片在标题栏下面，而不是被它盖住
     expect(tester.getTopLeft(find.text('卡片')).dy, greaterThan(tester.getBottomLeft(find.byType(GlassAppBar)).dy));
   });

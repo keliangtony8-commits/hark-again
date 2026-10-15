@@ -52,7 +52,7 @@ class _AgendaRow extends StatelessWidget {
     final p = context.palette;
     final next = item.state == AgendaState.next;
     final hint = agendaHint(item);
-    return RowTile(
+    return ListRow(
       dimmed: item.faded,
       leading: SizedBox(
         width: Layout.agendaTime,

@@ -107,8 +107,8 @@ void main() {
         b: b,
         ListView(padding: const EdgeInsets.all(16), children: [
           ListGroup(children: [
-            RowTile(icon: Icons.memory_rounded, title: '记忆' * 20, subtitle: '助手记住的关于你的事情' * 6, onTap: () {}),
-            RowTile(icon: Icons.schedule_rounded, title: '定时任务', trailing: const Pill('每天 08:00'), onTap: () {}),
+            ListRow(icon: Icons.memory_rounded, title: '记忆' * 20, subtitle: '助手记住的关于你的事情' * 6, onTap: () {}),
+            ListRow(icon: Icons.schedule_rounded, title: '定时任务', trailing: const Pill('每天 08:00'), onTap: () {}),
           ]),
           AppCard(onTap: () {}, child: const Text('一张可以点的卡片')),
           EmptyHint(icon: Icons.inbox_rounded, title: '还没有内容', text: '说明文字' * 15, action: FilledButton(onPressed: () {}, child: const Text('新建'))),

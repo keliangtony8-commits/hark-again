@@ -48,7 +48,7 @@ class ReplyLanguageTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(preferencesProvider).value;
-    return RowTile(
+    return ListRow(
       key: const Key('reply-language'),
       icon: Icons.translate_rounded,
       title: '回复语言',

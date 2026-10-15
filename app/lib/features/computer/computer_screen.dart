@@ -10,7 +10,6 @@ import '../../models/computer.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/motion.dart';
 import '../../ui/kit.dart';
 import '../../ui/sub_page.dart';
@@ -52,7 +51,7 @@ class ComputerScreen extends ConsumerWidget {
               delay: Motion.stagger(6),
               child: Padding(
                 padding: const EdgeInsets.only(top: Layout.sectionGap),
-                child: GlassGroup(children: [RowTile(icon: Icons.web_rounded, title: 'Pages', onTap: () => context.push('/me/pages'))]),
+                child: ListGroup(children: [ListRow(icon: Icons.web_rounded, title: 'Pages', onTap: () => context.push('/me/pages'))]),
               ),
             ),
           if (personal) BrowserSessionsSection(delay: Motion.stagger(7)),

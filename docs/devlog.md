@@ -156,3 +156,19 @@
 **删除清单**：App `VaultScreen`、`/me/vault`、`/me/accounts` 路由、`MeHub.accounts`、`vaultSummary`、MCP 区 +、保险箱起步卡、连接器页“其他服务”分区；Web `VaultScreen`、`me/vault`、`me/accounts` 路由、MeHub `accounts`、`vaultSummary`、同上 UI；后端 card target `vault`；测试里保险箱页的用例改写到连接的账号页（不保留旧页测试）；截图脚本的 vault 一张。
 **成本**：无新接口、无模型调用；一条只改数据的迁移（几行 UPDATE）；页面多读一份 `/api/vault`（原来要进第二页才读）。
 **结果**：按上面落地。测试：flutter analyze 0、flutter test 674 过 8 跳过、npm run build 过、后端 smoke 202/202（不含 smoke_stepfun）。没做：浏览器 / 真机截图核对（本机无 Chromium）。
+
+## 2026-10-15 v2.97 E1 收尾：ListRow / ListGroup / PageIntro 两端统一 + 附件弹层高度
+**依据**：HANDOFF 第五节第 6 项“E1 收尾（ListRow/ListGroup/PageHeader 统一、附件弹层高度）”。`docs/home-redesign.md`（E1 原始定义）不在仓库里（HANDOFF 早已注明从没提交），本轮按代码现状归纳标准如下。
+**现状（动手前查的）**
+- App：分组有两个名字——`ui/glass.dart GlassGroup`（实现）和 `ui/kit.dart ListGroup`（只转发的别名，不支持 separator），页面混用（11 个文件用 GlassGroup、19 个用 ListGroup）；行叫 `RowTile`（kit.dart），但记忆行 / 笔记行 / 任务备忘行三处各自拼 `InkWell + Padding + Row`（行高、图标位、箭头位各不一样）；子页说明有 `PageIntro`（摘要 + 说明）和 `SubPageLine`（只有说明）两个组件。页头（玻璃标题栏）只有 `SubPage/GlassAppBar` 一个，已统一，不动。
+- Web：页头 `PageHeader` 已统一（没有页面自写 header），不动；**没有行 / 分组组件**——全站 104 行手写 `className="row …"` / `"list …"`，“我的”页另有私有 `meRows.tsx`（MeRows）；子页说明有 `PageIntro` 和 3 处手写 `<p className="desc sub-line">`。
+- 附件弹层（App 输入框“+”）：**现象**——手机上一开就是几乎全屏高（实测 1080×2340、状态栏 + 手势条：弹层 807/851 逻辑像素），四个来源图标挤在最上面、下面一大片空。**根因**——`GlassSheet` 给内容的是“最高到屏幕”的松约束（Flexible），附件弹层每个来源是 `Column` 且没写 `mainAxisSize.min`，Column 默认 max 就把整张弹层撑满；不是 sheets.dart 的问题（其他弹层内容都写了 min）。Web 的附件入口是 Menu 小弹出菜单，没有这个问题。
+**标准（决定）**
+1. **一个分组、一个行、一个说明**：App `ListGroup`（GlassGroup 实现搬进 kit.dart、改名，删 GlassGroup 与别名）/ `ListRow`（RowTile 改名）/ `PageIntro`（summary 变可选，并入 SubPageLine）；Web 新增同名 `ListGroup` / `ListRow`（kit.tsx，props 对齐 App：icon/title/sub/problem/value/trail/control/to/onClick/off/enter），`PageIntro` summary 可选并入 `.sub-line` 段落。页头两端已是唯一组件（App `SubPage`、Web `PageHeader`），只核实不改。
+2. `ListRow` 只加三项能力去吃掉手写行：`titleWidget`（搜索高亮）、`titleMaxLines`（记忆正文 3 行）、`semanticLabel`（整行一个读屏节点）；Web 多一个 `control`（行尾开关 / 分段按钮 / 菜单原样放，不套次要色）。不为统一去改带进度条 / 多行错误说明的“富内容行”。
+3. **不叠加**：私有实现删掉（App 三个手写行、GlassGroup、SubPageLine；Web meRows.tsx、手写 sub-line）；旧名在 App 架构测试里禁止再出现；Web check-arch 第 7 条：手写 row/list 只许在登记文件里、数只减不增。
+4. 附件弹层：改根因（Column min），加回归测试（手机含状态栏 / 手势条，弹层 < 屏高 30%、标签下只剩内边距 + 安全区；已做变异验证：去掉 min 测试红）。
+**删除清单**：App `GlassGroup`（glass.dart）、kit.dart 的 ListGroup 别名、`RowTile` 名、`SubPageLine`、memory_notes `_NoteRow` / memory_screen `_MemoryRow` / task_memory `_MemoRow` 的手写行体、8 处多余的 glass.dart import；Web `features/me/meRows.tsx`、3 处 `desc sub-line` 手写段落、`.note-row-icon` 与 `.note-row` 的 flex 规则（ListRow 自带）；测试：sub_page_test 里“ListGroup 只是 GlassGroup 别名”的断言改为唯一实现。
+**迁移范围（本版）**：App 名字全统一、设置式列表行全走 ListRow；仍自己画行的 6 个文件登记在 `test/list_kit_test.dart`（抽屉里的对话 / 项目行、电脑页带进度条的状态行、运行记录多行错误说明、用量分享行——不是设置式列表行，硬并会改坏版式），只减不增；Web 迁了“我的”页 / 个人资料收拢页 / 我的电脑 Pages 行 / 关于 / 偏好设置 / 钱包 / 反馈 / Pages / 密钥行 / 记忆 / 记忆笔记 / 添加记忆弹层（手写 row/list 104 → 81 行）。**没迁**的 23 个文件登记在 check-arch RAW_ROWS（多为“行里再套按钮 + 开关”的分体行：任务、技能；电脑页状态行；连接器页；用量），留下一版。
+**成本**：纯前端重构，无接口 / 数据库 / 模型调用变化；无新依赖。行为变化（有意、= App）：Web 记忆 / 笔记行点开类的行补上箭头；App 笔记行副标题由 text3 变成行组件统一的次要色。
+**结果**：按上面落地。测试：flutter analyze 0、flutter test 678 过 8 跳过、npm run build 过（架构守卫 216 文件）、后端 smoke 202/202（不含 smoke_stepfun；smoke_stop 并行时偶发超时、单跑过）。没做：Web 剩 23 个文件的手写行、App 6 个富内容行、浏览器 / 真机截图。

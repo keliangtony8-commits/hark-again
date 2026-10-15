@@ -145,7 +145,7 @@ class _Body extends StatelessWidget {
                           label: conversationFileSemantics(f),
                           button: !f.gone,
                           excludeSemantics: true,
-                          child: RowTile(
+                          child: ListRow(
                             icon: projectFileIcon(f.mime),
                             title: f.name,
                             problem: f.gone ? '已不在' : null,

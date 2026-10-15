@@ -132,7 +132,7 @@ class _SkillRowState extends ConsumerState<_SkillRow> {
     final on = _pending ?? s.enabled;
     final row = FadeSlideIn(
       delay: widget.delay,
-      child: RowTile(
+      child: ListRow(
           dimmed: !on,
           icon: s.builtin ? Icons.auto_awesome_outlined : Icons.edit_note_rounded,
           title: s.name,
@@ -289,7 +289,7 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: Sp.x3),
                   child: ListGroup(children: [
-                    RowTile(
+                    ListRow(
                       icon: s.enabled ? Icons.toggle_on_outlined : Icons.toggle_off_outlined,
                       title: '启用',
                       subtitle: s.enabled ? '我会在合适的时候按它做' : '已停用：我看不到它，也不会用它',

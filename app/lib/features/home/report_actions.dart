@@ -65,7 +65,7 @@ class InboxRow extends ConsumerWidget {
     void more() => showReportActions(context, ref, card);
     return Semantics(
       customSemanticsActions: {const CustomSemanticsAction(label: '稍后再看或收起'): more},
-      child: RowTile(
+      child: ListRow(
         leading: DotBadge(visible: card.unread, color: p.accent, child: const IconBadge(Icons.inbox_outlined)),
         title: card.title,
         subtitle: card.glance,

@@ -1,4 +1,4 @@
-// RowTile(dimmed:)：关着的项图标和文字变淡，行尾开关不跟着淡（v1.08，技能/任务行）。
+// ListRow(dimmed:)：关着的项图标和文字变淡，行尾开关不跟着淡（v1.08，技能/任务行）。
 import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/kit.dart';
@@ -18,7 +18,7 @@ void main() {
     await t.pumpWidget(MaterialApp(
       theme: buildTheme(Brightness.light),
       home: Scaffold(
-        body: RowTile(
+        body: ListRow(
           dimmed: true,
           icon: Icons.auto_awesome_outlined,
           title: '购物比价',
@@ -35,7 +35,7 @@ void main() {
   testWidgets('not dimmed = full strength', (t) async {
     await t.pumpWidget(MaterialApp(
       theme: buildTheme(Brightness.light),
-      home: const Scaffold(body: RowTile(title: '网页调研')),
+      home: const Scaffold(body: ListRow(title: '网页调研')),
     ));
     expect(opacityAbove(t, find.text('网页调研')), 1.0);
   });

@@ -41,7 +41,7 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .section-note { color: var(--text-3); } /* 区块标题行尾的一句摘要，和标题同一小字层级 */
 .section-count { font-variant-numeric: tabular-nums; }
 .row-value { color: var(--text-3); font-size: var(--fs-md); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; } /* v2.81 行尾当前值（= App RowTile.value） */
-.sub-line { margin: var(--sp-2) var(--sp-1) var(--sp-5); color: var(--text-2); } /* v2.81 子页顶部一句说明（= App SubPageLine） */
+.sub-line { margin: var(--sp-2) var(--sp-1) var(--sp-5); color: var(--text-2); } /* 子页顶部一句说明：只由 ui/kit.tsx PageIntro（无 summary）输出（= App PageIntro 无摘要，v2.97 E1） */
 .row-trail { color: var(--text-3); display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); height: 40px; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); font-weight: var(--fw-title); transition: transform var(--dur-fast) var(--ease), background var(--dur); }
@@ -370,9 +370,7 @@ button.run-row:hover { background: var(--tile); }
   font-size: var(--fs-xs); color: var(--text); text-align: start; transition: color var(--dur) var(--ease); }
 @media (prefers-reduced-motion: reduce) { .file-diff-row { animation: none; } .file-diff-path { transition: none; } }
 /* 记忆笔记（v2.21，features/me/MemoryNotes.tsx） */
-.note-row { display: flex; align-items: center; gap: var(--sp-3); }
 .note-row .row-title { -webkit-line-clamp: 1; }
-.note-row-icon { color: var(--text-2); display: inline-flex; flex: none; }
 .note-head { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .note-title { font-size: var(--fs-lg); }
 .note-meta { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--text-3); }

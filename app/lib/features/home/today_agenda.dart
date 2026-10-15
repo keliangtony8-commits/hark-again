@@ -83,7 +83,7 @@ String agendaHint(AgendaItem i) => switch (i.state) {
       _ => '',
     };
 
-/// 失败 / 已暂停：放在副标题最前面用警示色（RowTile.problem）。
+/// 失败 / 已暂停：放在副标题最前面用警示色（ListRow.problem）。
 String? agendaProblem(AgendaItem i) => switch (i.state) {
       AgendaState.failed => '失败',
       AgendaState.paused => '已暂停',

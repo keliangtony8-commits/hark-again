@@ -164,7 +164,7 @@ class _PickRow extends StatelessWidget {
     return Semantics(
       checked: on,
       enabled: !taken,
-      child: RowTile(
+      child: ListRow(
         icon: projectFileIcon(file.mime),
         title: file.name,
         subtitle: taken ? '已在这条消息里' : [projectFileLine(file), if (file.modified != null) formatAgo(file.modified!)].join(' · '),
@@ -272,7 +272,7 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
                         onDelete: () => ref.read(provider.notifier).remove(f.path),
                         child: FadeSlideIn(
                           delay: Motion.stagger(i),
-                          child: RowTile(
+                          child: ListRow(
                             icon: projectFileIcon(f.mime),
                             title: f.name,
                             subtitle: projectFileLine(f),

@@ -126,7 +126,7 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
                   if (missing.isNotEmpty)
                     FadeSlideIn(
                       delay: next(),
-                      child: RowTile(
+                      child: ListRow(
                         icon: Icons.tune_rounded,
                         title: '服务器还差一步',
                         subtitle: setupLine(missing),
@@ -208,7 +208,7 @@ class _AccountRow extends ConsumerWidget {
     final can = c.authorizable;
     return FadeSlideIn(
       delay: delay,
-      child: RowTile(
+      child: ListRow(
         icon: _icons[c.id] ?? Icons.link_rounded,
         title: c.name,
         subtitle: c.connected ? c.account : c.desc,
@@ -253,7 +253,7 @@ class _McpRow extends ConsumerWidget {
         onDelete: () => ref.read(mcpServersProvider.notifier).remove(s.id),
         child: FadeSlideIn(
           delay: delay,
-          child: RowTile(
+          child: ListRow(
             icon: Icons.extension_outlined,
             title: s.name,
             // 连不上 / 令牌被拒：副标题最前面说问题（只那几个字警示色），主页同时有一张“需要你亲自处理”的卡

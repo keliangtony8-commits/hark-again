@@ -92,7 +92,7 @@ class SecretRow extends ConsumerWidget {
       onDelete: () => ref.read(secretsProvider.notifier).remove(s.id),
       child: FadeSlideIn(
         delay: delay,
-        child: RowTile(
+        child: ListRow(
           icon: secretKindIcon(s.kind),
           title: s.name,
           subtitle: secretWhere(s),

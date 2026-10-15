@@ -24,7 +24,6 @@ import '../../models/computer.dart';
 import '../../models/job.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
@@ -176,10 +175,10 @@ class _ComputerSectionState extends ConsumerState<ComputerSection> {
                     trailing: s.running
                         ? TextButton(onPressed: _restarting ? null : () => _restart(s), child: Text(_restarting ? '正在重启' : '重启'))
                         : null),
-                GlassGroup(children: [
+                ListGroup(children: [
                   _StatusTile(s, onOpen: widget.onOpen),
                   if (s.machine != null && machineLine(s.machine!) != null) // v2.85 整台服务器（只有个人工作区给）
-                    RowTile(icon: Icons.dns_rounded, title: '整台服务器', subtitle: machineLine(s.machine!)),
+                    ListRow(icon: Icons.dns_rounded, title: '整台服务器', subtitle: machineLine(s.machine!)),
                   for (final v in s.services)
                     _ServiceRow(
                       key: ValueKey('svc-${v.job.id}'),
@@ -219,7 +218,7 @@ class _StatusTile extends StatelessWidget {
       label: [computerSemantics(s), ?oom].join('，'),
       excludeSemantics: true,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2), // 与 RowTile 同一条行首线、同一行高
+        padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3 - 2), // 与 ListRow 同一条行首线、同一行高
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(problem ? Icons.cloud_off_rounded : Icons.computer_rounded,
               size: Layout.rowIcon, color: problem ? p.warning : (s.running ? p.text2 : p.text3)),
@@ -278,7 +277,7 @@ class _JobRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
-    return RowTile(
+    return ListRow(
       leading: SizedBox.square(dimension: Layout.rowIcon, child: Center(child: PulseDot(color: p.accent, size: 8))),
       title: job.title,
       subtitle: jobRowSubtitle(job),
@@ -306,7 +305,7 @@ class _ServiceRow extends ConsumerWidget {
     };
     return Semantics(
       label: serviceSemantics(v),
-      child: RowTile(
+      child: ListRow(
         leading: SizedBox.square(
           dimension: Layout.rowIcon,
           child: Center(child: SwapSwitcher(child: KeyedSubtree(key: ValueKey(v.health), child: mark))),

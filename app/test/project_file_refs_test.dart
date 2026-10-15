@@ -13,6 +13,7 @@ import 'package:assistant/features/projects/project_files_sheet.dart';
 import 'package:assistant/models/block.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
+import 'package:assistant/ui/glass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -177,5 +178,25 @@ void main() {
     await tester.tap(find.bySemanticsLabel('发送'));
     await _settle(tester);
     expect([for (final f in sent) (f.source, f.id)], [('project', 'notes/大纲.md'), ('project', '照片.png')]);
+  });
+
+  testWidgets('附件弹层高度随内容（v2.97）：手机含状态栏 / 手势条，弹层只有一排来源那么高，不撑满全屏', (tester) async {
+    for (final pid in ['me', null]) {
+      await _pump(tester, projectId: pid);
+      tester.view.physicalSize = const Size(1080, 2340);
+      tester.view.devicePixelRatio = 2.75;
+      tester.view.padding = const FakeViewPadding(top: 120, bottom: 63);
+      await _settle(tester);
+      await tester.tap(find.byTooltip('添加附件'));
+      await _settle(tester);
+      final sheet = tester.getRect(find.byType(GlassSheet));
+      final label = tester.getRect(find.text('相册'));
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      expect(sheet.height, lessThan(screen.height * 0.3), reason: 'pid=$pid 弹层 ${sheet.height} / 屏 ${screen.height}');
+      // 标签下面只剩内边距 + 手势条安全区，没有一大片空白
+      expect(sheet.bottom - label.bottom, lessThan(16 + 63 / 2.75 + 8));
+      await tester.tapAt(const Offset(10, 10));
+      await _settle(tester);
+    }
   });
 }

@@ -83,7 +83,7 @@ class _CardRow extends ConsumerWidget {
         onDelete: () => ref.read(walletProvider.notifier).remove(c.id),
         child: FadeSlideIn(
           delay: delay,
-          child: RowTile(
+          child: ListRow(
             icon: Icons.credit_card_rounded,
             title: c.label,
             problem: c.expired ? '已过期' : null,

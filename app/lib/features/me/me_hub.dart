@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sub_page.dart';
@@ -32,11 +31,11 @@ class MeHubScreen extends StatelessWidget {
   Widget build(BuildContext context) => SubPage(
         title: Text(hub.title),
         body: PageBody(children: [
-          SubPageLine(hub.line),
+          PageIntro(line: hub.line),
           FadeSlideIn(
             delay: Motion.stagger(1),
-            child: GlassGroup(children: [
-              for (final r in hub.rows) RowTile(icon: r.icon, title: r.title, onTap: () => context.push(r.to)),
+            child: ListGroup(children: [
+              for (final r in hub.rows) ListRow(icon: r.icon, title: r.title, onTap: () => context.push(r.to)),
             ]),
           ),
         ]),

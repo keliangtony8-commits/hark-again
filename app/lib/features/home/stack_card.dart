@@ -1,7 +1,7 @@
 // 主页卡片栈里的一张卡（v2.78 Home 重做）：同宽、同圆角、同底色、等距，标题在卡里（主页不再有小节标题）。
 // 主页上除了“要你处理的建议卡”（action_card.dart，自带按钮排）以外，今天 / 面板 / 收件箱 / 连接引导都用它，
 // 所以卡与卡的节奏只在这一处定：卡间距 Layout.cardGap，内边距 Layout.cardPad，标题一档 titleMedium。
-// 两种身体：[child] = 普通内容（面板的块、引导卡的文字）；[rows] = 一列 RowTile（今天、收件箱），行贴卡边、
+// 两种身体：[child] = 普通内容（面板的块、引导卡的文字）；[rows] = 一列 ListRow（今天、收件箱），行贴卡边、
 // 行内文字与标题对齐（行自带 Sp.x4 内边距，外面再补 cardPad − Sp.x4）。
 import 'package:flutter/material.dart';
 

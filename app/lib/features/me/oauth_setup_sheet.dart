@@ -62,7 +62,7 @@ class OAuthSetupSheet extends StatelessWidget {
           delay: next(),
           child: ListGroup(children: [
             for (final c in missing)
-              RowTile(
+              ListRow(
                 icon: Icons.open_in_new_rounded,
                 title: '在 ${c.name} 开发者后台创建',
                 subtitle: Uri.tryParse(c.setup!.console)?.host ?? c.setup!.console,

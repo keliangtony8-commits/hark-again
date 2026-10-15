@@ -14,7 +14,6 @@ import '../../core/api.dart';
 import '../../models/host.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
@@ -97,7 +96,7 @@ class _HostSectionState extends ConsumerState<HostSection> {
               delay: widget.delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 const SectionTitle(hostSectionTitle),
-                GlassGroup(children: [_ToggleRow(status: s, busy: _toggling, onChanged: (on) => _toggle(s, on))]),
+                ListGroup(children: [_ToggleRow(status: s, busy: _toggling, onChanged: (on) => _toggle(s, on))]),
                 RiseSwitcher(
                   child: s.installed
                       ? null
@@ -115,9 +114,9 @@ class _HostSectionState extends ConsumerState<HostSection> {
                       ? const SizedBox(width: double.infinity)
                       : Padding(
                           padding: const EdgeInsets.only(top: Sp.x3),
-                          child: GlassGroup(children: [
+                          child: ListGroup(children: [
                             if (s.rules.isEmpty)
-                              const RowTile(icon: Icons.rule_rounded, title: hostRulesEmpty, subtitle: hostRulesEmptyLine)
+                              const ListRow(icon: Icons.rule_rounded, title: hostRulesEmpty, subtitle: hostRulesEmptyLine)
                             else
                               for (final (i, r) in s.rules.indexed)
                                 FadeSlideIn(
@@ -143,7 +142,7 @@ class _ToggleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hint = hostHint(status);
-    return RowTile(
+    return ListRow(
       icon: Icons.dns_outlined,
       title: hostToggleTitle(status),
       subtitle: hostDetail(status),
@@ -168,7 +167,7 @@ class _RuleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: '以后都允许 ${rule.text} 开头的命令，${hostRuleDetail(rule)}',
-      child: RowTile(
+      child: ListRow(
         icon: Icons.rule_rounded,
         title: rule.text,
         subtitle: hostRuleDetail(rule),
