@@ -4,6 +4,13 @@
 .me-top .glass-btn { width: var(--topbar-h); height: var(--topbar-h); }
 .me-head { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-2) 0 var(--sp-5); }
 .me-id { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* v2.92 §P 头像 + 名字整块是一颗键：点开个人资料弹层 */
+.me-who { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-3); padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; border-radius: var(--r-inner);
+  transition: transform var(--dur) var(--ease); }
+.me-who:active { transform: scale(0.98); }
+.me-who:disabled { cursor: default; }
+.profile-photo { display: flex; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.profile-photo-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .me-id h1 { font-weight: var(--fw-strong); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .me-server { font-size: var(--fs-sm); color: var(--text-3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .me-usage { gap: var(--sp-3); }

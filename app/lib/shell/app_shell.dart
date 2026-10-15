@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/api.dart';
+import '../core/profile.dart';
 import '../features/home/inbox.dart';
 import '../theme/look.dart';
 import '../ui/glass.dart';
@@ -38,6 +40,8 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final unread = ref.watch(inboxProvider.select((s) => s.unread));
     final avatar = ref.watch(lookProvider.select((l) => l.value?.avatar));
+    final profile = ref.watch(profileProvider).value; // v2.92 §P 首字母 / 上传的头像
+    final photo = profile?.avatar;
     final covered = ref.watch(shellCoverProvider);
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -58,6 +62,8 @@ class AppShell extends ConsumerWidget {
               onSelect: (i) => shell.goBranch(i, initialLocation: i == shell.currentIndex),
               onAvatar: () => context.push('/me'),
               avatarColor: avatar,
+              initial: profile?.initial ?? '我',
+              image: photo == null ? null : ref.read(apiProvider).fileUrl(photo),
               tabs: [(label: '主页', badge: unread), (label: '聊天', badge: 0), (label: '项目', badge: 0)],
             ),
           ),

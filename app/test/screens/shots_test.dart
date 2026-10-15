@@ -346,7 +346,7 @@ class _Api implements Api {
         {'path': '旧计划.txt', 'name': '旧计划.txt', 'size': 300, 'mime': 'text/plain', 'modified': t - 86400 * 20},
       ];
     }
-    if (path == '/api/auth/me') return {'username': 'keliang'};
+    if (path == '/api/profile') return {'username': 'keliang', 'display_name': null, 'assistant_name': null, 'assistant_default': 'Toyuis', 'avatar': null, 'greet': false};
     if (path == '/api/pages') {
       final t = DateTime.now().millisecondsSinceEpoch / 1000;
       return [

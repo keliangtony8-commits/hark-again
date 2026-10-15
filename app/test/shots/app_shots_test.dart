@@ -67,7 +67,7 @@ class _Api implements Api {
         ],
       ]};
     }
-    if (path == '/api/auth/me') return {'username': 'keliang'};
+    if (path == '/api/profile') return {'username': 'keliang', 'display_name': null, 'assistant_name': null, 'assistant_default': 'Toyuis', 'avatar': null, 'greet': false};
     if (path == '/api/usage') return {'currency': 'CNY', 'priced': [], 'today': {}, 'month': {'tokens': 3100000, 'calls': 420}};
     if (path == '/api/preferences') return {'reply_language': 'auto', 'reply_languages': [{'code': 'auto', 'label': '跟随我的语言'}, {'code': 'en', 'label': 'English'}]};
     if (path.startsWith('/api/conversations')) {

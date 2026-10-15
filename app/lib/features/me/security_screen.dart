@@ -20,7 +20,7 @@ import '../../ui/sheets.dart';
 import '../../ui/sub_page.dart';
 import 'login_sessions_section.dart';
 
-/// 没登录（或测试里没有会话）不发请求、给 null：和 accountNameProvider 一样先看会话（抛错会被 Riverpod 自动重试）。
+/// 没登录（或测试里没有会话）不发请求、给 null：和 profileProvider 一样先看会话（抛错会被 Riverpod 自动重试）。
 final twoFactorProvider = FutureProvider.autoDispose<TwoFactorStatus?>((ref) async {
   final s = await ref.watch(sessionProvider.future);
   if (!s.signedIn) return null;

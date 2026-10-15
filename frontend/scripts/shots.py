@@ -190,7 +190,7 @@ FIXTURES = {
                                      {"id": "c9", "title": None, "calls": 12, "tokens": 90000, "cost": 1.2}],
                    "last_month": {"calls": 610, "tokens": 1500000, "cost": 28.0, "to_date": {"calls": 240, "tokens": 700000, "cost": 11.0}}},
     # 子页面（v0.52：桌面子页/弹层也要和一级页面同一套玻璃框架）
-    "/api/auth/me": {"username": "keliang"},
+    "/api/profile": {"username": "keliang", "display_name": None, "assistant_name": None, "assistant_default": "Toyuis", "avatar": None, "greet": False},
     "/api/memories": [
         {"id": "mm1", "category": "偏好", "content": "回答用中文，先给结论再给理由", "updated_at": NOW},
         {"id": "mm2", "category": "偏好", "content": "预算有限，优先推荐便宜的方案", "updated_at": NOW},

@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import agent_mentions, reply_language, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, reply_quote, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, wallet, workspace_instructions, workspaces
+from .. import agent_mentions, identity, reply_language, attachment_save, clock, command_credentials, connector_accounts, command_env, documents, init_command, llm, memory_notes, memory_store, project_brief, project_relay, prompt_cache, reply_quote, skill_catalog, skill_mentions, skills_store, turn_journal, user_shell, vision, wallet, workspace_instructions, workspaces
 from ..blocks import blocks_to_text
 from ..config import settings
 from ..connectors.providers import PROVIDERS
@@ -29,7 +29,7 @@ async def build_system_prompt(db: AsyncSession, project_id: str | None, query: s
     返回 Prompt：稳定段在前、每轮会变的段（时间、相关记忆）在后，前缀逐字不变才能命中供应商的提示缓存
     （规则在 app/prompt_cache.py）。调用方要加段用 .add(STABLE|VOLATILE, text)，最后 .text()。"""
     p = prompt_cache.Prompt()
-    p.add(STABLE, settings.system_prompt)
+    p.add(STABLE, identity.persona(await identity.get(db)) + "\n" + settings.system_prompt)  # v2.92 §P 助手名 / 用户称呼
     p.add(STABLE, parallel.prompt())  # 只读查询可以同一步一起发（agent/parallel.py）
 
     # 只放启用的目录，正文按需 use_skill 读取；超预算逐级退让，规则只在 skill_catalog

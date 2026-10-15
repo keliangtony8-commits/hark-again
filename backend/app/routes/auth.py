@@ -49,12 +49,6 @@ async def login(body: LoginIn, request: Request, db: AsyncSession = Depends(get_
     return out
 
 
-@router.get("/me")
-async def me(user: str = Depends(require_user)):
-    """当前登录的主人：客户端“我的”页页头显示用户名。只读、零查询。"""
-    return {"username": user}
-
-
 # ---------- 登录设备（规则在 app/login_sessions.py） ----------
 
 @router.post("/logout")

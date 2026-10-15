@@ -7,6 +7,9 @@ import { IconBack, IconCard, IconClock, IconComputer, IconDoc, IconFeedback, Ico
 import { stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
 import { MeRows, type MeRow } from "./meRows";
+import ProfileSheet from "./ProfileSheet";
+import { profileName, useProfile } from "../../lib/profile";
+import { Avatar } from "../../ui/glass";
 import { useServerVersion } from "../../hooks/useServerVersion";
 import { clientOutdated } from "../../lib/version";
 import "./me.css";
@@ -50,24 +53,26 @@ function UsageSummary() {
   );
 }
 
-/** 页头：名字大字 + 域名小字（GET /api/auth/me；= App _Identity）。没取到（加载中 / 老服务器）写“我的”，取到后淡入。 */
+/** 页头：头像 + 名字大字 + 域名小字（= App _Identity）。名字 = 称呼，没设用登录名（GET /api/profile）；没取到（加载中 / 老服务器）写“我的”，取到后淡入。
+ *  v2.92 §P：整块点开个人资料弹层（称呼 / 助手名 / 头像）。 */
 function Identity() {
-  const [name, setName] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    http.get<{ username?: string }>("/api/auth/me")
-      .then((j) => { if (live) setName(j.username?.trim() || null); })
-      .catch(() => {});
-    return () => { live = false; };
-  }, []);
+  const p = useProfile();
+  const [editing, setEditing] = useState(false);
+  const name = p ? profileName(p) : null;
   const raw = server.get() || location.origin;
   let host = raw;
   try { host = new URL(raw).host || raw; } catch { /* 不是完整 URL 就原样显示 */ }
   return (
-    <div className="me-id" aria-label={name ? `已登录 ${name}，服务器 ${host}` : `服务器 ${host}`}>
-      <h1 key={name ?? ""} className={name ? "fade-in" : undefined}>{name ?? "我的"}</h1>
-      <div className="me-server">{host}</div>
-    </div>
+    <>
+      <button className="me-who" disabled={!p} onClick={() => setEditing(true)}>
+        {p && <Avatar />}
+        <div className="me-id" aria-label={name ? `已登录 ${name}，服务器 ${host}` : `服务器 ${host}`}>
+          <h1 key={name ?? ""} className={name ? "fade-in" : undefined}>{name ?? "我的"}</h1>
+          <div className="me-server">{host}</div>
+        </div>
+      </button>
+      {editing && <ProfileSheet onClose={() => setEditing(false)} />}
+    </>
   );
 }
 

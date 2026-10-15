@@ -11,13 +11,14 @@ import '../ui/motion.dart';
 typedef TopTab = ({String label, int badge});
 
 class FloatingTopBar extends StatelessWidget {
-  const FloatingTopBar({super.key, required this.tabs, required this.index, required this.onSelect, required this.onAvatar, this.initial = '我', this.avatarColor});
+  const FloatingTopBar({super.key, required this.tabs, required this.index, required this.onSelect, required this.onAvatar, this.initial = '我', this.avatarColor, this.image});
   final List<TopTab> tabs;
   final int index;
   final ValueChanged<int> onSelect;
   final VoidCallback onAvatar;
   final String initial;
   final Color? avatarColor;
+  final String? image; // v2.92 §P 上传的头像（完整地址）
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -38,7 +39,7 @@ class FloatingTopBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: Sp.x3),
-              Avatar(initial: initial, onTap: onAvatar, color: avatarColor),
+              Avatar(initial: initial, onTap: onAvatar, color: avatarColor, image: image),
             ]),
           ),
         ),

@@ -23,6 +23,7 @@ import AboutScreen from "./features/me/AboutScreen";
 import ProjectScreen from "./features/projects/ProjectScreen";
 import ProjectsScreen from "./features/projects/ProjectsScreen";
 import { auth, onUnauthorized } from "./lib/api";
+import { resetProfile } from "./lib/profile";
 import AppShell from "./shell/AppShell";
 import { DialogHost } from "./ui/dialog";
 
@@ -30,7 +31,7 @@ import { DialogHost } from "./ui/dialog";
  *  “我的”不是栏目（顶栏头像进入），外壳只在 / /chat /projects 上显示浮动顶栏（shell/TopBar isShellRoot）。 */
 export default function App() {
   const [authed, setAuthed] = useState(!!auth.get());
-  useEffect(() => onUnauthorized(() => { auth.clear(); setAuthed(false); }), []);
+  useEffect(() => onUnauthorized(() => { auth.clear(); resetProfile(); setAuthed(false); }), []);
   if (!authed) return <><Login onDone={() => setAuthed(true)} /><DialogHost /></>;
 
   return (

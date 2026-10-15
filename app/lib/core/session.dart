@@ -58,20 +58,6 @@ class SessionNotifier extends AsyncNotifier<Session> {
 
 final sessionProvider = AsyncNotifierProvider<SessionNotifier, Session>(SessionNotifier.new);
 
-/// 当前登录的主人用户名（GET /api/auth/me）：“我的”页页头用。老服务器没有这个接口或请求失败 → null，页头只显示服务器。
-/// 跟着 sessionProvider 走：换账号 / 退出后重新取。
-final accountNameProvider = FutureProvider.autoDispose<String?>((ref) async {
-  final s = await ref.watch(sessionProvider.future);
-  if (!s.signedIn) return null;
-  try {
-    final j = await ref.read(apiProvider).get('/api/auth/me');
-    final name = j is Map ? j['username'] : null;
-    return name is String && name.trim().isNotEmpty ? name.trim() : null;
-  } catch (_) {
-    return null;
-  }
-});
-
 /// 服务器版本（GET /api/version，公开接口）：关于页显示两端版本、低于 min_client 时提示更新。取不到 = null。
 final serverVersionProvider = FutureProvider.autoDispose<ServerVersion?>((ref) async {
   final s = await ref.watch(sessionProvider.future);

@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api.dart';
+import '../../core/profile.dart';
 import '../../core/session.dart';
 import '../../models/usage.dart';
 import '../../theme/app_theme.dart';
@@ -16,6 +18,8 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../../theme/look.dart';
+import 'profile_sheet.dart';
 import 'usage_screen.dart';
 import '../../models/version.dart';
 
@@ -47,6 +51,7 @@ class _MeBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final server = ref.watch(sessionProvider).value?.server ?? '';
     final host = Uri.tryParse(server)?.host ?? '';
+    final profile = ref.watch(profileProvider).value;
     const gap = SizedBox(height: Sp.x4);
 
     return PageBody(children: [
@@ -57,7 +62,28 @@ class _MeBody extends ConsumerWidget {
               ? GlassIconButton(icon: Icons.close_rounded, tooltip: '回到主页', onTap: () => context.go('/home'))
               : GlassIconButton(icon: Icons.arrow_back_rounded, tooltip: '返回', onTap: () => Navigator.of(context).maybePop()),
           const SizedBox(width: Sp.x4),
-          Expanded(child: _Identity(name: ref.watch(accountNameProvider).value, host: host)),
+          // v2.92 §P：头像 + 名字一起点 → 改称呼 / 助手名 / 头像
+          Expanded(
+            child: Pressable(
+              key: const Key('me-identity'),
+              onTap: profile == null ? null : () => showProfileSheet(context),
+              scale: 0.98,
+              child: Row(children: [
+                if (profile != null) ...[
+                  ExcludeSemantics(
+                      child: Avatar(
+                    initial: profile.initial,
+                    image: profile.avatar == null ? null : ref.read(apiProvider).fileUrl(profile.avatar!),
+                    color: ref.watch(lookProvider.select((l) => l.value?.avatar)),
+                    onTap: null,
+                    tooltip: '头像',
+                  )),
+                  const SizedBox(width: Sp.x3),
+                ],
+                Expanded(child: _Identity(name: profile?.name, host: host)),
+              ]),
+            ),
+          ),
         ]),
       ),
       const SizedBox(height: Sp.x5),

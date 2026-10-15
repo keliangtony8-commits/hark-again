@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import deliver, host_mode, reply_quote, jobs, reply_language, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
+from .. import deliver, host_mode, identity, reply_quote, jobs, reply_language, plan_mode, llm_retry, model_router, reasoning, router_stats, steering, turn_changes, turn_journal, usage, vision
 from ..llm import chat_model
 from ..blocks import text_to_blocks
 from ..config import settings
@@ -163,6 +163,8 @@ async def _run_turn(db: AsyncSession, conv: Conversation, emit: Emit,
         prompt.add(VOLATILE, held)
     if brief:
         prompt.add(VOLATILE, brief)
+    if onboard := await identity.onboarding_line(db, cid):  # v2.92 §P 首次问候后：用户答了称呼就 set_names
+        prompt.add(VOLATILE, onboard)
     system = prompt.text()
     history = reply_language.nudge(history, await reply_language.get(db))  # 固定回复语言：最后一条用户消息补一句（只改请求副本）
     builder = loop.MessageBuilder()

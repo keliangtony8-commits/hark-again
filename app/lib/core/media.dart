@@ -34,6 +34,13 @@ class Media {
     }
   }
 
+  /// v2.92 §P 选一张头像：缩到 512px、JPEG 质量 85（几十 KB，服务器上限 2 MB）。取消 = null。
+  Future<File?> pickAvatar(PickSource source) async {
+    final x = await _images.pickImage(
+        source: source == PickSource.camera ? ImageSource.camera : ImageSource.gallery, imageQuality: 85, maxWidth: 512, maxHeight: 512);
+    return x == null ? null : File(x.path);
+  }
+
   Future<FileBlock> upload(File f) async {
     final j = await _api.upload('/api/uploads', f) as Map<String, dynamic>;
     return Block.fromJson({'type': 'file', 'source': 'upload', ...j}) as FileBlock;

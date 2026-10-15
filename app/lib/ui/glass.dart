@@ -305,12 +305,14 @@ class GlassIconButton extends StatelessWidget {
 
 /// 圆形头像：底色（null = 中性 Palette.avatar，“我的”里可改）+ 无衬线首字（600），字色按底色亮度自动深/浅。
 /// 只有一圈发丝边和很淡的投影：它是顶栏的一员，不该像贴纸一样浮起来。
+/// v2.92 §P：[image] = 用户上传的头像（完整地址，带 ?token=）；有图盖在圆里，加载失败退回首字母。
 class Avatar extends StatelessWidget {
-  const Avatar({super.key, required this.initial, required this.onTap, this.size = Layout.topBar, this.color, this.tooltip = '我的'});
+  const Avatar({super.key, required this.initial, required this.onTap, this.size = Layout.topBar, this.color, this.image, this.tooltip = '我的'});
   final String initial;
   final VoidCallback? onTap;
   final double size;
   final Color? color;
+  final String? image;
   final String tooltip;
 
   @override
@@ -331,13 +333,32 @@ class Avatar extends StatelessWidget {
           width: size,
           height: size,
           alignment: Alignment.center,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(color: bg, shape: BoxShape.circle, border: Border.all(color: p.glassBorder)),
           child: ExcludeSemantics(
-            child: AnimatedDefaultTextStyle(
-              duration: context.motion(Motion.base),
-              style: context.text.displaySmall!.copyWith(color: ink, fontSize: size * 0.42, height: 1, letterSpacing: 0),
-              child: Text(initial),
-            ),
+            child: Stack(fit: StackFit.expand, children: [
+              Center(
+                child: AnimatedDefaultTextStyle(
+                  duration: context.motion(Motion.base),
+                  style: context.text.displaySmall!.copyWith(color: ink, fontSize: size * 0.42, height: 1, letterSpacing: 0),
+                  child: Text(initial),
+                ),
+              ),
+              if (image != null)
+                Image.network(
+                  image!,
+                  key: ValueKey(image),
+                  fit: BoxFit.cover,
+                  // 淡入：图到了才盖住首字母（只动 opacity）；失败就留着首字母
+                  frameBuilder: (_, child, frame, sync) => AnimatedOpacity(
+                    opacity: sync || frame != null ? 1 : 0,
+                    duration: context.motion(Motion.base),
+                    curve: Motion.ease,
+                    child: child,
+                  ),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+            ]),
           ),
         ),
       ),

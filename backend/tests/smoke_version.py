@@ -28,8 +28,8 @@ assert body == {"name": name, "version": version, "build": v.BUILD, "min_client"
 assert tuple(map(int, v.MIN_CLIENT.split("."))) <= (major, minor, patch)  # 服务器自己的客户端总是兼容
 assert app.title == name
 
-from app.config import settings
-assert settings.system_prompt.startswith(f"你是 {name}"), settings.system_prompt[:20]
+from app import identity  # v2.92 §P：“你是 X”由 identity.persona 生成，没取名时 X = 产品名
+assert identity.persona(identity.Identity()).startswith(f"你是 {name}，"), identity.persona(identity.Identity())
 from app import two_factor as tf
 assert tf.ISSUER == name and f"issuer={name}" in tf.uri("ABC", "u")
 

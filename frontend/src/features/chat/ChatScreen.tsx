@@ -14,6 +14,7 @@ import PlanModeChip from "./PlanModeChip";
 import { runSlash } from "./slashActions";
 import ModelChip from "./ModelChip";
 import type { ConversationSummary, OutgoingFile } from "../../lib/types";
+import { greetOnce, useProfile } from "../../lib/profile";
 import "./chat.css";
 
 type Props = {
@@ -49,6 +50,15 @@ export default function ChatScreen({ projectId, listTitle = "对话", leading, t
     else if (st.draft || st.files?.length) chat.send(st.draft ?? "", st.files);
     nav(location.pathname, { replace: true, state: null });
   }, [location, chat, nav]);
+
+  // v2.92 §P 首次问候：主聊天空白、服务器说还没问候过 → 请服务器建「初次见面」对话并打开它（= App chat_screen.dart）。
+  // 助手的开场白就是那段对话的第一条消息：在聊天里问称呼，不做表单引导页。
+  const profile = useProfile();
+  const greetNow = !projectId && !!profile?.greet && !chat.activeId && chat.messages.length === 0;
+  useEffect(() => {
+    if (!greetNow) return;
+    void greetOnce().then((id) => { if (id) { chat.list.refresh(); chat.open(id); } });
+  }, [greetNow, chat]);
 
   // 搜索时列表被过滤，活动对话可能不在其中：记住它最后一次出现时的标题
   const lastTitle = useRef<{ id: string | null; title: string }>({ id: null, title: "新对话" });

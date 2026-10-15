@@ -68,3 +68,13 @@
 - 手机项目抽屉里的“新对话”按钮（App 抽屉头的 edit 图标、Web `.new-chat` 行）和 Web 抽屉头的关闭钮：+ 和遮罩已承担，删掉。常驻侧栏 / 主聊天抽屉保留。
 - 起标题“只在前 3 回合试”的一次性规则并入“首次 + 每约 10 条复查”的同一个 maybe()。
 **成本**：无新接口；列表多一个字段 + 项目列表多一次“每段对话最后一条消息”的查询（≤100 行）；一列迁移；标题每 10 条一次小调用。
+
+## 2026-10-15 v2.92 §P 名字与头像（称呼、助手名、头像、首次问候）
+**全局决定（先写后做）**
+1. **存哪**：只有一个主人，没有 users 表（登录用户名来自 .env 的 OWNER_USERNAME）。HANDOFF 写的 `users.display_name / users.avatar` 改为 `app_settings` 一行 key=`identity`（和 reply_language 同一模式，**不用迁移**），头像文件一份 `DATA/identity/avatar`。为三个字段建单行表只会多一个数据源。唯一规则入口 `backend/app/identity.py`。
+2. **接口替换**：新 `GET/PATCH /api/profile`、`POST/DELETE /api/profile/avatar`、`GET /api/profile/avatar/<版本>`（?token=，地址随版本变，长缓存）、`POST /api/profile/greet`；**删掉 `GET /api/auth/me`**（及 smoke_auth_me、App `accountNameProvider`）——页头名字、顶栏头像都只读 profile 一处。头像按文件头认类型（App multipart 一律报 octet-stream），≤2 MB，客户端先缩到 512px。
+3. **首次问候在聊天里问（不做表单引导页）**：客户端在主聊天空白且 `greet=true` 时调一次 `POST /api/profile/greet`，服务器建「初次见面」对话、落一条固定的助手开场（定稿文案，零模型成本），客户端打开它。用户回答后，**只在这段对话里**系统提示易变段附一句“用户回答了就调 set_names”，直到存过名字或对话超过 6 条（零 token 外溢）。用户在设置里先填过名字就不再问候。
+4. **助手名进系统提示**：`settings.system_prompt` 去掉写死的“你是 Toyuis”，第一句由 `identity.persona` 生成（助手名 + 用户称呼），仍在稳定段最前——只在改名那一轮打掉一次提示缓存。新按需工具 `set_names`（和 set_reply_language 同处 agent/builtin/preferences.py），系统提示里“设置不是记忆”那句顺带提到它，用户以后说“叫我…/你就叫…”也走设置。
+5. **界面**：头像 = 已有 Avatar 组件（App 本来就画首字母；网页把人形图标换成首字母），有上传的头像就盖一张图、到了才淡入（只动 opacity）。“我”页页头：头像 + 名字整块是一颗键 → 个人资料弹层（App `features/me/profile_sheet.dart`，网页 `ProfileSheet.tsx`）：大头像（相册/拍照/移除）+ 称呼 + 助手名 + 保存，只送改了的字段。头像颜色仍在偏好设置（它是没有图时的底色）。
+**替换 / 删除**：GET /api/auth/me、smoke_auth_me.py、App accountNameProvider、网页 Identity 里自己请求 /api/auth/me 的代码、网页 Avatar 的人形图标、config 里写死的“你是 Toyuis”。
+**成本**：无迁移；问候零模型调用；引导句只在问候对话的前 6 条里出现（约 120 字）；改名后一轮提示缓存失效一次。

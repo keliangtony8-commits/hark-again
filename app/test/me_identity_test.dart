@@ -1,6 +1,8 @@
 // v0.88 “我的”页页头身份行 + 用量页空月份：
-// 取到用户名 → “用户名 · 域名”；老服务器（/api/auth/me 失败）→ 只显示域名；本月零调用 → 说明卡、不画每日图。
+// 取到用户名 → “用户名 · 域名”；取不到资料（GET /api/profile 失败）→ 只显示域名；本月零调用 → 说明卡、不画每日图。
+// v2.92 §P：有称呼用称呼、头像首字母；点名字打开个人资料弹层，只送改了的字段。
 import 'package:assistant/core/api.dart';
+import 'package:assistant/core/profile.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/me/me_screen.dart';
 import 'package:assistant/features/me/usage_chart.dart';
@@ -18,13 +20,25 @@ class _SignedIn extends SessionNotifier {
 }
 
 class _Api implements Api {
-  _Api({this.me = true, this.idle = false});
+  _Api({this.me = true, this.idle = false, this.displayName});
   final bool me, idle;
+  final String? displayName;
+  final patches = <Map<String, dynamic>>[];
+  Map<String, dynamic> _profile() => {'username': 'keliang', 'display_name': displayName, 'assistant_name': null, 'assistant_default': 'Toyuis', 'avatar': null, 'greet': false};
+  @override
+  Future<dynamic> patch(String path, Object body) async {
+    patches.add(Map<String, dynamic>.from(body as Map));
+    return {..._profile(), ...patches.last};
+  }
+
+  @override
+  String fileUrl(String path) => 'https://ai.example.com$path?token=t';
+
   @override
   Future<dynamic> get(String path) async {
-    if (path == '/api/auth/me') {
+    if (path == '/api/profile') {
       if (!me) throw Exception('404');
-      return {'username': 'keliang'};
+      return _profile();
     }
     if (path.startsWith('/api/usage')) {
       return {
@@ -66,11 +80,42 @@ void main() {
     expect(find.text('ai.example.com'), findsOneWidget);
   });
 
-  testWidgets('老服务器没有 /api/auth/me：只显示域名', (tester) async {
+  testWidgets('取不到个人资料：只显示域名', (tester) async {
     await _pump(tester, const MeScreen(), _Api(me: false));
     expect(_identity('服务器 ai.example.com'), findsOneWidget);
     expect(find.text('keliang'), findsNothing);
     expect(find.text('我的'), findsOneWidget);
+  });
+
+  testWidgets('有称呼：页头用称呼，头像首字母', (tester) async {
+    await _pump(tester, const MeScreen(), _Api(displayName: 'tony'));
+    expect(_identity('已登录 tony，服务器 ai.example.com'), findsOneWidget);
+    expect(find.text('T'), findsOneWidget);
+  });
+
+  testWidgets('点名字：个人资料弹层，只送改了的字段', (tester) async {
+    final api = _Api();
+    await _pump(tester, const MeScreen(), api);
+    await tester.tap(find.byKey(const Key('me-identity')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('profile-name')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('profile-assistant')), '小克');
+    await tester.tap(find.byKey(const Key('profile-save')));
+    await tester.pumpAndSettle();
+    expect(api.patches, [{'assistant_name': '小克'}]);
+    expect(find.byKey(const Key('profile-name')), findsNothing);
+  });
+
+  test('Profile：称呼优先、首字母、助手名默认', () {
+    final a = Profile.fromJson({'username': 'keliang', 'display_name': '  ', 'assistant_default': 'Toyuis'});
+    expect(a.name, 'keliang');
+    expect(a.initial, 'K');
+    expect(a.assistant, 'Toyuis');
+    final b = Profile.fromJson({'username': 'keliang', 'display_name': '阿亮', 'assistant_name': '小克', 'greet': true});
+    expect(b.initial, '阿');
+    expect(b.assistant, '小克');
+    expect(b.greet, isTrue);
+    expect(const Profile(username: '').initial, '我');
   });
 
   testWidgets('本月零调用：说明卡，不画每日图', (tester) async {

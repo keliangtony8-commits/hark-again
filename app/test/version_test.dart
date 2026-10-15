@@ -28,7 +28,7 @@ class _Api implements Api {
       if (version == null) throw Exception('404');
       return version;
     }
-    if (path == '/api/auth/me') return {'username': 'keliang'};
+    if (path == '/api/profile') return {'username': 'keliang', 'display_name': null, 'assistant_name': null, 'assistant_default': 'Toyuis', 'avatar': null, 'greet': false};
     if (path.startsWith('/api/usage')) {
       return {'currency': 'CNY', 'priced': [], 'today': {'calls': 0, 'tokens': 0, 'cost': 0}, 'month': {'calls': 0, 'tokens': 0, 'cost': 0}, 'daily': []};
     }
