@@ -95,7 +95,15 @@ class _SpotlightState extends State<Spotlight> {
   }
 
   Future<void> _reveal() async {
-    if (!mounted || !(SpotlightScope.maybeOf(context)?.claim(widget.id) ?? false)) return;
+    final scope = SpotlightScope.maybeOf(context);
+    if (scope == null || scope.focus != widget.id) return;
+    // 区块的数据是异步取的（登录设备、电脑页各节）：内容出来之前高度为 0，滚过去只会闪一条空边。等到有内容再定位，超时就不闪。
+    final deadline = DateTime.now().add(Timing.spotlightWait);
+    while (mounted && (context.size?.height ?? 0) < 1) {
+      if (DateTime.now().isAfter(deadline)) return;
+      await Future<void>.delayed(Timing.spotlightPoll);
+    }
+    if (!mounted || !scope.claim(widget.id)) return;
     await Scrollable.ensureVisible(context, alignment: Layout.spotlightAt, duration: context.motion(Motion.slow), curve: Motion.ease);
     if (mounted) setState(() => _play++);
   }

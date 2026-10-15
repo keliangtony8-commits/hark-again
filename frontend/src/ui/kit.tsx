@@ -76,7 +76,8 @@ function useSpotlight(root: RefObject<HTMLElement | null>) {
     if (!id || !node) return;
     const reveal = () => {
       const el = node.querySelector<HTMLElement>(`[data-spot="${CSS.escape(id)}"]`);
-      if (!el) return false;
+      // 区块数据异步取（登录设备、电脑页各节）：内容出来前高度为 0，这时滚过去只会闪一条空边 → 等有内容再定位，超时不闪
+      if (!el || el.getBoundingClientRect().height < 1) return false;
       const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
       el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
       flashOnce(el);

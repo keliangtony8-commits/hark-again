@@ -247,6 +247,9 @@ abstract final class Timing {
   static const liveRetryMin = Duration(seconds: 1); // 浏览器实时画面断了：1 s 起翻倍重连，封顶 15 s（= 网页 LIVE_RETRY_*）
   static const liveRetryMax = Duration(seconds: 15);
   static const takeoverInput = Duration(milliseconds: 80); // 接管页：拖动/滚动时最多这么久发一次（攒起来发，不是每帧一个请求）
+  // v3.0.2 设置搜索直达：被定位的区块数据是异步取的，内容出来（高度 > 0）才滚过去闪；最多等这么久（= 网页 SPOT_WAIT_MS）
+  static const spotlightWait = Duration(seconds: 5);
+  static const spotlightPoll = Duration(milliseconds: 100);
 }
 
 /// 玻璃材质（ui/glass.dart 只读这里）。真模糊很贵：只给浮层（顶栏、输入胶囊、弹层），列表里的卡片用“假玻璃”。

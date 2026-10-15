@@ -109,9 +109,9 @@ FIXTURES = {
         {"code": "zh-Hant", "label": "繁體中文"}, {"code": "en", "label": "English"}]},
     "/api/projects": [
         {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW,
-         "conversation_count": 12, "last_active_at": NOW},
+         "conversation_id": "c1", "last_active_at": NOW},
         {"id": "pr2", "name": "毕业设计", "emoji": "🎓", "rules": "", "updated_at": "2026-10-09T20:00:00+08:00",
-         "conversation_count": 3, "last_active_at": "2026-10-09T20:00:00+08:00"},
+         "conversation_id": "c9", "last_active_at": "2026-10-09T20:00:00+08:00"},
         {"id": "pr3", "name": "日本旅行", "emoji": "✈️", "rules": "预算 8000 以内\n优先公共交通", "updated_at": "2026-10-01T10:00:00+08:00",
          "conversation_count": 0, "last_active_at": None},
     ],
@@ -162,6 +162,11 @@ FIXTURES = {
              "total": "¥229.00", "payment": "招商银行 储蓄卡 8841", "destination": "学校南门菜鸟驿站",
              "action": "确认下单", "state": "pending"}]},
     ]},
+    # v3.0 设置搜索定位截图：安全页（两步验证 + 登录设备）
+    "/api/auth/2fa": {"enabled": False, "recovery_left": 0},
+    "/api/auth/sessions": {"sessions": [
+        {"id": "s1", "label": "Chrome · Windows", "kind": "browser", "created_at": "2026-10-09T20:00:00+08:00", "last_seen_at": "2026-10-11T10:30:00+08:00", "current": True},
+        {"id": "s2", "label": "Toyuis App · Android", "kind": "app", "created_at": "2026-10-08T09:00:00+08:00", "last_seen_at": "2026-10-11T08:10:00+08:00", "current": False}]},
     "/api/projects/pr1/files": [
         {"path": "真题/2024 数一.pdf", "name": "2024 数一.pdf", "size": 3145728, "mime": "application/pdf", "modified": 1791680400},
         {"path": "错题本.md", "name": "错题本.md", "size": 9000, "mime": "text/markdown", "modified": 1791600000},
@@ -171,7 +176,7 @@ FIXTURES = {
     # 项目首屏“电脑”一节：缺了这份 useComputer 读 running_jobs.length 会让整页白屏（v2.91 补上）
     "/api/projects/pr1/computer": {"workspace": "pr1", "name": "考研数学", "sandbox": {"state": "stopped"}, "disk_used": 52428800,
                                    "disk_partial": False, "running_jobs": [], "services": []},
-    "/api/projects/pr1": {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW},
+    "/api/projects/pr1": {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW, "conversation_id": "c1"},
     # 项目首屏的“电脑”一节（v1.25）。形状照 frontend/src/lib/computer.ts 的 ComputerStatus；
     # 缺了它页面会白屏（读 s.sandbox.state 时炸），所以这张图以前一直拍不出来。
     "/api/projects/pr1/computer": COMPUTER,
@@ -363,10 +368,8 @@ def main():
                 # v1.16：项目里的对话——回复下“存到项目文件”→ 已存进一行；输入框“项目里的文件”选择弹层 → 待发名片
                 page.goto(base + "/#/projects/pr1")
                 page.wait_for_timeout(600)
-                # 手机上历史收在抽屉里（第一处同名文字不可见）→ 点首屏“最近的对话”那行
-                (page.get_by_text("DeepSeek 和 GPT 的价格对比").first if name == "desktop"
-                 else page.locator(".project-home button.row", has_text="DeepSeek 和 GPT 的价格对比")).click()
-                page.wait_for_timeout(800)
+                # v2.95 项目 = 一段对话：进项目直接就是那段聊天（c1），不再点对话列表
+                page.wait_for_timeout(400)
                 # v2.90.2：“存到项目文件”已经收进回复的 ⋯ 菜单（点菜单项“存成文件”）。
                 # 挑那条有 markdown 的回复（假数据里的 m2）；最后一条 assistant 往往是订单卡，没有这一项。
                 # ⋯ 平时 opacity:0（hover 才显形，触屏设备常显），所以先 hover 再点，否则第一次点会落空。
@@ -453,6 +456,18 @@ def main():
                 page.wait_for_timeout(500)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-dialog.png"))
                 page.keyboard.press("Escape")
+                # v3.0 “我的”页底部设置搜索：有结果 / 无结果 / 点结果定位并闪一下
+                page.goto(base + "/#/me")
+                page.wait_for_timeout(500)
+                page.get_by_placeholder("搜索设置").fill("深色")
+                page.wait_for_timeout(500)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-me-search.png"))
+                page.get_by_placeholder("搜索设置").fill("飞机票")
+                page.wait_for_timeout(500)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-me-search-empty.png"))
+                page.goto(base + "/#/me/security?focus=sessions")
+                page.wait_for_timeout(450)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-me-focus.png"))
                 if theme == "light":
                     page.goto(base + "/#/")
                     page.wait_for_timeout(500)
@@ -497,22 +512,10 @@ def section_n():
                 page.goto(base + "/#/projects/pr1")
                 page.wait_for_timeout(800)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-n-project-home.png"))
-                if name == "phone":
-                    page.get_by_role("button", name="项目对话").click()
+                if name == "phone":  # v2.95：左上 ≡ = 项目切换栏（宽屏常驻左侧），开着时同一颗钮是“新建项目”
+                    page.get_by_role("button", name="切换项目").click()
                     page.wait_for_timeout(500)
                     page.screenshot(path=str(OUT / f"{name}-{theme}-n-drawer.png"))
-                    page.get_by_role("button", name="新对话").click()  # 同一颗钮：+ = 新对话、收起
-                    page.wait_for_timeout(400)
-                    page.locator(".project-home button.row", has_text="DeepSeek 和 GPT 的价格对比").click()
-                else:
-                    page.locator(".conv-item", has_text="DeepSeek 和 GPT 的价格对比").click()
-                page.wait_for_timeout(600)
-                page.screenshot(path=str(OUT / f"{name}-{theme}-n-pill.png"))
-                page.wait_for_timeout(1800)
-                page.screenshot(path=str(OUT / f"{name}-{theme}-n-pill-hidden.png"))
-                page.evaluate("const t = document.querySelector('.thread'); t.style.scrollBehavior = 'auto'; t.scrollBy(0, -200)")
-                page.wait_for_timeout(500)
-                page.screenshot(path=str(OUT / f"{name}-{theme}-n-pill-scroll.png"))
                 ctx.close()
         browser.close()
     print("wrote", OUT)

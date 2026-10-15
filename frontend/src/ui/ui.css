@@ -21,6 +21,9 @@
 
 .section { margin-top: var(--section-gap); }
 .section:first-child { margin-top: 0; }
+/* v3.0.2：<Spot> 外壳里的分区仍按“分区之间”留距（否则它成了外壳的第一个孩子、间距被清零）；外壳本身在页首时才清零 */
+.spot > .section:first-child { margin-top: var(--section-gap); }
+.spot:first-child > .section:first-child { margin-top: 0; }
 .section-title { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); color: var(--text-3); margin: 0 var(--sp-1) var(--sp-3); }
 
 /* 分组列表卡（App GlassGroup）：假玻璃、大圆角、行间内缩分隔线 */

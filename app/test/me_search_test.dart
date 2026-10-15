@@ -223,6 +223,39 @@ void main() {
       expect(flash.play, 1);
     });
 
+    testWidgets('目标区块的数据晚到：内容出来前不闪，出来后才滚到并闪（不闪空边）', (tester) async {
+      await _phone(tester);
+      final loaded = ValueNotifier(false);
+      await tester.pumpWidget(_app(
+        home: SpotlightScope(
+          focus: 'late',
+          child: Scaffold(
+            body: PageBody(children: [
+              for (var i = 0; i < 8; i++) Container(height: 200, margin: const EdgeInsets.only(bottom: 16), color: Colors.black12),
+              Spotlight(
+                id: 'late',
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: loaded,
+                  builder: (_, on, _) => on ? const SizedBox(key: Key('late'), height: 64) : const SizedBox.shrink(),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      FlashHighlight flash() => tester.widget<FlashHighlight>(find.byType(FlashHighlight, skipOffstage: false).last);
+      expect(flash().play, 0);
+      loaded.value = true;
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(flash().play, 1);
+      final r = tester.getRect(find.byKey(const Key('late')));
+      expect(r.top, greaterThanOrEqualTo(0));
+      expect(r.bottom, lessThanOrEqualTo(892));
+    });
+
     testWidgets('不带 focus：不滚、不多建屏外内容', (tester) async {
       await _phone(tester);
       await tester.pumpWidget(_app(home: page(null)));

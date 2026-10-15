@@ -239,3 +239,11 @@
 **代价**：下次编 APK 要重新下 gradle / pub 依赖，多几分钟（用户已接受：“把不重要的删掉”）。
 **测试**：新 `deploy/tests/test_build_apk_cleanup.sh`（临时目录模拟 /opt /root：APK 带版本号取出且只留一份、部署包保留、缓存清掉、gradle 只留 wrapper、SDK/Flutter/JDK 不动、构建失败也清缓存不删上一份 APK）；做过变异验证（去掉 `! -name wrapper` 即红）。`bash -n` 两个脚本过；test_install.sh 过。未在 VPS 实跑（按规则不部署、不编 APK）。
 
+## 2026-10-15 v3.0.2 v3.0 截图验收发现的两个问题（本机装好 Chromium 后第一次真渲染网页）
+**环境**：/tmp/pw（playwright + chromium + install-deps）装好，`frontend/scripts/shots.py` 能跑了。脚本里 v2.95 起已失效的步骤（点项目内对话列表 `.project-home`、项目对话抽屉“项目对话 / 新对话”）删掉改成“进项目即聊天、≡=切换项目”；补 `/api/auth/2fa`、`/api/auth/sessions` 假数据；新增 me-search / me-search-empty / me-focus 三张。
+**发现并修**：
+1. 定位目标是异步加载的区块（登录设备、电脑页各节）时，外壳先出现、高度 0 → 立即滚过去并对一条空边闪一下，之后内容才出来。两端都改为“目标有高度才定位”：Web `useSpotlight` 里 `getBoundingClientRect().height < 1` 视为未出现、继续等 MutationObserver（上限仍 5 秒）；App `Spotlight._reveal` 每 100 ms 看一次 `context.size`，最多 5 秒（`Timing.spotlightWait/spotlightPoll`，= 网页 SPOT_WAIT_MS），有高度才 claim + ensureVisible + 闪。新测试“数据晚到”，变异验证过（去掉等待即红）。
+2. Web `<Spot>` 外壳让里面的 `.section` 变成第一个孩子 → `.section:first-child{margin-top:0}` 把分区间距清零（安全页“登录设备”紧贴上面的卡）。ui.css 加 `.spot > .section:first-child` 恢复 `--section-gap`、外壳在页首时仍为 0。App 分区间距在 SectionTitle 自身 padding 里，无此问题。
+**看过没问题**：搜索结果 / 无结果 / 胶囊明暗、桌面宽度居中、定位后位置。**仍未看**：App 截图（需中文字体环境）、真机。
+**另记（未改，属既有问题）**：手机宽度 400 下项目聊天输入框带“快速”芯片时，占位符“给 Toyuis 发消息”被截成“给 Toyuis 发消”。
+
