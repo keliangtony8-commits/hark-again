@@ -1,6 +1,6 @@
 # Toyuis 交接文档（2026-10-15，v2.99.0）
 
-> **给每个接手的 agent**：先读第二节宗旨（1–16 条，用户原话）。用户在对话里说出的任何纲领性要求，当轮带原话和日期补进第二节，这是硬规矩（见第 16 条）。
+> **给每个接手的 agent**：先读第二节宗旨（1–17 条）。用户在对话里说出的任何纲领性要求，当轮用明确、不会被误解的话（不必照抄原话）带日期补进第二节，这是硬规矩（见第 16 条）。
 
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
@@ -30,7 +30,13 @@
 
 14. **不会就找办法，不硬猜**（用户 2026-10-15 17:28：“自己不会的话可以去找可以参考或者相关skills，反正有办法”）：拿不准的交互/实现，先找相关技能，再查官方文档、成熟开源实现、设计规范（Material / Apple HIG / Hark 表现），借鉴后按本项目 token 与组件自己实现，参考来源记进 devlog。
 15. **连续推进，不停下等验收**（用户 2026-10-15：“我又不着急去检验，我可以等你做好好几个版本之后再去校验”“继续，别停下来”）：做完一版就沿本文件第五节做下一项，不等确认；每完成一块立刻更新本文件（做了什么/没做什么），中途中断也要反映真实进度；额度用在优化项目上，不做无必要的重复工作。
-16. **用户的纲领性要求一律写进本节**（用户 2026-10-15：“以后我的这些纲领性的东西都写进去，因为我经常换不同的agent让他去接着你们的进度去完善这个项目”）：接手的 agent 只认本文件。用户说出的原则、偏好、做事方式，当轮就带原话和日期写进第二节，不只留在聊天或私有记忆里。**这条对每一个接手的 agent 都适用**（用户 2026-10-15 17:30：“把这个也写进去，让其他agent也要这么做”）：不管谁在做，用户新说的纲领都由当时那个 agent 当轮写进来，并把本条原样传下去。
+16. **用户的纲领性要求一律写进本节**（用户 2026-10-15 定）：用户常换不同的 agent 接手，接手者只认本文件。用户说出的原则、偏好、做事方式，当轮写进第二节，写日期。**用自己的话写清楚意思，不必照抄原话**：口语原话容易被误读，要写成谁都不会理解错的明确规则，必要时写“做什么 / 不做什么 / 拿不准怎么办”，并给具体例子。这条对每一个接手的 agent 都适用，要原样传下去。
+
+17. **没用的就删，有用的别删**（用户 2026-10-15 定；起因：VPS 35G 硬盘一天用到 77%，清理后 49%）。判断标准只有一条：**还用不用得上**。
+   - **必须删**（能再生成且确定用不上）：编 APK 后的 gradle 缓存（`/opt/apkbuild/gradle` 下除 `wrapper` 外全部）、`/root/.pub-cache`、`/opt/apkbuild/src`；Docker 悬空镜像（`docker image prune -f`，**不带 -a**）和构建缓存（`docker builder prune -f`）；`/root` 下旧版本代码包和旧日志（只留最近一版）；用完的临时 swap、临时脚本输出、测试临时文件。
+   - **绝不能删**（删了要重装、会坏、或丢数据）：安卓 SDK、Flutter、JDK（`/opt/apkbuild/sdk|flutter|jdk`）；正在运行或 compose 引用的镜像（含 `assistant-sandbox`，即使当前没容器在跑）；数据库和数据卷（`/opt/assistant/data`、Docker volumes）；`/root/backups`；最近一版代码包（如 `v293.tgz`、`app-v2911-backup.tgz` 这类最近备份）和最近两份 `.env` 备份；部署脚本本身；`/swap.img`（常驻 swap）。
+   - **拿不准就不删**，先查它被谁用（grep compose/脚本/代码），还拿不准就问用户；删前删后都 `df -h`，删后确认容器全部 Up、`/api/version` 正常。
+   - **能自动的写进脚本**：`deploy/build-apk.sh` 结尾清上面“必须删”里的 APK 缓存；更新脚本结尾 `docker image prune -f` + `docker builder prune -f`（v3.0 之后下一版落地）。本地沙盒同理：测试日志、临时截图用完就删。
 
 ## 三、工程规矩（看代码 / 改代码时）
 - **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**
@@ -51,6 +57,7 @@
   - **2026-10-15 约 11:05 已部署 v2.92.0**（`/api/version` = 2.92.0，容器全部 Up）。旧版备份 `/root/app-v2911-backup.tgz`，.env 备份 `/root/env.bak.v292`；`docker builder prune` 后磁盘 80%。
   - 真模型（StepFun）验证通过：主聊天说“以后叫我小测，你就叫阿星”→ 调用 set_names（步骤“保存称呼”），profile 变为 小测 / 阿星；验证后已删测试对话和 identity 行，greet 恢复为 true（保留用户自己的首次问候体验）。
   - 未验：首次问候对话（greet 流程本身）在真机上的表现；回复里出现“一直陪着你”偏口语，提示词可再收紧。v2.92 安装包（APK）尚未构建（用户说不急）。
+  - **2026-10-15 18:10 VPS 清理**：删 gradle 缓存（/opt/apkbuild/gradle 只留 wrapper）、/opt/apkbuild/src、/root/.pub-cache、/root 下旧版本包和旧日志、Docker 悬空镜像与构建缓存，关掉并删除 /swapfile2（4G，未使用；保留 /swap.img 1.5G）；硬盘 26G→17G（49%），容器全部 Up，线上仍 2.93.0。下次编 APK 会重新下载 gradle/pub 依赖（慢几分钟）；内存不够时临时加 swap，编完删掉。用户 10-15 原话：‘把不重要的删掉，这样太浪费了’——以后编完 APK 就清缓存。
   - 坑：部署时用 `pgrep -f 'deploy/update.sh'` 轮询会匹配到轮询命令自身（永远“还在跑”），改用 pid 文件或 `pgrep -x`/排除自身。
 
 ## 五、用户提过但还没完成的要求（按优先级）
@@ -129,6 +136,12 @@
      - [x] 测试：flutter analyze 0、flutter test 682 过 8 跳过（新增 haptics_test 3 例、content_blocks 图片一摞 2 例含双击放大锁翻页）、npm run build 过（架构守卫 217 文件）、后端 smoke 202/202（不含 smoke_stepfun；smoke_preview_ws 并行时端口冲突一次，单跑过；后端本版只改版本号）
      - [x] 发布 v2.99：VERSION 2.99.0、CHANGELOG、check_version、commit + tag v2.99 + push（不部署、不出 APK）
      - [ ] App 明暗只在临时截图测试里看过（未提交）；Web 未在浏览器实点 / 截图（本机无 Chromium）；真机手感（扇开、翻页、震动强弱）未验
+   - **v3.0 “我的”页底部设置搜索进度（2026-10-15，按块如实记录）**：决定、删除清单、参考来源见 docs/devlog.md「2026-10-15 v3.0」。**版本号 2.99 之后因 brand/sync.py 构建号规则（功能轮 ≤ 99）进位到 3.0.0，不代表破坏性改动**（协议 / 接口 / 数据库 / MIN_CLIENT 不变）。
+     - [x] 核对：全仓没有已存在的设置搜索，无需合并；devlog 先写决定、参考（Apple 设置搜索在底部、LINE 滚到该项并闪一下）、删除清单
+     - [ ] App：`features/me/me_index.dart` 索引 + 匹配；“我的”页底部玻璃搜索胶囊（FloatingFooter）+ 结果 / 无结果态；`SpotlightScope` / `Spotlight` 定位并闪一下（复用 FlashHighlight）
+     - [ ] Web：`features/me/meIndex.ts`；MeScreen 改用 `Page footer`；`?focus=` 定位（Page 内统一处理）；`.msg.flash` 并入通用 `flashOnce` / `.flash`
+     - [ ] 测试 + 发布 v3.0
+     - ⚠️ 2026-10-15 18:17 因额度用完中断：App/Web 半成品已推到分支 `wip-v3.0`（未测试、未发版，main 不含）。接手：`git checkout wip-v3.0`，先跑 flutter analyze / npm run build 看状态再继续；VERSION 仍是 2.99.0。
 7. 后台任务/定时任务的运行对话不要出现在主对话列表（用户叫“子对话”，嫌乱）——确认 v2.75 修复在 VPS 上生效。
 8. Web 截图重拍、banner“稍后再看”。
 9. SearXNG 集成测试（需 VPS）；关闭 VPS SSH 密码登录。
