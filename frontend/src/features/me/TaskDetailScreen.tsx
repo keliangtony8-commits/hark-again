@@ -12,7 +12,7 @@ import type { JobInfo } from "../../lib/types";
 import { TaskIcon } from "./SchedulePicker";
 import type { ScheduledTask, TaskRun } from "../../lib/types";
 import { IconCheck, IconChevron, IconClock, IconClose, IconLock, IconSnooze, IconEdit, IconHistory, IconPause, IconPlay, IconTrash } from "../../ui/icons";
-import { Hint, Page, PageHeader, Section, Skeleton, Toggle } from "../../ui/kit";
+import { Hint, ListGroup, Page, PageHeader, Section, Skeleton, Toggle } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf } from "./TaskSheet";
 import { taskModelLabel } from "./TaskModelPicker";
 import { useModelCatalog } from "../../hooks/useModelCatalog";
@@ -93,7 +93,7 @@ export default function TaskDetailScreen() {
         ) : runs === null ? <Skeleton /> : runs.length === 0 && !task.run_requested ? (
           <Hint icon={<IconHistory size={26} />} title="还没运行过" text="到点会自动运行，也可以点上面的“立即运行”试一次。" />
         ) : (
-          <div className="list task-runs">
+          <ListGroup className="task-runs">
             {queued && (
               <div className="row run-row" aria-label="排队中，马上开始">
                 <span className="run-status"><span className="run-pulse muted" /></span>
@@ -102,7 +102,7 @@ export default function TaskDetailScreen() {
             )}
             {runs.map((r, i) => <RunRow key={r.id} run={r} index={i} onOpen={(cid) => nav("/chat", { state: { open: cid } })}
               onLog={(jid) => http.get<JobInfo>(`/api/jobs/${jid}`).then(setLog).catch(() => {})} />)}
-          </div>
+          </ListGroup>
         )}
       </Section>
 

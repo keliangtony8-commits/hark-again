@@ -6,8 +6,8 @@ import {
   type TwoFactorSetup, type TwoFactorStatus,
 } from "../../lib/twoFactor";
 import CopyButton from "../../ui/CopyButton";
-import { IconChevron, IconKey, IconLock, IconShield } from "../../ui/icons";
-import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton } from "../../ui/kit";
+import { IconKey, IconLock, IconShield } from "../../ui/icons";
+import { ListGroup, ListRow, Page, PageHeader, PageIntro, Section, Sheet, Skeleton } from "../../ui/kit";
 import LoginSessions from "./LoginSessions";
 
 /** 安全（v2.58，= App features/me/security_screen.dart；对标 Hark 设置 → 安全 → 两步验证）。
@@ -48,32 +48,19 @@ export default function SecurityScreen() {
         <div className="error-banner">{err} <button className="text-link" onClick={load}>重试</button></div>
       ) : !s ? <Skeleton rows={2} /> : (
         <Section enter={1}>
-          <div key={String(s.enabled)} className="list fade-swap">
+          <ListGroup key={String(s.enabled)} className="fade-swap">
             {!s.enabled ? (
-              <button className="row" onClick={start}>
-                <span className="row-icon"><IconShield /></span>
-                <div className="row-body"><div className="row-title">打开两步验证</div>
-                  <div className="row-sub">{s.pending ? "上次没设置完，重新扫一次码" : "大约一分钟，需要一个验证器 App"}</div></div>
-                <span className="row-trail"><IconChevron /></span>
-              </button>
+              <ListRow onClick={start} icon={<IconShield />} title="打开两步验证"
+                sub={s.pending ? "上次没设置完，重新扫一次码" : "大约一分钟，需要一个验证器 App"} />
             ) : (<>
-              <div className="row">
-                <span className="row-icon"><IconLock /></span>
-                <div className="row-body"><div className="row-title">两步验证</div>
-                  <div className="row-sub">{s.enabled_at ? `${new Date(s.enabled_at).toLocaleDateString("zh-CN")} 打开` : "已开"}</div></div>
-              </div>
-              <button className="row" onClick={() => setAsk({ kind: "recovery" })}>
-                <span className="row-icon"><IconKey /></span>
-                <div className="row-body"><div className="row-title">恢复码</div>
-                  <div className="row-sub">{s.recovery_left <= RECOVERY_LOW && <span className="warn-text">{s.recovery_left === 0 ? "用完了" : "快用完了"} · </span>}{recoveryLine(s.recovery_left)}</div></div>
-                <span className="row-trail"><IconChevron /></span>
-              </button>
-              <button className="row" onClick={() => setAsk({ kind: "disable" })}>
-                <span className="row-icon"><IconShield /></span>
-                <div className="row-body"><div className="row-title danger-text">关闭两步验证</div><div className="row-sub">需要密码和一个验证码</div></div>
-              </button>
+              <ListRow icon={<IconLock />} title="两步验证"
+                sub={s.enabled_at ? `${new Date(s.enabled_at).toLocaleDateString("zh-CN")} 打开` : "已开"} />
+              <ListRow onClick={() => setAsk({ kind: "recovery" })} icon={<IconKey />} title="恢复码"
+                sub={<>{s.recovery_left <= RECOVERY_LOW && <span className="warn-text">{s.recovery_left === 0 ? "用完了" : "快用完了"} · </span>}{recoveryLine(s.recovery_left)}</>} />
+              <ListRow onClick={() => setAsk({ kind: "disable" })} trail={null} icon={<IconShield />}
+                title={<span className="danger-text">关闭两步验证</span>} sub="需要密码和一个验证码" />
             </>)}
-          </div>
+          </ListGroup>
         </Section>
       )}
       <LoginSessions enter={2} reloadKey={devicesKey} onNote={setNote} />

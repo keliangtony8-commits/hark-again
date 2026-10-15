@@ -3,7 +3,7 @@ import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { Skill } from "../../lib/types";
 import { IconChevron, IconPlus, IconSearch, IconSpark } from "../../ui/icons";
-import { Hint, Page, PageHeader, PageIntro, SearchField, Section, Segmented, Sheet, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
+import { Hint, ListGroup, Page, PageHeader, PageIntro, SearchField, Section, Segmented, Sheet, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
 import { confirmDialog } from "../../ui/dialog";
 import Markdown from "../../ui/Markdown";
 import { SKILL_SEARCH_FROM, SKILL_STARTERS, filterSkills, fromBuiltin, isOn, skillSummary } from "./skillLibrary";
@@ -72,7 +72,7 @@ export default function SkillsScreen() {
   let n = 0; // 整页错峰序号
 
   const rows = (items: Skill[]) => (
-    <div className="list">
+    <ListGroup>
       {items.map((s) => (
         <div key={s.id} className={`row enter ${onOf(s) ? "" : "row-off"}`} style={stagger(++n)}>
           <button className="skill-row" onClick={() => show(s)}>
@@ -84,7 +84,7 @@ export default function SkillsScreen() {
           <Toggle on={onOf(s)} label={`启用「${s.name}」`} onChange={(v) => { if (!(s.id in pending)) toggle(s, v); }} />
         </div>
       ))}
-    </div>
+    </ListGroup>
   );
 
   return (

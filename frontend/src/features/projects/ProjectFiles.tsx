@@ -5,7 +5,7 @@ import { extOf } from "../../lib/files";
 import { projectFileLine } from "./projectHomeRules";
 import type { ProjectFile } from "../../lib/types";
 import { IconDownload, IconFile, IconTrash, IconUpload } from "../../ui/icons";
-import { Hint, Sheet, Skeleton } from "../../ui/kit";
+import { Hint, ListGroup, ListRow, Sheet, Skeleton } from "../../ui/kit";
 
 /** 项目工作区文件：你上传的资料，以及我在沙盒里生成的文件。 */
 export default function ProjectFiles({ projectId, onClose }: { projectId: string; onClose: () => void }) {
@@ -33,16 +33,14 @@ export default function ProjectFiles({ projectId, onClose }: { projectId: string
       {files === null ? <Skeleton /> : files.length === 0 ? (
         <Hint icon={<IconFile size={26} />} title="还没有文件" text={workspaceEmptyText(projectId)} />
       ) : (
-        <div className="list">
+        <ListGroup>
           {files.map((f) => (
-            <div key={f.path} className="row">
-              <span className="row-icon file-ext">{extOf(f.name)}</span>
-              <div className="row-body"><div className="row-title">{f.name}</div><div className="row-sub">{projectFileLine(f)}</div></div>
+            <ListRow key={f.path} icon={extOf(f.name)} iconClass="file-ext" title={f.name} sub={projectFileLine(f)} control={<>
               <a className="icon-btn" href={fileUrl(`${base}/${enc(f.path)}`)} download={f.name} aria-label="下载"><IconDownload /></a>
               <button className="icon-btn" onClick={() => remove(f.path)} aria-label="删除"><IconTrash /></button>
-            </div>
+            </>} />
           ))}
-        </div>
+        </ListGroup>
       )}
     </Sheet>
   );

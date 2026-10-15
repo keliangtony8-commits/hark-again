@@ -6,7 +6,7 @@ import { formatWhen } from "../../lib/format";
 import type { FileBlock, ProjectFile } from "../../lib/types";
 import { projectFileLine } from "./projectHomeRules";
 import { IconCheck, IconFile } from "../../ui/icons";
-import { Hint, Sheet, Skeleton, stagger } from "../../ui/kit";
+import { Hint, ListGroup, Sheet, Skeleton, stagger } from "../../ui/kit";
 
 /** 引用项目文件（v1.13，与 App pickProjectFiles 同款）：多选；已在这条消息里的（taken）显示但不能再选；
  *  room = 还能加几个。确认 → onPick(新选的，按列表顺序)。只带引用，内容由服务器每轮从项目里读。 */
@@ -45,7 +45,7 @@ export default function ProjectFilePicker({ projectId, taken, room, onPick, onCl
         : files === null ? <Skeleton />
         : files.length === 0 ? <Hint icon={<IconFile size={26} />} title="文件夹是空的" text={workspacePickEmptyText(projectId)} />
         : (
-          <div className="list" role="group" aria-label={workspaceFilesTitle(projectId)}>
+          <ListGroup role="group" label={workspaceFilesTitle(projectId)}>
             {files.map((f, i) => {
               const isTaken = taken.has(f.path);
               const on = isTaken || chosen.has(f.path);
@@ -61,7 +61,7 @@ export default function ProjectFilePicker({ projectId, taken, room, onPick, onCl
                 </button>
               );
             })}
-          </div>
+          </ListGroup>
         )}
     </Sheet>
   );

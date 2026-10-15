@@ -4,7 +4,7 @@ import { budgetLevel, budgetRatio, formatMoney, formatTokens, hasUnpriced, isIdl
 import { downloadText } from "../../lib/export";
 import { usageCsv, usageCsvFileName } from "../../lib/usageCsv";
 import { IconDownload, IconGauge } from "../../ui/icons";
-import { Hint, stagger } from "../../ui/kit";
+import { Hint, ListGroup, ListRow, stagger } from "../../ui/kit";
 import CountUp from "../../ui/CountUp";
 import DailyChart from "./DailyChart";
 import DayBreakdown from "./DayBreakdown";
@@ -23,7 +23,7 @@ export default function UsageCard() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  if (error) return <div className="list"><button className="row" onClick={load}><div className="row-body"><div className="row-title">用量加载失败</div><div className="row-sub">{error} · 点这里重试</div></div></button></div>;
+  if (error) return <ListGroup><ListRow onClick={load} trail={null} title="用量加载失败" sub={`${error} · 点这里重试`} /></ListGroup>;
   // 骨架形状跟报表一致（月卡 / 两格 / 每日图，= App _ReportSkeleton），换成内容时整块淡入不跳版
   if (!r) return <div className="usage usage-skeleton" aria-busy="true"><div className="skeleton sk-hero" /><div className="sk-stats"><div className="skeleton sk-stat" /><div className="skeleton sk-stat" /></div><div className="skeleton sk-chart" /></div>;
 

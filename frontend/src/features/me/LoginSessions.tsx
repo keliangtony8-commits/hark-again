@@ -3,7 +3,7 @@ import { auth, http } from "../../lib/api";
 import { LOGIN_SESSIONS_PATH, type LoginSession, loginSessionLine, loginSessionsSummary, signedOutToast } from "../../lib/loginSessions";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
 import { IconComputer, IconGlobe, IconLogout, IconPhone } from "../../ui/icons";
-import { Section } from "../../ui/kit";
+import { ListGroup, ListRow, Section } from "../../ui/kit";
 
 /** “安全”页的登录设备一节（v2.61，= App features/me/login_sessions_section.dart；对标 Hark 设置 → 安全）。
  *  本机排第一、行尾“本机”；别的行尾“退出”（确认后立刻作废那台的登录）；别的设备 ≥1 台时组尾“退出其他所有设备”。
@@ -44,24 +44,17 @@ export default function LoginSessions({ enter, reloadKey, onNote }: { enter?: nu
   const others = list.some((s) => !s.current);
   return (
     <Section title="登录设备" action={<span className="section-count">{loginSessionsSummary(list)}</span>} enter={enter}>
-      <div className="list">
+      <ListGroup>
         {list.map((s, i) => (
-          <div key={s.id} className="row enter" style={{ animationDelay: `calc(var(--stagger) * ${i})` }}>
-            <span className="row-icon">{s.kind === "app" ? <IconPhone /> : s.kind === "browser" ? <IconComputer /> : <IconGlobe />}</span>
-            <div className="row-body"><div className="row-title">{s.label}</div><div className="row-sub">{loginSessionLine(s)}</div></div>
-            {s.current
-              ? <span className="row-trail">本机</span>
-              : <button className="btn btn-ghost btn-sm" disabled={busy.has(s.id)} onClick={() => void revoke(s)}>{busy.has(s.id) ? "正在退出" : "退出"}</button>}
-          </div>
+          <ListRow key={s.id} enter={i} icon={s.kind === "app" ? <IconPhone /> : s.kind === "browser" ? <IconComputer /> : <IconGlobe />}
+            title={s.label} sub={loginSessionLine(s)} trail={s.current ? "本机" : undefined}
+            control={!s.current && <button className="btn btn-ghost btn-sm" disabled={busy.has(s.id)} onClick={() => void revoke(s)}>{busy.has(s.id) ? "正在退出" : "退出"}</button>} />
         ))}
         {others && (
-          <button className="row" disabled={busy.has("*")} onClick={() => void revokeOthers()}>
-            <span className="row-icon"><IconLogout /></span>
-            <div className="row-body"><div className="row-title danger-text">{busy.has("*") ? "正在退出…" : "退出其他所有设备"}</div>
-              <div className="row-sub">手机丢了、在别人电脑上登过时用</div></div>
-          </button>
+          <ListRow onClick={() => void revokeOthers()} disabled={busy.has("*")} trail={null} icon={<IconLogout />}
+            title={<span className="danger-text">{busy.has("*") ? "正在退出…" : "退出其他所有设备"}</span>} sub="手机丢了、在别人电脑上登过时用" />
         )}
-      </div>
+      </ListGroup>
     </Section>
   );
 }

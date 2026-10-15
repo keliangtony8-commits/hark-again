@@ -5,7 +5,7 @@ import { formatWhen } from "../../lib/format";
 import { SAVE_REPLY_LABEL, saveTargets, savedReplyText, type SavedReply } from "../../lib/saveReply";
 import type { Project } from "../../lib/types";
 import { IconFolder } from "../../ui/icons";
-import { Sheet, Skeleton, stagger } from "../../ui/kit";
+import { ListGroup, ListRow, Sheet, Skeleton } from "../../ui/kit";
 import { PERSONAL_WORKSPACE, isPersonalWorkspace, workspaceFilesTitle } from "../../lib/workspace";
 
 /** 回复动作菜单里的“存成文件”（v1.15；§I 起从操作条挪进“⋯”菜单；与 App saveReplyToProject 同款）——网页唯一入口。
@@ -57,23 +57,18 @@ function ProjectPicker({ onPick, onClose }: { onPick: (pid: string) => void; onC
       <p className="pick-note">存成一份 Markdown，之后的对话都能引用。</p>
       {list === null && !err ? <Skeleton />
         : (
-          <div className="list" role="list" aria-label="存到哪里">
-            <button className="row enter" style={stagger(0)} onClick={() => onPick(PERSONAL_WORKSPACE)}>
-              <span className="row-icon" aria-hidden><IconFolder /></span>
-              <span className="row-body"><span className="row-title">{workspaceFilesTitle(PERSONAL_WORKSPACE)}</span><span className="row-sub">主聊天的云端电脑</span></span>
-            </button>
+          <ListGroup role="list" label="存到哪里">
+            <ListRow enter={0} onClick={() => onPick(PERSONAL_WORKSPACE)} trail={null} icon={<IconFolder />}
+              title={workspaceFilesTitle(PERSONAL_WORKSPACE)} sub="主聊天的云端电脑" />
             {err && <p className="pick-note is-warn">项目列表没加载出来：{err}</p>}
             {(list ?? []).map((p, i) => {
               const at = p.last_active_at ?? p.updated_at;
               return (
-                <button key={p.id} className="row enter" style={stagger(i + 1)} onClick={() => onPick(p.id)}>
-                  <span className="row-icon" aria-hidden>{p.emoji}</span>
-                  <span className="row-body"><span className="row-title">{p.name}</span></span>
-                  {at && <span className="row-hint">{formatWhen(at)}</span>}
-                </button>
+                <ListRow key={p.id} enter={i + 1} onClick={() => onPick(p.id)} trail={null} icon={p.emoji} title={p.name}
+                  control={at && <span className="row-hint">{formatWhen(at)}</span>} />
               );
             })}
-          </div>
+          </ListGroup>
         )}
     </Sheet>
   );

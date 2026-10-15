@@ -172,3 +172,18 @@
 **迁移范围（本版）**：App 名字全统一、设置式列表行全走 ListRow；仍自己画行的 6 个文件登记在 `test/list_kit_test.dart`（抽屉里的对话 / 项目行、电脑页带进度条的状态行、运行记录多行错误说明、用量分享行——不是设置式列表行，硬并会改坏版式），只减不增；Web 迁了“我的”页 / 个人资料收拢页 / 我的电脑 Pages 行 / 关于 / 偏好设置 / 钱包 / 反馈 / Pages / 密钥行 / 记忆 / 记忆笔记 / 添加记忆弹层（手写 row/list 104 → 81 行）。**没迁**的 23 个文件登记在 check-arch RAW_ROWS（多为“行里再套按钮 + 开关”的分体行：任务、技能；电脑页状态行；连接器页；用量），留下一版。
 **成本**：纯前端重构，无接口 / 数据库 / 模型调用变化；无新依赖。行为变化（有意、= App）：Web 记忆 / 笔记行点开类的行补上箭头；App 笔记行副标题由 text3 变成行组件统一的次要色。
 **结果**：按上面落地。测试：flutter analyze 0、flutter test 678 过 8 跳过、npm run build 过（架构守卫 216 文件）、后端 smoke 202/202（不含 smoke_stepfun；smoke_stop 并行时偶发超时、单跑过）。没做：Web 剩 23 个文件的手写行、App 6 个富内容行、浏览器 / 真机截图。
+
+## 2026-10-15 v2.98 E1 Web 收尾：RAW_ROWS 23 个文件迁到 ListGroup / ListRow
+**依据**：HANDOFF 第五节第 6 项 E1 的 Web 剩余（v2.97 登记在 `frontend/scripts/check-arch.mjs` RAW_ROWS 的 23 个文件、81 处手写 `className="row/list"`）。先写决定再改代码。不碰 VPS、不编 APK、不做 E4 与“我的”页搜索。
+**决定**
+1. `ui/kit.tsx` 只补吃掉剩余手写行所需的最小能力（不新增组件）：`ListRow` 加 `href`（站外链接：新标签页 + noreferrer，默认不带箭头，= 原手写）、`disabled`（整行按钮禁用）、`role`（`group` 时正文 `aria-hidden`，读屏只念 label，= 原手写）、`iconClass`（行首图标位加类，如 `file-ext` 扩展名方块）；`ListGroup` 加 `label` / `role`（aria-label / role 原样透传）。行尾控件一律走既有 `control`（原样放，不套次要色）/ `trail`（次要色 .row-trail）。
+2. **能迁的全迁**：一行 = 图标 + 标题/副标题 + 行尾值/控件，且整行是一个可点目标或静态的，全部改 ListRow；分组容器 `div.list` 全部改 ListGroup（包括里面的行暂时保留手写的文件）。
+3. **真不适合、保留登记**（版式会坏或语义会错，数只减不增）：
+   - 分体行（行里一个可点主体 + 行尾独立按钮 / 开关，按钮不能套按钮）：技能、定时任务、MCP 服务器、收件箱行（`report-row`，行尾时间 + 菜单）、电脑页服务 / 后台任务行（`computer-job`）。ListRow 的整行按钮放不进第二个可点控件。
+   - 正文里带细条 / 多行说明的富内容行：电脑页状态行（`computer-status`）、内存 / 磁盘写入行（`computer-mem`）、磁盘配额行（`computer-quota`）、运行记录 / 助手备忘（`run-row`：顶对齐、运行状态点不是 row-icon、错误说明多行）、本月最花钱的对话（行下一条占比细条，flex-wrap 换行）。
+   - 主页今天时间线行（行首是时间文字不是 28px 图标位）、回复语言行（副标题位是常驻的 aria-live 容器，ListRow 只在有副标题时才渲染那一格）、项目文件选择行（`role="checkbox"` + aria-checked + 行尾勾选框）。
+4. **App 端 6 个登记文件评估：全部保留**。逐个看过：`history_panel`（抽屉对话行：状态点 + 长按 + 选中高亮）、`project_switcher`（项目行：emoji + 状态胶囊 + 当前高亮）、`computer_section`（状态行带内存细条）、`computer_details`（内存 / 磁盘行：标题与大小同一基线 + 细条）、`task_detail`（运行记录多行错误说明）、`usage_screen`（最花钱的对话行下细条）——都是富内容行，没有“内容简单”可直接并进 ListRow 的；硬并要给 ListRow 加细条 / 第二行内容槽，等于再造一个行组件。与 Web 保留的同类行一一对应。
+**删除清单**：上述迁移文件里的手写 `row-icon / row-body / row-title / row-sub / row-trail` 行体；`features/chat/chat.css` 的 `.conv-files .row { animation… }` 及其 reduced-motion 规则（改由 ListRow 的 `enter` 错峰，同一 rise 动画、同一 --stagger）；check-arch RAW_ROWS 中迁空的文件条目，其余数字下调到实际值。
+**有意的变化**：错峰入场原来写 `animationDelay: calc(var(--stagger) * i)` 的几处（登录设备、浏览器登录、主机规则、装过的工具、对话文件）统一走 `enter` / `--i`（原上限 8 的两处照传 `Math.min(i, 8)`；原来无上限的三处现在第 10 行起同时出现，肉眼无差别）；对话文件弹层的 `.conv-files` 类随之删掉（只剩被删的动画规则在用）。其余外观、读屏文字、交互不变。
+**成本**：纯前端重构，无接口 / 数据库 / 模型调用变化。
+**结果**：迁完并从 RAW_ROWS 删除 11 个文件（LoginSessions、SecurityScreen、ModelUsageList、OAuthSetupSheet、RouterUsageCard、UsageCard、ProjectFiles、useSaveReply、ConversationFilesSheet、BrowserSessionsSection、HostSection）；另外 9 个文件部分迁移、登记数下调（ComputerDetails 19→6、ComputerSection 6→4、ConnectorsScreen 7→1、SkillsScreen 2→1、TasksScreen 2→1、TaskDetailScreen 5→4、TaskMemory 2→1、TopConversations 3→2、ProjectFilePicker 2→1）；HomeScreen / InboxRow / ReplyLanguageRow 原样保留。手写 row/list 81 → 23 处、23 → 12 个文件；`ui/kit.tsx` 的 ListRow 补 href / disabled / role / iconClass，ListGroup 补 label / role。App 未改代码。测试：flutter analyze 0、flutter test 678 过 8 跳过、npm run build 过（架构守卫 216 文件）、后端 smoke 202/202（不含 smoke_stepfun，逐个串行跑）。没做：浏览器截图核对（本机无 Chromium）。

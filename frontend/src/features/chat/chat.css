@@ -337,8 +337,6 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 @media (prefers-reduced-motion: reduce) { .activity-steps, .step, .step-pulse, .step-diff { animation: none; } .step-toggle svg { transition: none; } }
 
 /* 本对话全部文件（ConversationFilesSheet）：行逐项上浮进场（切筛选时整列表重放），不在了的行淡掉不可点 */
-.conv-files .row { animation: rise var(--dur) var(--ease) both; }
-@media (prefers-reduced-motion: reduce) { .conv-files .row { animation: none; } }
 
 /* 模型调用重试提示（v1.50，RetryLine.tsx）：和 .thought-toggle 一样的小灰字行，图标 warning 色 */
 .retry-line { display: flex; align-items: center; gap: var(--sp-2); width: 86%; padding: var(--sp-2) var(--sp-4); color: var(--text-3);

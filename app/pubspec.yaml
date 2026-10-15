@@ -1,7 +1,7 @@
 name: assistant
 description: "A new Flutter project."
 publish_to: 'none'
-version: 2.97.0+29700
+version: 2.98.0+29800
 
 environment:
   sdk: ^3.13.5

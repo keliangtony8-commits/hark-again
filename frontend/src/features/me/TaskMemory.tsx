@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ScheduledTask } from "../../lib/types";
 import { usesModel } from "../../lib/taskLabels";
 import { IconBrain, IconChevron, IconDoc, IconTrash } from "../../ui/icons";
-import { Section, Sheet } from "../../ui/kit";
+import { ListGroup, Section, Sheet } from "../../ui/kit";
 import CopyButton from "../../ui/CopyButton";
 import { confirmDialog } from "../../ui/dialog";
 
@@ -27,7 +27,7 @@ export default function TaskMemory({ task, onClear }: { task: ScheduledTask; onC
   };
   return (
     <Section title="助手记下的">
-      <div className="list task-memo">
+      <ListGroup className="task-memo">
         {memos.map((m, i) => (
           <button key={m.field} className="row run-row" style={{ animationDelay: `calc(var(--stagger) * ${i})` }}
             aria-label={`${m.title}：${m.text.slice(0, 80)}，看全文`} onClick={() => setOpen(m)}>
@@ -39,7 +39,7 @@ export default function TaskMemory({ task, onClear }: { task: ScheduledTask; onC
             <IconChevron />
           </button>
         ))}
-      </div>
+      </ListGroup>
       {open && (
         <Sheet title={open.title} onClose={() => setOpen(null)} actions={<>
           <CopyButton text={open.text} />

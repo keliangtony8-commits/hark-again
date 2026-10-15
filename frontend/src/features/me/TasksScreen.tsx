@@ -4,7 +4,7 @@ import { useResource } from "../../hooks/useResource";
 import { autoPaused, scheduleLabel, taskStateLabel } from "../../lib/taskLabels";
 import type { ScheduledTask } from "../../lib/types";
 import { IconChevron, IconPlus, IconTerminal } from "../../ui/icons";
-import { Page, PageHeader, PageIntro, Section, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
+import { ListGroup, Page, PageHeader, PageIntro, Section, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
 import { TaskIcon } from "./SchedulePicker";
 import TaskSheet, { EMPTY_SCRIPT, EMPTY_TASK, type TaskDraft } from "./TaskSheet";
 import { TASK_STARTERS, groupTasks, nextUp, taskIdle, taskSummary } from "./taskLibrary";
@@ -23,7 +23,7 @@ export default function TasksScreen() {
   let n = 0; // 整页错峰序号
 
   const rows = (items: ScheduledTask[]) => (
-    <div className="list">
+    <ListGroup>
       {items.map((t) => {
         const failed = t.last_status === "error";
         // 失败 / 自动暂停 = 这一行的问题：问题那几个字放前面染警示色（.row-problem），计划原色（App RowTile.problem 同义，v1.06）
@@ -48,7 +48,7 @@ export default function TasksScreen() {
           </div>
         );
       })}
-    </div>
+    </ListGroup>
   );
 
   return (

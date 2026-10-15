@@ -4,7 +4,7 @@ import { BROWSER_SESSIONS_EMPTY, BROWSER_SESSIONS_EMPTY_LINE, BROWSER_SESSIONS_P
   browserSessionDetail, browserSessionExpired, browserSessionHint, browserSessionSemantics, browserSignOutText, sortBrowserSessions } from "../../lib/browserSessions";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
 import { IconGlobe, IconGlobeOff } from "../../ui/icons";
-import { Section } from "../../ui/kit";
+import { ListGroup, ListRow, Section } from "../../ui/kit";
 import "./computer.css";
 
 /** “浏览器登录”一节（v1.26，= App features/computer/browser_sessions_section.dart）：云浏览器按网站保存的会话。
@@ -31,28 +31,21 @@ export default function BrowserSessionsSection({ enter }: { enter?: number }) {
 
   return (
     <Section title="浏览器登录" enter={enter}>
-      <div className="list">
+      <ListGroup>
         {list.length === 0 ? (
-          <div className="row">
-            <span className="row-icon"><IconGlobe /></span>
-            <div className="row-body"><div className="row-title">{BROWSER_SESSIONS_EMPTY}</div>
-              <div className="row-sub">{BROWSER_SESSIONS_EMPTY_LINE}</div></div>
-          </div>
+          <ListRow icon={<IconGlobe />} title={BROWSER_SESSIONS_EMPTY} sub={BROWSER_SESSIONS_EMPTY_LINE} />
         ) : list.map((s, i) => {
           const hint = browserSessionHint(s), expired = browserSessionExpired(s);
           return (
-            <div key={s.name} className="row browser-session enter" style={{ animationDelay: `calc(var(--stagger) * ${i})` }}
-              role="group" aria-label={browserSessionSemantics(s)}>
-              <span className="row-icon">{expired ? <IconGlobeOff /> : <IconGlobe />}</span>
-              <div className="row-body" aria-hidden><div className="row-title">{s.label}</div>
-                <div className="row-sub">{browserSessionDetail(s)}</div></div>
-              {hint && <span className={`row-hint computer-hint${expired ? " is-warn" : ""}`} aria-hidden>{hint}</span>}
-              <button className="btn btn-ghost btn-sm" disabled={busy.has(s.name)} onClick={() => void signOut(s)}>
-                {busy.has(s.name) ? "正在退出" : "退出"}</button>
-            </div>
+            <ListRow key={s.name} className="browser-session" enter={i} role="group" label={browserSessionSemantics(s)}
+              icon={expired ? <IconGlobeOff /> : <IconGlobe />} title={s.label} sub={browserSessionDetail(s)} control={<>
+                {hint && <span className={`row-hint computer-hint${expired ? " is-warn" : ""}`} aria-hidden>{hint}</span>}
+                <button className="btn btn-ghost btn-sm" disabled={busy.has(s.name)} onClick={() => void signOut(s)}>
+                  {busy.has(s.name) ? "正在退出" : "退出"}</button>
+              </>} />
           );
         })}
-      </div>
+      </ListGroup>
     </Section>
   );
 }

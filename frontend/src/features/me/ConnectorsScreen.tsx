@@ -4,8 +4,8 @@ import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { Connector, McpServerInfo, VaultSecret } from "../../lib/types";
 import { withRetried } from "../../lib/taskLabels";
-import { IconAlert, IconChevron, IconPlus, IconSettings, IconSpark } from "../../ui/icons";
-import { Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+import { IconAlert, IconPlus, IconSettings, IconSpark } from "../../ui/icons";
+import { ListGroup, ListRow, Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
 import { ADD_KINDS, connectorSummary, groupSecrets, mcpProblemText, missingSetup, setupLine, sortAccounts, sortServers } from "./connectorLibrary";
 import SecretSheet, { SecretRows, secretKindIcon, type SecretDraftStart } from "./SecretSheet";
 import OAuthSetupSheet from "./OAuthSetupSheet";
@@ -95,40 +95,31 @@ export default function ConnectorsScreen() {
       {(accounts.loading || shown.length > 0 || missing.length > 0) && (
         <Section title={shown.length ? `账户 · ${shown.length}` : "账户"}>
           {accounts.loading ? <Skeleton rows={2} /> : (
-            <div className="list">
+            <ListGroup>
               {shown.map((c) => {
                 const can = connectorAuthorizable(c), expired = connectorStatus(c) === "expired";
                 return (
-                  <div key={c.id} className="row enter" style={stagger(++n)}>
-                    <span className="row-icon"><ConnectorLogo c={c} /></span>
-                    <div className="row-body">
-                      <div className="row-title">{c.name}</div>
-                      <div className="row-sub">{expired && <><span className="row-problem">授权失效</span> · </>}{c.account ?? c.desc}</div>
-                    </div>
-                    {c.account ? <>
+                  <ListRow key={c.id} enter={++n} icon={<ConnectorLogo c={c} />} title={c.name}
+                    problem={expired ? "授权失效" : undefined} sub={c.account ?? c.desc}
+                    control={c.account ? <>
                       {expired && can
                         ? <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>重新连接</button>
                         : <span className="row-hint">{expired ? "授权失效" : "已连接"}</span>}
                       <button className="btn btn-ghost btn-sm" onClick={() => disconnect(c)}>断开</button>
-                    </> : <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>连接</button>}
-                  </div>
+                    </> : <button className="btn btn-primary btn-sm" onClick={() => connect(c)}>连接</button>} />
                 );
               })}
               {missing.length > 0 && (
-                <button className="row enter" style={stagger(++n)} onClick={() => setSetupOpen(true)}>
-                  <span className="row-icon"><IconSettings /></span>
-                  <span className="row-body"><span className="row-title">服务器还差一步</span><span className="row-sub">{setupLine(missing)}</span></span>
-                  <span className="row-trail"><IconChevron /></span>
-                </button>
+                <ListRow enter={++n} onClick={() => setSetupOpen(true)} icon={<IconSettings />} title="服务器还差一步" sub={setupLine(missing)} />
               )}
-            </div>
+            </ListGroup>
           )}
         </Section>
       )}
 
       {servers.items.length > 0 && (
         <Section title={`MCP 服务器 · ${servers.items.length}`}>
-          <div className="list">
+          <ListGroup>
             {sortServers(servers.items).map((s) => (
               <div key={s.id} className="row enter" style={stagger(++n)}>
                 <button className="task-row" onClick={() => void showTools(s)}>
@@ -142,7 +133,7 @@ export default function ConnectorsScreen() {
                 <button className="btn btn-ghost btn-sm" onClick={async () => { if (await confirmDialog({ title: `移除 ${s.name}？`, action: "移除" })) void servers.remove(s.id); }}>移除</button>
               </div>
             ))}
-          </div>
+          </ListGroup>
         </Section>
       )}
 
@@ -164,13 +155,9 @@ export default function ConnectorsScreen() {
           {tools.err ? <div className="error-banner">{tools.err}</div> : !tools.list ? <Skeleton rows={3} /> : tools.list.length === 0 ? (
             <p className="desc">这个服务器连得上，但没有提供任何工具。</p>
           ) : (
-            <div className="list">
-              {tools.list.map((t, i) => (
-                <div key={t.name} className="row enter" style={stagger(i)}>
-                  <div className="row-body"><div className="row-title">{t.name}</div><div className="row-sub">{t.description ?? ""}</div></div>
-                </div>
-              ))}
-            </div>
+            <ListGroup>
+              {tools.list.map((t, i) => <ListRow key={t.name} enter={i} title={t.name} sub={t.description ?? ""} />)}
+            </ListGroup>
           )}
         </Sheet>
       )}

@@ -73,9 +73,10 @@ export function PageIntro({ summary, line, loading }: { summary?: string; line: 
 }
 
 /** 分组列表（全站唯一，= App ListGroup，v2.97 E1）：一张卡里多行 [ListRow]，行间发丝线。enter = 错峰入场序号。 */
-export function ListGroup({ children, enter, className = "" }: { children: ReactNode; enter?: number; className?: string }) {
+export function ListGroup({ children, enter, className = "", label, role }: { children: ReactNode; enter?: number; className?: string; label?: string; role?: string }) {
   return (
-    <div className={["list", className, enter === undefined ? "" : "enter"].filter(Boolean).join(" ")} style={enter === undefined ? undefined : stagger(enter)}>
+    <div className={["list", className, enter === undefined ? "" : "enter"].filter(Boolean).join(" ")} style={enter === undefined ? undefined : stagger(enter)}
+      aria-label={label} role={role}>
       {children}
     </div>
   );
@@ -83,18 +84,20 @@ export function ListGroup({ children, enter, className = "" }: { children: React
 
 /** 列表行（全站唯一，= App ListRow，v2.97 E1）：行首图标 + 标题（+ 副标题 / 问题）+ 行尾值 / 控件 / 箭头。
  *  to = 站内链接；onClick = 整行是按钮；都没有 = 静态行。可点的行默认带箭头，trail 给了就用 trail（null = 什么都不放）。
- *  control = 行尾的控件（开关、分段按钮、头像），原样放、不套次要色的 .row-trail。 */
-export function ListRow({ icon, title, sub, problem, value, trail, control, to, onClick, off, className = "", enter, label }: {
-  icon?: ReactNode; title: ReactNode; sub?: ReactNode; problem?: string; value?: string; trail?: ReactNode; control?: ReactNode;
-  to?: string; onClick?: () => void; off?: boolean; className?: string; enter?: number; label?: string;
+ *  control = 行尾的控件（开关、分段按钮、头像），原样放、不套次要色的 .row-trail。
+ *  v2.98：href = 站外链接（新标签页，默认不带箭头）；disabled = 整行按钮禁用；role="group" 时正文 aria-hidden（读屏只念 label）；
+ *  iconClass = 行首图标位的额外类（file-ext 扩展名方块）。 */
+export function ListRow({ icon, iconClass, title, sub, problem, value, trail, control, to, href, onClick, disabled, off, className = "", enter, label, role }: {
+  icon?: ReactNode; iconClass?: string; title: ReactNode; sub?: ReactNode; problem?: string; value?: string; trail?: ReactNode; control?: ReactNode;
+  to?: string; href?: string; onClick?: () => void; disabled?: boolean; off?: boolean; className?: string; enter?: number; label?: string; role?: string;
 }) {
   const cls = ["row", className, off ? "row-off" : "", enter === undefined ? "" : "enter"].filter(Boolean).join(" ");
   const style = enter === undefined ? undefined : stagger(enter);
   const tail = trail !== undefined ? trail : (to || onClick) ? <IconChevron /> : null;
   const inner = (
     <>
-      {icon && <span className="row-icon">{icon}</span>}
-      <div className="row-body">
+      {icon && <span className={iconClass ? `row-icon ${iconClass}` : "row-icon"}>{icon}</span>}
+      <div className="row-body" aria-hidden={role === "group" || undefined}>
         <div className="row-title">{title}</div>
         {(sub || problem) && <div className="row-sub">{problem && <span className="row-problem">{problem}</span>}{problem && sub ? " · " : ""}{sub}</div>}
       </div>
@@ -104,8 +107,9 @@ export function ListRow({ icon, title, sub, problem, value, trail, control, to, 
     </>
   );
   if (to) return <Link to={to} className={cls} style={style} aria-label={label}>{inner}</Link>;
-  if (onClick) return <button type="button" className={cls} style={style} onClick={onClick} aria-label={label}>{inner}</button>;
-  return <div className={cls} style={style} aria-label={label}>{inner}</div>;
+  if (href) return <a href={href} target="_blank" rel="noreferrer" className={cls} style={style} aria-label={label}>{inner}</a>;
+  if (onClick) return <button type="button" className={cls} style={style} onClick={onClick} disabled={disabled} aria-label={label}>{inner}</button>;
+  return <div className={cls} style={style} aria-label={label} role={role}>{inner}</div>;
 }
 
 /** 起步卡（= App StarterCard）：列表为空时代替空状态——标题 + 引导 + 一排起步按钮。 */

@@ -10,7 +10,7 @@ import type { JobInfo } from "../../lib/types";
 import { formatSize } from "../../lib/files";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
 import { IconGlobe, IconExternal, IconCopy, IconChevron, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt, IconDisk, IconChip, IconServer, IconTerminal, IconMore } from "../../ui/icons";
-import { Section, Sheet } from "../../ui/kit";
+import { ListGroup, ListRow, Section, Sheet } from "../../ui/kit";
 import type { ComputerCtl } from "./useComputer";
 import { type PreviewLink, portLine, portTitle } from "../../lib/preview";
 import { copyLink } from "../../lib/pages";
@@ -22,15 +22,11 @@ export function ProcessSection({ ctl, enter }: { ctl: ComputerCtl; enter?: numbe
   if (!list.length) return null;
   return (
     <Section title="正在运行的程序" enter={enter} action={<span className="section-note">{list.length}</span>}>
-      <div className="list">
+      <ListGroup>
         {list.map((p) => (
-          <div key={p.pid} className="row">
-            <span className="row-icon"><IconBolt /></span>
-            <div className="row-body"><div className="row-title computer-proc">{processTitle(p)}</div>
-              <div className="row-sub">{processLine(p)}</div></div>
-          </div>
+          <ListRow key={p.pid} icon={<IconBolt />} title={<span className="computer-proc">{processTitle(p)}</span>} sub={processLine(p)} />
         ))}
-      </div>
+      </ListGroup>
     </Section>
   );
 }
@@ -52,7 +48,7 @@ export function MemorySection({ ctl, enter }: { ctl: ComputerCtl; enter?: number
   );
   return (
     <Section title="内存" enter={enter}>
-      <div className="list">
+      <ListGroup>
         <div className={`row computer-quota${tight ? " is-tight" : ""}`} role="group" aria-label={[memoryViewLine(v), note].filter(Boolean).join("，")}>
           <span className="row-icon"><IconChip /></span>
           <div className="row-body" aria-hidden>
@@ -88,7 +84,7 @@ export function MemorySection({ ctl, enter }: { ctl: ComputerCtl; enter?: number
             </div>
           </div>
         )}
-      </div>
+      </ListGroup>
       {log && <JobLog job={log} onClose={() => setLog(null)} />}
     </Section>
   );
@@ -102,7 +98,7 @@ export function DiskJobsSection({ ctl, enter }: { ctl: ComputerCtl; enter?: numb
   if (!s || !rows.length) return null;
   return (
     <Section title={DISK_JOBS_TITLE} enter={enter}>
-      <div className="list">
+      <ListGroup>
         <div key={diskJobsNote(s)} className="row-sub computer-diskjobs-note">{diskJobsNote(s)}</div>
         {rows.map((r) => (
           <button key={r.job.id} className="row computer-mem" onClick={() => setLog(r.job)}
@@ -116,7 +112,7 @@ export function DiskJobsSection({ ctl, enter }: { ctl: ComputerCtl; enter?: numb
             </div>
           </button>
         ))}
-      </div>
+      </ListGroup>
       {log && <JobLog job={log} onClose={() => setLog(null)} />}
     </Section>
   );
@@ -145,23 +141,19 @@ export function PortsSection({ ws, ctl, enter }: { ws: string; ctl: ComputerCtl;
   };
   return (
     <Section title="正在监听的端口" enter={enter} action={<span className="section-note">{list.length}</span>}>
-      <div className="list">
+      <ListGroup>
         {list.map((p) => (
-          <div key={p.port} className="row">
-            <span className="row-icon"><IconGlobe size={16} /></span>
-            <div className="row-body"><div className="row-title">{portTitle(p.port)}</div>
-              <div className="row-sub">{p.loopback && <><span className="row-problem">打不开</span> · </>}{portLine(p)}</div></div>
-            {!p.loopback && (
+          <ListRow key={p.port} icon={<IconGlobe size={16} />} title={portTitle(p.port)} problem={p.loopback ? "打不开" : undefined} sub={portLine(p)}
+            control={!p.loopback && (
               <span className="row-trail computer-port-actions">
                 <button className="icon-btn" aria-label={`复制端口 ${p.port} 的预览链接`} disabled={busy !== null} onClick={() => go(p.port, true)}>
                   {copied === p.port ? "✓" : <IconCopy />}</button>
                 <button className="btn btn-sm btn-ghost" disabled={busy !== null} onClick={() => go(p.port, false)}>
                   <IconExternal /> {busy === p.port ? "正在打开" : "预览"}</button>
               </span>
-            )}
-          </div>
+            )} />
         ))}
-      </div>
+      </ListGroup>
     </Section>
   );
 }
@@ -210,40 +202,23 @@ export function StorageSection({ ws, ctl, enter, onFiles }: { ws: string; ctl: C
     <Section title="磁盘" enter={enter} action={label
       ? <button className="btn btn-ghost btn-sm" disabled={cleaning} onClick={clean}>{cleaning ? "正在清理" : label}</button>
       : done && <span key={done} className="section-note computer-done">{done}</span>}>
-      <div className="list">
+      <ListGroup>
         {s.disk_limit != null && <QuotaRow s={s} />}
-        {storageRows(st).map(([k, name, line, bytes]) => {
-          const body = (<>
-            <span className="row-icon">{ICONS[k]()}</span>
-            <div className="row-body"><div className="row-title">{name}</div><div className="row-sub">{line}</div></div>
-            <span key={bytes} className="row-hint computer-hint">{formatSize(bytes)}</span>
-          </>);
-          return k === "files" && onFiles
-            ? <button key={k} className="row" onClick={onFiles}>{body}</button>
-            : <div key={k} className="row">{body}</div>;
-        })}
-        {all.length ? (
-          <button className="row" onClick={() => setTools(all)}>
-            <span className="row-icon"><IconSettings /></span>
-            <div className="row-body"><div className="row-title">装过的工具</div><div className="row-sub">{toolsSummary(all)}</div></div>
-            <span className="row-trail"><IconChevron /></span>
-          </button>
-        ) : (
-          <div className="row"><span className="row-icon"><IconSettings /></span>
-            <div className="row-body"><div className="row-title">装过的工具</div><div className="row-sub">{toolsSummary(all)}</div></div></div>
-        )}
-      </div>
+        {storageRows(st).map(([k, name, line, bytes]) => (
+          <ListRow key={k} onClick={k === "files" && onFiles ? onFiles : undefined} trail={null} icon={ICONS[k]()} title={name} sub={line}
+            control={<span key={bytes} className="row-hint computer-hint">{formatSize(bytes)}</span>} />
+        ))}
+        <ListRow onClick={all.length ? () => setTools(all) : undefined} icon={<IconSettings />} title="装过的工具" sub={toolsSummary(all)} />
+      </ListGroup>
       {tools && (
         <Sheet title="装过的工具" onClose={() => setTools(null)}>
           <p className="pick-note">装在工作区 ~/.local 里，以后的对话和后台任务都能直接用；不含系统预装的。</p>
-          <div className="list">
+          <ListGroup>
             {tools.map((t, i) => (
-              <div key={`${t.kind}-${t.name}`} className="row enter" style={{ animationDelay: `calc(var(--stagger) * ${Math.min(i, 8)})` }}>
-                <div className="row-body"><div className="row-title">{t.name}</div><div className="row-sub">{t.kind}</div></div>
-                {t.version && <span className="row-hint">{t.version}</span>}
-              </div>
+              <ListRow key={`${t.kind}-${t.name}`} enter={Math.min(i, 8)} title={t.name} sub={t.kind}
+                control={t.version && <span className="row-hint">{t.version}</span>} />
             ))}
-          </div>
+          </ListGroup>
         </Sheet>
       )}
     </Section>

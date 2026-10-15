@@ -4,7 +4,7 @@ import { HOST_ENABLE_TEXT, HOST_INSTALL_HINT, HOST_PATH, HOST_RULES_EMPTY, HOST_
   type HostStatus, hostCanToggle, hostDetail, hostHint, hostRuleDeleteText, hostRuleDetail, hostToggleTitle } from "../../lib/host";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
 import { IconRule, IconServer } from "../../ui/icons";
-import { Section, Toggle } from "../../ui/kit";
+import { ListGroup, ListRow, Section, Toggle } from "../../ui/kit";
 import "./computer.css";
 
 /** “服务器主机”一节（v1.49，= App features/computer/host_section.dart）：主机模式开关 + “以后都允许”的命令规则。
@@ -36,31 +36,24 @@ export default function HostSection({ enter }: { enter?: number }) {
 
   return (
     <Section title={HOST_SECTION_TITLE} enter={enter}>
-      <div className="list">
-        <div className="row">
-          <span className="row-icon"><IconServer /></span>
-          <div className="row-body"><div className="row-title">{hostToggleTitle(s)}</div><div className="row-sub">{hostDetail(s)}</div></div>
+      <ListGroup>
+        <ListRow icon={<IconServer />} title={hostToggleTitle(s)} sub={hostDetail(s)} control={<>
           {hint && <span className="row-hint computer-hint is-warn">{hint}</span>}
           <Toggle on={s.enabled} onChange={(v) => void toggle(v)} label="服务器主机模式" disabled={busy || !hostCanToggle(s)} />
-        </div>
-      </div>
+        </>} />
+      </ListGroup>
       {!s.installed && <p className="computer-host-hint enter">{HOST_INSTALL_HINT}</p>}
       {(s.enabled || s.rules.length > 0) && (
-        <div className="list computer-host-rules enter">
+        <ListGroup className="computer-host-rules enter">
           {s.rules.length === 0 ? (
-            <div className="row"><span className="row-icon"><IconRule /></span>
-              <div className="row-body"><div className="row-title">{HOST_RULES_EMPTY}</div><div className="row-sub">{HOST_RULES_EMPTY_LINE}</div></div></div>
+            <ListRow icon={<IconRule />} title={HOST_RULES_EMPTY} sub={HOST_RULES_EMPTY_LINE} />
           ) : s.rules.map((r, i) => (
-            <div key={r.id} className="row enter" style={{ animationDelay: `calc(var(--stagger) * ${i})` }} role="group"
-              aria-label={`以后都允许 ${r.text} 开头的命令，${hostRuleDetail(r)}`}>
-              <span className="row-icon"><IconRule /></span>
-              <div className="row-body" aria-hidden><div className="row-title computer-host-rule">{r.text}</div>
-                <div className="row-sub">{hostRuleDetail(r)}</div></div>
-              <button className="btn btn-ghost btn-sm" disabled={deleting.has(r.id)} onClick={() => void remove(r)}>
-                {deleting.has(r.id) ? "正在删除" : "删除"}</button>
-            </div>
+            <ListRow key={r.id} enter={i} role="group" label={`以后都允许 ${r.text} 开头的命令，${hostRuleDetail(r)}`}
+              icon={<IconRule />} title={<span className="computer-host-rule">{r.text}</span>} sub={hostRuleDetail(r)}
+              control={<button className="btn btn-ghost btn-sm" disabled={deleting.has(r.id)} onClick={() => void remove(r)}>
+                {deleting.has(r.id) ? "正在删除" : "删除"}</button>} />
           ))}
-        </div>
+        </ListGroup>
       )}
     </Section>
   );

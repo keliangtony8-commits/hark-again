@@ -9,7 +9,7 @@ import { jobDuration, jobRowSubtitle } from "../../lib/jobs";
 import type { JobInfo } from "../../lib/types";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
 import { IconChevron, IconCloudOff, IconComputer, IconServer } from "../../ui/icons";
-import { Section } from "../../ui/kit";
+import { ListGroup, ListRow, Section } from "../../ui/kit";
 import "./computer.css";
 import { type ComputerCtl, useComputer } from "./useComputer";
 
@@ -73,13 +73,12 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
   return (
     <Section title={title} enter={enter}
       action={s.sandbox.state === "running" && <button className="btn btn-ghost btn-sm" disabled={restarting} onClick={restart}>{restarting ? "正在重启" : "重启"}</button>}>
-      <div className="list">
+      <ListGroup>
         {to
           ? <Link to={to} className={`row computer-status${down ? " is-down" : ""}`} aria-label={label}>{status}</Link>
           : <div className={`row computer-status${down ? " is-down" : ""}`} role="group" aria-label={label}>{status}</div>}
         {machine && ( // v2.85 整台服务器（只有个人工作区给）
-          <div className="row"><span className="row-icon"><IconServer /></span>
-            <div className="row-body"><div className="row-title">整台服务器</div><div className="row-sub">{machine}</div></div></div>
+          <ListRow icon={<IconServer />} title="整台服务器" sub={machine} />
         )}
         {(s.services ?? []).map((v) => (
           <div key={v.id} className={`row computer-job computer-svc is-${v.health}`}>
@@ -103,7 +102,7 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
               {cancelling.has(j.id) ? "正在取消" : "取消"}</button>
           </div>
         ))}
-      </div>
+      </ListGroup>
       {log && <JobLog job={log} onClose={() => setLog(null)} />}
     </Section>
   );

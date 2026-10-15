@@ -6,7 +6,7 @@ import {
   fileOriginLabel, zipNote, type ConversationFiles,
 } from "../../lib/conversationFiles";
 import { IconDownload, IconFolder } from "../../ui/icons";
-import { Hint, Sheet, Skeleton } from "../../ui/kit";
+import { Hint, ListGroup, ListRow, Sheet, Skeleton } from "../../ui/kit";
 
 /** 本对话全部文件（v1.33，App features/chat/conversation_files.dart 同义）：交给你的、你发的、网页下载/上传的、助手写的，
  *  最新在前，按来源筛选，一键打包下载。入口：本对话用量弹层、历史每行菜单。 */
@@ -45,19 +45,13 @@ export default function ConversationFilesSheet({ conversationId, onClose }: { co
               ))}
             </div>
           )}
-          <div className="list conv-files" key={origin ?? "all"}>
-            {shown.map((f, i) => {
-              const body = <>
-                <span className="row-icon file-ext">{extOf(f.name)}</span>
-                <span className="row-body"><span className="row-title">{f.name}</span>
-                  <span className="row-sub">{f.gone && <><span className="row-problem">已不在</span> · </>}{conversationFileLine(f)}</span></span>
-              </>;
-              const style = { animationDelay: `calc(var(--stagger) * ${Math.min(i, 8)})` };
-              return f.gone
-                ? <div key={f.key} className="row row-off" style={style} aria-label={`${f.name}，已不在，打不开`}>{body}</div>
-                : <a key={f.key} className="row" style={style} href={fileUrl(conversationFilePath(f))} target="_blank" rel="noreferrer">{body}</a>;
-            })}
-          </div>
+          <ListGroup key={origin ?? "all"}>
+            {shown.map((f, i) => (
+              <ListRow key={f.key} enter={Math.min(i, 8)} icon={extOf(f.name)} iconClass="file-ext" title={f.name}
+                problem={f.gone ? "已不在" : undefined} sub={conversationFileLine(f)} off={f.gone}
+                href={f.gone ? undefined : fileUrl(conversationFilePath(f))} label={f.gone ? `${f.name}，已不在，打不开` : undefined} />
+            ))}
+          </ListGroup>
         </>
       )}
     </Sheet>

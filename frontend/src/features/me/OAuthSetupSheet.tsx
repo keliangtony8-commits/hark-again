@@ -4,7 +4,7 @@
 import type { Connector } from "../../lib/types";
 import CopyButton from "../../ui/CopyButton";
 import { IconExternal } from "../../ui/icons";
-import { Sheet, stagger } from "../../ui/kit";
+import { ListGroup, ListRow, Sheet, stagger } from "../../ui/kit";
 import "./me.css";
 
 /** 重建读 .env 的两个容器（与 docs/oauth-setup.md 第 4 步一致）。 */
@@ -32,14 +32,11 @@ export default function OAuthSetupSheet({ missing, onClose }: { missing: Connect
       <p className="desc">一键授权由服务器上的 OAuth 应用完成。按以下三步配置一次，之后在连接器页点一下即可连接。</p>
 
       <div className="section-title setup-step"><span>1 · 创建 OAuth 应用</span></div>
-      <div className="list enter" style={stagger(n++)}>
+      <ListGroup enter={n++}>
         {missing.map((c) => (
-          <a key={c.id} className="row" href={c.setup?.console} target="_blank" rel="noreferrer">
-            <span className="row-icon"><IconExternal /></span>
-            <span className="row-body"><span className="row-title">在 {c.name} 开发者后台创建</span><span className="row-sub">{hostOf(c.setup?.console ?? "")}</span></span>
-          </a>
+          <ListRow key={c.id} href={c.setup?.console} icon={<IconExternal />} title={`在 ${c.name} 开发者后台创建`} sub={hostOf(c.setup?.console ?? "")} />
         ))}
-      </div>
+      </ListGroup>
 
       <div className="section-title setup-step"><span>2 · 回调地址（两处填写同一个）</span></div>
       <div className="enter" style={stagger(n++)}><Code text={callback} label="复制回调地址" /></div>

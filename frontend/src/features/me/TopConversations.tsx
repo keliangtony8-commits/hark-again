@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { IconChat, IconChevron, IconTrash } from "../../ui/icons";
+import { ListGroup } from "../../ui/kit";
 import { formatMoney, formatTokens, shareOf, type UsageReport } from "../../lib/usage";
 
 /** 设置页用量卡里“本月最花钱的对话”：点一行跳进那个对话（和收件箱横幅同一条路：/chat + state.open）；已删的只展示。
@@ -10,7 +11,7 @@ export default function TopConversations({ report: r }: { report: UsageReport })
   return (
     <section className="top-convs">
       <div className="usage-label">本月最花钱的对话</div>
-      <div className="list">
+      <ListGroup>
         {(r.conversations ?? []).map((c) => {
           const share = shareOf(r, c);
           const inner = <>
@@ -26,7 +27,7 @@ export default function TopConversations({ report: r }: { report: UsageReport })
             ? <div className="row gone" key={c.id}>{inner}</div>
             : <button className="row" key={c.id} onClick={() => nav("/chat", { state: { open: c.id } })}>{inner}</button>;
         })}
-      </div>
+      </ListGroup>
     </section>
   );
 }
