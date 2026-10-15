@@ -233,3 +233,9 @@
 **成本**：纯前端；无接口 / 数据库 / 模型调用变化；无新依赖。索引约 25 条，每次按键线性过滤，可忽略。
 **不做**：Web 手机浏览器软键盘下的胶囊跟随（Web 是电脑端客户端，手机走 App；聊天输入胶囊同样不处理，不单开先例）；拼音首字母匹配（索引条目少，靠关键词同义词覆盖）。
 **测试与发布（2026-10-15 18:40）**：flutter analyze 0、flutter test 695 过 8 跳过（含 `me_search_test.dart`：两端索引逐字一致、定位 id 两端都有落点、路由在表内、搜索排序 / 无结果 / 清空恢复 / 回车打开首项、`?focus=` 滚动并闪、浮动胶囊不遮“退出登录”）、npm run build 过（架构守卫 218 文件、配色守卫 14 对 × 2 套）、后端 smoke 203/203（不含 smoke_stepfun；smoke_jobs 串行全量中偶发一次超时、单跑过，后端本版只改版本号）。未做：浏览器 / 真机截图（本机无 Chromium）。不部署、不出 APK。
+
+## 2026-10-15 v3.0.1 部署脚本自动清理（HANDOFF 第二节第 17 条“能自动的写进脚本”）
+**决定**：清理只放在产生垃圾的那个脚本里，不新增维护脚本。`deploy/build-apk.sh` 的 EXIT trap（成功或失败都走）在恢复容器后调 `apk_cleanup`：先把 APK 拷到 `/root/toyuis-<pubspec 版本>-arm64.apk` 并删旧的 `toyuis-*-arm64.apk`（没编出来就不动上一份），再删 `/opt/apkbuild/gradle` 下除 `wrapper` 外全部、`/root/.pub-cache`、`/opt/apkbuild/src`、`/root/app.tgz`、本脚本自己加的 `/swapfile2`（之前就存在的不动）。SDK / Flutter / JDK、部署代码包、`.env` 备份、`/swap.img` 一律不碰（第 17 条“绝不能删”）。`deploy/update.sh` 在已有 `docker image prune -f`（不带 -a）后加 `docker builder prune -f`。
+**代价**：下次编 APK 要重新下 gradle / pub 依赖，多几分钟（用户已接受：“把不重要的删掉”）。
+**测试**：新 `deploy/tests/test_build_apk_cleanup.sh`（临时目录模拟 /opt /root：APK 带版本号取出且只留一份、部署包保留、缓存清掉、gradle 只留 wrapper、SDK/Flutter/JDK 不动、构建失败也清缓存不删上一份 APK）；做过变异验证（去掉 `! -name wrapper` 即红）。`bash -n` 两个脚本过；test_install.sh 过。未在 VPS 实跑（按规则不部署、不编 APK）。
+

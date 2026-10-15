@@ -23,5 +23,6 @@ if [[ "$(docker network inspect -f '{{.Internal}}' assistant-sandboxes 2>/dev/nu
 fi
 docker compose --profile build-only build sandbox-image
 docker compose up -d --build --remove-orphans
-docker image prune -f >/dev/null
+docker image prune -f >/dev/null   # 只删悬空镜像（不带 -a：沙盒镜像没容器在跑时也要留着）
+docker builder prune -f >/dev/null
 echo "› 已更新 ✓  看日志：docker compose logs -f backend"

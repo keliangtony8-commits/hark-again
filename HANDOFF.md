@@ -1,4 +1,4 @@
-# Toyuis 交接文档（2026-10-15，v3.0.0）
+# Toyuis 交接文档（2026-10-15，v3.0.1）
 
 > **给每个接手的 agent**：先读第二节宗旨（1–17 条）。用户在对话里说出的任何纲领性要求，当轮用明确、不会被误解的话（不必照抄原话）带日期补进第二节，这是硬规矩（见第 16 条）。
 
@@ -36,7 +36,7 @@
    - **必须删**（能再生成且确定用不上）：编 APK 后的 gradle 缓存（`/opt/apkbuild/gradle` 下除 `wrapper` 外全部）、`/root/.pub-cache`、`/opt/apkbuild/src`；Docker 悬空镜像（`docker image prune -f`，**不带 -a**）和构建缓存（`docker builder prune -f`）；`/root` 下旧版本代码包和旧日志（只留最近一版）；用完的临时 swap、临时脚本输出、测试临时文件。
    - **绝不能删**（删了要重装、会坏、或丢数据）：安卓 SDK、Flutter、JDK（`/opt/apkbuild/sdk|flutter|jdk`）；正在运行或 compose 引用的镜像（含 `assistant-sandbox`，即使当前没容器在跑）；数据库和数据卷（`/opt/assistant/data`、Docker volumes）；`/root/backups`；最近一版代码包（如 `v293.tgz`、`app-v2911-backup.tgz` 这类最近备份）和最近两份 `.env` 备份；部署脚本本身；`/swap.img`（常驻 swap）。
    - **拿不准就不删**，先查它被谁用（grep compose/脚本/代码），还拿不准就问用户；删前删后都 `df -h`，删后确认容器全部 Up、`/api/version` 正常。
-   - **能自动的写进脚本**：`deploy/build-apk.sh` 结尾清上面“必须删”里的 APK 缓存；更新脚本结尾 `docker image prune -f` + `docker builder prune -f`（v3.0 之后下一版落地）。本地沙盒同理：测试日志、临时截图用完就删。
+   - **能自动的写进脚本**：`deploy/build-apk.sh` 结尾清上面“必须删”里的 APK 缓存；更新脚本结尾 `docker image prune -f` + `docker builder prune -f`。**v3.0.1 已落地**（APK 产物改为 `/root/toyuis-<版本>-arm64.apk`，只留最新一份；测试 `deploy/tests/test_build_apk_cleanup.sh`；未在 VPS 实跑）。本地沙盒同理：测试日志、临时截图用完就删。
 
 ## 三、工程规矩（看代码 / 改代码时）
 - **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**
@@ -52,7 +52,7 @@
 - 已发布：v2.85–v2.92（v2.90.1 用户气泡改灰；v2.90.3 已部署过一次，见下）。
 - v2.89：浏览器实时推流（CDP screencast，单条 WS，取代截图轮询）。
 - v2.90：运行中连发“按件回复”（`backend/app/message_intake.py` 单入口；补充并入 / 附和不回 / 问进度一句话 / 新问题并行一路；`messages.answered_by` 账本，迁移 0064；回复离原话远才画引用线）。
-- 已发布到 git：**v3.0（tag v3.0，2026-10-15，“我的”页底部设置搜索两端 + `?focus=` 定位闪一下；版本号因构建号规则从 2.99 进位，无破坏性改动；纯前端）**、**v2.99（tag v2.99，2026-10-15，E4 ImageStack 两端 + App 震动统一入口 / AppSwitch；“我的”页底部搜索未做，见第五节第 6 项；纯前端）**、**v2.98（tag v2.98，2026-10-15，E1 Web 收尾：RAW_ROWS 81→23 处、23→12 个文件迁到 ListGroup / ListRow，App 6 个富内容行评估后保留，见第五节第 6 项；纯前端）**、**v2.97（tag v2.97，2026-10-15，E1 收尾：ListRow / ListGroup / PageIntro 两端统一 + App 附件弹层高度修复，见第五节第 6 项；无后端 / 迁移变化）**、**v2.96（tag v2.96，2026-10-15，“我 → 连接的账号”一页：连接器 + 保险箱合并，见 5·2a；含迁移 0067，只改旧卡去处 vault→connectors）**、v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95/v2.96/v2.97/v2.98/v2.99/v3.0 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
+- 已发布到 git：**v3.0.1（tag v3.0.1，部署脚本自动清理，见第二节第 17 条；应用无变化）**、**v3.0（tag v3.0，2026-10-15，“我的”页底部设置搜索两端 + `?focus=` 定位闪一下；版本号因构建号规则从 2.99 进位，无破坏性改动；纯前端）**、**v2.99（tag v2.99，2026-10-15，E4 ImageStack 两端 + App 震动统一入口 / AppSwitch；“我的”页底部搜索未做，见第五节第 6 项；纯前端）**、**v2.98（tag v2.98，2026-10-15，E1 Web 收尾：RAW_ROWS 81→23 处、23→12 个文件迁到 ListGroup / ListRow，App 6 个富内容行评估后保留，见第五节第 6 项；纯前端）**、**v2.97（tag v2.97，2026-10-15，E1 收尾：ListRow / ListGroup / PageIntro 两端统一 + App 附件弹层高度修复，见第五节第 6 项；无后端 / 迁移变化）**、**v2.96（tag v2.96，2026-10-15，“我 → 连接的账号”一页：连接器 + 保险箱合并，见 5·2a；含迁移 0067，只改旧卡去处 vault→connectors）**、v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95/v2.96/v2.97/v2.98/v2.99/v3.0 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
 - VPS：GreenCloud 2C/3.8G Debian 12，IP 172.93.163.240，域名 toyuis.itsllm.com。部署方式见 `deploy/`（git archive → 上传 → `deploy/update.sh`）。
   - **2026-10-15 约 11:05 已部署 v2.92.0**（`/api/version` = 2.92.0，容器全部 Up）。旧版备份 `/root/app-v2911-backup.tgz`，.env 备份 `/root/env.bak.v292`；`docker builder prune` 后磁盘 80%。
   - 真模型（StepFun）验证通过：主聊天说“以后叫我小测，你就叫阿星”→ 调用 set_names（步骤“保存称呼”），profile 变为 小测 / 阿星；验证后已删测试对话和 identity 行，greet 恢复为 true（保留用户自己的首次问候体验）。
