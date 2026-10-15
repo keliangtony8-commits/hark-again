@@ -15,7 +15,7 @@
 /* 一级页面的大标题（顶栏下方，衬线点缀） */
 /* 一级页面页头（主页、项目）：小标签一行 + 衬线大标题，= App 的 _Hero / _Header（Layout.headTop 节奏） */
 .page-hero { padding: var(--sp-5) var(--sp-1) var(--sp-5); animation: rise var(--dur) var(--ease) both; }
-.page-hero-label { display: block; min-height: 1.5em; font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+.page-hero-label { display: block; min-height: 1.5em; font-size: var(--fs-xs); color: var(--text-3); }
 .page-hero h1 { font-weight: var(--fw-strong); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-2) 0 0; }
 .page-head .spacer { width: 40px; }
 
@@ -24,7 +24,7 @@
 /* v3.0.2：<Spot> 外壳里的分区仍按“分区之间”留距（否则它成了外壳的第一个孩子、间距被清零）；外壳本身在页首时才清零 */
 .spot > .section:first-child { margin-top: var(--section-gap); }
 .spot:first-child > .section:first-child { margin-top: 0; }
-.section-title { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); color: var(--text-3); margin: 0 var(--sp-1) var(--sp-3); }
+.section-title { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-body); color: var(--text-3); margin: 0 var(--sp-1) var(--sp-3); }
 
 /* 分组列表卡（App GlassGroup）：假玻璃、大圆角、行间内缩分隔线 */
 .list { background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-card); box-shadow: var(--elev-card); overflow: hidden; }
@@ -140,7 +140,7 @@ button.row-body { text-align: left; }
 .starter-list .btn { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .skill-name { margin: 0 var(--sp-1) var(--sp-1); font-size: var(--fs-lg); font-weight: var(--fw-strong); }
 .skill-read { background: var(--tile); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); }
-.skill-body-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: var(--sp-2) 0; font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+.skill-body-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: var(--sp-2) 0; font-size: var(--fs-xs); color: var(--text-3); }
 .skill-body-input { width: 100%; min-height: 14em; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); border: 1px solid transparent; background: var(--tile); color: var(--text); outline: 0; resize: vertical; line-height: 1.55; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .skill-body-input:focus { border-color: color-mix(in srgb, var(--text) 24%, transparent); background: var(--surface); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
@@ -209,7 +209,7 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
 .usage-skeleton .sk-chart { height: 200px; }
 .usage-hero { padding: var(--sp-4); display: grid; gap: var(--sp-2); animation: rise var(--dur) var(--ease) both; }
 .usage-head { display: flex; align-items: center; justify-content: space-between; margin: calc(-1 * var(--sp-1)) 0; }
-.usage-label { font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); }
+.usage-label { font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); }
 .usage-big { font-size: var(--fs-xl); font-weight: var(--fw-strong); letter-spacing: var(--display-tracking); font-variant-numeric: tabular-nums; }
 .meter { height: 8px; border-radius: var(--r-full); background: var(--tile); overflow: hidden; }
 .meter > span { display: block; height: 100%; background: var(--accent); transform-origin: left; transition: transform var(--dur) var(--ease); animation: meter-grow var(--dur) var(--ease) both; }
@@ -239,7 +239,7 @@ mark.hl { background: var(--accent-soft); color: var(--accent); border-radius: 3
 /* 本月每天：SVG 柱状图，按整月排格子；选中的柱子满色，超过日均预算的用警示色 */
 .daily { padding: var(--sp-4); display: grid; gap: var(--sp-2); animation: rise var(--dur) var(--ease) both; animation-delay: calc(var(--stagger) * 2); }
 .daily-head { display: flex; align-items: baseline; gap: var(--sp-2); }
-.daily-head span { font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); }
+.daily-head span { font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); }
 .daily-head b { font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .daily-plot { width: 100%; height: 120px; display: block; cursor: pointer; touch-action: pan-y; border-radius: var(--r-inner); }
 .daily-plot:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
@@ -357,7 +357,7 @@ button.run-row:hover { background: var(--tile); }
 /* 行上的问题（连不上 / 令牌被拒）：警示色，不用强调色——强调色只给信号（v2.1） */
 .row-problem { color: var(--warning); font-weight: var(--fw-title); } /* 只染问题那几个字，后面的域名保持原色 */
 .row-problem-icon { flex: none; display: inline-flex; color: var(--warning); }
-.row-hint { flex: none; color: var(--text-3); font-size: var(--fs-xs); letter-spacing: var(--label-tracking); }
+.row-hint { flex: none; color: var(--text-3); font-size: var(--fs-xs); }
 /* 入场动画让每行自成层叠上下文：行内菜单打开时抬高本行，弹出层才盖得住下一行 */
 .row:has(.menu.open) { position: relative; z-index: 3; }
 .skill-row { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }

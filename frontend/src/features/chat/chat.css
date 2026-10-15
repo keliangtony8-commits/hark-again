@@ -115,13 +115,13 @@
 .caret { display: inline-block; width: 8px; height: 1.1em; vertical-align: -3px; margin-left: 2px; border-radius: 2px; background: var(--text-3); animation: blink 1s steps(2) infinite; }
 /* 推理模型的思考：胶囊长成小卡，固定两行高、底对齐露出最新内容，顶部渐隐（App 的 TailText） */
 .thought { gap: var(--sp-2); width: 86%; animation: rise var(--dur) var(--ease) both; }
-.thought-head { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); letter-spacing: var(--label-tracking); }
+.thought-head { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); }
 .thought-head .thinking { padding: 0; }
 .thought-time { margin-left: auto; color: var(--text-3); }
 /* 正文一来，思考卡收成回复上方的一行；左缘与卡内正文对齐 */
 .thought-sum { width: 86%; animation: rise var(--dur) var(--ease) both; }
 .thought-toggle { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 32px; padding: 0 var(--sp-4); border: 0; background: none;
-  color: var(--text-3); font-size: var(--fs-xs); letter-spacing: var(--label-tracking); cursor: pointer; border-radius: var(--r-full); transition: color var(--dur-fast) var(--ease); }
+  color: var(--text-3); font-size: var(--fs-xs); cursor: pointer; border-radius: var(--r-full); transition: color var(--dur-fast) var(--ease); }
 .thought-toggle:hover { color: var(--text-2); }
 .thought-toggle svg:last-child { transition: transform var(--dur) var(--ease); }
 .thought-toggle.open svg:last-child { transform: rotate(90deg); }

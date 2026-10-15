@@ -57,7 +57,7 @@ class _AgendaRow extends StatelessWidget {
       leading: SizedBox(
         width: Layout.agendaTime,
         child: Text(item.time,
-            style: context.text.titleSmall?.copyWith(color: next ? p.text : p.text2, fontWeight: next ? Weights.title : null)),
+            style: context.text.titleSmall?.copyWith(color: next ? p.text : p.text2, fontWeight: next ? Weights.title : null, fontFeatures: const [FontFeature.tabularFigures()])), // 钟点列上下对齐
       ),
       title: item.task.name,
       subtitle: agendaDetail(item),

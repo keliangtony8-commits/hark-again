@@ -187,14 +187,13 @@ abstract final class Radii {
 abstract final class Fs {
   static const xs = 12.0, sm = 14.0, md = 16.0, lg = 19.0, xl = 30.0, display = 32.0; // v3.1 对着 Hark 真机截图降一档（同一台手机上我们的字大约大 20%）
   static const lineHeight = 1.3; // v2.83 §G：界面文字（标题、行、按钮、标签）紧凑 = 网页 --lh
-  static const prose = 1.6; // 只给要“读”的正文：聊天回复（AppMarkdown）、记忆摘要、项目档案 = 网页 --lh-prose
+  static const prose = 1.4; // v3.2 1.6→1.4（Hark 回复行距约 1.33，1.6 让段落发散）； 只给要“读”的正文：聊天回复（AppMarkdown）、记忆摘要、项目档案 = 网页 --lh-prose
 }
 
 /// 字重与字距（v2.1「降一档」）：正文 400、标题/按钮/导航 500、只有页面主标题和大数字 600。
 /// 小标签（“为你准备”“本月花费”）不加粗，靠更小字号 + 字距 + text3 色区分。页面里不再写 FontWeight.w700。
 abstract final class Weights {
   static const body = FontWeight.w400, title = FontWeight.w500, strong = FontWeight.w600;
-  static const labelTracking = 0.5; // 小标签的字距
   static const displayTracking = -0.5; // 大标题、大数字收紧（v2.83 无衬线 600）
 }
 
@@ -275,14 +274,13 @@ abstract final class Elevation {
   static const floatAlpha = 0.5; // 乘在 Palette.shadow 上
 }
 
-/// 字体：正文用系统无衬线；衬线只做点缀（问候、品牌词、引导卡大标题），克制使用。
-/// 不打包字体（省 10MB+）：安卓有 Noto Serif CJK 就用它，没有就退回系统衬线。
+/// 字体（v3.2）：全 App 只有一种字——打包的 MiSans，中文、拉丁、数字同一套字形（= 网页 --font-sans 首位）。
+/// 为什么打包：Flutter 在安卓上按名字找不到系统 MiSans，中文会落成思源黑体、拉丁又是另一套（v2.83 的 Inter），
+/// 两套字形拼在一起是“不细腻”的头号来源（对照 Hark 真机截图）。子集 = GB2312 + 界面用字，三字重约 5 MB；
+/// 子集外的生僻字落到下面的系统字。没有衬线/宋体。
 abstract final class Fonts {
-  /// v2.83 §G：全 App 只有一种字——无衬线。拉丁/数字 = 打包的 Inter（OFL，assets/fonts，只含拉丁子集，
-  /// = 网页 --font-sans 首位）；中文不在 Inter 里，自动落到下面的系统中文字（小米 MiSans、苹方、鸿蒙、思源黑体）。
-  /// 不再有衬线/宋体：真机上它落成 Noto Serif CJK，是“丑”的头号来源。
-  static const sans = 'Inter';
-  static const sansFallback = ['MiSans', 'PingFang SC', 'HarmonyOS Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', ...emoji];
+  static const sans = 'MiSans';
+  static const sansFallback = ['PingFang SC', 'HarmonyOS Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', ...emoji];
   static const emoji = ['Noto Color Emoji', 'Apple Color Emoji']; // 表情兜底（项目图标）：系统通常自己会兜，写明了更稳
 }
 

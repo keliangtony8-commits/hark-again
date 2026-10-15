@@ -1,5 +1,5 @@
 // App 截图（v2.78）：真字体把整个 App 外壳画成 PNG，对照 Hark 截图自查。v2.83 §G：和真机同一套字——
-// 拉丁/数字 = 打包的 Inter（assets/fonts，三种字重），中文 = Noto Sans CJK（真机上是 MiSans/苹方，同为黑体），
+// 中英数字 = 打包的 MiSans（assets/fonts，三种字重，和真机一致），子集外的字落到 Noto Sans CJK，
 // MaterialIcons 来自 Flutter SDK。默认跳过；要出图（先按 app/README.md「截图」下 NotoSansSC.ttf）：
 //   SHOTS_DIR=/tmp/shots/app flutter test test/shots/app_shots_test.dart
 // 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-dark / me-preferences-dark / chat-times-dark / chat-menu-dark（手机 412×915 逻辑像素，2.625 倍）。
@@ -145,8 +145,8 @@ void main() {
   setUpAll(() async {
     if (_out == null) return;
     Directory(_out!).createSync(recursive: true);
-    // 和 tokens Fonts.sans/sansFallback 同名：Inter 用打包的那三份，中文兜底名挂上 CJK 字
-    await _font('Inter', 'assets/fonts/Inter-Regular.ttf', ['assets/fonts/Inter-Medium.ttf', 'assets/fonts/Inter-SemiBold.ttf']);
+    // 和 tokens Fonts.sans/sansFallback 同名：MiSans 用打包的那三份，兜底名挂上 CJK 字
+    await _font('MiSans', 'assets/fonts/MiSans-Regular.ttf', ['assets/fonts/MiSans-Medium.ttf', 'assets/fonts/MiSans-Semibold.ttf']);
     // 每个中文兜底名都挂上 CJK 字：测试引擎把没注册的字族名解析成 FlutterTest 字，
     // 它恰好有“一中本”等几个字（画成方块），排在前面的 MiSans 就会把这几个字吃掉
     for (final f in Fonts.sansFallback.where((f) => !Fonts.emoji.contains(f))) {

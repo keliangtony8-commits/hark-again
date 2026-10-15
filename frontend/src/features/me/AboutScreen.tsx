@@ -19,6 +19,7 @@ export default function AboutScreen() {
         <ListRow spot="version" title="版本" value={clientVersionLabel(sv)} />
         <ListRow title="服务器" value={host} />
         {sv && <ListRow title="服务器版本" value={sv.version} />}
+        <ListRow title="字体" value="MiSans（小米）" />
       </ListGroup>
     </Page>
   );

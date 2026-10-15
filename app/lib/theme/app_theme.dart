@@ -48,11 +48,12 @@ ThemeData buildTheme(Brightness brightness) {
     error: p.danger,
     outline: p.border,
   );
-  // 全 App 唯一的字样工厂：Inter（拉丁/数字）+ 系统中文字 + 表情兜底（Fonts.sans/sansFallback）。
+  // 全 App 唯一的字样工厂：MiSans（中英数字同一套）+ 生僻字/表情兜底（Fonts.sans/sansFallback）。
   // AppBar 标题、按钮字这类不经过 textTheme 的样式也必须从这里出，否则它们没有字族、也没有表情兜底。
-  // v2.1：所有数字等宽（tabular figures）——金额、时间、计数上下对齐，跳动时不抖。
+  // v3.2：数字回到比例宽（正文里“1 秒”“11 月”不再发散）；只有要上下对齐/会跳动的数字（钟点列、计时、用量）
+  // 在各自那一处加 FontFeature.tabularFigures()（= 网页 font-variant-numeric: tabular-nums 只写在那些类上）。
   TextStyle t(double size, FontWeight w, [Color? c]) => TextStyle(
-      fontSize: size, fontWeight: w, color: c, height: Fs.lineHeight, fontFamily: Fonts.sans, fontFamilyFallback: Fonts.sansFallback, fontFeatures: const [FontFeature.tabularFigures()]);
+      fontSize: size, fontWeight: w, color: c, height: Fs.lineHeight, fontFamily: Fonts.sans, fontFamilyFallback: Fonts.sansFallback);
   // v2.83 §G：页面主标题和大数字 = 同一字族 600、收紧字距（原来是宋体衬线，真机上最丑的地方）。
   TextStyle display(double size, [Color? c]) => t(size, Weights.strong, c).copyWith(height: 1.2, letterSpacing: Weights.displayTracking);
 
@@ -76,7 +77,7 @@ ThemeData buildTheme(Brightness brightness) {
       bodySmall: t(Fs.xs + 1, Weights.body, p.text2),
       labelLarge: t(Fs.sm, Weights.title, p.text),
       labelMedium: t(Fs.xs, Weights.title, p.text2),
-      labelSmall: t(Fs.xs, Weights.body, p.text3).copyWith(letterSpacing: Weights.labelTracking),
+      labelSmall: t(Fs.xs, Weights.body, p.text3),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: p.bg,

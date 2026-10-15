@@ -29,7 +29,7 @@
 .glass-sub { font-size: var(--fs-sm); color: var(--text-2); margin: 0; }
 
 .tile { padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); background: var(--tile); min-width: 0; }
-.tile-label { font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+.tile-label { font-size: var(--fs-xs); color: var(--text-3); }
 .tile-value { font-size: var(--fs-xl); font-weight: var(--fw-strong); line-height: 1.25; letter-spacing: var(--display-tracking); font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile-note { font-size: var(--fs-xs); color: var(--text-3); }
@@ -71,4 +71,4 @@ button.avatar:active { transform: scale(0.94); }
   -webkit-backdrop-filter: blur(var(--blur-scrim)); backdrop-filter: blur(var(--blur-scrim)); animation: fade calc(var(--dur) * 1.5) var(--ease) both; }
 
 /* 日期分隔：居中小灰字 */
-.day-sep { align-self: center; font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); letter-spacing: var(--label-tracking); padding: var(--sp-1) 0; }
+.day-sep { align-self: center; font-size: var(--fs-xs); color: var(--text-3); font-weight: var(--fw-body); padding: var(--sp-1) 0; }

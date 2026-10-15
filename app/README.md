@@ -80,7 +80,7 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 新版外壳截图：先下好上面的 NotoSansSC.ttf，再 `SHOTS_DIR=/tmp/shots/app flutter test test/shots/app_shots_test.dart`（Inter 用打包的那份）。
 
 ## 字体（v2.83 §G，`test/typography_test.dart` 守卫）
-全 App 只有一种无衬线：`Fonts.sans` = 打包的 Inter（`assets/fonts`，OFL，只含拉丁子集，三种字重约 190 KB），中文落到 `Fonts.sansFallback`（MiSans/苹方/鸿蒙/思源黑体）。没有衬线/宋体。行高：界面 `Fs.lineHeight` 1.3，只有要读的正文（AppMarkdown、记忆摘要、项目档案）用 `Fs.prose` 1.6。页面主标题/大数字 = displayX（600、字距 -0.5）。网页同一套：`--font-sans`、`--lh`/`--lh-prose`、`styles/base.css` 的 @font-face。
+全 App 只有一种字：`Fonts.sans` = 打包的 MiSans（`assets/fonts`，中英数字同一套，GB2312 + 界面用字子集，三种字重约 5 MB；须在「关于」注明），子集外的字落到 `Fonts.sansFallback`。数字默认比例宽，只有钟点列/计时/用量那几处加 `tabularFigures`；小标签不加字距。没有衬线/宋体。行高：界面 `Fs.lineHeight` 1.3，只有要读的正文（AppMarkdown、记忆摘要、项目档案）用 `Fs.prose` 1.6。页面主标题/大数字 = displayX（600、字距 -0.5）。网页同一套：`--font-sans`、`--lh`/`--lh-prose`、`styles/base.css` 的 @font-face。
 
 ## 出包
 - 推到 GitHub → Actions → app → 下载 `assistant-android`（选 `arm64-v8a` 那个 APK 装到手机）

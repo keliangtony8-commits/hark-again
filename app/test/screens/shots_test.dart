@@ -498,7 +498,7 @@ Future<void> _loadFonts() async {
     await loader.load();
   }
 
-  await load('Inter', 'assets/fonts/Inter-Regular.ttf'); // v2.83 §G：tokens Fonts.sans（打包的拉丁字）
+  await load('MiSans', 'assets/fonts/MiSans-Regular.ttf'); // v3.2：tokens Fonts.sans（打包的 MiSans）
   for (final f in ['MiSans', 'PingFang SC', 'HarmonyOS Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC']) {
     await load(f, '$_fonts/NotoSansSC.ttf'); // tokens Fonts.sansFallback：中文（每个名都挂，否则未注册名落到 FlutterTest 方块）
   }

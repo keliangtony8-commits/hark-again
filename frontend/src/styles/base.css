@@ -1,7 +1,7 @@
-/* v2.83 §G：Inter（OFL，rsms/inter v4.1，只含拉丁子集，public/fonts/）。中文字形不在里面，浏览器自动落到 --font-sans 后面的系统中文字 */
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/Inter-Regular.woff2") format("woff2"); }
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/Inter-Medium.woff2") format("woff2"); }
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/Inter-SemiBold.woff2") format("woff2"); }
+/* v3.2：MiSans（小米，免费商用可嵌入，须注明；常用字子集 public/fonts/，= App assets/fonts）。中英数字同一套字形 */
+@font-face { font-family: "MiSans"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/MiSans-Regular.woff2") format("woff2"); }
+@font-face { font-family: "MiSans"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/MiSans-Medium.woff2") format("woff2"); }
+@font-face { font-family: "MiSans"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/MiSans-Semibold.woff2") format("woff2"); }
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -12,7 +12,6 @@ body {
   font-family: var(--font-sans);
   font-size: var(--fs-md);
   line-height: var(--lh);
-  font-variant-numeric: tabular-nums; /* v2.1：所有数字等宽（= App FontFeature.tabularFigures） */
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }

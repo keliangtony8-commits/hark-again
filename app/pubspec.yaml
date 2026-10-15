@@ -1,7 +1,7 @@
 name: assistant
 description: "A new Flutter project."
 publish_to: 'none'
-version: 3.1.0+30100
+version: 3.2.0+30200
 
 environment:
   sdk: ^3.13.5
@@ -35,12 +35,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/mark.png
-  # v2.83 §G：Inter（OFL-1.1，rsms/inter v4.1，拉丁子集，许可见 assets/fonts/Inter-OFL.txt）。中文用系统字。
+  # v3.2：中英同一套 MiSans（小米，免费商用可嵌入，须注明；常用字子集，许可见 assets/fonts/MiSans-LICENSE.txt）。
   fonts:
-    - family: Inter
+    - family: MiSans
       fonts:
-        - asset: assets/fonts/Inter-Regular.ttf
-        - asset: assets/fonts/Inter-Medium.ttf
+        - asset: assets/fonts/MiSans-Regular.ttf
+        - asset: assets/fonts/MiSans-Medium.ttf
           weight: 500
-        - asset: assets/fonts/Inter-SemiBold.ttf
+        - asset: assets/fonts/MiSans-Semibold.ttf
           weight: 600

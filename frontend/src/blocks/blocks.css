@@ -132,13 +132,13 @@
 /* 草稿 / 摘要 / 图片（= App blocks/content_blocks.dart） */
 .blk-draft { background: var(--tile); border-radius: var(--r-inner); padding: var(--sp-1) var(--sp-1) var(--sp-4) var(--sp-4); }
 .blk-draft-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 36px; color: var(--text-3); }
-.blk-draft-title { flex: 1; min-width: 0; font-size: var(--fs-xs); color: var(--text-2); letter-spacing: var(--label-tracking);
+.blk-draft-title { flex: 1; min-width: 0; font-size: var(--fs-xs); color: var(--text-2);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .blk-draft-body { white-space: pre-wrap; overflow-wrap: anywhere; padding-right: var(--sp-3); font-size: var(--fs-sm); line-height: 1.7; }
 .blk-summary { padding: var(--sp-4) var(--sp-2) var(--sp-2) var(--sp-5); }
 .blk-summary-head { display: flex; align-items: flex-start; gap: var(--sp-2); }
 .blk-summary-head > div { flex: 1; min-width: 0; padding-top: var(--sp-1); }
-.blk-summary-sub { margin-top: var(--sp-1); font-size: var(--fs-xs); color: var(--text-3); letter-spacing: var(--label-tracking); }
+.blk-summary-sub { margin-top: var(--sp-1); font-size: var(--fs-xs); color: var(--text-3); }
 /* v1.04：文档标题用衬线（同 App headlineMedium），出处/概要小字在标题下面 */
 .blk-summary-title { margin: 0; font-size: calc(var(--fs-xl) - 4px); font-weight: var(--fw-strong);
   line-height: 1.2; letter-spacing: var(--display-tracking); }

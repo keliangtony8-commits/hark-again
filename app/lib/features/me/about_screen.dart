@@ -30,6 +30,7 @@ class AboutScreen extends ConsumerWidget {
             Spotlight(id: 'version', row: true, child: ListRow(icon: Icons.tag_rounded, title: '版本', value: clientVersionLabel(sv))),
             ListRow(icon: Icons.dns_outlined, title: '服务器', value: host.isEmpty ? '未设置' : host),
             if (sv != null) ListRow(icon: Icons.update_rounded, title: '服务器版本', value: sv.version),
+            const ListRow(icon: Icons.text_fields_rounded, title: '字体', value: 'MiSans（小米）'), // MiSans 许可要求在软件中注明（= 网页 AboutScreen）
             ListRow(
               icon: Icons.description_outlined,
               title: '开源许可',
