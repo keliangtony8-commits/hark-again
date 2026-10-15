@@ -5,7 +5,7 @@
 不认识的值客户端当没有，所以加新去处 = 三处各加一行，老客户端不出错。
 
 | 模型写的 open      | 存成                         | 客户端打开            |
-| usage / memory / connectors / vault / skills / pages / tasks | 同名 | “我的”下对应页 |
+| usage / memory / connectors / skills / pages / tasks | 同名 | “我的”下对应页（connectors = 连接的账号：OAuth、MCP、网站登录、API Key、环境变量同一页；v2.96 起没有单独的 vault） |
 | task:<任务 id>     | target=tasks, task_id=<id>   | 那个任务的详情        |
 | project:<项目 id>  | target=project:<id>          | 那个项目（点“去做”开的对话也放进这个项目） |
 """
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Project, ScheduledTask
 
-PAGES = {"usage": "用量", "memory": "记忆", "connectors": "连接器", "vault": "保险箱",
+PAGES = {"usage": "用量", "memory": "记忆", "connectors": "连接的账号",
          "skills": "技能", "pages": "网页", "tasks": "定时任务"}
 TARGET_MAX = 64  # home_cards.target 列宽（迁移 0022）
 HELP = ("open 只能是 " + " / ".join(PAGES) + "，或 task:<任务 id>、project:<项目 id>（id 先用 manage_tasks / 项目列表查）。")

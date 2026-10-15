@@ -2,7 +2,7 @@
 值直接存进保险箱（command_env.save），模型只拿到“存好了 $NAME”。对标 Hark 的 request_secret：密钥从不经过模型、
 从不出现在聊天记录里。复用表单卡通道（Tool.form → loop._ask_form → ws form.reply），purpose=env：
 值不写进卡片、不进历史（blocks.FormBlock 规则），只交给这里的 run。
-- 无人值守（定时任务、后台运行）没人能填：不弹卡，告诉模型去请用户到「我的 → 保险箱 → 环境变量」里加。
+- 无人值守（定时任务、后台运行）没人能填：不弹卡，告诉模型去请用户到「我的 → 连接的账号 → 环境变量」里加。
 - 已经有这个变量：照样弹卡（标题写“换个值”），用户填了就覆盖（Token 过期 / 换号是常见原因）。
 - 变量名、值的校验只在 command_env（check_name / check_value / save），这里不重复规则。"""
 from ... import command_env
@@ -47,7 +47,7 @@ async def request_env(ctx: ToolContext, name: str = "", reason: str = "", form: 
     except ValueError as e:
         return ToolResult(f"参数有误：{e}")
     if form is None:  # 只有没人能填时才走到这里（取消由内核处理）
-        return ToolResult(f"现在是后台运行，没人能填。告诉用户到「我的 → 保险箱 → 环境变量」里添加 {var}，"
+        return ToolResult(f"现在是后台运行，没人能填。告诉用户到「我的 → 连接的账号 → 环境变量」里添加 {var}，"
                           "加好后命令就能读到；别让用户把值发在聊天里。")
     value = form.values.get(FIELD, "")
     try:

@@ -1,17 +1,14 @@
-import { IconBrain, IconLock, IconPlug, IconSpark } from "../../ui/icons";
+import { IconBrain, IconSpark } from "../../ui/icons";
 import { Page, PageHeader, stagger } from "../../ui/kit";
 import { MeRows, type MeRow } from "./meRows";
 
-/** “我的”里收拢入口的二级页（v2.81，= App me_hub.dart）：个人资料 = 记忆 + 技能；账户 = 连接器 + 保险箱。
+/** “我的”里收拢入口的二级页（v2.81，= App me_hub.dart）：个人资料 = 记忆 + 技能。
+ *  （v2.96 “账户”收拢页删除：连接器与保险箱合成“连接的账号”一页，“我的”直达。）
  *  原来的子页路由原样保留（深链照常能开）。加一个收拢页 = 在 HUBS 里加一项。 */
 const HUBS = {
   profile: { title: "个人资料", line: "我记住的你，和教我做事的方法。", rows: [
     { to: "/me/memory", icon: IconBrain, title: "记忆" },
     { to: "/me/skills", icon: IconSpark, title: "技能" },
-  ] },
-  accounts: { title: "账户", line: "我替你登录和调用的地方：一键授权的账号、MCP 服务器，以及加密保存的 API Key 和网站登录。", rows: [
-    { to: "/me/connectors", icon: IconPlug, title: "连接的账号" },
-    { to: "/me/vault", icon: IconLock, title: "密钥与网站登录" },
   ] },
 } satisfies Record<string, { title: string; line: string; rows: MeRow[] }>;
 

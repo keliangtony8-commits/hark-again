@@ -43,9 +43,10 @@ Future<FakeApi> pump(WidgetTester tester, HomeCard c) async {
 
 void main() {
   test('every target maps to a route; ids fill slots', () {
-    for (final name in ['usage', 'tasks', 'memory', 'skills', 'connectors', 'vault', 'pages', 'project']) {
+    for (final name in ['usage', 'tasks', 'memory', 'skills', 'connectors', 'pages', 'project']) {
       expect(cardTarget(name), isNotNull, reason: name);
     }
+    expect(cardTarget('vault'), isNull, reason: 'v2.96 保险箱并进连接的账号，后端不再发 vault');
     expect(splitTarget('project:abc'), ('project', 'abc'));
     expect(splitTarget('usage'), ('usage', null));
     expect(splitTarget('project:'), ('project', null));
@@ -71,9 +72,9 @@ void main() {
   testWidgets('system "connection expired" alert: eyebrow + reconnect is the primary pill', (tester) async {
     await pump(tester, card('connectors', prompt: false, system: true));
     expect(find.text('需要你亲自处理'), findsOneWidget);
-    final pill = tester.widget<PillButton>(find.byWidgetPredicate((w) => w is PillButton && w.label == '去连接器'));
+    final pill = tester.widget<PillButton>(find.byWidgetPredicate((w) => w is PillButton && w.label == '去连接的账号'));
     expect(pill.primary, isTrue);
-    await tester.tap(find.text('去连接器'));
+    await tester.tap(find.text('去连接的账号'));
     await tester.pumpAndSettle();
     expect(find.text('CONNECTORS PAGE'), findsOneWidget);
   });
@@ -83,9 +84,9 @@ void main() {
     expect(find.text('需要你亲自处理'), findsOneWidget);
     expect(find.text('可以替你做'), findsNothing);
     expect(find.text('帮我续费'), findsNothing);
-    final pill = tester.widget<PillButton>(find.byWidgetPredicate((w) => w is PillButton && w.label == '去连接器'));
+    final pill = tester.widget<PillButton>(find.byWidgetPredicate((w) => w is PillButton && w.label == '去连接的账号'));
     expect(pill.primary, true);
-    await tester.tap(find.text('去连接器'));
+    await tester.tap(find.text('去连接的账号'));
     await tester.pumpAndSettle();
     expect(find.text('CONNECTORS PAGE'), findsOneWidget);
     expect(api.calls.any((c) => c.endsWith('/start')), false);

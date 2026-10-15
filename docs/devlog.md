@@ -142,3 +142,17 @@
 - Web：`ProjectHome.tsx`；ChatScreen 的 `empty / back / listTitle` 项目分支、项目对话抽屉 + 遮罩复用为项目切换抽屉（`ProjectSwitcher.tsx`）；`TitlePill.tsx` 与 chat.css 的 `.title-pill*`；`useConversations` 的项目搜索。
 - 测试：删 TitlePill / ProjectHome / 项目对话抽屉相关旧测试与 smoke 段落（smoke_conversation_status 的项目汇总、smoke_project_activity 的计数、smoke_project_relay 的“新开一段”），补 smoke_project_chat（约束、ensure、迁移多段→一段 / 回退 / 幂等、运行对话不误伤）与 App / Web 新行为测试。
 **成本**：一次迁移（单用户几十段对话，秒级）；`GET /api/projects` 查询从“每项目 100 段 + for_list”降到“每项目 1 段 + for_list”；项目对话不再自动起标题（每 10 条省一次 lite 调用）；客户端进项目少一次列表渲染。无新模型调用。
+
+## 2026-10-15 v2.96 “我 → 连接的账号”一页（HANDOFF 5 · 2a 第三条；顺带核实第二条）
+**现状（动手前查清）**：三页两套入口。“我”→「账户」收拢页（`/me/accounts`，MeHub.accounts，只有两行）→ ①「连接的账号」= 连接器页 `/me/connectors`（标题却叫“连接器”：OAuth 账户 + MCP 服务器 + 一行“API Key 与网站登录”跳走）；②「密钥与网站登录」= 保险箱页 `/me/vault`（标题“保险箱”：网站登录 / API Key / 环境变量）。同一个“去存 Key”有三条路（收拢页、连接器页末行、主页卡 `vault`），用户要点三层才看到全部，页名三个说法。
+**第二条（没配置的提供方）核实结论：v2.90.2 已做到，不重复**。两端 `sortAccounts` 不画 `status=unconfigured`；连过但服务器后来删了配置的行不给“重新连接”；缺配置时账户区末尾只有一行“服务器还差一步：配置 X 授权”，点开 `oauth_setup_sheet` / `OAuthSetupSheet` 引导（回调地址、变量名、重启命令、docs/oauth-setup.md）；聊天连接卡 unconfigured 无按钮（`connectCardState`）。“普通用户不显示、管理员显示”：Toyuis 单用户（`auth.py` 只有一个主人 = 部署者），登录者即管理员，等价成立；将来多用户再加角色判断。本轮这部分只随页面合并原样搬进新页。
+**决定**
+1. **一页**：`/me/connectors`，标题「连接的账号」（与“我”页行名、HANDOFF 用词一致）。分区按“越省事越靠前”：账户（OAuth 一键授权 + 缺配置那一行）→ MCP 服务器 → 网站登录 → API Key → 环境变量；分区只在有内容时出现。
+2. **一个添加入口**：页头 + → “添加什么？”（MCP 服务器 / 网站登录 / API Key / 环境变量，四类同一份文案表 `addKinds`）。删 MCP 分区自己的 +、保险箱页头 +。MCP 与密钥都空时只放**一张**起步卡（四个按钮），替换原来的 MCP 起步卡 + 保险箱起步卡两张。
+3. **“我”页直达**：“我”的「账户」行改为「连接的账号」直接进这一页；删 `/me/accounts` 收拢页（MeHub 只剩“个人资料”）。少点一层。
+4. **数据源不变、不新增接口**：三类数据本来就各有唯一后端（`/api/connectors`、`/api/connectors/mcp`、`/api/vault`），页面只是同时读三份；不做聚合接口（那会是第二份来源）。页头摘要合成一个函数 `connectorSummary(accounts, servers, secrets)`：“已连接 N 个账户 · N 个 MCP 服务器 · N 项加密保存 · N 个需要处理”，删 `vaultSummary`。
+5. **卡片去处 `vault` 并入 `connectors`**：后端 `card_targets.PAGES` 删 `vault`；`task_wall` needs_login 与浏览器登录过期提醒改指 `connectors`；迁移 0067 把 `home_cards.target='vault'` 改成 `connectors`（单向数据清理，downgrade 不还原——旧服务端也认识 connectors）。两端 cardTargets 删 `vault` 行；“去连接器”文案改“去连接的账号”。老 APK 收到 connectors 照样能开。
+6. 两端同构：App `vault_screen.dart` → `secret_rows.dart`（只剩存入表单与行，无页面）；Web `VaultScreen.tsx` → `SecretSheet.tsx`（表单弹层 + 行），页面只剩 ConnectorsScreen 一个。
+**删除清单**：App `VaultScreen`、`/me/vault`、`/me/accounts` 路由、`MeHub.accounts`、`vaultSummary`、MCP 区 +、保险箱起步卡、连接器页“其他服务”分区；Web `VaultScreen`、`me/vault`、`me/accounts` 路由、MeHub `accounts`、`vaultSummary`、同上 UI；后端 card target `vault`；测试里保险箱页的用例改写到连接的账号页（不保留旧页测试）；截图脚本的 vault 一张。
+**成本**：无新接口、无模型调用；一条只改数据的迁移（几行 UPDATE）；页面多读一份 `/api/vault`（原来要进第二页才读）。
+**结果**：按上面落地。测试：flutter analyze 0、flutter test 674 过 8 跳过、npm run build 过、后端 smoke 202/202（不含 smoke_stepfun）。没做：浏览器 / 真机截图核对（本机无 Chromium）。

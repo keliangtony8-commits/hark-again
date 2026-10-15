@@ -1,4 +1,4 @@
-# Toyuis 交接文档（2026-10-15，v2.95.0）
+# Toyuis 交接文档（2026-10-15，v2.96.0）
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
@@ -28,7 +28,7 @@
 - **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**
 - Flutter：颜色/时长只在 `app/lib/theme/tokens.dart`，动效只在 `app/lib/ui/motion.dart`；弹层只在 `ui/sheets.dart`，子页面 `ui/sub_page.dart`；**不要 `dart format lib`**；测试用 `package:assistant/...` 导入。
 - Web：只用 `tokens.css` 变量，keyframes 只在 `styles/base.css`；`npm run build`（含 check-arch）必须过。
-- 后端：改表必须 Alembic 迁移（当前到 0064）；SQLite 下 ctx.db 写入要在下次模型调用前 commit；runner._run_turn 先读完 conv 属性再 build_history。
+- 后端：改表必须 Alembic 迁移（当前到 0067）；SQLite 下 ctx.db 写入要在下次模型调用前 commit；runner._run_turn 先读完 conv 属性再 build_history。
 - 协议变更同步 `docs/protocol.md`。
 - 版本：唯一版本源 `VERSION` → `python3 brand/sync.py` 同步 App/Web/后端 → 测试 → 写 CHANGELOG → commit → `bash scripts/check_version.sh vX.Y` → tag → push。产品名只来自 `brand.json`。
 - 提交前：`flutter analyze` 0 问题、全量 `flutter test`、`npm run build`、后端全部 smoke；`git diff --cached | grep -iE 'api[_-]?key|secret|token='` 必须为空；不 force-push。
@@ -38,7 +38,7 @@
 - 已发布：v2.85–v2.92（v2.90.1 用户气泡改灰；v2.90.3 已部署过一次，见下）。
 - v2.89：浏览器实时推流（CDP screencast，单条 WS，取代截图轮询）。
 - v2.90：运行中连发“按件回复”（`backend/app/message_intake.py` 单入口；补充并入 / 附和不回 / 问进度一句话 / 新问题并行一路；`messages.answered_by` 账本，迁移 0064；回复离原话远才画引用线）。
-- 已发布到 git：v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
+- 已发布到 git：**v2.96（tag v2.96，2026-10-15，“我 → 连接的账号”一页：连接器 + 保险箱合并，见 5·2a；含迁移 0067，只改旧卡去处 vault→connectors）**、v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95/v2.96 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
 - VPS：GreenCloud 2C/3.8G Debian 12，IP 172.93.163.240，域名 toyuis.itsllm.com。部署方式见 `deploy/`（git archive → 上传 → `deploy/update.sh`）。
   - **2026-10-15 约 11:05 已部署 v2.92.0**（`/api/version` = 2.92.0，容器全部 Up）。旧版备份 `/root/app-v2911-backup.tgz`，.env 备份 `/root/env.bak.v292`；`docker builder prune` 后磁盘 80%。
   - 真模型（StepFun）验证通过：主聊天说“以后叫我小测，你就叫阿星”→ 调用 set_names（步骤“保存称呼”），profile 变为 小测 / 阿星；验证后已删测试对话和 identity 行，greet 恢复为 true（保留用户自己的首次问候体验）。
@@ -49,10 +49,18 @@
 > 完整原话与决定见 `docs/home-redesign.md`（A–P 各节）和 `docs/devlog.md`；凡标注“剩/待/未做”的都算未完成，接手后先逐节核对一遍。
 1. ~~重新部署 VPS~~ 已完成 v2.90.1。剩：真机打开网页确认标题是 Toyuis、实时画面和连发回复在服务器上能用；~~之后每批改动都要重新部署~~ **已被 2026-10-15 13:03 新规则取代：只有用户说“更新服务器”才部署，APK 也只在用户要时才编**（见第三节顶部）。
 2. ~~**用户气泡截图验收**（v2.90.1 只改了颜色 token，未截图）：App 浅/深 + 网页，与 Hark 截图 1000035386 并排对比；a11y 对比度 ≥4.5 补测试。编辑中/引用条/长按聚焦也要跟随新颜色（home-redesign §L）。~~ 2026-10-15 做完：气泡 13.80:1（浅）/14.84:1（深），App 6 个新测试 + 网页构建期守门；顺带修了浅色警示色 3.62→4.93。**剩用户自己拿 Hark 截图并排看一眼**（图在 `shots-2.90.2/`）。
-2a. **连接器“点一下就能授权”**（用户 15:27 原话：“连接器没用，根本就连不上…人家是点一下就能够直接授个权”；更早：“连接 GitHub、Gmail…全面与你对标”“为什么现在连接不了 GitHub 还有 Gmail，显示还没有做”）。**v2.90.2 已做“按钮诚实化 + 引导页 + docs/oauth-setup.md”（未部署）；剩：在 GitHub / Google 后台注册应用、填 VPS `.env`、重启、真机走通授权。** 原因：OAuth 代码在 `backend/app/connectors/oauth.py`，但 VPS `.env` 的 GOOGLE_/GITHUB_CLIENT_ID/SECRET 是空的，点了必失败。要做：
+2a. **连接器“点一下就能授权”**（用户 15:27 原话：“连接器没用，根本就连不上…人家是点一下就能够直接授个权”；更早：“连接 GitHub、Gmail…全面与你对标”“为什么现在连接不了 GitHub 还有 Gmail，显示还没有做”）。**v2.90.2 已做“按钮诚实化 + 引导页 + docs/oauth-setup.md”，v2.96 已做“连接的账号”一页（均未部署）；剩：在 GitHub / Google 后台注册应用、填 VPS `.env`、重启、真机走通授权。** 原因：OAuth 代码在 `backend/app/connectors/oauth.py`，但 VPS `.env` 的 GOOGLE_/GITHUB_CLIENT_ID/SECRET 是空的，点了必失败。要做：
    - 在 VPS 注册 GitHub OAuth App、Google OAuth（测试模式，把用户自己加为测试用户），回调地址 `https://toyuis.itsllm.com/...`（看 oauth.py），填进 `.env` 后重启，真机走通 GitHub、Gmail 一键授权。
    - 没配置的提供方，按钮不能“看起来能点、点了失败”：只显示已配置的；全没配时普通用户不显示，管理员显示“服务器还差一步：配置 Google 授权”并进引导页。
    - “我 → 连接的账号”统一：OAuth、MCP、API Key、网站登录在同一页分区（连接器 + 保险箱合并，home-redesign B/§连接器）。
+   - **v2.96 进度（2026-10-15，按块如实更新）**：第二条核实 v2.90.2 已做到（单用户 = 登录者即管理员），不重复；第三条本轮做，决定见 docs/devlog.md「2026-10-15 v2.96」。
+     - [x] devlog：现状、决定、删除清单、成本
+     - [x] 后端：card target vault 并入 connectors（card_targets / task_wall / 浏览器登录过期提醒 / env 工具文案）+ 迁移 0067（home_cards.target vault→connectors）；protocol.md 同步；smoke_offer_target / task_wall / browser_login_expiry / project_chat（加 0067 用例）已过
+     - [x] App：连接的账号一页（`connectors_screen.dart`；`vault_screen.dart` → `secret_rows.dart` 只剩表单与行），页头 + 唯一添加入口（`addKinds` 四类）、MCP+密钥都空时一张起步卡；删 `/me/vault`、`/me/accounts`、`MeHub.accounts`、`vaultSummary`、“其他服务”行、MCP 区 +；“我”页行直达；cardTargets 删 vault
+     - [x] Web：同构（`ConnectorsScreen.tsx`；`VaultScreen.tsx` → `SecretSheet.tsx` 弹层 + 行，去掉弹层里的种类切换——种类在 + 菜单里选，= App）；删 `me/vault`、`me/accounts` 路由、MeHub accounts、cardTargets vault；shots.py 去掉 vault 一张。`npm run build` 过。**未在浏览器实点 / 未截图**（本机无 Chromium）
+     - [x] 测试：flutter analyze 0、flutter test 674 过（8 跳过；connector_library_test 保险箱页 4 例改写成连接的账号页 5 例，含“+ 唯一入口四类”）、npm run build 过（架构守卫 217 文件）、后端 smoke 202/202（不含 smoke_stepfun；smoke_jobs 并行时偶发失败、单跑过；smoke_request_env 随 env 工具文案改了断言）
+     - [x] 发布 v2.96：VERSION 2.96.0、CHANGELOG、check_version、commit + tag v2.96 + push（不部署、不出 APK）
+     - [ ] 未做：浏览器 / 真机实点与截图（App 明暗 + Web 手机宽度）；部署后核对 0067 把旧“打开保险箱”卡改成了“去连接的账号”
 3. ~~**连发分组准确率重评**（用户 20:48）~~ 2026-10-15 做完，但**不是原地重标**：`work/e2e-harness/intake_cases.jsonl`、`eval_intake.py`、`docs/home-redesign.md`（§C 定义所在）**从没提交进 git**，只在旧沙盒里，旧的那个 70% 不可复现。改成把评测搬进仓库当唯一真源：
    - 标注集 `backend/tests/intake_cases.jsonl`（**57 组 / 74 条**，每组带 `why` 说明标注依据，可复核）；评测器 `backend/tests/smoke_intake_eval.py`（`python tests/smoke_intake_eval.py -v`；`EVAL_JUDGE=1` 加跑真模型判官层）。
    - 量出来的真实数字（v2.90.4）：**规则层误判 0**、62.2% 的条数靠规则直接定、37.8% 交给便宜模型；57 组里 30 组纯靠规则、27 组要问一次 ≈200 token 的便宜模型（`SUMMARY_MODEL=lite`）；判官答对即 100%。
@@ -110,7 +118,7 @@
 | 核心功能对标 Codex / DeepSeek / Gemini 三个 agent，学优点、能用就用，以 Hark/Muse/Cue/Dots 的消费者价值判断 | ⚠️ 持续项 | core-research.md、core-gaps.md（#9 未做） |
 | 没 VPS 先用你的云电脑测试，多测试，实践是检验真理的唯一标准 | ✅ 规则 | work/e2e-harness（每轮真 E2E） |
 | 点开任何功能就白屏（http 下） | ✅ | lib/uuid.ts、clipboard.ts |
-| 连接不了 GitHub、Gmail；点一下登录再确认授权 | ⚠️ v2.90.2 按钮诚实化 + 配置引导已提交；OAuth 应用未注册、未部署 | 见第五节 2a、docs/oauth-setup.md |
+| 连接不了 GitHub、Gmail；点一下登录再确认授权 | ⚠️ v2.90.2 按钮诚实化 + 配置引导已提交；v2.96 连接器 + 保险箱合成“连接的账号”一页（已提交，未部署、未真机看）；OAuth 应用未注册、未部署 | 见第五节 2a、docs/oauth-setup.md |
 | 删了的对话又蹦出来；子对话（定时任务运行对话）不要放主列表 | ⚠️ v2.75 修了，需在服务器上确认 | devlog v2.75 |
 | CPU 60%～100%、内存占用高，要优化 | ❓ | 服务器上 `docker stats` 核实；APK 构建已改为限流脚本 |
 | 一个项目就是一段对话，项目内不能开多个会话（10-15 12:48） | ⚠️ v2.95 已做并提交（点项目即聊天、≡ 项目切换、旧多段迁移合并可回退），未部署、未真机看 | 第五节 5b，devlog v2.95 |

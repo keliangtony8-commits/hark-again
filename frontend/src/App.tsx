@@ -10,7 +10,6 @@ import MeScreen from "./features/me/MeScreen";
 import SkillsScreen from "./features/me/SkillsScreen";
 import TaskDetailScreen from "./features/me/TaskDetailScreen";
 import TasksScreen from "./features/me/TasksScreen";
-import VaultScreen from "./features/me/VaultScreen";
 import WalletScreen from "./features/me/WalletScreen";
 import SecurityScreen from "./features/me/SecurityScreen";
 import FeedbackScreen from "./features/me/FeedbackScreen";
@@ -50,7 +49,6 @@ export default function App() {
           <Route path="me/tasks/:id" element={<TaskDetailScreen />} />
           <Route path="me/skills" element={<SkillsScreen />} />
           <Route path="me/connectors" element={<ConnectorsScreen />} />
-          <Route path="me/vault" element={<VaultScreen />} />
           <Route path="me/wallet" element={<WalletScreen />} />
           <Route path="me/security" element={<SecurityScreen />} />
           <Route path="me/feedback" element={<FeedbackScreen />} />
@@ -59,7 +57,6 @@ export default function App() {
           <Route path="me/pages" element={<PagesScreen />} />
           <Route path="me/usage" element={<UsageScreen />} />
           <Route path="me/profile" element={<MeHub hub="profile" />} />
-          <Route path="me/accounts" element={<MeHub hub="accounts" />} />
           <Route path="me/preferences" element={<PreferencesScreen />} />
           <Route path="me/about" element={<AboutScreen />} />
           {/* v0.47 前的“设置”页已拆进“我的”和“用量”：旧链接回到我的 */}

@@ -251,7 +251,7 @@ async def _alert(ctx: ToolContext, tab: Tab, subject: str, stale: bool = False) 
         await system_alerts.post(
             ctx.db, subject=subject, once="expired", title=f"{site} 的登录过期了",
             text=f"定时任务要用 {site}，但云浏览器里的登录已经失效，{why}",
-            open=f"task:{ctx.task_id}" if ctx.task_id else "vault",
+            open=f"task:{ctx.task_id}" if ctx.task_id else "connectors",
             prompt=f"帮我在云浏览器里重新登录 {site}（会话 {tab.session}）。")
         await ctx.db.commit()
     except Exception:  # 提醒发不出去不影响任务本身

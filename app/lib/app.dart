@@ -24,7 +24,6 @@ import 'features/me/tasks_screen.dart';
 import 'features/me/usage_screen.dart';
 import 'features/me/feedback_screen.dart';
 import 'features/me/security_screen.dart';
-import 'features/me/vault_screen.dart';
 import 'features/me/wallet_screen.dart';
 import 'features/projects/project_brief_screen.dart';
 import 'features/projects/projects_screen.dart';
@@ -90,7 +89,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: ':id', builder: (_, s) => TaskDetailScreen(id: s.pathParameters['id']!)),
         ]),
         GoRoute(path: 'connectors', builder: (_, s) => ConnectorsScreen(oauth: OAuthResult.fromQuery(s.uri.queryParameters))),
-        GoRoute(path: 'vault', builder: (_, _) => const VaultScreen()),
         GoRoute(path: 'wallet', builder: (_, _) => const WalletScreen()),
         GoRoute(path: 'security', builder: (_, _) => const SecurityScreen()),
         GoRoute(path: 'feedback', builder: (_, _) => const FeedbackScreen(), routes: [
@@ -100,7 +98,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(path: 'pages', builder: (_, _) => const PagesScreen()),
         GoRoute(path: 'usage', builder: (_, _) => const UsageScreen()),
         GoRoute(path: 'profile', builder: (_, _) => const MeHubScreen(hub: MeHub.profile)),
-        GoRoute(path: 'accounts', builder: (_, _) => const MeHubScreen(hub: MeHub.accounts)),
         GoRoute(path: 'preferences', builder: (_, _) => const PreferencesScreen()),
         GoRoute(path: 'about', builder: (_, _) => const AboutScreen()),
         GoRoute(path: 'skills', builder: (_, _) => const SkillsScreen(), routes: [

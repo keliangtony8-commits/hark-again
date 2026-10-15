@@ -1,4 +1,4 @@
-// 连接器页与保险箱页的纯逻辑。与 App lib/features/me/connector_library.dart 同规则。
+// “连接的账号”页的纯逻辑。与 App lib/features/me/connector_library.dart 同规则。
 import type { Connector, McpServerInfo, VaultSecret } from "../../lib/types";
 import { connectorShown } from "../../lib/connect";
 
@@ -20,12 +20,12 @@ export function sortServers(list: McpServerInfo[]): McpServerInfo[] {
   return list.map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map((x) => x.s);
 }
 
-/** 页头小标签；servers 为 null = MCP 还在加载，先不说这部分。 */
-export function connectorSummary(accounts: Connector[], servers: McpServerInfo[] | null): string {
+/** 页头小标签：“已连接 2 个账户 · 1 个 MCP 服务器 · 3 项加密保存 · 1 个需要处理”；servers / secrets 为 null = 还在加载，先不说这部分。 */
+export function connectorSummary(accounts: Connector[], servers: McpServerInfo[] | null, secrets: VaultSecret[] | null): string {
   const n = accounts.filter((c) => c.account).length;
   const broken = servers ? servers.filter((s) => mcpProblemText(s)).length : 0;
   const parts = [n > 0 ? `已连接 ${n} 个账户` : "", servers && servers.length ? `${servers.length} 个 MCP 服务器` : "",
-    broken ? `${broken} 个需要处理` : ""].filter(Boolean);
+    secrets && secrets.length ? `${secrets.length} 项加密保存` : "", broken ? `${broken} 个需要处理` : ""].filter(Boolean);
   return parts.length ? parts.join(" · ") : "还没有连接任何服务";
 }
 
@@ -36,13 +36,6 @@ export function groupSecrets(list: VaultSecret[]) {
     keys: list.filter((s) => s.kind !== "login" && s.kind !== "env"),
     envs: list.filter((s) => s.kind === "env"),
   };
-}
-
-export function vaultSummary(list: VaultSecret[]): string {
-  const g = groupSecrets(list);
-  const parts = [g.logins.length ? `${g.logins.length} 个网站登录` : "", g.keys.length ? `${g.keys.length} 个 API Key` : "",
-    g.envs.length ? `${g.envs.length} 个环境变量` : ""].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "保险箱是空的";
 }
 
 /** 脱敏说明：登录 → 用户名；Key / 环境变量 → ••••末四位（短值不露）。 */
@@ -78,6 +71,12 @@ export const SECRET_KINDS = [
   { kind: "login", label: "网站登录", desc: "我在云浏览器里替你登录这个网站" },
   { kind: "api_key", label: "API Key", desc: "我调用这个服务时按域名带上它" },
   { kind: "env", label: "环境变量", desc: "由你电脑上运行的程序按名称读取，比如机器人 Token" },
+] as const;
+
+/** 页头 +“添加什么？”与起步卡共用的四类（v2.96 一页一个添加入口；= App addKinds）。 */
+export const ADD_KINDS = [
+  { kind: "mcp", label: "MCP 服务器", desc: "接入支持 MCP 的服务，我就能用它的工具" },
+  ...SECRET_KINDS,
 ] as const;
 
 /** MCP 服务器行上的问题；不认识的值当没有（与 App McpServerItem.problemText 同一规则）。 */

@@ -1,4 +1,4 @@
-// 连接器页与保险箱页的纯逻辑（不碰界面，便于测试）：排序、页头摘要、保险箱分组。
+// “连接的账号”页的纯逻辑（不碰界面，便于测试）：排序、页头摘要、密钥分组、添加的种类。
 // 网页版 frontend/src/features/me/connectorLibrary.ts 与此同规则。
 import '../../models/resources.dart';
 
@@ -22,35 +22,26 @@ List<McpServerItem> sortServers(List<McpServerItem> list) {
   return [for (final (_, s) in indexed) s];
 }
 
-/// 连接器页页头小标签：“已连接 2 个账户 · 1 个 MCP 服务器”；什么都没接时说清楚。
-/// [servers] 为 null = MCP 列表还在加载，这部分先不说。
-String connectorSummary(List<Connector> accounts, List<McpServerItem>? servers) {
+/// 连接的账号页头小标签：“已连接 2 个账户 · 1 个 MCP 服务器 · 3 项加密保存 · 1 个需要处理”；什么都没接时说清楚。
+/// [servers] / [secrets] 为 null = 还在加载，这部分先不说。
+String connectorSummary(List<Connector> accounts, List<McpServerItem>? servers, List<SecretItem>? secrets) {
   final n = accounts.where((c) => c.connected).length;
+  final broken = servers?.where((s) => s.problemText != null).length ?? 0;
   final parts = [
     if (n > 0) '已连接 $n 个账户',
     if (servers != null && servers.isNotEmpty) '${servers.length} 个 MCP 服务器',
-    if (servers != null && servers.any((s) => s.problemText != null)) '${servers.where((s) => s.problemText != null).length} 个需要处理',
+    if (secrets != null && secrets.isNotEmpty) '${secrets.length} 项加密保存',
+    if (broken > 0) '$broken 个需要处理',
   ];
   return parts.isEmpty ? '还没有连接任何服务' : parts.join(' · ');
 }
 
-/// 保险箱分组：网站登录（云浏览器里代填）、API Key（按域名进请求头）、环境变量（注入电脑上的命令）严格分开。
+/// 密钥分组：网站登录（云浏览器里代填）、API Key（按域名进请求头）、环境变量（注入电脑上的命令）严格分开。
 ({List<SecretItem> logins, List<SecretItem> keys, List<SecretItem> envs}) groupSecrets(List<SecretItem> list) => (
       logins: [for (final s in list) if (s.isLogin) s],
       keys: [for (final s in list) if (!s.isLogin && !s.isEnv) s],
       envs: [for (final s in list) if (s.isEnv) s],
     );
-
-/// 保险箱页头小标签：“1 个网站登录 · 2 个 API Key · 1 个环境变量”。
-String vaultSummary(List<SecretItem> list) {
-  final g = groupSecrets(list);
-  final parts = [
-    if (g.logins.isNotEmpty) '${g.logins.length} 个网站登录',
-    if (g.keys.isNotEmpty) '${g.keys.length} 个 API Key',
-    if (g.envs.isNotEmpty) '${g.envs.length} 个环境变量',
-  ];
-  return parts.isEmpty ? '保险箱是空的' : parts.join(' · ');
-}
 
 /// 一行里的脱敏说明：登录 → 用户名；Key / 环境变量 → ••••末四位（短值不露）。永远不含明文。
 String secretHint(SecretItem s) => s.isLogin ? (s.username ?? '') : (s.preview.isEmpty ? '' : '••••${s.preview}');
@@ -81,9 +72,15 @@ const reservedEnvNames = {
   'SHLVL', 'IFS', 'BASH_ENV', 'ENV', 'PS1', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'STDIN_B64',
 };
 
-/// 保险箱里能存的三类，起步卡和“存入什么？”菜单共用一份文案。
+/// 加密保存的三类。
 const secretKinds = [
   (kind: 'login', label: '网站登录', desc: '我在云浏览器里替你登录这个网站'),
   (kind: 'api_key', label: 'API Key', desc: '我调用这个服务时按域名带上它'),
   (kind: 'env', label: '环境变量', desc: '由你电脑上运行的程序按名称读取，比如机器人 Token'),
+];
+
+/// 页头 +“添加什么？”与起步卡共用的四类（v2.96 一页一个添加入口）：MCP 服务器 + 加密保存的三类。
+const addKinds = [
+  (kind: 'mcp', label: 'MCP 服务器', desc: '接入支持 MCP 的服务，我就能用它的工具'),
+  ...secretKinds,
 ];

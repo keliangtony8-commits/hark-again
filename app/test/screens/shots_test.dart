@@ -630,7 +630,7 @@ void main() {
       await _calm(tester);
       router.push('/me');
       await _shot(tester, '$mode-me');
-      router.push('/me/connectors'); // 连接器：MCP 行上的问题（v0.97）
+      router.push('/me/connectors'); // 连接的账号：账户 / MCP 行上的问题 / 网站登录 / API Key 同一页（v2.96）
       await _shot(tester, '$mode-connectors');
       router.pop();
       router.push('/me/tasks'); // 定时任务：自动暂停的进“需要留意”（v1.00）
@@ -638,9 +638,6 @@ void main() {
       router.pop();
       router.push('/me/memory'); // 记忆：摘要卡 + 分类 + 分组（v1.06）
       await _shot(tester, '$mode-memory');
-      router.pop();
-      router.push('/me/vault'); // 保险箱：网站登录 / API Key 两组（v1.06）
-      await _shot(tester, '$mode-vault');
       router.pop();
       router.push('/me/pages'); // Pages：在线 / 已下线（v1.08）
       await _shot(tester, '$mode-pages');

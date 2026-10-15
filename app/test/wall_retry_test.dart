@@ -30,11 +30,11 @@ Future<void> pumpRunning(WidgetTester tester, FakeApi api) async {
 
 void main() {
   test('parsing + wording', () {
-    final j = {...taskJson(label: '需要登录 jw.example.edu', fixable: true, open: 'vault'), 'run_requested': true, 'wall_retrying': true};
+    final j = {...taskJson(label: '需要登录 jw.example.edu', fixable: true, open: 'connectors'), 'run_requested': true, 'wall_retrying': true};
     final t = ScheduledTask.fromJson(j);
     expect(t.wallRetrying, isTrue);
     expect(wallHint(t), contains('已经在重新运行'));
-    final waiting = ScheduledTask.fromJson(taskJson(label: '需要登录 jw.example.edu', fixable: true, open: 'vault', output: 'report'));
+    final waiting = ScheduledTask.fromJson(taskJson(label: '需要登录 jw.example.edu', fixable: true, open: 'connectors', output: 'report'));
     expect(waiting.wallRetrying, isFalse);
     expect(wallHint(waiting), contains('自动重新运行'));
     expect(withRetried('已连接 GitHub', null), '已连接 GitHub');
@@ -47,14 +47,14 @@ void main() {
     expect(McpServerItem.fromJson({'id': 'm', 'name': 'x', 'retried_note': 'n'}).retriedNote, 'n');
   });
 
-  testWidgets('retrying wall: sync icon, no retry button, still a way to the vault', (tester) async {
-    final api = FakeApi({...taskJson(label: '需要登录 jw.example.edu', fixable: true, open: 'vault'), 'run_requested': true, 'wall_retrying': true});
+  testWidgets('retrying wall: sync icon, no retry button, still a way to the login page', (tester) async {
+    final api = FakeApi({...taskJson(label: '需要登录 jw.example.edu', fixable: true, open: 'connectors'), 'run_requested': true, 'wall_retrying': true});
     await pumpRunning(tester, api);
     expect(find.text('需要登录 jw.example.edu'), findsOneWidget);
     expect(find.text('已经在重新运行，成功后这条会自动收起。'), findsOneWidget);
     expect(find.byIcon(Icons.sync_rounded), findsOneWidget);
     expect(find.text('重试'), findsNothing);
-    expect(find.text('打开保险箱'), findsOneWidget);
+    expect(find.text('去连接的账号'), findsOneWidget);
     await tester.pumpWidget(const SizedBox()); // 卸掉页面，停掉轮询计时器
     await tester.pump(const Duration(seconds: 30));
   });

@@ -2,7 +2,6 @@ import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/connector_library.dart';
 import 'package:assistant/features/me/connectors_screen.dart';
 import 'package:assistant/features/me/oauth_setup_sheet.dart';
-import 'package:assistant/features/me/vault_screen.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/tokens.dart';
@@ -38,7 +37,6 @@ Future<void> pump(WidgetTester tester, String path, Widget screen, Map<String, O
   addTearDown(tester.view.reset);
   final router = GoRouter(initialLocation: path, routes: [
     GoRoute(path: path, builder: (_, _) => screen),
-    GoRoute(path: '/me/vault', builder: (_, _) => const VaultScreen()),
   ]);
   await tester.pumpWidget(ProviderScope(
     overrides: [apiProvider.overrideWithValue(FakeApi(data))],
@@ -75,18 +73,17 @@ void main() {
   });
 
   test('摘要与脱敏', () {
-    expect(connectorSummary([c('a')], const []), '还没有连接任何服务');
-    expect(connectorSummary([c('a', account: 'x'), c('b')], null), '已连接 1 个账户');
+    expect(connectorSummary([c('a')], const [], const []), '还没有连接任何服务');
+    expect(connectorSummary([c('a', account: 'x'), c('b')], null, null), '已连接 1 个账户');
     final mcp = [const McpServerItem(id: 'm', name: 'm', url: 'https://m.dev/mcp', hasToken: false)];
-    expect(connectorSummary([c('a', account: 'x')], mcp), '已连接 1 个账户 · 1 个 MCP 服务器');
-    expect(vaultSummary(const []), '保险箱是空的');
-    expect(vaultSummary([sec('k1'), sec('l', login: true), sec('k2')]), '1 个网站登录 · 2 个 API Key');
+    expect(connectorSummary([c('a', account: 'x')], mcp, const []), '已连接 1 个账户 · 1 个 MCP 服务器');
+    expect(connectorSummary(const [], const [], [sec('k1'), sec('l', login: true), sec('k2')]), '3 项加密保存');
+    expect(addKinds.map((k) => k.kind), ['mcp', 'login', 'api_key', 'env']);
     expect(secretHint(sec('k')), '••••wxyz');
     expect(secretHint(sec('l', login: true)), 'me');
     const env = SecretItem(id: 'e', kind: 'env', name: 'TG_TOKEN', hosts: [], preview: '');
     expect(groupSecrets([sec('k1'), env]).envs.single.name, 'TG_TOKEN');
     expect(groupSecrets([sec('k1'), env]).keys.length, 1);
-    expect(vaultSummary([sec('k1'), env]), '1 个 API Key · 1 个环境变量');
     expect(secretHint(env), '');
     expect(secretWhere(env), r'电脑上的命令里读 $TG_TOKEN');
     expect(secretWhere(sec('k')), 'a.com');
@@ -121,7 +118,8 @@ void main() {
     expect(find.widgetWithText(RowHint, '已连接'), findsOneWidget);
     expect(find.widgetWithText(PillButton, '连接'), findsOneWidget);
     expect(tester.getSize(find.widgetWithText(PillButton, '连接')).height, greaterThanOrEqualTo(A11y.minTap));
-    expect(find.text('接入任何 MCP 服务'), findsOneWidget);
+    expect(find.text('接入更多服务'), findsOneWidget); // MCP 与密钥都空：只有一张起步卡
+    expect(find.text('连接的账号'), findsOneWidget);
     // 没配的 GitHub 不画成一行（没有“看起来能点、点了失败”的东西），只在末尾给部署者一行
     expect(find.text('GitHub'), findsNothing);
     expect(find.text('服务器还差一步'), findsOneWidget);
@@ -136,7 +134,7 @@ void main() {
         {'id': 'github', 'name': 'GitHub', 'desc': '代码', 'status': 'unconfigured', 'setup': ghSetup},
       ],
     });
-    expect(find.byType(PillButton), findsWidgets); // MCP 起步卡的按钮
+    expect(find.byType(PillButton), findsWidgets); // 起步卡的按钮
     expect(find.widgetWithText(PillButton, '连接'), findsNothing);
     expect(find.text('配置 Google / GitHub 授权'), findsOneWidget);
     await tester.tap(find.text('服务器还差一步'));
@@ -167,7 +165,7 @@ void main() {
     expect(m('down').problemText, '无法连接');
     expect(m('weird').problemText, isNull);
     expect(m(null).problemText, isNull);
-    expect(connectorSummary(const [], [m('down'), m(null)]), '2 个 MCP 服务器 · 1 个需要处理');
+    expect(connectorSummary(const [], [m('down'), m(null)], null), '2 个 MCP 服务器 · 1 个需要处理');
   });
 
   test('sortServers：有问题的在前，其余保持顺序', () {
@@ -191,27 +189,39 @@ void main() {
     expect(find.text('2 个 MCP 服务器 · 1 个需要处理'), findsOneWidget);
   });
 
-  testWidgets('保险箱：分组带数量；空时起步按钮直接打开对应表单', (tester) async {
-    await pump(tester, '/me/vault', const VaultScreen(), {
+  testWidgets('连接的账号一页：账户、MCP、网站登录、API Key 分区同页（v2.96 保险箱并入），有内容就没有起步卡', (tester) async {
+    await pump(tester, '/me/connectors', const ConnectorsScreen(), {
+      '/api/connectors': [
+        {'id': 'google', 'name': 'Google', 'desc': '邮件', 'status': 'connected', 'account': 'me@gmail.com'},
+      ],
+      '/api/connectors/mcp': [
+        {'id': 'b', 'name': 'calc', 'url': 'https://calc.dev/mcp', 'has_token': false},
+      ],
       '/api/vault': [
         {'id': '1', 'kind': 'api_key', 'name': 'OpenWeather', 'hosts': ['api.openweathermap.org'], 'preview': 'abcd'},
         {'id': '2', 'kind': 'login', 'name': '教务', 'username': 'stu', 'hosts': ['jwxt.edu.cn'], 'preview': ''},
       ],
     });
-    expect(find.text('1 个网站登录 · 1 个 API Key'), findsOneWidget);
+    expect(find.text('已连接 1 个账户 · 1 个 MCP 服务器 · 2 项加密保存'), findsOneWidget);
+    double y(String t) => tester.getTopLeft(find.text(t)).dy;
+    expect(y('Google'), lessThan(y('calc')));
+    expect(y('calc'), lessThan(y('教务')));
+    expect(y('教务'), lessThan(y('OpenWeather'))); // 网站登录在 API Key 前
     expect(find.text('••••abcd'), findsOneWidget);
+    expect(find.text('接入更多服务'), findsNothing);
+    expect(find.text('其他服务'), findsNothing); // 不再有跳去另一页的那一行
     await tester.tap(find.text('OpenWeather'));
     await tester.pumpAndSettle();
     expect(find.text('删除'), findsOneWidget);
   });
 
-  testWidgets('保险箱：环境变量自成一组，点开能换值', (tester) async {
-    await pump(tester, '/me/vault', const VaultScreen(), {
+  testWidgets('连接的账号：环境变量自成一组，点开能换值', (tester) async {
+    await pump(tester, '/me/connectors', const ConnectorsScreen(), {
       '/api/vault': [
         {'id': '3', 'kind': 'env', 'name': 'TELEGRAM_BOT_TOKEN', 'hosts': [], 'preview': 'wxyz'},
       ],
     });
-    expect(find.text('1 个环境变量'), findsOneWidget);
+    expect(find.text('1 项加密保存'), findsOneWidget);
     expect(find.text('环境变量'), findsOneWidget);
     expect(find.text(r'电脑上的命令里读 $TELEGRAM_BOT_TOKEN'), findsOneWidget);
     expect(find.byIcon(Icons.terminal_rounded), findsOneWidget);
@@ -224,20 +234,37 @@ void main() {
     expect(find.text('变量名'), findsNothing);
   });
 
-  testWidgets('保险箱为空：环境变量起步按钮 → 变量表单', (tester) async {
-    await pump(tester, '/me/vault', const VaultScreen(), const {});
-    await tester.tap(find.text('环境变量'));
+  testWidgets('连接的账号为空：起步卡的环境变量 → 变量表单', (tester) async {
+    await pump(tester, '/me/connectors', const ConnectorsScreen(), const {});
+    await tester.tap(find.widgetWithText(PillButton, '环境变量'));
     await tester.pumpAndSettle();
     expect(find.text('新环境变量'), findsOneWidget);
     expect(find.text('变量名'), findsOneWidget);
   });
 
-  testWidgets('保险箱为空：网站登录起步按钮 → 登录表单', (tester) async {
-    await pump(tester, '/me/vault', const VaultScreen(), const {});
-    expect(find.text('保险箱是空的'), findsWidgets);
-    await tester.tap(find.text('网站登录'));
+  testWidgets('连接的账号为空：起步卡的网站登录 → 登录表单', (tester) async {
+    await pump(tester, '/me/connectors', const ConnectorsScreen(), const {});
+    await tester.tap(find.widgetWithText(PillButton, '网站登录'));
     await tester.pumpAndSettle();
     expect(find.text('新网站登录'), findsOneWidget);
     expect(find.text('用户名 / 手机号 / 邮箱'), findsOneWidget);
+  });
+
+  testWidgets('页头 + 是唯一的添加入口：四类都在，选 MCP 进 MCP 表单', (tester) async {
+    await pump(tester, '/me/connectors', const ConnectorsScreen(), {
+      '/api/vault': [
+        {'id': '1', 'kind': 'api_key', 'name': 'OpenWeather', 'hosts': ['api.openweathermap.org'], 'preview': 'abcd'},
+      ],
+    });
+    expect(find.byTooltip('添加 MCP 服务器'), findsNothing); // MCP 分区不再自带 +
+    await tester.tap(find.byTooltip('添加'));
+    await tester.pumpAndSettle();
+    expect(find.text('添加什么？'), findsOneWidget);
+    for (final k in addKinds) {
+      expect(find.text('${k.label} · ${k.desc}'), findsOneWidget);
+    }
+    await tester.tap(find.text('${addKinds.first.label} · ${addKinds.first.desc}'));
+    await tester.pumpAndSettle();
+    expect(find.text('添加 MCP 服务器'), findsOneWidget);
   });
 }

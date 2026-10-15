@@ -422,7 +422,7 @@ def main():
                 page.wait_for_timeout(800)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-chat-day.png"))
                 subs = [("memory", "/#/me/memory"), ("tasks", "/#/me/tasks"), ("task", "/#/me/tasks/t2"), ("skills", "/#/me/skills"),
-                        ("connectors", "/#/me/connectors"), ("vault", "/#/me/vault"), ("pages", "/#/me/pages")]
+                        ("connectors", "/#/me/connectors"), ("pages", "/#/me/pages")]  # v2.96 保险箱并进连接的账号
                 for shot, url in subs:
                     page.goto(base + url)
                     page.wait_for_timeout(600)
@@ -444,8 +444,8 @@ def main():
                 page.get_by_label("新定时任务").first.click()
                 page.wait_for_timeout(500)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-sheet-task.png"))
-                # 确认框（ui/dialog.tsx）：钥匙页点“删除”
-                page.goto(base + "/#/me/vault")
+                # 确认框（ui/dialog.tsx）：连接的账号里一把密钥点“删除”
+                page.goto(base + "/#/me/connectors")
                 page.wait_for_timeout(500)
                 page.get_by_label("的操作").first.click()  # v0.79：删除收进行尾菜单
                 page.wait_for_timeout(300)

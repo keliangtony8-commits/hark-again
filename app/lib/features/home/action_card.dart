@@ -36,8 +36,7 @@ const cardTargets = <String, CardTarget>{
   'tasks': (label: '查看任务', icon: Icons.event_repeat_rounded, route: '/me/tasks/{task}'),
   'memory': (label: '打开记忆', icon: Icons.psychology_outlined, route: '/me/memory'),
   'skills': (label: '打开技能', icon: Icons.auto_awesome_outlined, route: '/me/skills'),
-  'connectors': (label: '去连接器', icon: Icons.hub_outlined, route: '/me/connectors'),
-  'vault': (label: '打开保险箱', icon: Icons.lock_outline_rounded, route: '/me/vault'),
+  'connectors': (label: '去连接的账号', icon: Icons.hub_outlined, route: '/me/connectors'),
   'pages': (label: '查看网页', icon: Icons.web_rounded, route: '/me/pages'),
   'project': (label: '打开项目', icon: Icons.folder_outlined, route: '/projects/{id}'),
 };

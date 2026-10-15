@@ -1,7 +1,7 @@
 # 冒烟：定时任务 / 面板碰壁（app/task_wall.py，模拟模型，不打真接口）+ manage_home read / runs / refresh 等结果。
 # 规则：parse 规整大小写、坏格式中文提示；label / fixable / open_page；不在运行里报壁被拒。
 # 面板第一次成功 → 内容；第二次运行里 report_wall needs_login → 运行 error=“需要登录 …：经过”、run.wall、任务 wall_label/
-# wall_fixable/wall_open=vault，面板保留上一次内容（不刷成“登录不了”），失败卡标题“需要你处理”；brief 带“上一次碰壁”；
+# wall_fixable/wall_open=connectors，面板保留上一次内容（不刷成“登录不了”），失败卡标题“需要你处理”；brief 带“上一次碰壁”；
 # 第三次正常 → 壁清掉、卡收起；报告任务 blocked:captcha → 不可修、照常交付报告；连续碰壁 3 次 → 自动暂停；
 # manage_home read 带状态与内容、runs 带“碰壁”、refresh 在后台 worker 跑完后带回新内容 / 碰壁原因；迁移 0050 往返。
 # 运行：python tests/smoke_task_wall.py
@@ -38,7 +38,7 @@ for bad in ("", "needs_login", "login:x.com", "needs_login:", "blocked:有 空�
         assert "needs_login" in str(e)
 assert task_wall.label("needs_connector:github") == "需要重新连接 github"
 assert task_wall.fixable("paywall:nyt.com") and not task_wall.fixable("blocked:captcha") and not task_wall.fixable(None)
-assert task_wall.open_page("needs_login:x.com") == "vault" and task_wall.open_page("needs_connector:github") == "connectors"
+assert task_wall.open_page("needs_login:x.com") == "connectors" and task_wall.open_page("needs_connector:github") == "connectors"
 assert task_wall.open_page("source_gone:x.com") is None and task_wall.label("weird") == "weird"
 
 seen, script = [], {"v": None}
@@ -109,7 +109,7 @@ r = runs(pid)[0]
 assert r["status"] == "error" and r["wall"] == "needs_login:jw.example.edu" and r["wall_label"] == "需要登录 jw.example.edu", r
 assert r["error"] == "需要登录 jw.example.edu：登录页要学号密码，保险箱里没有", r
 t = task(pid)
-assert t["wall"] == "needs_login:jw.example.edu" and t["wall_fixable"] is True and t["wall_open"] == "vault", t
+assert t["wall"] == "needs_login:jw.example.edu" and t["wall_fixable"] is True and t["wall_open"] == "connectors", t
 assert "高数 92" in cards(pid, "panel")[0]["blocks"][0]["text"]  # 保留上一次内容
 alert = [x for x in c.get("/api/cards").json() if x["kind"] == "action" and x["task_id"] == pid and not x["dismissed"]]
 assert len(alert) == 1 and "需要你处理" in alert[0]["title"] and "立即运行" in alert[0]["blocks"][0]["text"], alert

@@ -286,7 +286,7 @@ async def tail():
     s0, s1 = data["sessions"]
     assert s0["signed_in_at"].endswith("+00:00") and s0["expired_at"] and s1["expired_at"] is None, data
     async with SessionLocal() as db:
-        await system_alerts.post(db, subject="browser:taobao-com", once="expired", title="t", text="x", open="vault")
+        await system_alerts.post(db, subject="browser:taobao-com", once="expired", title="t", text="x", open="connectors")
         await db.commit()
     async def fake_close(session, forget=False):
         pass

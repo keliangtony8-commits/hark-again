@@ -4,7 +4,7 @@
 // 新增去处只在这里加一行；不认识的名字返回 undefined（老网页遇到新服务端不出错）。
 import type { ComponentType } from "react";
 import type { HomeCard } from "./types";
-import { IconBrain, IconClock, IconFolder, IconGauge, IconLayout, IconPlug, IconShield, IconSpark } from "../ui/icons";
+import { IconBrain, IconClock, IconFolder, IconGauge, IconLayout, IconPlug, IconSpark } from "../ui/icons";
 
 export type CardTarget = { label: string; route: string; Icon: ComponentType<{ size?: number }> };
 
@@ -13,8 +13,7 @@ const TARGETS: Record<string, CardTarget> = {
   tasks: { label: "查看任务", route: "/me/tasks/{task}", Icon: IconClock },
   memory: { label: "打开记忆", route: "/me/memory", Icon: IconBrain },
   skills: { label: "打开技能", route: "/me/skills", Icon: IconSpark },
-  connectors: { label: "去连接器", route: "/me/connectors", Icon: IconPlug },
-  vault: { label: "打开保险箱", route: "/me/vault", Icon: IconShield },
+  connectors: { label: "去连接的账号", route: "/me/connectors", Icon: IconPlug },
   pages: { label: "查看网页", route: "/me/pages", Icon: IconLayout },
   project: { label: "打开项目", route: "/projects/{id}", Icon: IconFolder },
 };

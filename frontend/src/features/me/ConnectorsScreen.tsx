@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
-import type { Connector, McpServerInfo } from "../../lib/types";
+import type { Connector, McpServerInfo, VaultSecret } from "../../lib/types";
 import { withRetried } from "../../lib/taskLabels";
-import { IconAlert, IconChevron, IconPlus, IconSettings, IconShield, IconSpark } from "../../ui/icons";
-import { Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
-import { connectorSummary, mcpProblemText, missingSetup, setupLine, sortAccounts, sortServers } from "./connectorLibrary";
+import { IconAlert, IconChevron, IconPlus, IconSettings, IconSpark } from "../../ui/icons";
+import { Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+import { ADD_KINDS, connectorSummary, groupSecrets, mcpProblemText, missingSetup, setupLine, sortAccounts, sortServers } from "./connectorLibrary";
+import SecretSheet, { SecretRows, secretKindIcon, type SecretDraftStart } from "./SecretSheet";
 import OAuthSetupSheet from "./OAuthSetupSheet";
 import { confirmDialog } from "../../ui/dialog";
 import { monogramOf } from "../../lib/monogram";
@@ -23,11 +24,14 @@ function ConnectorLogo({ c }: { c: Connector }) {
   return <img src={favicon(c.logo)} alt="" width={20} height={20} onError={() => setBroken(true)} />;
 }
 
-/** 连接器：OAuth 账户、MCP 服务器、API Key 三种接入方式，按“越省事越靠前”排列。
- *  版式同技能/定时任务页：页头摘要 → 分区 → 行错峰进场；MCP 为空时起步卡。 */
+/** 连接的账号（v2.96 一页，= App connectors_screen.dart）：账户（OAuth）→ MCP 服务器 → 网站登录 → API Key → 环境变量，
+ *  按“越省事越靠前”分区，有内容才出现；页头 + 是唯一的添加入口（ADD_KINDS）；MCP 与密钥都空时一张起步卡。
+ *  原来的保险箱页、“账户”收拢页已并进来、删除。 */
 export default function ConnectorsScreen() {
   const accounts = useResource<Connector>("/api/connectors");
   const servers = useResource<McpServerInfo>("/api/connectors/mcp");
+  const secrets = useResource<VaultSecret>("/api/vault");
+  const [secretStart, setSecretStart] = useState<SecretDraftStart | null>(null);
   const [params, setParams] = useSearchParams();
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [mcpDraft, setMcpDraft] = useState<typeof EMPTY_MCP | null>(null);
@@ -73,12 +77,18 @@ export default function ConnectorsScreen() {
     finally { setMcpBusy(false); }
   };
 
+  const add = (kind: string) => (kind === "mcp" ? openMcp() : setSecretStart({ kind: kind as SecretDraftStart["kind"] }));
+  const addIcon = (kind: string, size?: number) => (kind === "mcp" ? <IconSpark size={size} /> : secretKindIcon(kind, size));
   const shown = sortAccounts(accounts.items), missing = missingSetup(accounts.items);
+  const g = groupSecrets(secrets.items);
+  const secretGroups = [{ title: "网站登录", items: g.logins }, { title: "API Key", items: g.keys }, { title: "环境变量", items: g.envs }];
   let n = 0;
   return (
-    <Page header={<PageHeader title="连接器" back />}>
-      <PageIntro loading={accounts.loading} summary={connectorSummary(accounts.items, servers.loading ? null : servers.items)}
-        line="连接后我能读你的邮件、日历和代码仓库。发邮件、提交代码这类动作，永远先问你。" />
+    <Page header={<PageHeader title="连接的账号" back action={
+      <Menu trigger={<IconPlus />} label="添加" triggerClass="icon-btn" items={ADD_KINDS.map((k) => (
+        { label: `${k.label} · ${k.desc}`, icon: addIcon(k.kind), onSelect: () => add(k.kind) }))} />} />}>
+      <PageIntro loading={accounts.loading} summary={connectorSummary(accounts.items, servers.loading ? null : servers.items, secrets.loading ? null : secrets.items)}
+        line="一键授权的账号、MCP 服务器，以及加密保存的网站登录、API Key 和环境变量。发邮件、提交代码这类动作，永远先问你；密钥我只知道“有”，看不到内容。" />
       {notice && <div className={`notice ${notice.ok ? "ok" : "err"}`} onClick={() => setNotice(null)}>{notice.text}</div>}
 
       {/* v2.90.2 只画服务器配好了的（或已连过的）；缺配置时给部署者一行，点开是引导，不放点了会失败的按钮 */}
@@ -116,13 +126,8 @@ export default function ConnectorsScreen() {
         </Section>
       )}
 
-      <Section title={servers.items.length ? `MCP 服务器 · ${servers.items.length}` : "MCP 服务器"}
-        action={servers.items.length > 0 && <button className="icon-btn sm" onClick={openMcp} aria-label="添加 MCP 服务器"><IconPlus /></button>}>
-        {servers.loading ? <Skeleton rows={1} /> : servers.items.length === 0 ? (
-          <StarterCard title="接入任何 MCP 服务" text="填一个支持 MCP（Streamable HTTP）的地址，我先连一次确认能用，之后就能用它的工具。">
-            <button className="btn btn-ghost" onClick={openMcp}><IconPlus size={16} />添加 MCP 服务器</button>
-          </StarterCard>
-        ) : (
+      {servers.items.length > 0 && (
+        <Section title={`MCP 服务器 · ${servers.items.length}`}>
           <div className="list">
             {sortServers(servers.items).map((s) => (
               <div key={s.id} className="row enter" style={stagger(++n)}>
@@ -138,18 +143,20 @@ export default function ConnectorsScreen() {
               </div>
             ))}
           </div>
-        )}
-      </Section>
+        </Section>
+      )}
 
-      <Section title="其他服务">
-        <div className="list">
-          <Link to="/me/vault" className="row enter" style={stagger(++n)}>
-            <span className="row-icon"><IconShield /></span>
-            <div className="row-body"><div className="row-title">API Key 与网站登录</div><div className="row-sub">没有现成连接器的服务，存进保险箱就能用</div></div>
-            <span className="row-trail"><IconChevron /></span>
-          </Link>
-        </div>
-      </Section>
+      {secretGroups.map(({ title, items }) => {
+        if (!items.length) return null;
+        const from = n + 1; n += items.length;
+        return <Section key={title} title={`${title} · ${items.length}`}><SecretRows items={items} secrets={secrets} onEdit={setSecretStart} from={from} /></Section>;
+      })}
+
+      {servers.items.length + secrets.items.length > 0 ? null : (servers.loading || secrets.loading) ? <Skeleton rows={1} /> : (
+        <StarterCard title="接入更多服务" text="没有一键授权的服务，也能接进来：填一个 MCP 地址我就能用它的工具；存一个网站登录，我在云浏览器里替你登录；存一个 API Key，我就能调用那个服务；存一个环境变量，你电脑上的程序就能读到它。">
+          {ADD_KINDS.map((k) => <button key={k.kind} className="btn btn-ghost" onClick={() => add(k.kind)}>{addIcon(k.kind, 16)}{k.label}</button>)}
+        </StarterCard>
+      )}
 
       {tools && (
         <Sheet title={tools.server.name} onClose={() => setTools(null)}>
@@ -167,6 +174,9 @@ export default function ConnectorsScreen() {
           )}
         </Sheet>
       )}
+
+      {secretStart && <SecretSheet key={`${secretStart.kind}:${secretStart.name ?? ""}`} start={secretStart} secrets={secrets}
+        onClose={() => setSecretStart(null)} onSaved={(text) => setNotice({ ok: true, text })} />}
 
       {setupOpen && <OAuthSetupSheet missing={missing} onClose={() => setSetupOpen(false)} />}
 

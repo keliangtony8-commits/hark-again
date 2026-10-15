@@ -1,4 +1,5 @@
-// 连接器：账户（OAuth：Google、GitHub…）+ 我自己的 MCP 服务器 + 去保险箱存 API Key。
+// 连接的账号（v2.96 一页）：账户（OAuth：Google、GitHub…）→ MCP 服务器 → 网站登录 → API Key → 环境变量，按“越省事越靠前”分区；
+// 页头 + 是唯一的添加入口（四类同一张表 addKinds）。原来的保险箱页、“账户”收拢页已并进来、删除。
 // 授权在系统浏览器里完成，服务器用深链把结果带回这一页（?connected= / ?error=）；
 // 用户手动切回 App 时也会刷新一次状态。
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'connector_library.dart';
 import 'oauth_setup_sheet.dart';
+import 'secret_rows.dart';
 import 'task_wall.dart' show withRetried;
 
 /// OAuth 回调带回来的结果（深链的查询参数）。没有结果时为 null。
@@ -88,22 +90,33 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
   Widget build(BuildContext context) {
     final accounts = ref.watch(connectorsProvider);
     final mcp = ref.watch(mcpServersProvider);
+    final secrets = ref.watch(secretsProvider);
     return SubPage(
-      title: const Text('连接器'),
+      title: const Text('连接的账号'),
+      actions: [IconButton(icon: const Icon(Icons.add_rounded), tooltip: '添加', onPressed: _add)],
       body: AsyncBody<Connector>(
         value: accounts,
         onRetry: () => ref.invalidate(connectorsProvider),
         builder: (list) {
           final shown = sortAccounts(list), missing = missingSetup(list);
-          var i = 0; // 整页错峰序号：账户 → MCP → 其他服务一行一行进
+          var i = 0; // 整页错峰序号：账户 → MCP → 密钥一行一行进
           Duration next() => Motion.stagger(i++, from: 1);
-          final servers = mcp.value;
+          final servers = mcp.value, keys = secrets.value;
+          final g = keys == null ? null : groupSecrets(keys);
+          Widget secretGroup(String title, List<SecretItem> items) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                SectionTitle(title, count: items.length),
+                ListGroup(children: [for (final s in items) SecretRow(s, delay: next())]),
+              ]);
           return PullRefresh(
-            onRefresh: () => Future.wait([ref.read(connectorsProvider.notifier).reload(), ref.read(mcpServersProvider.notifier).reload()]),
+            onRefresh: () => Future.wait([
+              ref.read(connectorsProvider.notifier).reload(),
+              ref.read(mcpServersProvider.notifier).reload(),
+              ref.read(secretsProvider.notifier).reload(),
+            ]),
             child: PageBody(children: [
               PageIntro(
-                summary: connectorSummary(list, servers),
-                line: '连接后我能读你的邮件、日历和代码仓库。发邮件、推送代码这类动作，永远先问你。',
+                summary: connectorSummary(list, servers, keys),
+                line: '一键授权的账号、MCP 服务器，以及加密保存的网站登录、API Key 和环境变量。发邮件、推送代码这类动作，永远先问你；密钥我只知道“有”，看不到内容。',
               ),
               // v2.90.2 只画服务器配好了的（或已连过的）；缺配置时给部署者一行，点开是引导，不放点了会失败的按钮
               if (shown.isNotEmpty || missing.isNotEmpty) ...[
@@ -122,42 +135,51 @@ class _ConnectorsScreenState extends ConsumerState<ConnectorsScreen> {
                     ),
                 ]),
               ],
-              SectionTitle('MCP 服务器',
-                  trailing: servers == null || servers.isEmpty
-                      ? null
-                      : QuietAction(icon: const Icon(Icons.add_rounded), tooltip: '添加 MCP 服务器', onPressed: _addMcp)),
+              if (servers != null && servers.isNotEmpty) ...[
+                SectionTitle('MCP 服务器', count: servers.length),
+                ListGroup(children: [for (final s in sortServers(servers)) _McpRow(s, delay: next())]),
+              ],
+              if (g != null && g.logins.isNotEmpty) secretGroup('网站登录', g.logins),
+              if (g != null && g.keys.isNotEmpty) secretGroup('API Key', g.keys),
+              if (g != null && g.envs.isNotEmpty) secretGroup('环境变量', g.envs),
               FadeSwitcher(
-                child: switch (mcp) {
-                  AsyncData(:final value) when value.isEmpty => StarterCard(
+                child: switch ((mcp, secrets)) {
+                  (AsyncError(:final error), _) || (_, AsyncError(:final error)) =>
+                    AppCard(key: const ValueKey('error'), child: Text('$error')),
+                  (AsyncData(value: final a), AsyncData(value: final b)) when a.isEmpty && b.isEmpty => Padding(
                       key: const ValueKey('empty'),
-                      title: '接入任何 MCP 服务',
-                      text: '填一个支持 MCP（Streamable HTTP）的地址，我先连一次确认能用，之后就能用它的工具。',
-                      starters: [PillButton(label: '添加 MCP 服务器', icon: Icons.add_rounded, onTap: _addMcp)],
+                      padding: const EdgeInsets.only(top: Sp.x4),
+                      child: StarterCard(
+                        title: '接入更多服务',
+                        text: '没有一键授权的服务，也能接进来：填一个 MCP 地址我就能用它的工具；存一个网站登录，我在云浏览器里替你登录；'
+                            '存一个 API Key，我就能调用那个服务；存一个环境变量，你电脑上的程序就能读到它。',
+                        starters: [
+                          for (final k in addKinds) PillButton(label: k.label, icon: _addIcon(k.kind), onTap: () => _addKind(k.kind)),
+                        ],
+                      ),
                     ),
-                  AsyncData(:final value) =>
-                    ListGroup(key: const ValueKey('list'), children: [for (final s in sortServers(value)) _McpRow(s, delay: next())]),
-                  AsyncError(:final error) => AppCard(key: const ValueKey('error'), child: Text('$error')),
+                  (AsyncData(), AsyncData()) => const SizedBox.shrink(key: ValueKey('done')),
                   _ => const SkeletonList(key: ValueKey('loading'), rows: 1),
                 },
               ),
-              const SectionTitle('其他服务'),
-              ListGroup(children: [
-                FadeSlideIn(
-                  delay: next(),
-                  child: RowTile(
-                    icon: Icons.key_rounded,
-                    title: 'API Key 与网站登录',
-                    subtitle: '没有现成连接器的服务，存进保险箱就能用',
-                    onTap: () => context.push('/me/vault'),
-                  ),
-                ),
-              ]),
             ]),
           );
         },
       ),
     );
   }
+
+  /// 唯一的添加入口：先问加什么，再弹那一类的表单。
+  Future<void> _add() async {
+    final kind = await showActionSheet<String>(context, title: '添加什么？', actions: [
+      for (final k in addKinds) SheetAction(_addIcon(k.kind), '${k.label} · ${k.desc}', value: k.kind),
+    ]);
+    if (kind != null && mounted) await _addKind(kind);
+  }
+
+  Future<void> _addKind(String kind) => kind == 'mcp' ? _addMcp() : addSecret(context, ref, kind: kind);
+
+  static IconData _addIcon(String kind) => kind == 'mcp' ? Icons.extension_outlined : secretKindIcon(kind);
 
   Future<void> _addMcp() async {
     final v = await showFormSheet(context, title: '添加 MCP 服务器', subtitle: '保存前我会先连一次，确认能用', submit: '连接', fields: const [

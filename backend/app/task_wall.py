@@ -2,8 +2,8 @@
 记成一个可修的标记，而不是默默失败或把“我登录不了”当成内容刷上面板）。
 
 壁 = "<类>:<对象>"，对象是小写 slug（[a-z0-9._-]，≤64）：
-- needs_login:<域名>      网站要登录（保险箱里没有可用的登录）      用户能修 → 去“保险箱”
-- needs_connector:<名字>  连接器没连 / 授权失效                      用户能修 → 去“连接器”
+- needs_login:<域名>      网站要登录（保险箱里没有可用的登录）      用户能修 → 去“连接的账号”（网站登录）
+- needs_connector:<名字>  连接器没连 / 授权失效                      用户能修 → 去“连接的账号”（账户）
 - paywall:<域名>          付费墙                                    用户能修（订阅或换来源）
 - source_gone:<域名>      页面搬走 / 改版，按做法找不到了            会自己重新摸索，不算用户的事
 - blocked:<原因>          验证码、限流、源站挂了这类暂时的阻碍        之后自己重试
@@ -29,7 +29,7 @@ REASON_MAX = 300
 SLUG = re.compile(r"^[a-z0-9._-]{1,64}$")
 # 类 → (标签模板, 用户能修吗, 客户端去处页 card_targets.PAGES 之一或 None)
 CLASSES: dict[str, tuple[str, bool, str | None]] = {
-    "needs_login": ("需要登录 {}", True, "vault"),
+    "needs_login": ("需要登录 {}", True, "connectors"),
     "needs_connector": ("需要重新连接 {}", True, "connectors"),
     "paywall": ("{} 要付费订阅", True, None),
     "source_gone": ("{} 的页面变了，正在重新找", False, None),

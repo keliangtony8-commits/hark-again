@@ -144,7 +144,7 @@ assert asyncio.run(secrets()) == [("TELEGRAM_BOT_TOKEN", "env")]
 # 7) 无人值守 → 不弹卡，指去保险箱页
 script.extend([("request_env", {"name": "OPENAI_API_KEY", "reason": "调 OpenAI"}), "缺变量。"])
 reply, _ = asyncio.run(turn())
-assert [b["type"] for b in reply.blocks] == ["text"] and "保险箱 → 环境变量" in model_saw[-1] and "OPENAI_API_KEY" in model_saw[-1]
+assert [b["type"] for b in reply.blocks] == ["text"] and "连接的账号 → 环境变量" in model_saw[-1] and "OPENAI_API_KEY" in model_saw[-1]
 
 # 8) 表单通道：超长值整个丢掉（不截断成错值），正常长度的长 Token 原样
 async def chan():

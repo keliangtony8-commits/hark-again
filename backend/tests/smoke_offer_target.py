@@ -55,7 +55,7 @@ assert k["target"] == "tasks" and k["task_id"] == tid and k["action_prompt"], k
 assert f"直达：task:{tid}" in out
 
 # 3) 拒绝
-for bad, why in [("task:nope", "没有 id=nope 的定时任务"), ("project:nope", "没有 id=nope 的项目"), ("settings", "不认识的去处"), ("memory:x", "不认识的去处")]:
+for bad, why in [("task:nope", "没有 id=nope 的定时任务"), ("project:nope", "没有 id=nope 的项目"), ("settings", "不认识的去处"), ("memory:x", "不认识的去处"), ("vault", "不认识的去处")]:  # v2.96 保险箱并进连接的账号
     out = asyncio.run(call("offer_on_home", title="坏去处", prompt="x", open=bad))
     assert why in out and "open 只能是" in out, (bad, out)
 assert "坏去处" not in cards()

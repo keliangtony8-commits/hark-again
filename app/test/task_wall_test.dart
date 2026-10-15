@@ -1,5 +1,5 @@
 // v2.15 碰壁：模型解析（wall_label / wall_reason / wall_fixable / wall_open）、运行“碰壁”状态、
-// 任务详情的碰壁条（要你处理 → “打开保险箱”直达 + “重试”走 POST run；会自己好的 → 只有说明、没有按钮）、没壁不占地方。
+// 任务详情的碰壁条（要你处理 → “去连接的账号”直达 + “重试”走 POST run；会自己好的 → 只有说明、没有按钮）、没壁不占地方。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
 import 'package:assistant/features/me/task_detail.dart';
@@ -69,7 +69,7 @@ class FakeApi implements Api {
 Future<void> pump(WidgetTester tester, FakeApi api) async {
   final router = GoRouter(initialLocation: '/me/tasks/t1', routes: [
     GoRoute(path: '/me/tasks/:id', builder: (_, s) => TaskDetailScreen(id: s.pathParameters['id']!)),
-    GoRoute(path: '/me/vault', builder: (_, _) => const Scaffold(body: Text('保险箱页'))),
+    GoRoute(path: '/me/connectors', builder: (_, _) => const Scaffold(body: Text('连接的账号页'))),
   ]);
   await tester.pumpWidget(ProviderScope(
     overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
@@ -80,10 +80,10 @@ Future<void> pump(WidgetTester tester, FakeApi api) async {
 
 void main() {
   test('parsing + labels', () {
-    final t = ScheduledTask.fromJson(taskJson(label: '需要登录 jw.example.edu', reason: '没有学号密码', fixable: true, open: 'vault'));
+    final t = ScheduledTask.fromJson(taskJson(label: '需要登录 jw.example.edu', reason: '没有学号密码', fixable: true, open: 'connectors'));
     expect(t.walled, isTrue);
     expect(t.wallFixable, isTrue);
-    expect(t.wallOpen, 'vault');
+    expect(t.wallOpen, 'connectors');
     expect(wallHint(t), contains('上一次的内容'));
     final ok = ScheduledTask.fromJson(taskJson());
     expect(ok.walled, isFalse);
@@ -95,8 +95,8 @@ void main() {
     expect(runStateLabel(TaskRun.fromJson(runJson('r2', status: 'error', error: 'x'))), '失败');
   });
 
-  testWidgets('fixable wall: notice, go to vault, retry runs task', (tester) async {
-    final api = FakeApi(taskJson(label: '需要登录 jw.example.edu', reason: '登录页要学号密码', fixable: true, open: 'vault'),
+  testWidgets('fixable wall: notice, go to connectors, retry runs task', (tester) async {
+    final api = FakeApi(taskJson(label: '需要登录 jw.example.edu', reason: '登录页要学号密码', fixable: true, open: 'connectors'),
         [runJson('r1', status: 'error', wall: 'needs_login:jw.example.edu', error: '需要登录 jw.example.edu：登录页要学号密码')]);
     await pump(tester, api);
     expect(find.text('需要登录 jw.example.edu'), findsOneWidget);
@@ -106,9 +106,9 @@ void main() {
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
     expect(api.calls, contains('POST /api/tasks/t1/run'));
-    await tester.tap(find.text('打开保险箱'));
+    await tester.tap(find.text('去连接的账号'));
     await tester.pumpAndSettle();
-    expect(find.text('保险箱页'), findsOneWidget);
+    expect(find.text('连接的账号页'), findsOneWidget);
   });
 
   testWidgets('transient wall: no buttons', (tester) async {

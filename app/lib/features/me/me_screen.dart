@@ -94,7 +94,7 @@ class _MeBody extends ConsumerWidget {
         child: GlassGroup(children: [
           RowTile(icon: Icons.person_outline_rounded, title: '个人资料', onTap: () => context.push('/me/profile')),
           RowTile(icon: Icons.schedule_rounded, title: '定时任务', onTap: () => context.push('/me/tasks')),
-          RowTile(icon: Icons.hub_outlined, title: '账户', onTap: () => context.push('/me/accounts')),
+          RowTile(icon: Icons.hub_outlined, title: '连接的账号', onTap: () => context.push('/me/connectors')),
           RowTile(icon: Icons.credit_card_rounded, title: '钱包', onTap: () => context.push('/me/wallet')),
           RowTile(icon: Icons.computer_rounded, title: '我的电脑', onTap: () => context.push('/me/computer')),
         ]),

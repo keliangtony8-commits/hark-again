@@ -1,5 +1,5 @@
-// 保险箱：API Key、网站登录、命令环境变量。只能存、看脱敏预览、删；明文永不回到手机上。
-// 版式与技能/定时任务页同一套：页头摘要 + 说明 → 空时起步卡 → 分组（带数量）→ 行错峰进场。
+// 加密保存的三类（网站登录、API Key、命令环境变量）：存入表单与列表行。页面只有“连接的账号”一页（connectors_screen.dart，
+// v2.96 保险箱页并入）。只能存、看脱敏预览、删；明文永不回到手机上。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,53 +7,14 @@ import '../../core/api.dart';
 import '../../core/resource.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/tokens.dart';
-import '../../ui/glass.dart';
 import '../../ui/kit.dart';
-import '../../ui/sub_page.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import 'connector_library.dart';
 import 'task_wall.dart' show withRetried;
 
-class VaultScreen extends ConsumerWidget {
-  const VaultScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final secrets = ref.watch(secretsProvider);
-    return SubPage(
-      title: const Text('保险箱'),
-      actions: [IconButton(icon: const Icon(Icons.add_rounded), tooltip: '存入', onPressed: () => addSecret(context, ref))],
-      body: AsyncBody<SecretItem>(
-        value: secrets,
-        onRetry: () => ref.invalidate(secretsProvider),
-        builder: (list) {
-          final g = groupSecrets(list);
-          var i = 0; // 整页错峰序号
-          Widget rows(List<SecretItem> items) => ListGroup(children: [for (final s in items) _SecretRow(s, delay: Motion.stagger(i++, from: 1))]);
-          return PullRefresh(
-            onRefresh: () => ref.read(secretsProvider.notifier).reload(),
-            child: PageBody(children: [
-              PageIntro(summary: vaultSummary(list), line: '加密存在你自己的服务器上，只用于你指定的网站或你电脑上的命令。我只知道“有这把钥匙”，回复里永远看不到内容。'),
-              if (list.isEmpty) const _Starters(),
-              if (g.logins.isNotEmpty) ...[SectionTitle('网站登录', count: g.logins.length), rows(g.logins)],
-              if (g.keys.isNotEmpty) ...[SectionTitle('API Key', count: g.keys.length), rows(g.keys)],
-              if (g.envs.isNotEmpty) ...[SectionTitle('环境变量', count: g.envs.length), rows(g.envs)],
-            ]),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// 存入一把钥匙：没给 [kind] 先问存哪类，再弹对应表单。页头 +、起步卡共用。
-Future<void> addSecret(BuildContext context, WidgetRef ref, {String? kind}) async {
-  kind ??= await showActionSheet<String>(context, title: '存入什么？', actions: [
-    for (final k in secretKinds) SheetAction(_kindIcon(k.kind), '${k.label} · ${k.desc}', value: k.kind),
-  ]);
-  if (kind == null || !context.mounted) return;
+/// 存入一把钥匙：按 [kind]（login / api_key / env）弹对应表单。连接的账号页的“添加什么？”与起步卡共用。
+Future<void> addSecret(BuildContext context, WidgetRef ref, {required String kind}) async {
   if (kind == 'env') return addEnv(context, ref);
   final login = kind == 'login';
   final v = await showFormSheet(context,
@@ -108,35 +69,17 @@ Future<void> _save(BuildContext context, WidgetRef ref, Map<String, dynamic> bod
   }
 }
 
-IconData _kindIcon(String kind) => switch (kind) {
+IconData secretKindIcon(String kind) => switch (kind) {
       'login' => Icons.person_outline_rounded,
       'env' => Icons.terminal_rounded,
       _ => Icons.key_rounded,
     };
 
-/// 空保险箱：两类各一个起步按钮，直接打开对应表单。
-class _Starters extends ConsumerWidget {
-  const _Starters();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => Padding(
-        padding: const EdgeInsets.only(top: Sp.x4),
-        child: StarterCard(
-          title: '保险箱是空的',
-          text: '存一个网站登录，我在云浏览器里能替你登录；存一个 API Key，我就能调用那个服务；存一个环境变量，你电脑上的程序就能读到它。',
-          starters: [
-            for (final k in secretKinds)
-              PillButton(label: k.label, icon: _kindIcon(k.kind), onTap: () => addSecret(context, ref, kind: k.kind)),
-          ],
-        ),
-      );
-}
-
 Future<bool> _confirmDelete(BuildContext context, SecretItem s) =>
     confirmDanger(context, title: '删除「${s.name}」？', text: '用到它的任务会失败，直到你重新存入。');
 
-class _SecretRow extends ConsumerWidget {
-  const _SecretRow(this.s, {this.delay = Duration.zero});
+class SecretRow extends ConsumerWidget {
+  const SecretRow(this.s, {super.key, this.delay = Duration.zero});
   final SecretItem s;
   final Duration delay;
 
@@ -150,7 +93,7 @@ class _SecretRow extends ConsumerWidget {
       child: FadeSlideIn(
         delay: delay,
         child: RowTile(
-          icon: _kindIcon(s.kind),
+          icon: secretKindIcon(s.kind),
           title: s.name,
           subtitle: secretWhere(s),
           trailing: hint.isEmpty ? null : Text(hint, style: context.text.labelSmall),

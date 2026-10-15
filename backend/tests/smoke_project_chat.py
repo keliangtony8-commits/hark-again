@@ -102,6 +102,17 @@ sq = sqlite3.connect(db_path)
 again = snapshot()
 assert again["msgs"] == after["msgs"] and again["card"] == after["card"] and [r[0] for r in again["convs"]] == [r[0] for r in after["convs"]]
 
+# 0067（v2.96）：主页卡去处 vault 并进 connectors（保险箱页合进“连接的账号”）
+alembic("downgrade", "0066")
+sq = sqlite3.connect(db_path)
+sq.execute("INSERT INTO home_cards (id, kind, title, blocks, target, dismissed, unread, created_at, updated_at) "
+           "VALUES ('cardv', 'action', '登录过期', '[]', 'vault', 0, 0, ?, ?)", (T(5), T(5)))
+sq.commit()
+alembic("upgrade", "head")
+sq = sqlite3.connect(db_path)
+assert sq.execute("SELECT target FROM home_cards WHERE id = 'cardv'").fetchone() == ("connectors",)
+sq.execute("DELETE FROM home_cards WHERE id = 'cardv'"); sq.commit()
+
 # ---------------------------------------------------------------- 二、约束
 try:
     sq.execute("INSERT INTO conversations (id, project_id, title, title_source, pinned, mode, summary, created_at, updated_at) "

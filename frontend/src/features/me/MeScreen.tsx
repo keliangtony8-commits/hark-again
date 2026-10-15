@@ -18,7 +18,7 @@ import "./me.css";
 const GROUP1: MeRow[] = [
   { to: "/me/profile", icon: IconUser, title: "个人资料" },
   { to: "/me/tasks", icon: IconClock, title: "定时任务" },
-  { to: "/me/accounts", icon: IconPlug, title: "账户" },
+  { to: "/me/connectors", icon: IconPlug, title: "连接的账号" },
   { to: "/me/wallet", icon: IconCard, title: "钱包" },
   { to: "/me/computer", icon: IconComputer, title: "我的电脑" },
 ];
