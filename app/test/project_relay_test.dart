@@ -25,8 +25,8 @@ void main() {
     expect(relay.projectId, 'p1');
     expect(relay.meta, '新开了一段对话 · 带了 提纲.md 等 2 个文件');
     expect((Block.fromJson({'type': 'relay', 'project_id': 'p', 'name': 'x', 'conversation_id': 'c', 'files': ['a.md']}) as RelayBlock).meta,
-        '接在最近的对话里 · 带了 a.md');
-    expect((Block.fromJson({'type': 'relay', 'project_id': 'p', 'name': 'x', 'conversation_id': 'c'}) as RelayBlock).meta, '接在最近的对话里');
+        '接在项目对话里 · 带了 a.md');
+    expect((Block.fromJson({'type': 'relay', 'project_id': 'p', 'name': 'x', 'conversation_id': 'c'}) as RelayBlock).meta, '接在项目对话里');
     expect(origin.label, '来自 💬 主聊天');
     expect(origin.projectId, isNull);
     expect(origin.semantics, contains('点按打开原对话'));

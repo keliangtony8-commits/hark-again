@@ -251,7 +251,7 @@ assert run(job(j3)).followup == "done" and run(held()) is None
 # ---- 10. 对话删了：不接着说 ----
 async def other_conv():
     async with SessionLocal() as db:
-        conv = Conversation(title="临时", project_id=pid); db.add(conv); await db.commit()
+        conv = Conversation(title="临时"); db.add(conv); await db.commit()  # v2.95 项目只有一段普通对话（cid）：另一段用主聊天里的
         return conv.id
 oc = run(other_conv())
 j6 = run(start("echo hi", conv_id=oc))

@@ -120,3 +120,25 @@
 **替换 / 删除**：`twin` 里“面板不查重”的例外；面板投递里“整轮回复原样进卡”；Web `Page wide` / `.page-inner.wide` / `--content-wide`；Web 三处 `var(--footer-h, 88px)` 兜底魔法数。不新增内置天气卡。
 **成本**：无迁移、无新接口、无模型调用；查重多一次查面板任务（单用户十几行）。
 **没做 / 待验**：线上库里已经重复的面板与重复内容本轮没清（规定不碰 VPS）——下次部署后在服务器上 `manage_home list` 看一眼，重复面板手动移除一个即可，旧内容下次刷新就按新规则重写。
+
+## 2026-10-15 v2.95 项目 = 一段对话（HANDOFF 5b）
+用户 12:48 原话：“项目点进去之后为什么还可以开多个会话，一个项目不应该就一个对话吗，hark 就是这样的呀”。Hark 截图：项目页顶栏照旧“主页 / 聊天 / 项目”+ 头像，左上 ≡，顶栏下一枚药丸写项目名，下面直接是聊天和输入框。v2.93 的“项目内对话列表 / 抽屉 / 本项目新对话”方向错了，本版整条替换。不碰 VPS、不出 APK。
+**全局决定（先写后做；用户可事后改）**
+1. **项目 = 唯一一段普通对话**。唯一规则入口新模块 `backend/app/project_chat.py`：`of(db, pid)` 取、`ensure(db, project)` 取不到就建（标题 = 项目名，`title_source=fixed`——不再自动起标题，项目里药丸写项目名，总结标题没人看，省掉每 10 条一次的小调用）、`rename` 项目改名时跟着改。数据库约束：部分唯一索引 `uq_conversations_project_chat`（`project_id` 非空且 `task_id` 为空时 `project_id` 唯一，SQLite / Postgres 都支持）。
+   - **运行对话不算**（v2.75）：定时脚本在项目工作区跑开的对话带 `task_id`，不受约束、不进项目页，从 Home 报告卡 / 运行记录打开。查清了挂项目的只有定时脚本（`script_tasks`；agent 任务和面板 `project_id` 恒为空）。**唯一要改的点**：用户在这种对话里回话时 `run_conversations.promote()` 会清 `task_id`，在项目里会撞约束——项目里的运行对话不再 promote（仍是运行对话，照样能聊、能从报告卡打开）；`drop()` 清理时跳过“用户回过话的”（>1 条用户消息），免得被裁掉。
+   - 所有“在项目里开对话”的入口改走 `ensure`：建项目（`POST /api/projects`，crud 加 `after_create` 钩子；agent 的 projects create）、ws 新消息带 `project_id`、主页建议卡“去做”指向项目、跨项目转交（`target_conversation` 删掉，`new_conversation` 恒 false 但字段保留不破协议）。
+   - 删项目照旧连带删对话；`DELETE /api/conversations/{项目对话}` 回 409（“项目对话随项目删除”），客户端也不再给项目对话“删除”入口。
+2. **点项目直接进这段聊天**：App `/projects/:id`、Web `/projects/:pid` 就是聊天；客户端只认一条数据路——`GET /api/conversations?project_id=` 语义改为“这个项目的那段对话”（≤1 项，带 `status`；没有就当场建，幂等），项目范围的聊天控制器拿到就自动打开，不再有“没打开对话”的项目首屏。`?q=&project_id=`（项目内搜索）删掉——一段对话不需要“找对话”。
+3. **药丸 / 标题的唯一来源**：顶栏下那一行（ChatScaffold header / Web `chat-caption`）是唯一的标题位。主聊天：写对话总结标题（不变）。项目：写**项目名药丸**（`emoji 名字 ▾`，玻璃胶囊，进页时 DropIn 一次），点它 = 项目菜单（文件 / 电脑 / 规则与档案 / 编辑 / 删除，同列表行 ⋯ 的 `showProjectMenu`）——⋯ 菜单保留、并到药丸上，不再另放 ‹ 和 ⋯。v2.91 的“滚动浮出对话标题”药丸（App `title_pill.dart` TitlePill、Web `TitlePill.tsx`）整件删掉：它写的是“这段对话在谈什么”，项目只有一段对话后就是项目名，常驻即可，没必要再按滚动显隐。
+4. **左上钮**：项目列表 = +（新建项目）；进项目 = ≡，打开**项目切换抽屉**（所有项目，按最近活动，行尾项目状态胶囊，当前项目高亮），抽屉开着时钮转成 + = 新建项目。与主聊天“≡ 历史 / 新对话在里面”同构：抽屉 = 同层级的“切换”，+ = 新建同类。仍复用 MenuPlus（App `MenuPlusHero` 骑在项目页路由动画上，Web `MenuPlus`），抽屉仍从 header 行下面滑出（左上钮不被盖住才能 morph）。宽屏 / 双栏：切换栏常驻左侧，左上 = 收起 / 展开（同主聊天）。回项目列表：再点顶栏“项目”（已有：点当前 Tab = 回根）。
+5. **项目状态 = 这段对话的状态**：`conversation_status.summarize / for_projects / PROJECT_SCOPE` 删掉（只为多对话汇总服务），`GET /api/projects` 的 `status` 直接是 `for_list([那段对话])`；`conversation_count` 换成 `conversation_id`（客户端点项目不必再查）。
+6. **数据迁移 0066（可回退、幂等）**：同一项目多段普通对话 → 一段：保留**最早创建**那段的 id，其余对话的消息按原 `created_at` 原样挪进去（时间线自然交织）；其余引用这些对话 id 的行（`turn_journals / task_runs / feedback / home_cards / usage / routings / subagent_threads / video_transcripts / jobs`）一并改指保留那段，免得报告卡、反馈、账单点开 404。保留那段：标题改项目名、`title_source=fixed`、`title_at` 清空、滚动摘要 `summary / summary_upto` 清空（下一轮按新历史重生成）、`updated_at` 取各段最大、`pinned/model/reasoning` 用最近一段的。被合并的对话行删除。
+   - **备份**：`project_chat_merge_convs`（每段被合并 / 被改的对话一行：原 id、项目、保留 id、角色 kept|merged、全部元数据 JSON）+ `project_chat_merge_refs`（表名、行 id、原对话 id：每条被改指的消息和引用行）。**downgrade**：按备份重建被合并的对话、把行改回原对话、恢复保留那段的元数据，删唯一索引和两张备份表。
+   - **幂等**：只处理“还有 >1 段普通对话”的项目，备份按主键 `INSERT` 前先查；重复跑无变化（smoke 直接再调一次合并函数验证）。没有任何对话的项目不在迁移里建（打开或发消息时 `ensure`）。
+   - 部署时 alembic 自动执行；回退 = `alembic downgrade 0065` 再部署 v2.94。
+**替换 / 删除清单**
+- 后端：`conversation_status.summarize / for_projects / PROJECT_SCOPE`；`project_relay.target_conversation` 与“对方没有就新开”分支；home_offers 里给项目 new 一段对话；ws 里给项目 new 一段对话（并入 ensure）；`GET /api/conversations` 的项目多对话列表 / 项目内搜索；`GET /api/projects` 的 `conversation_count`（projects 工具清单里的“N 个对话”一并去掉）。
+- App：`project_home.dart`（ProjectHome / projectConversations）整件；ChatScaffold 的项目对话抽屉（HistoryPanel 项目模式）、“+ = 本项目新对话”、header 行 ‹ / ⋯；`HistoryPanel` 的 `projectId` 参数（只剩主聊天）；`title_pill.dart` 与其测试；项目里的对话搜索；ChatController 项目范围“新对话”。新增 `features/projects/project_switcher.dart`（抽屉 / 常驻栏共用）、项目药丸（在 project_switcher.dart 旁，`ProjectPill`）。
+- Web：`ProjectHome.tsx`；ChatScreen 的 `empty / back / listTitle` 项目分支、项目对话抽屉 + 遮罩复用为项目切换抽屉（`ProjectSwitcher.tsx`）；`TitlePill.tsx` 与 chat.css 的 `.title-pill*`；`useConversations` 的项目搜索。
+- 测试：删 TitlePill / ProjectHome / 项目对话抽屉相关旧测试与 smoke 段落（smoke_conversation_status 的项目汇总、smoke_project_activity 的计数、smoke_project_relay 的“新开一段”），补 smoke_project_chat（约束、ensure、迁移多段→一段 / 回退 / 幂等、运行对话不误伤）与 App / Web 新行为测试。
+**成本**：一次迁移（单用户几十段对话，秒级）；`GET /api/projects` 查询从“每项目 100 段 + for_list”降到“每项目 1 段 + for_list”；项目对话不再自动起标题（每 10 条省一次 lite 调用）；客户端进项目少一次列表渲染。无新模型调用。

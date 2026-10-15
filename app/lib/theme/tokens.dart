@@ -218,8 +218,6 @@ abstract final class Motion {
   static const morphCurve = Cubic(0.65, 0, 0.35, 1); // easeInOutCubic：来回对称（= 网页 --ease-morph）
   static const pageRise = 8.0; // v2.93 §Q 进出项目页：新页从下方 8px 浮上来 + 淡入（与 ≡/+ 同一个 Motion.morph 时长）
   static const pillDrop = 8.0; // 标题药丸从上方落下的距离（出现用 spring，过冲约 2–3%）
-  static const pillReveal = 24.0; // 往上翻看历史累计超过这么多像素，药丸浮出
-  static const pillHide = 4.0; // 往下滑超过这么多像素，药丸收起（滚动回弹的抖动不算）
 
   /// 列表错峰入场：第 i 项晚 i 拍，超过 10 项不再加（长列表不拖沓）。
   static const staggerStep = Duration(milliseconds: 30);
@@ -240,7 +238,6 @@ abstract final class Timing {
   static const socketBackoffMin = Duration(seconds: 1); // 重连退避：1 s 起翻倍，封顶 10 s，再乘 0.5–1 的随机抖动
   static const socketBackoffMax = Duration(seconds: 10);
   static const copiedHold = Duration(milliseconds: 1500); // 复制键变成对勾停多久再变回去
-  static const pillHold = Duration(milliseconds: 1500); // §N 标题药丸：停下多久后收起
   static const clockTick = Duration(seconds: 1); // “思考中 · 8 秒”这类计时多久跳一次
   static const jobPoll = Duration(seconds: 2); // 聊天里的后台任务卡运行中多久问一次进度
   static const computerPoll = Duration(seconds: 5); // 电脑状态块：有后台任务在跑时多久刷新一次（每次要问 Docker，别太密）

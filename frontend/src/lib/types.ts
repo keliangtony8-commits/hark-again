@@ -175,7 +175,7 @@ export type Message = { id: string; role: Role; blocks: Block[]; status?: "stopp
 /** 被引用的那条：一行原文（服务器截断 ≤120 字）；missing = 原消息已删除。 */
 export type MessageQuote = { id: string; role?: Role; text?: string; missing?: boolean };
 /** 对话列表项。snippet + message_id 只在搜索命中正文时出现（见 docs/protocol.md）：打开后定位到那条消息。 */
-/** v2.91 §N 项目对话列表的状态（后端 app/conversation_status.py）；主聊天列表、搜索结果不带。 */
+/** v2.91 §N 对话状态（后端 app/conversation_status.py）：项目那段对话 / 项目列表带；主聊天列表、搜索结果不带。 */
 export type ConversationStatus = "running" | "waiting" | "done";
 export type ConversationSummary = { id: string; title: string; pinned: boolean; model?: string | null; reasoning?: string | null; routed_model?: string | null; mode?: string | null; updated_at: string; snippet?: string; message_id?: string; status?: ConversationStatus | null };
 
@@ -205,11 +205,11 @@ export type ServerEvent = TurnCursor & (
   | { type: "turn.snapshot"; turn_id: string; seq: number; conversation_id: string | null; message: { blocks: Block[]; steps: ActivityStep[] }; steered?: Message[] });
 
 // ---- 其他资源（对应 backend/app/models.py） ----
-/** conversation_count / last_active_at：服务器算好的只读字段（旧服务器没有）。 */
+/** conversation_id / last_active_at：服务器算好的只读字段（旧服务器没有）。v2.95 项目 = 一段对话：conversation_id = 那段对话（还没建 = null）。 */
 /** brief = 项目档案（Markdown 活文档，用户和助手都能改）；brief_by = 最后谁改的。老服务器没有这三个字段。 */
 export type Project = { id: string; name: string; emoji: string; rules: string; updated_at: string;
-  brief?: string; brief_by?: "user" | "assistant" | null; brief_updated_at?: string | null; conversation_count?: number; last_active_at?: string | null;
-  /** v2.93 §Q 项目汇总状态（服务器算，规则在后端 conversation_status.summarize；老服务器没有 = 不画胶囊） */
+  brief?: string; brief_by?: "user" | "assistant" | null; brief_updated_at?: string | null; conversation_id?: string | null; last_active_at?: string | null;
+  /** 项目状态 = 那段对话的状态（服务器算，规则在后端 conversation_status；老服务器没有 = 不画胶囊） */
   status?: ConversationStatus | null };
 export type Memory = { id: string; category: string; content: string; updated_at: string };
 export type ScheduledTask = { id: string; name: string; prompt: string; cron: string; active: boolean; output: "report" | "panel"; run_requested: boolean; last_run_at: string | null; last_status: "ok" | "error" | null;

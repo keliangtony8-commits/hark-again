@@ -4,12 +4,12 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .. import chat_search, conversation_share, conversation_status, conversation_title, model_router, plan_mode, quota, reasoning, reply_quote, run_conversations, turn_changes, turn_journal, usage, workspaces
+from .. import chat_search, conversation_share, conversation_status, conversation_title, model_router, plan_mode, project_chat, quota, reasoning, reply_quote, run_conversations, turn_changes, turn_journal, usage, workspaces
 from ..agent import context
 from ..auth import require_user
 from ..config import settings
 from ..db import get_session
-from ..models import Conversation, Message
+from ..models import Conversation, Message, Project
 from ..wire_time import iso
 from .inbox import mark_read
 
@@ -27,20 +27,24 @@ def _summary(c: Conversation, hit: tuple[str, str] | None = None) -> dict:
 
 @router.get("")
 async def list_conversations(project_id: str | None = None, q: str = "", db: AsyncSession = Depends(get_session)):
-    """不带 project_id = 主聊天的对话；带 = 该项目内的对话（每项多 status，v2.91）。q = 按标题和消息内容搜索（空格分开的词都要有）。置顶在前。"""
+    """不带 project_id = 主聊天的对话（q = 按标题和消息内容搜索，空格分开的词都要有；置顶在前）。
+    带 project_id = 这个项目的那段对话（v2.95 项目 = 一段对话：≤1 项、带 status；没有就当场建，幂等；不搜索）。"""
+    if project_id:
+        project = await db.get(Project, project_id)
+        if project is None:
+            raise HTTPException(404, "没有这个项目")
+        conv = await project_chat.ensure(db, project)
+        await db.commit()
+        status = await conversation_status.for_list(db, [conv.id])
+        return [{**_summary(conv), "status": status.get(conv.id)}]
     q = q.strip()
     if q:  # 规则在 chat_search（拆词 AND、摘录、最佳命中消息）；标题已含全部词的不带摘录/定位
-        found = await chat_search.search(db, q, scope=project_id or None, limit=50)
+        found = await chat_search.search(db, q, scope=None, limit=50)
         return [_summary(h.conversation, None if h.title_hit or not h.message_id else (h.message_id, h.snippet))
                 for h in found]
-    scope = Conversation.project_id == project_id if project_id else Conversation.project_id.is_(None)
-    rows = (await db.scalars(select(Conversation).where(scope, run_conversations.listed())
+    rows = (await db.scalars(select(Conversation).where(Conversation.project_id.is_(None), run_conversations.listed())
                              .order_by(Conversation.pinned.desc(), Conversation.updated_at.desc()).limit(100))).all()
-    if not project_id:
-        return [_summary(c) for c in rows]
-    # v2.91 §N 项目对话列表带状态胶囊（规则在 conversation_status）；主聊天列表、搜索结果不带
-    status = await conversation_status.for_list(db, [c.id for c in rows])
-    return [{**_summary(c), "status": status.get(c.id)} for c in rows]
+    return [_summary(c) for c in rows]
 
 
 class ConversationPatch(BaseModel):
@@ -195,6 +199,8 @@ async def delete_conversation(cid: str, db: AsyncSession = Depends(get_session))
     c = await db.get(Conversation, cid)
     if c and await run_conversations.busy(db, c):
         raise HTTPException(409, "这个定时任务还在跑，跑完再删")
+    if c and not project_chat.deletable(c):
+        raise HTTPException(409, "项目的对话随项目一起删除")
     if c:
         await db.delete(c)
         await db.commit()

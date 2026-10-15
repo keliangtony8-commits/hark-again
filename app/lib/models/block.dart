@@ -613,7 +613,7 @@ class RelayBlock extends Block {
 
   /// 卡片第二行：在哪段对话 + 带了几个文件。
   String get meta => [
-        newConversation ? '新开了一段对话' : '接在最近的对话里',
+        newConversation ? '新开了一段对话' : '接在项目对话里',
         if (files.length == 1) '带了 ${files.first}' else if (files.length > 1) '带了 ${files.first} 等 ${files.length} 个文件',
       ].join(' · ');
   String get semantics => '已交给项目 $name：$text。$meta。点按打开';

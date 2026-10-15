@@ -100,12 +100,12 @@ void main() {
     expect(tester.getTopLeft(find.text('¥1,100.00 / 月')).dy, greaterThan(tester.getTopLeft(find.text('¥1,280.00 / 月')).dy));
   });
 
-  test('项目：对话数和最近活动（老服务端没有 → 0 / 退回 updated_at）', () {
-    final p = Project.fromJson({'id': 'p', 'name': 'x', 'updated_at': '2026-10-01T00:00:00Z', 'conversation_count': 3, 'last_active_at': '2026-10-10T00:00:00Z'});
-    expect(p.conversationCount, 3);
+  test('项目：那段对话 id 和最近活动（老服务端没有 → null / 退回 updated_at）', () {
+    final p = Project.fromJson({'id': 'p', 'name': 'x', 'updated_at': '2026-10-01T00:00:00Z', 'conversation_id': 'c1', 'last_active_at': '2026-10-10T00:00:00Z'});
+    expect(p.conversationId, 'c1');
     expect(p.activeAt, DateTime.parse('2026-10-10T00:00:00Z').toLocal());
     final old = Project.fromJson({'id': 'p', 'name': 'x', 'updated_at': '2026-10-01T00:00:00Z'});
-    expect(old.conversationCount, 0);
+    expect(old.conversationId, isNull);
     expect(old.activeAt, old.updatedAt);
   });
 
@@ -114,7 +114,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final card = HomeCard.fromJson({'id': 'k', 'kind': 'action', 'title': '预算', 'blocks': [], 'action_prompt': 'x', 'target': 'usage', 'dismissed': false, 'unread': false});
-    await tester.pumpWidget(ProviderScope(child: _wrap(SingleChildScrollView(child: ActionCard(card: card, onDo: (_) {}, onOpen: (_, _) {})))));
+    await tester.pumpWidget(ProviderScope(child: _wrap(SingleChildScrollView(child: ActionCard(card: card, onDo: (_) {}, onOpen: (_, _, {projectId}) {})))));
     await tester.pumpAndSettle();
     final pills = tester.widgetList<PillButton>(find.byType(PillButton)).toList();
     expect(pills.map((b) => b.label), ['忽略', '查看用量', '去做']);

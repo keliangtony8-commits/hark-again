@@ -5,15 +5,16 @@
 - 列表：主聊天和项目的对话列表只列 listed() 为真的（task_id 为空）。运行对话从 Home 的报告卡、任务详情的运行记录点开；
   搜索照常能搜到（搜索是“找”，不是“列”）。
 - 接话：用户在运行对话里发了一句（ws 新消息 / 引导）→ promote()：清掉 task_id，从此是一段普通对话，进列表。
-  按 Hark 的做法，回复一份报告就是开始聊这件事。
+  按 Hark 的做法，回复一份报告就是开始聊这件事。v2.95 例外：项目里的运行对话（定时脚本在项目工作区跑的）不 promote——
+  项目只有一段普通对话（app/project_chat.py），它照样能聊、从报告卡打开，只是永远是运行对话；清理时跳过用户回过话的。
 - 删除：任务这次还在跑（同任务有 running 的运行记录）时 busy() 为真，删对话的接口回 409——不然 worker 往一段删掉的对话写
   回复会撞外键（用户 13:58 报的 worker FK 错误）。
 - 清理：运行记录只留最近 task_runs.KEEP 条；被裁掉的那几次、或任务被删时，还藏着的运行对话一起删（Home 上还挂着的卡引用的留着），
   免得看不见又删不掉的对话越积越多。被接过话（promote 了）的不动——那是用户自己的对话了。"""
-from sqlalchemy import ColumnElement, delete, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Conversation, HomeCard, ScheduledTask, TaskRun
+from .models import Conversation, HomeCard, Message, ScheduledTask, TaskRun
 
 
 def mark(conv: Conversation, task: ScheduledTask) -> Conversation:
@@ -32,7 +33,7 @@ def hidden(conv: Conversation | None) -> bool:
 
 def promote(conv: Conversation) -> bool:
     """用户在这段对话里说话了：变成普通对话。返回是否有变化（不 commit，随这一轮的提交落库）。"""
-    if conv.task_id is None:
+    if conv.task_id is None or conv.project_id:
         return False
     conv.task_id = None
     return True
@@ -55,6 +56,10 @@ async def drop(db: AsyncSession, conversation_ids: list[str] | None = None, task
         where.append(Conversation.id.in_(conversation_ids))
     if task_id is not None:
         where.append(Conversation.task_id == task_id)
+    # v2.95 项目里的运行对话用户回过话（>1 条用户消息）也不删：它不会 promote，但已经是用户的对话了
+    talked = (select(func.count(Message.id)).where(Message.conversation_id == Conversation.id, Message.role == "user")
+              .scalar_subquery())
+    where.append(talked <= 1)
     ids = list((await db.scalars(select(Conversation.id).where(*where))).all())
     if not ids:
         return 0

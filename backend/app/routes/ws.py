@@ -8,14 +8,14 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 import logging
 
-from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, message_intake, project_relay, reply_quote, run_conversations, skill_mentions, steering, user_shell, workspaces
+from .. import agent_mentions, conversation_title, file_mentions, init_command, live_turns, message_intake, project_chat, project_relay, reply_quote, run_conversations, skill_mentions, steering, user_shell, workspaces
 from ..agent import approvals, context
 from ..agent.tools import deny_all, nobody
 from ..agent.runner import RewindError, apply_choice, rewind, run_turn
 from ..auth import verify_token
 from ..blocks import FileBlock, text_to_blocks
 from ..db import SessionLocal
-from ..models import Conversation, Message
+from ..models import Conversation, Message, Project
 from ..storage import mime_of, project_file, project_file_root, upload_path
 
 router = APIRouter()
@@ -77,13 +77,18 @@ async def _handle_user_message(emit, event: dict, stop: asyncio.Event) -> None:
         pid = conv.project_id if conv is not None else event.get("project_id")
         if workspaces.is_personal(pid) or not isinstance(pid, str):
             pid = None  # 主聊天：对话不属于任何项目（个人工作区不是项目）
+        project = await db.get(Project, pid) if conv is None and pid else None
+        if conv is None and project is None:
+            pid = None  # 项目不存在（被删了）：当主聊天
         files = _attachments(event.get("attachments") or [])
         files += await _project_files(db, pid, event.get("project_files") or [], MAX_FILES - len(files), text)
         if not text and not files:
             return
-        if conv is None:
+        if conv is None and project is not None:
+            conv = await project_chat.ensure(db, project)  # v2.95 项目 = 一段对话：不新开
+        elif conv is None:
             conv = Conversation(title=conversation_title.first_title(text or files[0]["name"]),
-                                title_source=conversation_title.FIRST, project_id=pid)
+                                title_source=conversation_title.FIRST, project_id=None)
             db.add(conv)
             await db.flush()
         apply_choice(conv, event)

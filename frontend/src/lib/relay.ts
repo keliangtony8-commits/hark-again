@@ -7,7 +7,8 @@ export const originSemantics = (b: OriginBlock) => (b.conversation_id ? `${b.nam
 export function relayMeta(b: RelayBlock): string {
   const files = b.files ?? [];
   return [
-    b.new_conversation ? "新开了一段对话" : "接在最近的对话里",
+    // v2.95 项目 = 一段对话：服务器恒发 new_conversation=false；true 只出现在 v2.95 前的老消息里
+    b.new_conversation ? "新开了一段对话" : "接在项目对话里",
     ...(files.length === 1 ? [`带了 ${files[0]}`] : files.length > 1 ? [`带了 ${files[0]} 等 ${files.length} 个文件`] : []),
   ].join(" · ");
 }

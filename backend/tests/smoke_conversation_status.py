@@ -1,10 +1,9 @@
-# 冒烟（v2.91 §N）：项目对话列表的状态胶囊（app/conversation_status.py 唯一规则）。
+# 冒烟（v2.91 §N；v2.95 项目 = 一段对话）：项目的状态胶囊（app/conversation_status.py 唯一规则）。
 # 一、纯规则：问号收尾（含 Markdown / 引号收尾、只看最后一段）、挂起卡片（审批 / 表单 / 下单 / 方案 / 浏览器接管）、
 #    在跑 > 任务 > 最后一条；被停 / 打断 / 用户消息结尾 / 没消息 → None；
-# 二、接口：GET /api/conversations?project_id= 每项带 status（最后一条取对、常驻任务不算、followup=pending 算、
-#    live_turns 在跑的一轮 running、挂着表单 waiting、并行路也算）；主聊天列表和搜索结果不带 status。
-# 三、v2.93 §Q 项目汇总：summarize 纯规则（waiting > running > 最近那段 done > None），
-#    GET /api/projects 的只读字段 status（_project_activity）：同口径（定时任务的运行对话不算）、空项目 None。
+# 二、for_list（最后一条取对、常驻任务不算、followup=pending 算、live_turns 在跑的一轮 running、挂着表单 waiting、并行路也算）；
+#    主聊天列表和搜索结果不带 status；GET /api/conversations?project_id= 那一项带。
+# 三、GET /api/projects 的只读字段 status（_project_activity）= 那段对话的状态；只有运行对话 / 空项目 → None。
 # 运行：python tests/smoke_conversation_status.py
 import os, sys, asyncio, subprocess, tempfile
 from datetime import datetime, timedelta, timezone
@@ -49,18 +48,13 @@ for b in [{"type": "approval", "id": "a", "title": "", "detail": "", "state": "p
     assert cs.derive([[*text("稍等"), b]], False, done) == cs.WAITING, b
 assert cs.derive([[{"type": "form", "id": "f", "state": "submitted"}]], False, done) == cs.RUNNING
 assert cs.derive([[{"type": "browser", "handoff": {"state": "done"}}]], True, None) == cs.RUNNING
-# 三、项目汇总（纯规则）：列表按最近更新排在前
-assert cs.summarize(["done", None, "waiting", "running"]) == cs.WAITING     # 任一等你回复
-assert cs.summarize([None, "done", "running"]) == cs.RUNNING                # 否则任一进行中
-assert cs.summarize(["done", None]) == cs.DONE                              # 否则看最近那段
-assert cs.summarize([None, "done"]) is None and cs.summarize([]) is None    # 最近那段没结论 → 不画
 
 
 async def main():
     t0 = datetime(2026, 10, 15, 8, 0, tzinfo=timezone.utc)
     async with SessionLocal() as db:
         db.add(Project(id="p1", name="考研"))
-        convs = {k: Conversation(title=k, project_id="p1") for k in
+        convs = {k: Conversation(title=k) for k in
                  ("done", "ask", "stopped", "user_last", "empty", "job", "service", "followup", "live", "live_form", "side")}
         convs["main"] = Conversation(title="main")
         db.add_all(convs.values())
@@ -98,29 +92,29 @@ async def main():
     ended.ended = True                                                    # 收尾保留期里的旧轮次不算
 
     async with SessionLocal() as db:
-        rows = await list_conversations(project_id="p1", q="", db=db)
-    got = {r["title"]: r["status"] for r in rows}
+        status = await cs.for_list(db, [i for k, i in ids.items() if k != "main"])
+    got = {k: status[i] for k, i in ids.items() if k != "main"}
     assert got == {"done": "done", "ask": "waiting", "stopped": None, "user_last": None, "empty": None, "job": "running",
                    "service": "done", "followup": "running", "live": "running", "live_form": "waiting", "side": "running"}, got
     async with SessionLocal() as db:
         main_rows = await list_conversations(project_id=None, q="", db=db)
-        found = await list_conversations(project_id="p1", q="ask", db=db)
+        found = await list_conversations(project_id=None, q="ask", db=db)
+        mine = await list_conversations(project_id="p1", q="", db=db)
     assert main_rows and all("status" not in r for r in main_rows)       # 主聊天列表不带
     assert found and all("status" not in r for r in found)               # 搜索结果不带
+    assert len(mine) == 1 and "status" in mine[0]                        # 项目的那段对话带
     assert live_turns.busy().keys() == {ids["live"], ids["live_form"], ids["side"]}
 
-    # 三、项目汇总：p1 里有挂着表单的一轮 → waiting；p2 最近一段做完 → done；p3 最近一段被停（更早的做完）→ None；
-    # p4 只有一个后台任务在跑 → running；p5 没对话 → None；p6 只有定时任务的运行对话（不在列表里）→ None
+    # 三、项目状态 = 那段对话：p2 做完 → done；p3 被停 → None；p4 后台任务在跑 → running；p5 没对话 → None；
+    # p6 只有定时任务的运行对话（不是项目那段）→ None；p1 那段是 GET ?project_id= 刚建的空对话 → None
     from app.routes.resources import _project_activity
     async with SessionLocal() as db:
         db.add_all([Project(id=f"p{i}", name=f"p{i}") for i in range(2, 7)])
         c = {k: Conversation(title=k, project_id=pid, updated_at=t0 + timedelta(minutes=m), task_id=task) for k, pid, m, task in [
-            ("p2_old", "p2", 1, None), ("p2_new", "p2", 5, None), ("p3_old", "p3", 1, None), ("p3_new", "p3", 5, None),
-            ("p4_job", "p4", 1, None), ("p6_run", "p6", 1, "t1")]}
+            ("p2_new", "p2", 5, None), ("p3_new", "p3", 5, None), ("p4_job", "p4", 1, None), ("p6_run", "p6", 1, "t1")]}
         db.add_all(c.values())
         await db.flush()
-        for k, role, st, body in [("p2_old", "assistant", "stopped", "停"), ("p2_new", "assistant", "done", "好了。"),
-                                  ("p3_old", "assistant", "done", "好了。"), ("p3_new", "assistant", "stopped", "停"),
+        for k, role, st, body in [("p2_new", "assistant", "done", "好了。"), ("p3_new", "assistant", "stopped", "停"),
                                   ("p4_job", "assistant", "done", "好了。"), ("p6_run", "assistant", "done", "要继续吗？")]:
             db.add(Message(conversation_id=c[k].id, role=role, blocks=text(body), status=st, created_at=t0))
         db.add(Job(id="j5", project_id="p4", conversation_id=c["p4_job"].id, title="训练", command="x", timeout=60, state="running"))
@@ -128,8 +122,8 @@ async def main():
         projects = list((await db.scalars(select(Project))).all())
         stats = await _project_activity(db, projects)
     assert {pid: v["status"] for pid, v in stats.items()} == {
-        "p1": "waiting", "p2": "done", "p3": None, "p4": "running", "p5": None, "p6": None}, stats
-    assert stats["p6"]["conversation_count"] == 1                        # 统计口径不变（只读字段只多一个 status）
+        "p1": None, "p2": "done", "p3": None, "p4": "running", "p5": None, "p6": None}, stats
+    assert stats["p6"]["conversation_id"] is None and stats["p2"]["conversation_id"] == c["p2_new"].id
     print("smoke_conversation_status ok")
 
 

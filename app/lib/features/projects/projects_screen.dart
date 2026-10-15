@@ -1,9 +1,9 @@
-// 项目：长期的事各有自己的对话、文件和规则。列表 → 点开是项目内的对话列表 / 聊天（都在一级外壳下，v2.93 §Q）。
+// 项目：长期的事各有自己的一段对话、文件和规则。列表 → 点开就是那段对话（v2.95 项目 = 一段对话；都在一级外壳下）。
 // 版式（v2.93 §Q，按 Hark）：顶上一行小标签（几个项目 · 最近活动），下面一行一个大字项目名（displaySmall），
-// 行尾是项目汇总状态胶囊（服务器 status，规则在后端 conversation_status.summarize）和 ⋯；长按 = 同一份菜单。
+// 行尾是项目状态胶囊（= 那段对话的状态，服务器 status，规则在后端 conversation_status）和 ⋯；长按 = 同一份菜单。
 // “当前”的项目正文色，其余变灰（projectIsCurrent）。没有卡片网格、没有输入框：这一页只负责“选一件事”。
 // 加载 / 空 / 出错 / 列表四态在同一个 FadeSwitcher 里交叉淡化，加载态是同高骨架，内容到了不跳版。
-// 左上 + = 新建项目；它和项目页的 ≡ 是同一颗钮（MenuPlusHero，tag = projectLeadTag），进出项目时原地 morph。
+// 左上 + = 新建项目；它和项目页的 ≡（项目切换）是同一颗钮（MenuPlusHero，tag = projectLeadTag），进出项目时原地 morph。
 // 新建与编辑都走 project_form.dart 的 showProjectForm，删除都走 deleteProject（列表菜单和项目内一致）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,7 +23,7 @@ import '../chat/status_capsule.dart';
 import '../chat/chat_scaffold.dart';
 import 'project_files_sheet.dart';
 import 'project_form.dart';
-import 'project_home.dart';
+import 'project_switcher.dart';
 
 /// 新建项目并直接进去。
 Future<void> createProject(BuildContext context, WidgetRef ref) async {
@@ -48,7 +48,7 @@ Future<bool> deleteProject(BuildContext context, WidgetRef ref, Project project)
   return true;
 }
 
-/// 项目的操作菜单（列表行 ⋯ / 长按、项目内 header 行 ⋯ 共用这一份）；onDeleted = 真的删了之后（项目内用来退出页面）。
+/// 项目的操作菜单（列表行 ⋯ / 长按、项目内的项目名药丸共用这一份）；onDeleted = 真的删了之后（项目内用来退出页面）。
 Future<void> showProjectMenu(BuildContext context, WidgetRef ref, Project project, {VoidCallback? onDeleted}) =>
     showActionSheet<void>(
       context,
@@ -219,31 +219,18 @@ class _ProjectRow extends StatelessWidget {
   }
 }
 
-/// 项目内（v2.93 §Q）：仍在一级外壳下（顶栏不消失）。左上 ≡ = 本项目对话列表（开着时转成 + = 新对话）；
-/// header 行 = ‹ 返回项目列表 + 项目名 + ⋯（文件 / 电脑 / 规则与档案 / 编辑 / 删除，与列表菜单同一份）。
-/// 没打开对话时是项目首屏 ProjectHome（本项目对话列表）。
+/// 项目内（v2.95 项目 = 一段对话）：仍在一级外壳下（顶栏不消失）。顶栏下一枚项目名药丸（点开项目菜单），下面直接是这段对话；
+/// 左上 ≡ = 项目切换（开着时转成 + = 新建项目）。回项目列表 = 再点一次顶栏“项目”。
 class ProjectDetailScreen extends ConsumerWidget {
   const ProjectDetailScreen({super.key, required this.id});
   final String id;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final project = ref.watch(projectsProvider).value?.where((p) => p.id == id).firstOrNull;
-    void back() => context.canPop() ? context.pop() : context.go('/projects');
-    return ChatScaffold(
-      projectId: id,
-      title: Text(project == null ? '项目' : '${project.emoji} ${project.name}', maxLines: 1, overflow: TextOverflow.ellipsis),
-      back: IconButton(icon: const Icon(Icons.chevron_left_rounded), tooltip: '返回项目列表', onPressed: back),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.more_horiz_rounded),
-          tooltip: '项目菜单',
-          onPressed: project == null ? null : () => showProjectMenu(context, ref, project, onDeleted: () {
-            if (context.mounted) back();
-          }),
-        ),
-      ],
-      empty: (context, send) => ProjectHome(projectId: id),
-    );
-  }
+  Widget build(BuildContext context, WidgetRef ref) => ChatScaffold(
+        key: ValueKey(id), // 抽屉里换项目：整页换新（侧栏开合、抽屉状态不带到别的项目）
+        projectId: id,
+        title: ProjectPill(projectId: id, onDeleted: () {
+          if (context.mounted) context.go('/projects');
+        }),
+      );
 }

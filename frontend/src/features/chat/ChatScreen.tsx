@@ -13,44 +13,44 @@ import EffortChip from "./EffortChip";
 import PlanModeChip from "./PlanModeChip";
 import { runSlash } from "./slashActions";
 import ModelChip from "./ModelChip";
-import type { ConversationSummary, OutgoingFile } from "../../lib/types";
+import type { OutgoingFile } from "../../lib/types";
 import { greetOnce, useProfile } from "../../lib/profile";
 import "./chat.css";
 
 type Props = {
-  projectId?: string;       // 有值 = 项目内聊天
-  listTitle?: string;
-  back?: ReactNode;         // 标题行最左（项目页：返回项目列表）；和 trailing 对称，标题居中
-  trailing?: ReactNode;     // 标题行最右（项目页：项目菜单 ⋯）
-  headerTitle?: string;
+  projectId?: string;       // 有值 = 项目聊天（v2.95 项目 = 一段对话）
   emptyGreeting?: string;
-  /** 没有消息时的首屏（项目首屏 ProjectHome）：拿到打开对话和对话列表。 */
-  empty?: (c: EmptyContext) => ReactNode;
+  /** 项目：顶栏下那一行写的东西（项目名药丸 ProjectPill）代替对话标题。 */
+  caption?: ReactNode;
+  /** 项目：左上 ≡ 打开的项目切换栏。render 拿到 close（选了项目就收起）；onOpen = 打开时刷新一次（状态胶囊以服务器为准）；
+   *  onNew = 抽屉开着时同一颗钮转成的 + = 新建项目。 */
+  switcher?: { render: (close: () => void) => ReactNode; onOpen?: () => void; onNew: () => void };
 };
 
-export type EmptyContext = { open: (id: string) => void; conversations: ConversationSummary[] };
-
-/** 聊天屏：主聊天和项目内对话共用（设计 v2；v2.93 §Q 起两者都在一级外壳下）。
- *  外壳的浮动顶栏在上，标题是它下面的一行小字（标题行，= App ChatScaffold header）；窄屏左上钮传进顶栏左槽：
- *  主聊天 = 历史（抽屉盖全屏）；项目 = ≡（本项目对话列表，从标题行下面滑出，开着时同一颗钮转成 + = 新对话）。
- *  项目的标题行左 ‹ 返回项目列表、右 ⋯ 项目菜单。新对话在历史面板顶部（项目抽屉里由那颗 + 承担）。 */
-export default function ChatScreen({ projectId, listTitle = "对话", back, trailing, headerTitle, emptyGreeting, empty }: Props) {
+/** 聊天屏：主聊天和项目聊天共用（设计 v2；都在一级外壳下）。
+ *  外壳的浮动顶栏在上，顶栏下一行（chat-caption，= App ChatScaffold header）是全站唯一的标题位：
+ *    主聊天 = 对话总结标题 + 本对话用量；项目 = 项目名药丸（caption，点开项目菜单），下面直接是那一段对话。
+ *  窄屏左上钮传进顶栏左槽：主聊天 = 历史（抽屉盖全屏，新对话在历史面板顶部）；
+ *    项目 = ≡ 打开项目切换栏（从标题行下面滑出），开着时同一颗钮转成 + = 新建项目。宽屏切换栏常驻左侧。 */
+export default function ChatScreen({ projectId, emptyGreeting, caption, switcher }: Props) {
   const chat = useChat(projectId);
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
   const nav = useNavigate();
-  const consumed = useRef<string | null>(null); // 用过的那次跳转（location.key）：同一页里再跳一次（转交卡打开同项目的另一段）也认
+  const consumed = useRef<string | null>(null); // 用过的那次跳转（location.key）：同一页里再跳一次（反馈 / 建议卡又指回本项目）也认
 
   // 从 Home 跳过来：带一句话就直接发出（新对话）；带对话 id 就打开那段，同时带话 = 打开后再发（建议卡“开始做”）。
+  // 项目里不认带来的对话 id（老消息里的 id 可能是迁移时合并掉的那段）：打开的永远是项目那一段，带话就在那段里发。
   // 用完清掉路由状态防止重复
   useEffect(() => {
     const st = location.state as { draft?: string; files?: OutgoingFile[]; open?: string } | null;
     if (!st || consumed.current === location.key) return;
     consumed.current = location.key;
-    if (st.open) chat.open(st.open).then(() => { if (st.draft?.trim()) chat.send(st.draft); });
+    if (projectId) chat.openProjectChat().then(() => { if (st.draft?.trim() || st.files?.length) chat.send(st.draft ?? "", st.files); });
+    else if (st.open) chat.open(st.open).then(() => { if (st.draft?.trim()) chat.send(st.draft); });
     else if (st.draft || st.files?.length) chat.send(st.draft ?? "", st.files);
     nav(location.pathname, { replace: true, state: null });
-  }, [location, chat, nav]);
+  }, [location, chat, nav, projectId]);
 
   // v2.92 §P 首次问候：主聊天空白、服务器说还没问候过 → 请服务器建「初次见面」对话并打开它（= App chat_screen.dart）。
   // 助手的开场白就是那段对话的第一条消息：在聊天里问称呼，不做表单引导页。
@@ -65,22 +65,21 @@ export default function ChatScreen({ projectId, listTitle = "对话", back, trai
   const lastTitle = useRef<{ id: string | null; title: string }>({ id: null, title: "新对话" });
   const found = chat.list.items.find((c) => c.id === chat.activeId);
   if (found) lastTitle.current = { id: found.id, title: found.title };
-  const title = headerTitle ?? (lastTitle.current.id === chat.activeId && chat.activeId ? lastTitle.current.title : "新对话");
+  const title = lastTitle.current.id === chat.activeId && chat.activeId ? lastTitle.current.title : "新对话";
   const open = (id: string | null, focus?: string) => { chat.open(id, focus); setDrawer(false); };
-  // 打开对话列表：项目里顺便刷新一次（状态胶囊以服务器为准；挂起的卡片出现在一轮中途）
-  const showList = () => { setDrawer(true); if (projectId) chat.list.refresh(); };
-  // v2.91 §N 项目对话的标题药丸：当前对话在列表里的标题（搜索过滤掉时沿用最后一次看到的）
-  const convTitle = chat.activeId && lastTitle.current.id === chat.activeId ? lastTitle.current.title : "";
-  // v2.23 转交卡 / “来自 X”：同一个范围（主聊天或同一项目）直接打开，否则跳到那边的聊天再打开（路由状态 open）
+  // 项目切换栏：打开时刷新一次项目列表（状态胶囊以服务器为准；挂起的卡片出现在一轮中途）
+  const showList = () => { setDrawer(true); switcher?.onOpen?.(); };
+  // v2.23 转交卡 / “来自 X”：主聊天里的对话直接打开；指向项目的统一进那个项目的那一段（同一项目 = 已经在看它，只确保打开）
   const openElsewhere = (id: string, pid: string | null) => {
-    if ((pid ?? undefined) === projectId) open(id);
+    if (!pid && !projectId) open(id);
+    else if (pid && pid === projectId) void chat.openProjectChat();
     else nav(pid ? `/projects/${pid}` : "/chat", { state: { open: id } });
   };
   // /status 打开标题的本对话用量面板：每次 +1，ChatTitle 看到变化就打开
   const [statusAsk, setStatusAsk] = useState(0);
   const catalog = useModelCatalog();
   const onSlash = (c: Parameters<typeof runSlash>[0], files: OutgoingFile[]) => runSlash(c, files, {
-    activeId: chat.activeId, messages: chat.messages, planMode: chat.planMode,
+    activeId: chat.activeId, messages: chat.messages, planMode: chat.planMode, inProject: !!projectId,
     open: (id) => open(id), setPlanMode: chat.setPlanMode, send: chat.send, showStatus: () => setStatusAsk((n) => n + 1),
     catalog: catalog ?? null, model: chat.model, setModel: chat.setModel, seek: chat.seek,
   });
@@ -88,23 +87,21 @@ export default function ChatScreen({ projectId, listTitle = "对话", back, trai
   return (
     <BlockActionsContext.Provider value={{ replyApproval: chat.replyApproval, replyForm: chat.replyForm, onJobSettled: chat.refreshActive, undoChanges: chat.undoChanges, followUp: chat.followUp, openConversation: (id, pid) => openElsewhere(id, pid) }}>
       <div className={`chat floating ${projectId ? "project" : ""} ${drawer ? "drawer-open" : ""}`}>
-        <ConversationList title={listTitle} list={chat.list} activeId={chat.activeId}
-          onOpen={open} onDelete={chat.remove} onClose={() => setDrawer(false)} />
+        {switcher
+          ? switcher.render(() => setDrawer(false))
+          : <ConversationList title="对话" list={chat.list} activeId={chat.activeId} onOpen={open} onDelete={chat.remove} onClose={() => setDrawer(false)} />}
         <div className="scrim" onClick={() => setDrawer(false)} />
         <section className="chat-main">
           <ShellLead>
             {projectId
-              ? <MenuPlus mobileOnly plus={drawer} label={drawer ? "新对话" : "项目对话"} onClick={() => (drawer ? open(null) : showList())} />
+              ? <MenuPlus mobileOnly plus={drawer} label={drawer ? "新建项目" : "切换项目"}
+                  onClick={() => { if (!drawer) showList(); else { setDrawer(false); switcher?.onNew(); } }} />
               : <button className="glass-btn glass mobile-only" onClick={() => setDrawer(true)} aria-label="历史"><IconHistory /></button>}
           </ShellLead>
-          <header className={`chat-top chat-caption ${back || trailing ? "with-sides" : ""}`}>
-            {(back || trailing) && <div className="chat-caption-side">{back}</div>}
-            <ChatTitle title={title} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} />
-            {(back || trailing) && <div className="chat-caption-side end">{trailing}</div>}
+          <header className="chat-top chat-caption">
+            <ChatTitle title={title} head={caption} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} />
           </header>
-          <ChatView empty={empty?.({ open: (id) => open(id), conversations: chat.list.items })}
-            pill={projectId ? { id: chat.activeId, title: convTitle } : undefined}
-            projectId={projectId} messages={chat.messages} busy={chat.busy} error={chat.error} link={chat.link} greeting={emptyGreeting}
+          <ChatView projectId={projectId} messages={chat.messages} busy={chat.busy} error={chat.error} link={chat.link} greeting={emptyGreeting}
             canRegenerate={chat.canRegenerate} onRegenerate={chat.regenerate}
             editableId={chat.editableId} onEdit={chat.edit}
             streaming={chat.streaming} canSteer={chat.canSteer} onStop={chat.canStop ? chat.stop : undefined}

@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, event, false
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, event, false, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .blocks import blocks_to_text
@@ -20,6 +20,10 @@ def _id() -> str:
 
 class Conversation(Base):
     __tablename__ = "conversations"
+    # v2.95 项目 = 一段对话（app/project_chat.py）：每个项目最多一段普通对话；运行对话（task_id 非空）不算。迁移 0066
+    __table_args__ = (Index("uq_conversations_project_chat", "project_id", unique=True,
+                            sqlite_where=text("project_id IS NOT NULL AND task_id IS NULL"),
+                            postgresql_where=text("project_id IS NOT NULL AND task_id IS NULL")),)
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
     title: Mapped[str] = mapped_column(String(200), default="新对话")
     # 标题从哪来（app/conversation_title.py）：first = 第一句话截取（第一轮后自动换成模型起的）/ auto / user = 用户改过 /
@@ -27,7 +31,7 @@ class Conversation(Base):
     title_source: Mapped[str] = mapped_column(String(8), default="fixed", server_default="fixed")
     # v2.91 上次自动起标题时这段对话有几条消息（迁移 0065）；auto 标题每多约 10 条复查一次话题变没变。None = 还没自动起过
     title_at: Mapped[int | None] = mapped_column(Integer, nullable=True, info={"private": True})
-    # 预留：Phase 3 的 Project 归属
+    # 所属项目（null = 主聊天）。v2.95 起一个项目只有一段普通对话
     project_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # v2.75 定时任务 / 面板 / 定时脚本某次运行开的对话 = 开它的任务 id：不进对话列表，用户接话后清空（app/run_conversations.py）

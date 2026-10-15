@@ -1,31 +1,38 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../lib/api";
+import { useResource } from "../../hooks/useResource";
 import type { Project } from "../../lib/types";
-import { IconBack, IconComputer, IconDoc, IconEdit, IconFile, IconMore, IconTrash } from "../../ui/icons";
-import { Menu, Sheet } from "../../ui/kit";
+import { Sheet } from "../../ui/kit";
 import ChatScreen from "../chat/ChatScreen";
 import ProjectBrief from "./ProjectBrief";
 import ProjectFiles from "./ProjectFiles";
 import ProjectForm from "./ProjectForm";
-import ProjectHome from "./ProjectHome";
+import ProjectSwitcher, { ProjectPill } from "./ProjectSwitcher";
 import { confirmDialog } from "../../ui/dialog";
+import "./projects.css";
 
-/** 项目详情（v2.93 §Q）= 带项目上下文的聊天屏，仍在一级外壳下（顶栏不让位）。
- *  标题行：‹ 返回项目列表 + 项目名 + ⋯（文件 / 电脑 / 规则与档案 / 编辑 / 删除，= App showProjectMenu）；
- *  窄屏左上 ≡ = 本项目对话列表（ChatScreen）。没打开对话时是项目首屏 ProjectHome（本项目对话列表）。 */
+/** 项目详情（v2.95 项目 = 一段对话，= App ProjectDetailScreen）= 那一段对话的聊天屏，仍在一级外壳下（顶栏不让位）。
+ *  顶栏下一枚项目名药丸（ProjectPill，点开 文件 / 电脑 / 规则与档案 / 编辑 / 删除，同列表行 ⋯），下面直接是聊天。
+ *  左上 ≡ = 项目切换栏（ProjectSwitcher；开着时转成 + = 新建项目），宽屏常驻左侧。回项目列表 = 再点顶栏“项目”。 */
 export default function ProjectScreen() {
   const { pid = "" } = useParams();
   const nav = useNavigate();
-  const [project, setProject] = useState<Project | null>(null);
+  const projects = useResource<Project>("/api/projects");
+  const [loaded, setLoaded] = useState<Project | null>(null);
   const [editing, setEditing] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
 
-  useEffect(() => { http.get<Project>(`/api/projects/${pid}`).then(setProject).catch(() => nav("/projects")); }, [pid, nav]);
+  useEffect(() => { http.get<Project>(`/api/projects/${pid}`).then(setLoaded).catch(() => nav("/projects")); }, [pid, nav]);
+  // 抽屉里换项目：新项目还没拉到时先用列表里那条，药丸不闪旧名字
+  const project = loaded?.id === pid ? loaded : projects.items.find((p) => p.id === pid) ?? null;
   if (!project) return null;
+
+  const saved = (p: Project) => { setLoaded(p); void projects.reload().catch(() => {}); };
   const remove = async () => {
-    if (await confirmDialog({ title: `删除“${project.name}”？`, text: "项目里的对话、文件和档案会一起删除，不能恢复。" })) {
+    if (await confirmDialog({ title: `删除“${project.name}”？`, text: "项目的对话、文件和档案会一起删除，不能恢复。" })) {
       await http.del(`/api/projects/${pid}`); nav("/projects");
     }
   };
@@ -35,25 +42,33 @@ export default function ProjectScreen() {
       <ChatScreen
         key={pid}
         projectId={pid}
-        listTitle={`${project.emoji} ${project.name}`}
-        headerTitle={`${project.emoji} ${project.name}`}
-        empty={(c) => <ProjectHome conversations={c.conversations} onOpen={c.open} />}
-        back={<button className="icon-btn" onClick={() => nav("/projects")} aria-label="返回项目列表" title="返回项目列表"><IconBack /></button>}
-        trailing={<Menu label="项目菜单" trigger={<IconMore size={20} />} items={[
-          { label: "项目文件", icon: <IconFile />, onSelect: () => setShowFiles(true) },
-          { label: "电脑", icon: <IconComputer size={16} />, onSelect: () => nav(`/projects/${pid}/computer`) },
-          { label: "规则与档案", icon: <IconDoc size={16} />, onSelect: () => setShowBrief(true) },
-          { label: "编辑项目", icon: <IconEdit />, onSelect: () => setEditing(true) },
-          { label: "删除项目", icon: <IconTrash />, danger: true, onSelect: () => { void remove(); } },
-        ]} />}
+        caption={<ProjectPill project={project}
+          onFiles={() => setShowFiles(true)}
+          onComputer={() => nav(`/projects/${pid}/computer`)}
+          onBrief={() => setShowBrief(true)}
+          onEdit={() => setEditing(true)}
+          onDelete={() => { void remove(); }} />}
+        switcher={{
+          render: (close) => <ProjectSwitcher projects={projects.items} loading={projects.loading} currentId={pid}
+            onPick={(p) => { close(); if (p.id !== pid) nav(`/projects/${p.id}`); }}
+            onNew={() => { close(); setCreating(true); }} />,
+          onOpen: () => { void projects.reload().catch(() => {}); },
+          onNew: () => setCreating(true),
+        }}
       />
       {showFiles && <ProjectFiles projectId={pid} onClose={() => setShowFiles(false)} />}
-      {showBrief && <ProjectBrief project={project} onSaved={setProject} onClose={() => setShowBrief(false)} />}
+      {showBrief && <ProjectBrief project={project} onSaved={setLoaded} onClose={() => setShowBrief(false)} />}
       {editing && (
         <Sheet title="项目设置" onClose={() => setEditing(false)}>
           <ProjectForm initial={project} submitLabel="保存" onCancel={() => setEditing(false)}
-            onSubmit={async (v) => { setProject(await http.patch<Project>(`/api/projects/${pid}`, v)); setEditing(false); }}
+            onSubmit={async (v) => { saved(await http.patch<Project>(`/api/projects/${pid}`, v)); setEditing(false); }}
             onDelete={() => { void remove(); }} />
+        </Sheet>
+      )}
+      {creating && (
+        <Sheet title="新建项目" onClose={() => setCreating(false)}>
+          <ProjectForm submitLabel="创建" onCancel={() => setCreating(false)}
+            onSubmit={async (v) => { const p = await projects.create(v); setCreating(false); if (p?.id) nav(`/projects/${p.id}`); }} />
         </Sheet>
       )}
     </>

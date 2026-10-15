@@ -1,6 +1,6 @@
-# 冒烟：项目接口带只读的 conversation_count 和 last_active_at（项目卡片“x 个对话 · 更新于…”）。
-# 新项目 → 0 个对话、活动时间 = 项目更新时间；加两段对话（其中一段更新得更晚）→ 计数 2、活动时间 = 最晚那段；
-# 别的项目/无项目的对话不算；单条 GET / PATCH 同样带上；客户端写不进来。
+# 冒烟：项目接口带只读的 conversation_id 和 last_active_at（v2.95 项目 = 一段对话）。
+# 新项目 → 带着刚建的那段对话、活动时间 = 项目与对话中较晚的；那段对话更新得更晚 → 活动时间 = 它；
+# 运行对话 / 别的项目 / 主聊天的对话不算；单条 GET / PATCH 同样带上；客户端写不进来。
 # 运行：python tests/smoke_project_activity.py
 import os, sys, asyncio, subprocess, tempfile
 db_path = os.path.join(tempfile.mkdtemp(), "t.db")
@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app.auth import require_user
 from app.db import SessionLocal
 from app.models import Conversation
+from sqlalchemy import update
 from app.routes.resources import routers
 
 app = FastAPI()
@@ -27,29 +28,28 @@ def parse(s): return datetime.fromisoformat(s).astimezone(timezone.utc)
 
 a = c.post("/api/projects", json={"name": "考研"}).json()
 b = c.post("/api/projects", json={"name": "旅行"}).json()
-assert a["conversation_count"] == 0, a
-assert parse(a["last_active_at"]) == parse(a["updated_at"]), a
+assert a["conversation_id"] and a["conversation_id"] != b["conversation_id"], a
+assert abs((parse(a["last_active_at"]) - parse(a["updated_at"])).total_seconds()) < 1, a
 
 later = datetime.now(timezone.utc) + timedelta(hours=2)
+much_later = later + timedelta(hours=5)
 async def seed():
     async with SessionLocal() as db:
+        await db.execute(update(Conversation).where(Conversation.id == a["conversation_id"]).values(updated_at=later))
         db.add_all([
-            Conversation(project_id=a["id"], title="x"),
-            Conversation(project_id=a["id"], title="y", updated_at=later),
-            Conversation(project_id=b["id"], title="z"),
-            Conversation(project_id=None, title="main"),
+            Conversation(project_id=a["id"], title="脚本", task_id="t1", updated_at=much_later),  # 运行对话不算
+            Conversation(project_id=None, title="main", updated_at=much_later),
         ])
         await db.commit()
 asyncio.run(seed())
 
 rows = {p["id"]: p for p in c.get("/api/projects").json()}
-assert rows[a["id"]]["conversation_count"] == 2, rows
-assert rows[b["id"]]["conversation_count"] == 1, rows
+assert rows[a["id"]]["conversation_id"] == a["conversation_id"] and "conversation_count" not in rows[a["id"]], rows
 assert abs((parse(rows[a["id"]]["last_active_at"]) - later).total_seconds()) < 1, rows[a["id"]]
 one = c.get(f"/api/projects/{a['id']}").json()
-assert one["conversation_count"] == 2 and one["last_active_at"] == rows[a["id"]]["last_active_at"]
-patched = c.patch(f"/api/projects/{a['id']}", json={"rules": "用英文", "conversation_count": 99}).json()
-assert patched["conversation_count"] == 2 and patched["rules"] == "用英文", patched
+assert one["conversation_id"] == a["conversation_id"] and one["last_active_at"] == rows[a["id"]]["last_active_at"]
+patched = c.patch(f"/api/projects/{a['id']}", json={"rules": "用英文", "conversation_id": "x"}).json()
+assert patched["conversation_id"] == a["conversation_id"] and patched["rules"] == "用英文", patched
 # 任务接口的 extra（next_run_at）不受影响
 t = c.post("/api/tasks", json={"name": "早报", "prompt": "x", "cron": "0 8 * * *"}).json()
 assert t["next_run_at"], t

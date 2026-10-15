@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import card_targets
+from . import card_targets, project_chat
 from .blocks import text_to_blocks
 from .models import Conversation, HomeCard, Project
 
@@ -107,11 +107,13 @@ async def start(db: AsyncSession, card_id: str) -> tuple[HomeCard, bool]:
     cid, started = card.conversation_id, False
     if not cid or await db.get(Conversation, cid) is None:
         pid = card_targets.project_of(card.target)
-        if pid and await db.get(Project, pid) is None:
-            pid = None  # 项目删了：对话放回主聊天
-        conv = Conversation(title=card.title[:200], project_id=pid)
-        db.add(conv)
-        await db.flush()
+        project = await db.get(Project, pid) if pid else None  # 项目删了：对话放回主聊天
+        if project is not None:
+            conv = await project_chat.ensure(db, project)  # v2.95 项目 = 一段对话：指令发进项目那段
+        else:
+            conv = Conversation(title=card.title[:200])
+            db.add(conv)
+            await db.flush()
         cid, started = conv.id, True
     # 显式写回 updated_at = 原值：onupdate 不触发，卡在 Home 上的位置不跳
     await db.execute(update(HomeCard).where(HomeCard.id == card.id)

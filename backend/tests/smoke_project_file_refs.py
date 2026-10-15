@@ -130,7 +130,7 @@ for i in range(12):
 with c.websocket_connect(f"/ws?token={token}") as ws:
     e = turn(ws, {"type": "user.message", "text": "很多", "project_id": pid, "attachments": [doc["id"]] * 3,
                   "project_files": [f"f{i}.txt" for i in range(12)]})
-    assert len([b for b in asyncio.run(user_blocks(e["conversation_id"]))[0] if b["type"] == "file"]) == 10
+    assert len([b for b in asyncio.run(user_blocks(e["conversation_id"]))[-1] if b["type"] == "file"]) == 10  # v2.95 项目只有一段对话：看最新这条
 assert storage.project_file(pid, "notes/plan.md") and storage.project_file(pid, "notes") is None
 assert storage.project_file("", "x") is None and storage.project_file("missing", "x") is None
 assert not (storage.PROJECTS / "missing").exists()

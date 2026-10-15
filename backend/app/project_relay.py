@@ -1,9 +1,9 @@
 """跨项目协作（对标 Hark 的 projects 工具：看有哪些项目、新建项目、把一件事交给另一个项目）。这是唯一规则。
 
-- list_text：项目清单（名字、id、对话数、最近活动、档案第一行），当前项目标“（就是这里）”。
+- list_text：项目清单（名字、id、最近活动、档案第一行），当前项目标“（就是这里）”。
 - create：新建项目（名字去重；可带第一版项目档案）。
 - send：把一段话（可带本工作区的文件）交给另一个项目——
-  · 落在对方最近的一段普通对话里（没有就新开一段；定时任务的报告对话不算）；
+  · 落在对方项目的那段对话里（v2.95 项目 = 一段对话，app/project_chat.py；没有就建）；
   · 存成一条用户消息：[origin 块（谁转来的、第几手），文字，文件块]，对方助手立刻在那段对话里接着做（answer 钩子：
     routes/ws 注册成和“补充的话另起一轮”同一条路，worker 进程里没有 ws 就用这里的默认做法）；
   · 文件复制进对方工作区 received/（同名加 (2)，隐藏目录拒绝，过对方磁盘配额）——“把文件放进别的项目，同时一定发消息告诉它”合成一步；
@@ -23,9 +23,9 @@ from typing import Callable
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import project_brief, quota, workspaces
+from . import project_brief, project_chat, quota, workspaces
 from .blocks import FileBlock, OriginBlock, RelayBlock
-from .models import Conversation, Message, Project, TaskRun
+from .models import Conversation, Message, Project
 from .storage import hidden, mime_of, project_dir, project_file
 
 TEXT_MAX = 4000          # 一条转交的话最多多少字（再长就写成文件一起带过去）
@@ -88,16 +88,16 @@ async def list_text(db: AsyncSession, here: str | None) -> str:
     rows = (await db.scalars(select(Project).order_by(Project.updated_at.desc()))).all()
     if not rows:
         return "还没有任何项目。用户有一件独立、会长期积累文件的事时，可以建议新建一个（action=create），由他决定。"
-    stats = {pid: (n, last) for pid, n, last in (await db.execute(
-        select(Conversation.project_id, func.count(Conversation.id), func.max(Conversation.updated_at))
+    last_at = {pid: last for pid, last in (await db.execute(
+        select(Conversation.project_id, func.max(Conversation.updated_at))
         .where(Conversation.project_id.in_([p.id for p in rows])).group_by(Conversation.project_id))).all()}
     lines = []
     for p in rows[:LIST_MAX]:
-        n, last = stats.get(p.id, (0, None))
+        last = last_at.get(p.id)
         when = max(t for t in (_aware(p.updated_at), _aware(last)) if t is not None)
         brief = next((ln.strip(" #-") for ln in (p.brief or p.rules or "").splitlines() if ln.strip(" #-")), "")
         mark = "（就是这里）" if p.id == here else ""
-        lines.append(f"- {p.emoji} {p.name}{mark}  id={p.id}  {n} 个对话  最近 {when:%Y-%m-%d %H:%M} UTC"
+        lines.append(f"- {p.emoji} {p.name}{mark}  id={p.id}  最近 {when:%Y-%m-%d %H:%M} UTC"
                      + (f"\n  {brief[:80]}" if brief else ""))
     more = f"\n（还有 {len(rows) - LIST_MAX} 个没列出）" if len(rows) > LIST_MAX else ""
     return f"共 {len(rows)} 个项目：\n" + "\n".join(lines) + more
@@ -116,6 +116,7 @@ async def create(db: AsyncSession, name: str, emoji: str = "", brief: str = "") 
         if err := project_brief.write(p, brief):
             raise RelayError(err)
     db.add(p)
+    await project_chat.after_create(db, p)
     await db.commit()
     return p
 
@@ -147,14 +148,6 @@ async def _anchor(db: AsyncSession, cid: str | None) -> tuple[str, int]:
         return "", 0
     o = origin_of(last.blocks)
     return last.id, int(o.get("depth", 1)) if o else 0
-
-
-async def target_conversation(db: AsyncSession, project_id: str) -> Conversation | None:
-    """对方项目里最近更新的普通对话（定时任务跑出来的报告对话不算）；没有 → None（调用方新开）。"""
-    task_convs = select(TaskRun.conversation_id).where(TaskRun.conversation_id.is_not(None))
-    return await db.scalar(select(Conversation).where(Conversation.project_id == project_id,
-                                                      Conversation.id.not_in(task_convs))
-                           .order_by(Conversation.updated_at.desc()).limit(1))
 
 
 def _free_name(root, name: str) -> str:
@@ -232,12 +225,8 @@ async def send(db: AsyncSession, source_conversation_id: str | None, source_proj
         name, emoji = src.name, src.emoji
     else:
         name, emoji = MAIN_NAME, MAIN_EMOJI
-    conv = await target_conversation(db, target.id)
-    new = conv is None
-    if new:
-        conv = Conversation(project_id=target.id, title=f"来自{name}：{text.splitlines()[0][:24]}", title_source="first")
-        db.add(conv)
-        await db.flush()
+    new = await project_chat.of(db, target.id) is None
+    conv = await project_chat.ensure(db, target)
     origin = OriginBlock(name=name, emoji=emoji, project_id=source_project_id,
                          conversation_id=source_conversation_id, depth=depth + 1).model_dump()
     msg = Message(conversation_id=conv.id, role="user",
@@ -261,9 +250,8 @@ def card(s: Sent, text: str) -> dict:
 
 
 def for_model(s: Sent) -> str:
-    where = "新开的一段对话" if s.new_conversation else "最近的那段对话"
     files = f"；文件已放进对方工作区 {', '.join(b['id'] for b in s.files)}" if s.files else ""
-    return (f"已交给「{s.project.emoji} {s.project.name}」项目（{where}），那边的助手已经开始处理{files}。"
+    return (f"已交给「{s.project.emoji} {s.project.name}」项目（发进了那个项目的对话），那边的助手已经开始处理{files}。"
             "结果会留在那个项目里，不会自动传回来；用一句话告诉用户交出去了、去哪看，用户已经能看到转交卡。")
 
 

@@ -90,15 +90,15 @@ err(go(pr.send, "main1", None, "论文", "看看", ["nope.txt"]), "没有文件"
 err(go(pr.send, "main1", None, "论文", "看看", ["a"] * 6), "最多带")
 assert not got and not (PROJECTS / paper.id / "received").exists()
 
-# 报告对话不算“最近的普通对话”：论文项目只有一段报告对话 → 新开
+# v2.95 项目 = 一段对话：落在项目建好时就有的那段；项目里的运行对话（定时脚本的报告）不算
 async def report_conv():
     async with SessionLocal() as db:
-        db.add(Conversation(id="rep1", title="周报", project_id=paper.id))
+        db.add(Conversation(id="rep1", title="周报", project_id=paper.id, task_id="t1"))
         db.add(TaskRun(task_id="t1", conversation_id="rep1"))
         await db.commit()
 run(report_conv())
 s1 = run(go(pr.send, "main1", None, "毕业论文", "这是提纲初稿，帮我扩成三级目录。", ["notes/提纲.md", "/workspace/notes/提纲.md"]))
-assert s1.new_conversation and s1.depth == 1 and s1.conversation_id != "rep1"
+assert not s1.new_conversation and s1.depth == 1 and s1.conversation_id != "rep1"
 assert [b["id"] for b in s1.files] == ["received/提纲.md", "received/提纲 (2).md"], s1.files
 assert (PROJECTS / paper.id / "received" / "提纲 (2).md").read_text(encoding="utf-8").startswith("# 提纲")
 assert got == [(s1.conversation_id, s1.message_id)]
@@ -108,14 +108,14 @@ async def msg(mid):
         c = await db.get(Conversation, m.conversation_id)
         return m, c
 m1, c1 = run(msg(s1.message_id))
-assert c1.project_id == paper.id and c1.title.startswith("来自主聊天：这是提纲初稿") and c1.title_source == "first"
+assert c1.project_id == paper.id and c1.task_id is None and c1.title == "毕业 论文" and c1.title_source == "fixed"
 o = m1.blocks[0]
 assert o == {"type": "origin", "name": "主聊天", "emoji": "💬", "project_id": None, "conversation_id": "main1", "depth": 1}, o
 assert m1.blocks[1] == {"type": "text", "text": "这是提纲初稿，帮我扩成三级目录。"} and m1.blocks[2]["project_id"] == paper.id
 card = pr.card(s1, "这是提纲初稿，帮我扩成三级目录。")
-assert card["type"] == "relay" and card["name"] == "毕业 论文" and card["files"] == ["提纲.md", "提纲 (2).md"] and card["new_conversation"]
+assert card["type"] == "relay" and card["name"] == "毕业 论文" and card["files"] == ["提纲.md", "提纲 (2).md"] and not card["new_conversation"]
 assert "已交给「毕业 论文」项目" in blocks_to_text([card]) and "提纲 (2).md" in blocks_to_text([card])
-# 第二次发给同一项目：落在刚才那段（最近的普通对话）
+# 第二次发给同一项目：还是那段
 s2 = run(go(pr.send, "main1", None, paper.id, "另外参考文献用 GB/T 7714。"))
 assert not s2.new_conversation and s2.conversation_id == s1.conversation_id
 s3 = run(go(pr.send, "main1", None, trip.id, "第三条"))

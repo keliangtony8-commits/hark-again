@@ -179,17 +179,42 @@ class ChatController extends Notifier<ChatState> {
     return ChatState(linkDown: socket.current == LinkStatus.down);
   }
 
-  /// 先摆出缓存的列表（打开就有东西看），再去服务器刷新。
+  /// 先摆出缓存的列表（打开就有东西看），再去服务器刷新。项目范围：列表就是那一段对话，拿到就打开（openProjectChat）。
   Future<void> _start() async {
     final cached = await _cache.conversations(projectId);
     if (cached != null && state.conversations.isEmpty) {
       state = state.copyWith(conversations: [for (final j in cached) ConversationSummary.fromJson(j)]);
+    }
+    if (projectId.isNotEmpty) {
+      await _openProjectChat(); // 缓存里的那段先摆出来，不闪空白
+      await refreshList();
+      await _openProjectChat();
+      if (state.activeId != null || state.messages.isNotEmpty) return;
+      // 还没拿到那段对话（离线且没缓存）：照旧把“新对话”里没发出的话摆回来，重发时服务器 ensure 那段
+      final restored = await _cache.outbox(projectId, null);
+      if (restored.isNotEmpty && state.activeId == null && state.messages.isEmpty) state = state.copyWith(messages: restored);
+      return;
     }
     if (state.activeId == null && state.messages.isEmpty) {
       final restored = await _cache.outbox(projectId, null);
       if (restored.isNotEmpty && state.activeId == null && state.messages.isEmpty) state = state.copyWith(messages: restored);
     }
     await refreshList();
+  }
+
+  /// v2.95 项目 = 一段对话：项目范围的列表（GET /api/conversations?project_id=）只有那一段，没打开就打开它。
+  /// 已经在看它、或用户已经发出了一句（还没拿到 id）时不动。
+  Future<void> _openProjectChat() async {
+    final id = state.conversations.firstOrNull?.id;
+    if (id != null && state.activeId == null && state.messages.isEmpty) await open(id);
+  }
+
+  /// 从别处跳进项目（转交卡、“来自 X”、反馈、建议卡）：不管带来的是哪个对话 id，项目里只有这一段——刷新并打开它。
+  Future<void> openProjectChat() async {
+    if (projectId.isEmpty) return;
+    await refreshList();
+    final id = state.conversations.firstOrNull?.id;
+    if (id != null && state.activeId != id) await open(id);
   }
 
   /// 发件箱持久化：同一个对话里未发出的消息（id + 状态）一变就整份写。
@@ -201,7 +226,8 @@ class ChatController extends Notifier<ChatState> {
     unawaited(_cache.putOutbox(projectId, next.activeId, [for (final m in next.messages) if (m.unsent) m]));
   }
 
-  /// 对话列表（置顶在前，后端排好序）；[query] 不为空时按标题和内容搜索。返回服务器原样 JSON。
+  /// 对话列表（置顶在前，后端排好序）；[query] 不为空时按标题和内容搜索（只主聊天有）。
+  /// 项目范围 = 这个项目的那段对话（≤1 项，服务器没有就建）。返回服务器原样 JSON。
   Future<List<dynamic>> _list([String query = '']) async {
     final params = {if (projectId.isNotEmpty) 'project_id': projectId, if (query.isNotEmpty) 'q': query};
     final path = Uri(path: '/api/conversations', queryParameters: params.isEmpty ? null : params).toString();

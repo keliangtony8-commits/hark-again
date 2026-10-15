@@ -13,10 +13,12 @@ import type { Message, OutgoingFile } from "../../lib/types";
 import { writeClipboard } from "../../lib/clipboard";
 
 export const NO_CONVERSATION = "还没开始对话";
+/** v2.95 项目 = 一段对话：项目里 /new 不另起一段，只回这一句。 */
+export const PROJECT_ONE_CHAT = "项目只有这一段对话；要另起一件事，新建一个项目";
 export const planModeNote = (on: boolean) => (on ? "计划模式：先出方案，你批准后再动手" : "已退出计划模式");
 
 export type SlashDeps = {
-  activeId: string | null; messages: Message[]; planMode: boolean;
+  activeId: string | null; messages: Message[]; planMode: boolean; inProject?: boolean;
   open: (id: string | null) => unknown; setPlanMode: (on: boolean) => Promise<void>;
   send: (t: string, files?: OutgoingFile[]) => void; showStatus: () => void;
   catalog: ModelCatalog | null; model: string | null; setModel: (choice: string | null) => unknown; seek: (messageId: string) => void;
@@ -24,7 +26,7 @@ export type SlashDeps = {
 
 export async function runSlash(call: SlashCall, files: OutgoingFile[], d: SlashDeps): Promise<string | undefined> {
   switch (call.command.name) {
-    case "new": await d.open(null); return;
+    case "new": if (d.inProject) return PROJECT_ONE_CHAT; await d.open(null); return;
     case "plan": {
       const withText = !!call.args || files.length > 0;
       const on = withText ? true : !d.planMode;

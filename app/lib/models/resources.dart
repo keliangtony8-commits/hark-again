@@ -199,7 +199,7 @@ class Project {
     this.briefBy,
     this.briefUpdatedAt,
     this.updatedAt,
-    this.conversationCount = 0,
+    this.conversationId,
     this.lastActiveAt,
     this.status,
   });
@@ -212,7 +212,7 @@ class Project {
     briefBy: j['brief_by'] as String?,
     briefUpdatedAt: _date(j['brief_updated_at']),
     updatedAt: _date(j['updated_at']),
-    conversationCount: (j['conversation_count'] as num?)?.toInt() ?? 0,
+    conversationId: j['conversation_id'] as String?,
     lastActiveAt: _date(j['last_active_at']),
     status: ConversationStatus.parse(j['status']),
   );
@@ -224,11 +224,11 @@ class Project {
   final String? briefBy;
   final DateTime? briefUpdatedAt;
 
-  /// 服务端算的只读字段（老服务端没有 → 0 / null，卡片退回用 updatedAt）。
-  final int conversationCount;
+  /// 服务端算的只读字段：v2.95 项目的那段对话（还没建 / 老服务端 → null）、最近活动（老服务端没有 → 退回 updatedAt）。
+  final String? conversationId;
   final DateTime? lastActiveAt;
 
-  /// v2.93 §Q 项目汇总状态（服务器算，规则在后端 conversation_status.summarize；老服务端没有 → null，不画胶囊）。
+  /// 项目状态 = 那段对话的状态（服务器算，规则在后端 conversation_status；老服务端没有 → null，不画胶囊）。
   final ConversationStatus? status;
 
   DateTime? get activeAt => lastActiveAt ?? updatedAt;

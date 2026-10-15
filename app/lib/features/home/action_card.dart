@@ -52,8 +52,9 @@ const cardTargets = <String, CardTarget>{
 
 CardTarget? cardTarget(String? id) => id == null ? null : cardTargets[splitTarget(id).$1];
 
-/// 打开某段对话，send 非空就在打开后发出去（主页传 openConversation）。
-typedef OpenConversation = void Function(String conversationId, String? send);
+/// 打开某段对话，send 非空就在打开后发出去（主页传 openConversation）；projectId = 卡指向的项目（`project:<id>`），
+/// v2.95 起服务器把指令发进那个项目的那段对话，客户端要切到那个项目里打开。
+typedef OpenConversation = void Function(String conversationId, String? send, {String? projectId});
 
 /// 点助手建议卡的主按钮（开始做 / 查看对话）的唯一入口。服务端说 started 才发指令，所以重复点不会重发。
 /// 卡已经不在（404 等）→ 只刷新列表。先拿到 notifier 再跳走：跳转后这张卡的 context 可能失效。
@@ -61,7 +62,8 @@ Future<void> startOffer(WidgetRef ref, HomeCard card, OpenConversation open) asy
   final api = ref.read(apiProvider), cards = ref.read(cardsProvider.notifier), inbox = ref.read(inboxProvider.notifier);
   try {
     final j = await api.post('/api/cards/${card.id}/start') as Map<String, dynamic>;
-    open(j['conversation_id'] as String, j['started'] == true ? j['prompt'] as String? : null);
+    final (kind, arg) = splitTarget(card.target ?? '');
+    open(j['conversation_id'] as String, j['started'] == true ? j['prompt'] as String? : null, projectId: kind == 'project' ? arg : null);
   } catch (_) {
     await cards.reload();
     return;

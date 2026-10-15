@@ -61,7 +61,7 @@ Future<FakeApi> pump(WidgetTester tester, Map<String, dynamic> json,
         path: '/home',
         builder: (_, _) => Scaffold(
             body: SingleChildScrollView(child: ActionCard(
-                card: HomeCard.fromJson(json), onDo: (t) => sent?.add(t), onOpen: (id, s) => opened?.add((id, s)))))),
+                card: HomeCard.fromJson(json), onDo: (t) => sent?.add(t), onOpen: (id, s, {projectId}) => opened?.add((id, s)))))),
     GoRoute(path: '/me/usage', builder: (_, _) => const Scaffold(body: Text('USAGE PAGE'))),
   ]);
   await tester.pumpWidget(ProviderScope(

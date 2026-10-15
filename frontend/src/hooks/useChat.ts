@@ -23,7 +23,8 @@ const keepTail = (t: string) => (t.length > THOUGHT_KEEP ? t.slice(-THOUGHT_KEEP
 const plainText = (blocks: Block[]) => blocks.map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
 
 /**
- * 聊天状态的唯一归属地（对应 App 的 chat_controller）。projectId 为空 = 主聊天；有值 = 该项目内的聊天。
+ * 聊天状态的唯一归属地（对应 App 的 chat_controller）。projectId 为空 = 主聊天；有值 = 该项目内的聊天
+ *   （v2.95 项目 = 一段对话：列表就是那一段，拿到就自动打开；项目里没有“新对话”）。
  * 发件箱：发出的消息先以 outbox="queued" 进列表；线通了才真正写出，一次只在飞一条（flush effect 一处负责）。
  *   等 45 秒没连上 → failed；发出后、回复开始前断线 → failed（服务器可能没收到）；回复中途断线 → 连上后从服务器重新拉。
  *   failed 由用户 resend()（挪到末尾重新排队）或 discard()。
@@ -43,7 +44,8 @@ const plainText = (blocks: Block[]) => blocks.map((b) => (b.type === "text" ? b.
  */
 export function useChat(projectId?: string) {
   const list = useConversations(projectId);
-  const [thread, setThread] = useState<Thread>(() => ({ id: null, messages: outbox.load(projectId, null) }));
+  // 项目里没有“新对话”这一态（v2.95），开场不摆空白槽位的发件箱：拿到那段对话 id 时再并进去（见下面 autoOpen）
+  const [thread, setThread] = useState<Thread>(() => ({ id: null, messages: projectId ? [] : outbox.load(projectId, null) }));
   const [streaming, setStreaming] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +143,7 @@ export function useChat(projectId?: string) {
           if (um && i >= 0) ms[i] = { ...ms[i], blocks: um.blocks };
           return { id: e.conversation_id, messages: [...ms, { id: "pending", role: "assistant", blocks: [], steps: [], pending: true }] };
         });
-        if (projectId) list.refresh();   // v2.91 §N 项目对话：新对话出现、状态胶囊变“进行中”（服务器此刻已能看到这一轮）
+        if (projectId) list.refresh();   // 项目对话：服务器此刻已能看到这一轮（列表里那段的状态 / 刚建出来的那段）
         break;
       }
       case "turn.steered": {
@@ -385,6 +387,27 @@ export function useChat(projectId?: string) {
     }
   }, [projectId, list.items]);
 
+  /** v2.95 项目 = 一段对话：项目范围的列表只有那一段，拿到 id 就打开它（App ChatController._openProjectChat）。
+   *  已经在看它、或用户已经发出了一句还没拿到 id（服务器会把它发进同一段，message.start 带回 id）时不动。
+   *  空白槽位里没发出的老消息（v2.95 前“本项目新对话”留下的）并进这段的发件箱，不丢。 */
+  const projectChatId = projectId ? list.items[0]?.id ?? null : null;
+  const pendingNew = thread.messages.some((m) => m.outbox === "queued") || streaming;
+  useEffect(() => {
+    if (!projectChatId || thread.id || pendingNew) return;
+    const orphan = outbox.load(projectId, null);
+    if (orphan.length) { outbox.save(projectId, projectChatId, [...outbox.load(projectId, projectChatId), ...orphan]); outbox.save(projectId, null, []); }
+    void open(projectChatId);
+  }, [projectChatId, thread.id, pendingNew, projectId, open]);
+
+  /** 从别处跳进项目（转交卡、“来自 X”、反馈、指向项目的建议卡）：不管带来的是哪个对话 id
+   *  （老消息里的 id 可能是迁移时合并掉的那段），项目里只有这一段——刷新并打开它（= App openProjectChat）。 */
+  const openProjectChat = useCallback(async () => {
+    if (!projectId) return;
+    const items = await list.refresh().catch(() => null);
+    const id = items?.[0]?.id;
+    if (id && threadRef.current.id !== id) await open(id);
+  }, [projectId, list.refresh, open]);
+
   const busy = streaming || thread.messages.some((m) => m.outbox === "queued");
   const last = thread.messages[thread.messages.length - 1];
   /** 最后一条是已落库的回复，或是已发出却没等到回复的用户消息（上一轮失败 → 重试）。 */
@@ -569,7 +592,7 @@ export function useChat(projectId?: string) {
   return {
     refreshActive, undoChanges, seek,
     list, activeId: thread.id, messages: thread.messages, streaming, busy, error, link,
-    canRegenerate, canStop, canSteer, editableId, focus, model, routed, setModel, effort, setEffort, planMode, setPlanMode, takeFocus: useCallback(() => setFocus(null), []), open, send, followUp, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
+    canRegenerate, canStop, canSteer, editableId, focus, model, routed, setModel, effort, setEffort, planMode, setPlanMode, takeFocus: useCallback(() => setFocus(null), []), open, openProjectChat, send, followUp, stop, resend, discard, regenerate, edit, remove, replyApproval, replyForm, reconnect,
   };
 }
 

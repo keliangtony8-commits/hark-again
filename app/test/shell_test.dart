@@ -89,7 +89,7 @@ void main() {
     router.go('/projects/p1');
     await _settle(tester);
     expect(_barShown(tester), isTrue); // v2.93 §Q 项目页仍在一级外壳下
-    expect(find.byTooltip('项目对话'), findsOneWidget); // 左上 ≡
+    expect(find.byTooltip('项目'), findsOneWidget); // 左上 ≡ = 项目切换（v2.95）
 
     router.go('/projects/p1/brief');
     await _settle(tester);

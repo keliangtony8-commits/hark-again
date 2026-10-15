@@ -1,4 +1,4 @@
-# Toyuis 交接文档（2026-10-15，v2.94.0）
+# Toyuis 交接文档（2026-10-15，v2.95.0）
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
@@ -38,7 +38,7 @@
 - 已发布：v2.85–v2.92（v2.90.1 用户气泡改灰；v2.90.3 已部署过一次，见下）。
 - v2.89：浏览器实时推流（CDP screencast，单条 WS，取代截图轮询）。
 - v2.90：运行中连发“按件回复”（`backend/app/message_intake.py` 单入口；补充并入 / 附和不回 / 问进度一句话 / 新问题并行一路；`messages.answered_by` 账本，迁移 0064；回复离原话远才画引用线）。
-- 已发布到 git：v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，2026-10-15，主页三个 bug，见第五节 6a；未部署、未出 APK——按新规则等用户说）**。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
+- 已发布到 git：v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
 - VPS：GreenCloud 2C/3.8G Debian 12，IP 172.93.163.240，域名 toyuis.itsllm.com。部署方式见 `deploy/`（git archive → 上传 → `deploy/update.sh`）。
   - **2026-10-15 约 11:05 已部署 v2.92.0**（`/api/version` = 2.92.0，容器全部 Up）。旧版备份 `/root/app-v2911-backup.tgz`，.env 备份 `/root/env.bak.v292`；`docker builder prune` 后磁盘 80%。
   - 真模型（StepFun）验证通过：主聊天说“以后叫我小测，你就叫阿星”→ 调用 set_names（步骤“保存称呼”），profile 变为 小测 / 阿星；验证后已删测试对话和 identity 行，greet 恢复为 true（保留用户自己的首次问候体验）。
@@ -60,7 +60,7 @@
    - 没动的取向：拿不准仍按补充（宁少勿多）；判官失败/超时仍按补充。
    - 判官层的真模型分数见下面「接手记录二」里的实测一节。
 4. ~~**v2.91 §N 项目页**~~ **2.91.0 已提交（未部署）**，决定见 docs/devlog.md 2026-10-15；剩：部署后真机看 App 明/暗动效手感。原规格（home-redesign §N）：项目对话左钮“≡”↔“+”（三条线旋转成十字 ~280ms）；项目列表带状态胶囊（进行中/等你回复/已完成）；进场浮出项目名药丸（下滑 8px+淡入，轻微回弹 ≤4%）；**往上滑看历史 >24px 也浮出**，下滑/停 1.5 秒/回到底部收起；App 用 ValueNotifier+RepaintBoundary 不整页 setState，Web 用 passive scroll+rAF；药丸显示**总结标题**（唯一来源 conversation_title，名词短语 ≤14 字、无标点口语，话题变了每约 10 条重总结），列表/药丸共用；`first_title` 只作生成前占位。要“细腻，不粗糙”。
-5a. **v2.93 §Q 项目页按 Hark 重做 + 手机弹层修遮挡（代码已提交 tag v2.93；剩部署、Web 截图、真机验收）**。规格与决定见 docs/devlog.md「2026-10-15 v2.93 §Q」。
+5a. **v2.93 §Q 项目页按 Hark 重做 + 手机弹层修遮挡（代码已提交 tag v2.93）**。⚠️ 项目内对话列表 / 抽屉 / +↔≡ 第三态 / 项目汇总状态已被 v2.95（5b）取代；弹层修遮挡与顶栏常驻仍有效。规格与决定见 docs/devlog.md「2026-10-15 v2.93 §Q」。
    - [x] devlog 全局决定 + 替换/删除 + 成本
    - [x] 后端：`conversation_status.summarize/for_projects`，`GET /api/projects` 每项加 `status`（无迁移）；smoke_conversation_status 加项目汇总一节，已过
    - [x] App（代码 + 测试，analyze 0、全量 flutter test 通过）：`shellBarShown`、`MenuPlusGlyph/MenuPlusHero`（Hero 骑在项目页路由动画上）、项目页 `CustomTransitionPage`（淡入 + 浮上 8px，Motion.morph）+ 列表 `FadeUnderCover`、ChatScaffold 只剩 ShellPage 一种外框、项目列表大字 + `projectIsCurrent` 灰化 + 汇总胶囊、ProjectHome 只列对话、⋯ 加“电脑”、sheets.dart `useSafeArea` + 表单提交钮钉底；顺手修 `SpeechController.stop` 在容器已释放时报错。
@@ -72,10 +72,18 @@
    - [x] 出 APK：2026-10-15 12:54 VPS 上 `deploy/build-apk.sh` 编好 v2.93.0（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）
    - [ ] 真机看 App 项目页 +↔≡ 切换手感、明/暗；手机浏览器验弹层三处不再被挡
    - [ ] App 截图回归里 emoji 无字体显示为空白（仅测试环境）
-5b. **【v2.95 最高优先级，下一版做；v2.94 不碰】项目 = 一段对话**（用户 2026-10-15 12:48 原话大意：“Hark 里一个项目就是一段对话，不能在项目里开多个会话”；附 Hark 截图（在 Hark 项目工作区 `files/uploads/1000035393.png`，不在仓库里）：点进项目直接就是聊天，顶栏下方药丸显示项目名，左上 ≡，底部输入框）。**v2.93 的“项目内对话列表 / 抽屉 / 新建本项目对话”方向错了。**
+5b. ✅（v2.95.0 已做并提交，未部署）**项目 = 一段对话**（用户 2026-10-15 12:48 原话大意：“Hark 里一个项目就是一段对话，不能在项目里开多个会话”；附 Hark 截图（在 Hark 项目工作区 `files/uploads/1000035393.png`，不在仓库里）：点进项目直接就是聊天，顶栏下方药丸显示项目名，左上 ≡，底部输入框）。**v2.93 的“项目内对话列表 / 抽屉 / 新建本项目对话”方向错了。**
    - 要被替换的 v2.93/v2.91 部分：ProjectHome 对话列表（App `features/projects/project_home.dart` 相关、Web `ProjectHome.tsx`）；项目对话抽屉（App ShellPage 内层 Scaffold 抽屉、Web 项目抽屉 + 遮罩）；“+ = 本项目新对话”与 ≡↔+ 的第三态；header 行 ‹ / 项目名 / ⋯ 是否保留待定；双栏项目历史栏；`conversation_status.for_projects/summarize` 的多对话汇总（单对话后项目状态 = 那段对话的状态，summarize 可删）；`GET /api/conversations?project_id=` 的项目内列表用法。
    - 待定设计要点（先在 devlog 写决定再动手）：①项目 = 唯一对话（建项目即建这段对话，项目 id ↔ 对话 id 一一对应，需迁移或约束）；②点项目直接进聊天，药丸显示项目名（v2.91 药丸当前显示对话总结标题，要改成项目名）；③**现有多对话项目的数据怎么并成一段**（按时间合并消息进最早那段？还是保留最近一段、其余归档进主聊天？需用户定，迁移不可逆要先备份）；④左上 ≡ 改作什么（Hark 截图里 ≡ 在项目里——候选：回项目列表 / 项目菜单（文件、电脑、规则）；需定）；⑤后端 / 协议（docs/protocol.md）/ 状态胶囊随之简化，删掉多对话专用代码与测试。
-   - 状态：[ ] 设计决定 [ ] 数据合并方案（用户确认）[ ] 后端 [ ] App [ ] Web [ ] 测试 [ ] 部署
+   - **v2.95 进度（2026-10-15，按块如实更新）**：
+     - [x] 设计决定：写进 docs/devlog.md「2026-10-15 v2.95 项目 = 一段对话」（项目=唯一普通对话 + 部分唯一索引；药丸=项目名并兼项目菜单；≡=项目切换抽屉、开着变 + = 新建项目；状态=那段对话的状态；迁移按 created_at 合并、备份表 + downgrade、幂等）
+     - [x] 数据迁移 0066（用户已授权不必再确认：可回退）：多段按 created_at 合进最早那段，引用行改指，备份表 + downgrade，幂等，部分唯一索引；smoke_project_chat 覆盖合并/回退/再升级/幂等，已过
+     - [x] 后端：project_chat.py 唯一入口；建项目/发消息/建议卡/转交都用项目那段；/api/projects 改 conversation_id，删 summarize/for_projects；项目对话单删 409。待全量 smoke 复核（smoke_project_brief/file_refs 需改）
+     - [x] App：project_switcher.dart（切换抽屉 + 项目名药丸），删 title_pill/project_home 与 pill 时长 token；离线无缓存时草稿保留
+     - [x] Web：ProjectSwitcher.tsx，删 ProjectHome/TitlePill；跳进项目统一 openProjectChat；项目里 /new 提示新建项目；protocol.md 已同步。未在浏览器实点
+     - [x] 测试：smoke 202/202（不含 smoke_stepfun）、flutter analyze 0、flutter test 673 过 8 跳过、npm run build 过；截图测试需真中文字体重跑
+     - [x] 发布 v2.95（commit + tag + push；不部署、不出 APK）
+    - 遗留：部署后核对迁移结果；主聊天搜索命中项目对话时结果无 project_id（旧行为）；tokens.css `--pill-drop` 为对齐 App 保留
 6a. **v2.94 主页三个 bug（第 6 项里拆出来，本轮做）**——进度如实记录：
    - [x] devlog 写全局决定 / 替换删除 / 成本（docs/devlog.md「2026-10-15 v2.94 主页三个 bug」，含三条根因调查结论）
    - [x] ① 天气面板重复：**根因是数据重复，不是渲染**。(a) 面板内容收的是整轮回复全部块，每一步说过的话各是一块（先写一遍→show_stats→再写一遍/被“继续”再补）→ 新 `worker.panel_blocks()`：文字只留最后一块、相同展示卡只留一张；(b) create_panel 不查重 → `task_store.panel_twin()`（同标题去标点 / 同指令即同一个，不建第二张，回告用 manage_home update）。Toyuis 没有“内置天气卡”（从没做过），天气只有面板一条路，无可删；不新增。smoke_manage_home 加查重 + panel_blocks 用例，相关 7 个 smoke 已过。**没做**：线上库已存在的重复面板没清（不碰 VPS）——部署后 `manage_home list` 看一眼，手动移除多余的；旧内容下次刷新按新规则重写。
@@ -105,6 +113,7 @@
 | 连接不了 GitHub、Gmail；点一下登录再确认授权 | ⚠️ v2.90.2 按钮诚实化 + 配置引导已提交；OAuth 应用未注册、未部署 | 见第五节 2a、docs/oauth-setup.md |
 | 删了的对话又蹦出来；子对话（定时任务运行对话）不要放主列表 | ⚠️ v2.75 修了，需在服务器上确认 | devlog v2.75 |
 | CPU 60%～100%、内存占用高，要优化 | ❓ | 服务器上 `docker stats` 核实；APK 构建已改为限流脚本 |
+| 一个项目就是一段对话，项目内不能开多个会话（10-15 12:48） | ⚠️ v2.95 已做并提交（点项目即聊天、≡ 项目切换、旧多段迁移合并可回退），未部署、未真机看 | 第五节 5b，devlog v2.95 |
 | 电脑端主页割裂、左边空一大块；天气报告重复 3 次；输入框遮住面板 | ⚠️ v2.94 已修并提交（面板只收结果 + 面板查重；删宽版残路；输入框留白加回归测试），未部署、线上已有的重复面板未清、未真机看 | 第五节 6a，devlog v2.94 |
 | 主页对比 Hark“又乱” → 整体重设计 | ⚠️ 进行中 | home-redesign A–E，E1/E4 收尾未完 |
 | 历史抽屉被顶栏压住“还叠在一起” | ✅ v2.78 | |

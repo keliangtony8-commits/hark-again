@@ -29,7 +29,7 @@ Future<FakeApi> pump(WidgetTester tester, HomeCard c) async {
   final router = GoRouter(initialLocation: '/home', routes: [
     GoRoute(
         path: '/home',
-        builder: (_, _) => Scaffold(body: SingleChildScrollView(child: ActionCard(card: c, onDo: (_) {}, onOpen: (_, _) {})))),
+        builder: (_, _) => Scaffold(body: SingleChildScrollView(child: ActionCard(card: c, onDo: (_) {}, onOpen: (_, _, {projectId}) {})))),
     GoRoute(path: '/me/connectors', builder: (_, _) => const Scaffold(body: Text('CONNECTORS PAGE'))),
     GoRoute(path: '/projects/:id', builder: (_, s) => Scaffold(body: Text('PROJECT ${s.pathParameters['id']}'))),
   ]);

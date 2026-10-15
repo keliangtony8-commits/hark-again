@@ -6,7 +6,7 @@ let lastShape: boolean | null = null;
 
 /** v2.91 §N / v2.93 §Q 项目左上钮（= App MenuPlusIcon）：plus=false 是“≡”，true 是“+”——上下两条线平移到中线、各转 ±90° 合成竖线，
  *  中线不动 → 十字（--dur-morph 280ms，只动 transform；减弱动效时 base.css 把过渡压到 1ms）。
- *  项目列表：+ = 新建项目（各宽度都显示）；项目页：≡ = 本项目对话列表、开着时 + = 新对话（窄屏才有，宽屏历史栏常驻）。 */
+ *  项目列表：+ = 新建项目（各宽度都显示）；项目页（v2.95）：≡ = 项目切换栏、开着时 + = 新建项目（窄屏才有，宽屏切换栏常驻）。 */
 export default function MenuPlus({ plus, onClick, label, mobileOnly = false }: { plus: boolean; onClick: () => void; label: string; mobileOnly?: boolean }) {
   const [shape, setShape] = useState(lastShape ?? plus);
   useEffect(() => {

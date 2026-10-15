@@ -48,7 +48,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// 建议卡上的“去做”：开一段新对话发出去，然后切到聊天。
   void _send(String text) => askInNewChat(context, ref, text);
 
-  void _openOffer(String id, String? send) => openConversation(context, ref, id, send: send);
+  void _openOffer(String id, String? send, {String? projectId}) => openConversation(context, ref, id, send: send, projectId: projectId);
 
   void _openReport(HomeCard c) {
     if (c.conversationId != null) openInboxItem(context, ref, conversationId: c.conversationId);

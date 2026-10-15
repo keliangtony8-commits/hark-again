@@ -1,5 +1,6 @@
-"""v2.91 §N 对话状态——项目对话列表上的胶囊（进行中 / 等你回复 / 已完成），唯一规则在这里。
-GET /api/conversations?project_id= 每项带 status；客户端只按值画，不自己推断。
+"""v2.91 §N 对话状态——项目上的胶囊（进行中 / 等你回复 / 已完成），唯一规则在这里。
+v2.95 项目 = 一段对话：项目的状态就是那段对话的状态（GET /api/projects 与 GET /api/conversations?project_id= 都带 status，
+都经 for_list）；客户端只按值画，不自己推断。v2.93 的多对话汇总 summarize / for_projects 已删。
 
 - running：本进程有这段对话的一轮在跑（live_turns 主路或并行路），且没有挂起等用户的卡片；
   或有这段对话开的后台任务在跑（常驻 keep_alive 除外：常驻服务会让对话永远“进行中”），或任务结束、助手还要接着说（followup=pending）。
@@ -7,16 +8,13 @@ GET /api/conversations?project_id= 每项带 status；客户端只按值画，�
   或不在跑、最后一条是正常结束的回复，且最后一段文字以问号收尾（在问你）。轮次结束时挂起的卡片都会变 expired（agent/loop.py），
   所以静止时只剩“回复本身在提问”这一种等你的信号。
 - done：不在跑、最后一条是正常结束（done / wrapped）的回复，没在提问。
-- None：其它（没有消息、最后一条是没等到回复的用户消息、回复被停止 / 打断 / 原地打转）——不画胶囊。
-
-v2.93 §Q 项目汇总状态（项目列表上的胶囊）：GET /api/projects 每项带 status，同样只在这里判定（summarize / for_projects）：
-任一对话 waiting → waiting；否则任一 running → running；否则最近那段对话 done → done；否则 None。"""
+- None：其它（没有消息、最后一条是没等到回复的用户消息、回复被停止 / 打断 / 原地打转）——不画胶囊。"""
 from __future__ import annotations
 
 from sqlalchemy import func, select
 
-from . import live_turns, run_conversations
-from .models import Conversation, Job, Message
+from . import live_turns
+from .models import Job, Message
 
 RUNNING, WAITING, DONE = "running", "waiting", "done"
 FINISHED = ("done", "wrapped")  # 正常结束的回复（wrapped = 预算到头好好收了尾）
@@ -70,30 +68,3 @@ async def for_list(db, ids: list[str]) -> dict[str, str | None]:
         ((Job.state == "running") & Job.keep_alive.is_(False)) | (Job.followup == "pending")))).all())
     busy = live_turns.busy()
     return {cid: derive([t.blocks for t in busy[cid]] if cid in busy else None, cid in jobs, last.get(cid)) for cid in ids}
-
-
-PROJECT_SCOPE = 100  # 与 GET /api/conversations?project_id= 同口径：每个项目最近 100 段可见对话
-
-
-def summarize(statuses: list[str | None]) -> str | None:
-    """项目汇总（纯规则）。statuses = 项目里各段对话的状态，按最近更新排在前。"""
-    if WAITING in statuses:
-        return WAITING
-    if RUNNING in statuses:
-        return RUNNING
-    return DONE if statuses and statuses[0] == DONE else None
-
-
-async def for_projects(db, project_ids: list[str]) -> dict[str, str | None]:
-    """一批项目 → {项目 id: 汇总状态}。对话状态复用 for_list，不另起一套判定。"""
-    if not project_ids:
-        return {}
-    rows = (await db.execute(select(Conversation.project_id, Conversation.id)
-                             .where(Conversation.project_id.in_(project_ids), run_conversations.listed())
-                             .order_by(Conversation.updated_at.desc()))).all()
-    per: dict[str, list[str]] = {pid: [] for pid in project_ids}
-    for pid, cid in rows:
-        if len(per[pid]) < PROJECT_SCOPE:
-            per[pid].append(cid)
-    status = await for_list(db, [cid for ids in per.values() for cid in ids])
-    return {pid: summarize([status.get(cid) for cid in ids]) for pid, ids in per.items()}

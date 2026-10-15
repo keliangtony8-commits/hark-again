@@ -30,11 +30,13 @@ def crud_router(prefix: str, model: type[Base], create: type[BaseModel], update:
                 extra: Callable[[Any], dict[str, Any]] | None = None,
                 annotate: Callable[[AsyncSession, list[Any]], Awaitable[dict[str, dict[str, Any]]]] | None = None,
                 on_update: Callable[[Any, dict[str, Any]], None] | None = None,
+                after_create: Callable[[AsyncSession, Any], Awaitable[None]] | None = None,
                 after_update: Callable[[AsyncSession, Any, dict[str, Any]], Awaitable[None]] | None = None) -> APIRouter:
     """on_delete：删除前的级联清理钩子（如删项目时删其对话）。
     extra：给每条记录补上算出来的只读字段（不存库，如任务的 next_run_at），所有接口一致带上。
     annotate：同样是只读字段，但要查库（如项目的对话数）：一次拿一批记录，返回 {id: 字段}，列表接口只多一条聚合查询。
     on_update：PATCH 写库前的钩子 (obj, changes)，负责派生字段（如项目档案的“谁改的/何时改的”）或抛 HTTPException 拒绝。
+    after_create：新记录加进会话之后、commit 之前的异步钩子 (db, obj)，建随它一起生的行（如项目的那段对话）。
     after_update：字段写上之后、commit 之前的异步钩子 (db, obj, changes)，同步别的表里的镜像字段（如面板改名 → 卡片标题）。"""
     r = APIRouter(prefix=prefix, dependencies=[Depends(require_user)])
 
@@ -66,6 +68,8 @@ def crud_router(prefix: str, model: type[Base], create: type[BaseModel], update:
     async def create_item(body: create, db: AsyncSession = Depends(get_session)):  # type: ignore[valid-type]
         obj = model(**body.model_dump())
         db.add(obj)
+        if after_create:
+            await after_create(db, obj)
         await db.commit()
         return await out(db, obj)
 

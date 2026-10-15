@@ -96,22 +96,37 @@ void main() {
     expect(s.messages.last.blocks.last, isA<UnknownBlock>()); // 未知块不崩
   });
 
-  test('搜索带编码后的 q 和项目 id；改名/置顶后刷新列表', () async {
+  test('搜索带编码后的 q（只主聊天有；v2.95 项目只有一段对话，不再搜）；改名/置顶后刷新列表', () async {
     final api = RecordingApi();
     final c = ProviderContainer(overrides: [
       chatSocketProvider.overrideWithValue(FakeSocket()),
       apiProvider.overrideWithValue(api),
     ]);
     addTearDown(c.dispose);
-    final ctl = c.read(chatProvider('p1').notifier);
+    final ctl = c.read(chatProvider('').notifier);
     await Future<void>.delayed(Duration.zero); // 让 build 里的首次列表加载先跑完
     final r = await ctl.search(' 猫 & 狗 ');
     expect(r.single.snippet, '…猫…');
-    expect(Uri.parse(api.gets.last).queryParameters, {'project_id': 'p1', 'q': '猫 & 狗'});
+    expect(Uri.parse(api.gets.last).queryParameters, {'q': '猫 & 狗'});
     await ctl.setPinned('c1', true);
     expect(api.patches.single.$1, '/api/conversations/c1');
     expect(api.patches.single.$2, {'pinned': true});
-    expect(Uri.parse(api.gets.last).queryParameters, {'project_id': 'p1'});
+    expect(api.gets.last, '/api/conversations');
+  });
+
+  test('v2.95 项目范围：列表就是那一段对话，进来自动打开', () async {
+    final api = RecordingApi();
+    final c = ProviderContainer(overrides: [
+      chatSocketProvider.overrideWithValue(FakeSocket()),
+      apiProvider.overrideWithValue(api),
+    ]);
+    addTearDown(c.dispose);
+    c.read(chatProvider('p1').notifier);
+    for (var i = 0; i < 8; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(api.gets, contains('/api/conversations?project_id=p1'));
+    expect(c.read(chatProvider('p1')).activeId, 'c1');
   });
 }
 
@@ -121,6 +136,7 @@ class RecordingApi implements Api {
   @override
   Future<dynamic> get(String path) async {
     gets.add(path);
+    if (path == '/api/conversations/c1') return {'id': 'c1', 'title': 't', 'messages': <dynamic>[]};
     return [
       {'id': 'c1', 'title': 't', 'snippet': '…猫…'}
     ];

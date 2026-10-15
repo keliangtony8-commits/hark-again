@@ -14,7 +14,7 @@ subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=root, c
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from app import llm, project_brief
+from app import llm, project_brief, project_chat
 from app.agent import runner
 from app.agent.tools import ToolContext, load_builtin, schemas
 from app.auth import require_user
@@ -48,7 +48,7 @@ BRIEF = "## 目标\n12 月考研，目标 985 计算机。\n## 做法\n- 每天�
 
 async def turn(pid, text):
     async with SessionLocal() as db:
-        conv = Conversation(project_id=pid); db.add(conv); await db.commit()
+        conv = await project_chat.ensure(db, await db.get(Project, pid)); await db.commit()  # v2.95 项目 = 一段对话：两轮都在这段里
         db.add(Message(conversation_id=conv.id, role="user", blocks=text_to_blocks(text)))
         await db.commit()
         await runner.run_turn(db, conv)

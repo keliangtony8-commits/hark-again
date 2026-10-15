@@ -5,7 +5,7 @@ import { useInbox } from "../../hooks/useInbox";
 import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { HomeCard, ScheduledTask } from "../../lib/types";
-import { cardEyebrow, cardRoute, cardTarget, type CardTarget } from "../../lib/cardTargets";
+import { cardEyebrow, cardRoute, cardTarget, splitTarget, type CardTarget } from "../../lib/cardTargets";
 import LaunchComposer, { useAskInNewChat } from "../../shell/LaunchComposer";
 import { ShellLead } from "../../shell/ShellLead";
 import { WidePill } from "../../ui/glass";
@@ -59,7 +59,9 @@ export default function HomeScreen() {
     if (c.origin !== "agent") return ask(c.action_prompt!);
     try {
       const r = await http.post<{ conversation_id: string; prompt: string; started: boolean }>(`/api/cards/${c.id}/start`, {});
-      nav("/chat", { state: { open: r.conversation_id, draft: r.started ? r.prompt : undefined } });
+      // v2.95 卡指向项目（project:<id>）：服务器把指令发进那个项目的那段对话，切到那个项目里打开（项目里只认那一段）
+      const [kind, pid] = splitTarget(c.target ?? "");
+      nav(kind === "project" && pid ? `/projects/${pid}` : "/chat", { state: { open: r.conversation_id, draft: r.started ? r.prompt : undefined } });
     } finally {
       cards.reload();
       inbox.refresh();

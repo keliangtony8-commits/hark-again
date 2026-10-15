@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 
 from ..models import Conversation, HomeCard, Job, Memory, Project, ScheduledTask
-from .. import task_brief, card_snooze, conversation_status, panel_trash, project_brief, sandbox_client, schedule, script_tasks, task_store
+from .. import task_brief, card_snooze, conversation_status, panel_trash, project_brief, project_chat, sandbox_client, schedule, script_tasks, task_store
 from ..storage import PROJECTS
 from .crud import crud_router
 
@@ -130,25 +130,25 @@ async def _delete_project_conversations(db, project: Project) -> None:
 
 
 async def _project_activity(db, projects: list[Project]) -> dict[str, dict]:
-    """项目的只读统计：对话数 + 最近活动（项目本身或其中任一对话的最后更新，一条 GROUP BY）
-    + v2.93 汇总状态 status（规则在 conversation_status.summarize）。"""
+    """项目的只读字段（v2.95 项目 = 一段对话）：conversation_id = 那段对话（还没有为 null，打开时建）、
+    last_active_at = 项目本身或那段对话的最后更新、status = 那段对话的状态（规则在 conversation_status.for_list）。"""
     ids = [p.id for p in projects]
-    rows = (await db.execute(
-        select(Conversation.project_id, func.count(Conversation.id), func.max(Conversation.updated_at))
-        .where(Conversation.project_id.in_(ids)).group_by(Conversation.project_id))).all()
-    stats = {pid: (n, last) for pid, n, last in rows}
-    status = await conversation_status.for_projects(db, ids)
+    convs = {c.project_id: c for c in (await db.scalars(select(Conversation).where(
+        Conversation.project_id.in_(ids), Conversation.task_id.is_(None)))).all()}
+    status = await conversation_status.for_list(db, [c.id for c in convs.values()])
     out = {}
     for p in projects:
-        n, last = stats.get(p.id, (0, None))
-        times = [(t if t.tzinfo else t.replace(tzinfo=timezone.utc)) for t in (p.updated_at, last) if t is not None]
-        out[p.id] = {"conversation_count": n, "last_active_at": max(times) if times else None, "status": status.get(p.id)}
+        conv = convs.get(p.id)
+        times = [(t if t.tzinfo else t.replace(tzinfo=timezone.utc)) for t in (p.updated_at, conv and conv.updated_at) if t is not None]
+        out[p.id] = {"conversation_id": conv.id if conv else None, "last_active_at": max(times) if times else None,
+                     "status": status.get(conv.id) if conv else None}
     return out
 
 
 routers = [
     crud_router("/api/projects", Project, ProjectIn, ProjectPatch, order_by=Project.updated_at.desc(),
-                on_delete=_delete_project_conversations, annotate=_project_activity, on_update=project_brief.on_patch),
+                on_delete=_delete_project_conversations, annotate=_project_activity, on_update=project_brief.on_patch,
+                after_create=project_chat.after_create, after_update=project_chat.rename),
     crud_router("/api/memories", Memory, MemoryIn, MemoryPatch, order_by=Memory.updated_at.desc()),
     crud_router("/api/tasks", ScheduledTask, TaskIn, TaskPatch, order_by=ScheduledTask.created_at.desc(),
                 on_delete=task_store.delete_cascade, extra=schedule.wire, on_update=_check_task_patch,

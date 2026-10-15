@@ -10,15 +10,11 @@ import { Hint, Menu, Page, Sheet, stagger } from "../../ui/kit";
 import MenuPlus from "../chat/MenuPlus";
 import StatusCapsule from "../chat/StatusCapsule";
 import ProjectFiles from "./ProjectFiles";
-import { projectIsCurrent } from "./projectHomeRules";
+import { activeAt, byActivity, projectIsCurrent } from "./projectHomeRules";
 import ProjectBrief from "./ProjectBrief";
 import ProjectForm from "./ProjectForm";
 import "./projects.css";
 
-const activeAt = (p: Project) => p.last_active_at ?? p.updated_at;
-
-/** 最近有动静的排前面（= App byActivity）。 */
-export const byActivity = (list: Project[]) => [...list].sort((a, b) => (Date.parse(activeAt(b) ?? "") || 0) - (Date.parse(activeAt(a) ?? "") || 0));
 
 /** 页头小标签：“3 个项目 · 最近 今天 09:12”；加载中为空（行高照占）。 */
 const summary = (loading: boolean, list: Project[]) =>
@@ -26,8 +22,9 @@ const summary = (loading: boolean, list: Project[]) =>
 
 /**
  * 项目列表（v2.93 §Q 按 Hark，= App projects_screen）：页头一行小标签，下面一行一个大字项目名（按最近活动排序），
- * 行尾是项目汇总状态胶囊（服务器 status）和 ⋯；不是“当前”的项目变灰（projectIsCurrent）。没有卡片网格、没有输入框。
- * 顶栏左侧 + = 新建；它和项目页的 ≡ 是同一颗钮（MenuPlus 记着上一颗的形状，进出项目时原地 morph）。
+ * 行尾是项目状态胶囊（= 那段对话的状态，服务器 status）和 ⋯；不是“当前”的项目变灰（projectIsCurrent）。没有卡片网格、没有输入框。
+ * 点一行 = 进那个项目的那段对话（v2.95 项目 = 一段对话）。
+ * 顶栏左侧 + = 新建；它和项目页的 ≡（项目切换）是同一颗钮（MenuPlus 记着上一颗的形状，进出项目时原地 morph）。
  */
 export default function ProjectsScreen() {
   const projects = useResource<Project>("/api/projects");
@@ -56,7 +53,7 @@ export default function ProjectsScreen() {
       ) : list.length === 0 ? (
         <div className="fade-in">
           <Hint icon={<IconFolder size={26} />} title="还没有项目"
-            text="把需要很多步、很多天的事放进项目：备考、求职、旅行、课程设计。每个项目有自己的对话和规则。"
+            text="把需要很多步、很多天的事放进项目：备考、求职、旅行、课程设计。每个项目有自己的一段对话、文件和规则。"
             action={<button className="pill primary project-new" onClick={() => setCreating(true)}><IconPlus size={18} />新建项目</button>} />
         </div>
       ) : (
