@@ -1,6 +1,4 @@
-> ⚠️ **接手第一件事（2026-10-15 18:18）**：v3.0（“我的”页设置搜索）做了一半，代码**不在 main**，在分支 `wip-v3.0`。先 `git fetch && git checkout wip-v3.0`，否则会漏掉这些文件：VERSION app/lib/app.dart app/lib/brand.dart app/lib/features/computer/computer_screen.dart app/lib/features/me/about_screen.dart app/lib/features/me/me_index.dart app/lib/features/me/me_screen.dart app/lib/features/me/preferences_screen.dart app/lib/features/me/security_screen.dart app/lib/theme/tokens.dart app/lib/ui/kit.dart app/lib/ui/motion.dart app/pubspec.yaml app/test/me_search_test.dart backend/app/version.py docs/devlog.md frontend/package-lock.json frontend/package.json frontend/scripts/check-arch.mjs frontend/src/brand.ts frontend/src/features/chat/ChatView.tsx frontend/src/features/chat/chat.css frontend/src/features/computer/ComputerScreen.tsx frontend/src/features/me/AboutScreen.tsx frontend/src/features/me/MeScreen.tsx frontend/src/features/me/PreferencesScreen.tsx frontend/src/features/me/ReplyLanguageRow.tsx frontend/src/features/me/SecurityScreen.tsx frontend/src/features/me/me.css frontend/src/features/me/meIndex.ts frontend/src/ui/kit.tsx frontend/src/ui/ui.css。它们没测试、没发版，VERSION 在 wip-v3.0 上已改成 3.0.0（brand/sync.py 已同步过），main 上还是 2.99.0；还没打 tag v3.0。先跑 flutter analyze / flutter test / npm run build，修好后在 wip-v3.0 上继续，完成后合进 main 再发 v3.0。进度见第五节第 6 项。
-
-# Toyuis 交接文档（2026-10-15，v2.99.0）
+# Toyuis 交接文档（2026-10-15，v3.0.0）
 
 > **给每个接手的 agent**：先读第二节宗旨（1–17 条）。用户在对话里说出的任何纲领性要求，当轮用明确、不会被误解的话（不必照抄原话）带日期补进第二节，这是硬规矩（见第 16 条）。
 
@@ -54,7 +52,7 @@
 - 已发布：v2.85–v2.92（v2.90.1 用户气泡改灰；v2.90.3 已部署过一次，见下）。
 - v2.89：浏览器实时推流（CDP screencast，单条 WS，取代截图轮询）。
 - v2.90：运行中连发“按件回复”（`backend/app/message_intake.py` 单入口；补充并入 / 附和不回 / 问进度一句话 / 新问题并行一路；`messages.answered_by` 账本，迁移 0064；回复离原话远才画引用线）。
-- 已发布到 git：**v2.99（tag v2.99，2026-10-15，E4 ImageStack 两端 + App 震动统一入口 / AppSwitch；“我的”页底部搜索未做，见第五节第 6 项；纯前端）**、**v2.98（tag v2.98，2026-10-15，E1 Web 收尾：RAW_ROWS 81→23 处、23→12 个文件迁到 ListGroup / ListRow，App 6 个富内容行评估后保留，见第五节第 6 项；纯前端）**、**v2.97（tag v2.97，2026-10-15，E1 收尾：ListRow / ListGroup / PageIntro 两端统一 + App 附件弹层高度修复，见第五节第 6 项；无后端 / 迁移变化）**、**v2.96（tag v2.96，2026-10-15，“我 → 连接的账号”一页：连接器 + 保险箱合并，见 5·2a；含迁移 0067，只改旧卡去处 vault→connectors）**、v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95/v2.96/v2.97/v2.98/v2.99 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
+- 已发布到 git：**v3.0（tag v3.0，2026-10-15，“我的”页底部设置搜索两端 + `?focus=` 定位闪一下；版本号因构建号规则从 2.99 进位，无破坏性改动；纯前端）**、**v2.99（tag v2.99，2026-10-15，E4 ImageStack 两端 + App 震动统一入口 / AppSwitch；“我的”页底部搜索未做，见第五节第 6 项；纯前端）**、**v2.98（tag v2.98，2026-10-15，E1 Web 收尾：RAW_ROWS 81→23 处、23→12 个文件迁到 ListGroup / ListRow，App 6 个富内容行评估后保留，见第五节第 6 项；纯前端）**、**v2.97（tag v2.97，2026-10-15，E1 收尾：ListRow / ListGroup / PageIntro 两端统一 + App 附件弹层高度修复，见第五节第 6 项；无后端 / 迁移变化）**、**v2.96（tag v2.96，2026-10-15，“我 → 连接的账号”一页：连接器 + 保险箱合并，见 5·2a；含迁移 0067，只改旧卡去处 vault→connectors）**、v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）、**v2.94（tag v2.94，主页三个 bug，见 6a）**、**v2.95（tag v2.95，2026-10-15，项目 = 一段对话，见 5b；含迁移 0066，部署时自动合并旧多对话项目、可回退）**。v2.94/v2.95/v2.96/v2.97/v2.98/v2.99/v3.0 均未部署、未出 APK（按新规则等用户说）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**2026-10-15 12:54 已在 VPS 用 `deploy/build-apk.sh` 编好 v2.93.0 APK**（arm64，22.2 MB，约 7 分钟，构建后容器已恢复）。
 - VPS：GreenCloud 2C/3.8G Debian 12，IP 172.93.163.240，域名 toyuis.itsllm.com。部署方式见 `deploy/`（git archive → 上传 → `deploy/update.sh`）。
   - **2026-10-15 约 11:05 已部署 v2.92.0**（`/api/version` = 2.92.0，容器全部 Up）。旧版备份 `/root/app-v2911-backup.tgz`，.env 备份 `/root/env.bak.v292`；`docker builder prune` 后磁盘 80%。
   - 真模型（StepFun）验证通过：主聊天说“以后叫我小测，你就叫阿星”→ 调用 set_names（步骤“保存称呼”），profile 变为 小测 / 阿星；验证后已删测试对话和 identity 行，greet 恢复为 true（保留用户自己的首次问候体验）。
@@ -140,10 +138,10 @@
      - [ ] App 明暗只在临时截图测试里看过（未提交）；Web 未在浏览器实点 / 截图（本机无 Chromium）；真机手感（扇开、翻页、震动强弱）未验
    - **v3.0 “我的”页底部设置搜索进度（2026-10-15，按块如实记录）**：决定、删除清单、参考来源见 docs/devlog.md「2026-10-15 v3.0」。**版本号 2.99 之后因 brand/sync.py 构建号规则（功能轮 ≤ 99）进位到 3.0.0，不代表破坏性改动**（协议 / 接口 / 数据库 / MIN_CLIENT 不变）。
      - [x] 核对：全仓没有已存在的设置搜索，无需合并；devlog 先写决定、参考（Apple 设置搜索在底部、LINE 滚到该项并闪一下）、删除清单
-     - [ ] App：`features/me/me_index.dart` 索引 + 匹配；“我的”页底部玻璃搜索胶囊（FloatingFooter）+ 结果 / 无结果态；`SpotlightScope` / `Spotlight` 定位并闪一下（复用 FlashHighlight）
-     - [ ] Web：`features/me/meIndex.ts`；MeScreen 改用 `Page footer`；`?focus=` 定位（Page 内统一处理）；`.msg.flash` 并入通用 `flashOnce` / `.flash`
-     - [ ] 测试 + 发布 v3.0
-     - ⚠️ 2026-10-15 18:17 因额度用完中断：App/Web 半成品已推到分支 `wip-v3.0`（未测试、未发版，main 不含）。接手：`git checkout wip-v3.0`，先跑 flutter analyze / npm run build 看状态再继续；VERSION：wip-v3.0 上是 3.0.0，main 上是 2.99.0，尚未打 tag。
+     - [x] App：`features/me/me_index.dart` 索引 + 匹配；“我的”页底部玻璃搜索胶囊（FloatingFooter）+ 结果 / 无结果态；`SpotlightScope` / `Spotlight` 定位并闪一下（复用 FlashHighlight）
+     - [x] Web：`features/me/meIndex.ts`；MeScreen 改用 `Page footer`；`?focus=` 定位（Page 内统一处理）；`.msg.flash` 并入通用 `flashOnce` / `.flash`
+     - [x] 测试 + 发布 v3.0（2026-10-15 18:40）：flutter analyze 0、flutter test 695 过 8 跳过、npm run build 过（架构守卫 218 文件）、后端 smoke 203/203（不含 smoke_stepfun；smoke_jobs 全量串行偶发超时、单跑过）；wip-v3.0 合入 main，tag v3.0，push。不部署、不出 APK
+     - [ ] 未做：浏览器 / 真机截图核对（App 明暗、Web）；真机手感（定位滚动 + 闪一下）
 7. 后台任务/定时任务的运行对话不要出现在主对话列表（用户叫“子对话”，嫌乱）——确认 v2.75 修复在 VPS 上生效。
 8. Web 截图重拍、banner“稍后再看”。
 9. SearXNG 集成测试（需 VPS）；关闭 VPS SSH 密码登录。
