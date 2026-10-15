@@ -3,6 +3,7 @@
 //   showAppSheet        随内容高度的底部弹层（菜单、表单、选择器、小卡片）
 //   showAppScrollSheet  长列表弹层：随内容高度、封顶后内部滚动（工具列表、项目文件、选项目）
 //   showAppDialog       居中对话框（短确认、一句话提示）：磨砂遮罩 + GlassDialog + PopTransition
+//   showAppViewer       全屏查看器（v2.99 图片一摞点开）：实底盖满、淡入，内容自己排版
 // 弹层套 ui/glass.dart 的 GlassSheet，对话框套 GlassDialog；showModalBottomSheet / showDialog / showMenu /
 // PopupMenuButton 只允许出现在本文件（test/sheet_test.dart 的架构守卫）。
 import 'dart:ui' show ImageFilter;
@@ -236,6 +237,20 @@ Future<T?> showAppDialog<T>(BuildContext context, {required WidgetBuilder builde
         dialog,
       ]);
     },
+  );
+}
+
+/// 全屏查看器（v2.99 E4 图片一摞点开左右翻）：页面底色实底盖满整屏、只淡入（减少动态直接出现），返回键 / 内容里的关闭 = 退出。
+/// [builder] 自己排版（翻页、页码、说明、按钮），这里只给路由、底色和安全区。
+Future<T?> showAppViewer<T>(BuildContext context, {required WidgetBuilder builder}) {
+  final solid = GlassMode.solidOf(context);
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: false,
+    barrierColor: context.palette.bg,
+    transitionDuration: context.motion(Motion.base),
+    pageBuilder: (ctx, _, _) => GlassMode(solid: solid, child: SafeArea(child: Builder(builder: builder))),
+    transitionBuilder: (ctx, animation, _, child) => FadeTransition(opacity: CurvedAnimation(parent: animation, curve: Motion.ease), child: child),
   );
 }
 

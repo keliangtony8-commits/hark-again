@@ -148,7 +148,7 @@ class _ToggleRow extends StatelessWidget {
       subtitle: hostDetail(status),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         if (hint != null) ...[RowHint(hint, warn: true), const SizedBox(width: Sp.x2)],
-        Switch(
+        AppSwitch(
           value: status.enabled,
           onChanged: busy || !status.canToggle ? null : onChanged,
         ),

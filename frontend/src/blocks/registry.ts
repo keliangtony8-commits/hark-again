@@ -12,7 +12,8 @@ import BrowserBlock from "./BrowserBlock";
 import PageBlock from "./PageBlock";
 import StatsBlock from "./StatsBlock";
 import MemoryBlock from "./MemoryBlock";
-import { DraftBlock, ImagesBlock, SummaryBlock } from "./ContentBlocks";
+import { DraftBlock, SummaryBlock } from "./ContentBlocks";
+import ImageStack from "./ImageStack";
 import { OrderBlock, ProductsBlock } from "./CommerceBlocks";
 import FormBlock from "./FormBlock";
 import JobBlock from "./JobBlock";
@@ -41,7 +42,7 @@ export const registry: { [K in Block["type"]]: ComponentType<{ block: Extract<Bl
   memory: MemoryBlock,
   draft: DraftBlock,
   summary: SummaryBlock,
-  images: ImagesBlock,
+  images: ImageStack,
   products: ProductsBlock,
   order: OrderBlock,
   form: FormBlock,

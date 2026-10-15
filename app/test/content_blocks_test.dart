@@ -4,6 +4,7 @@ import 'package:assistant/blocks/block_view.dart';
 import 'package:assistant/blocks/content_blocks.dart';
 import 'package:assistant/models/block.dart';
 import 'package:assistant/theme/app_theme.dart';
+import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/kit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -82,22 +83,65 @@ void main() {
     expect(find.text('展开全文'), findsNothing);
   });
 
-  testWidgets('图片：单张铺满、多张横排、点开大图', (tester) async {
+  testWidgets('图片一摞（v2.99 E4）：单张铺满；多张叠成一摞 + N 张；点开全屏左右翻；减少动态直接到位', (tester) async {
     await pump(tester, const ImagesBlock([ImageItem(url: 'https://img.example/a.jpg', caption: '白堤')]));
     expect(find.byType(AspectRatio), findsOneWidget);
     expect(find.text('白堤'), findsOneWidget);
+    expect(find.text('1 张'), findsNothing);
+    expect(find.bySemanticsLabel('图片：白堤，查看大图'), findsOneWidget);
 
     await pump(tester, const ImagesBlock([
       ImageItem(url: 'https://img.example/a.jpg', caption: '白堤'),
       ImageItem(url: 'https://img.example/b.jpg', caption: '苏堤'),
+      ImageItem(url: 'https://img.example/c.jpg', caption: '孤山'),
+      ImageItem(url: 'https://img.example/d.jpg'),
     ]));
-    expect(find.byType(ListView), findsOneWidget);
-    expect(find.text('苏堤'), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('图片：苏堤，查看大图'));
+    // 不再是横排可滑的小图条；只显示最上面那张的说明，后面露两层
+    expect(find.byType(ListView), findsNothing);
+    expect(find.text('4 张'), findsOneWidget);
+    expect(find.text('白堤'), findsOneWidget);
+    expect(find.text('苏堤'), findsNothing);
+    expect(find.byType(NetImage), findsNWidgets(3));
+    // 一摞宽度封顶，后面的层不超出自己的盒子太多
+    expect(tester.getSize(find.byKey(const Key('image-stack'))).width, lessThanOrEqualTo(Layout.imageStackMax));
+
+    await tester.tap(find.bySemanticsLabel('4 张图片，第一张：白堤，点开左右翻看'));
     await tester.pumpAndSettle();
+    expect(find.text('1 / 4'), findsOneWidget);
     expect(find.text('打开原图'), findsOneWidget);
-    await tester.tap(find.text('关闭'));
+    await tester.fling(find.byType(PageView), const Offset(-600, 0), 1200);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 4'), findsOneWidget);
+    expect(find.text('苏堤'), findsWidgets);
+    // 双击放大后锁住翻页（拖动交给图片），再双击缩回原大放开
+    final page = find.byType(PageView);
+    await tester.tap(page);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(page);
+    await tester.pumpAndSettle();
+    expect(tester.widget<PageView>(page).physics, isA<NeverScrollableScrollPhysics>());
+    await tester.tap(page);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(page);
+    await tester.pumpAndSettle();
+    expect(tester.widget<PageView>(page).physics, isA<PageScrollPhysics>());
+    await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
     expect(find.text('打开原图'), findsNothing);
+  });
+
+  testWidgets('图片一摞：减少动态时后面几层一帧到位（不跑扇开动画）', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(Brightness.light),
+      home: MediaQuery(
+        data: const MediaQueryData(disableAnimations: true),
+        child: Scaffold(body: BlockView(const ImagesBlock([
+          ImageItem(url: 'https://img.example/a.jpg'),
+          ImageItem(url: 'https://img.example/b.jpg'),
+        ]))),
+      ),
+    ));
+    expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
+    expect(find.text('2 张'), findsOneWidget);
   });
 }

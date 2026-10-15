@@ -34,6 +34,7 @@ import 'quote_line.dart';
 import 'reply_rating.dart';
 import 'retry_line.dart';
 import 'thought_view.dart';
+import '../../ui/haptics.dart';
 
 class MessageView extends StatelessWidget {
   const MessageView(this.message,
@@ -408,7 +409,7 @@ class _ContinueRow extends StatelessWidget {
                 icon: Icons.play_arrow_rounded,
                 label: continueText,
                 onTap: () {
-                  HapticFeedback.selectionClick();
+                  Haptics.tap();
                   onTap();
                 },
               ),

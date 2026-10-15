@@ -2,7 +2,6 @@
 // “不好”弹原因单（答错了 / 没做完 / 太慢或卡住了 / 别的问题 + 可选一句补充），已经是不好时 = 取消。
 // 本机先换、服务器没收下换回原样（ChatController.rate）。报告里存什么只在后端 app/feedback.py。
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/api.dart';
 import '../../models/feedback.dart';
@@ -10,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../ui/kit.dart';
 import '../../ui/sheets.dart';
+import '../../ui/haptics.dart';
 
 typedef RateReply = Future<void> Function(String? kind, {String? note});
 
@@ -25,7 +25,7 @@ List<SheetAction<void>> ratingActions(BuildContext context, RateReply onRate, St
 }
 
 Future<void> _send(BuildContext context, RateReply onRate, String? kind, {String? note}) async {
-  HapticFeedback.selectionClick();
+  Haptics.tap();
   try {
     await onRate(kind, note: note);
     if (context.mounted) showToast(context, feedbackToast(kind));

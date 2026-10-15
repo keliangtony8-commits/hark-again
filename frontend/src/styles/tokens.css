@@ -124,6 +124,14 @@
   --dur-morph: 280ms;
   --ease-morph: cubic-bezier(0.65, 0, 0.35, 1);
   --pill-drop: 8px;
+  /* v2.99 E4 图片一摞（= App Layout.imageStackMax / stackPeek、Motion.stackFan / stackTurn、Op.stackLayer） */
+  --image-stack-max: 360px;
+  --stack-peek: 8px;
+  --stack-turn: 0.035rad;
+  --stack-layer: 0.22;
+  --stack-base: var(--surface); /* 图下垫的实底：坏图 / 加载中时后面那层不会从半透明占位里透出来（= App p.surface） */
+  --stack-veil: var(--bg); /* 一摞后面几层盖的薄纱色 = 页面底色（= App p.bg × Op.stackLayer），明暗自动跟随 */
+  --dur-stack-fan: 420ms;
 }
 
 /* 深色：只认 <html data-theme="dark">（由 lib/theme.ts 和 index.html 首帧脚本按偏好/系统写入） */

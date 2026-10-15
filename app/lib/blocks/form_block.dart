@@ -132,7 +132,7 @@ class _FormBlockViewState extends State<FormBlockView> {
           child: MergeSemantics(
             child: Row(children: [
               Expanded(child: Text(b.purpose == 'info' ? '记进记忆，下次不用再问' : '记住到保险箱，下次自动登录', style: context.text.bodySmall)),
-              Switch(value: _remember, onChanged: (v) => setState(() => _remember = v)),
+              AppSwitch(value: _remember, onChanged: (v) => setState(() => _remember = v)),
             ]),
           ),
         ),

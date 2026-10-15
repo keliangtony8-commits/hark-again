@@ -38,7 +38,7 @@ class PreferencesScreen extends ConsumerWidget {
             ListRow(
               icon: Icons.blur_off_rounded,
               title: '减少透明度',
-              trailing: Switch(key: const Key('solid'), value: look.solid, onChanged: (v) => ref.read(lookProvider.notifier).setSolid(v)),
+              trailing: AppSwitch(key: const Key('solid'), value: look.solid, onChanged: (v) => ref.read(lookProvider.notifier).setSolid(v)),
             ),
             ListRow(
               icon: Icons.palette_outlined,

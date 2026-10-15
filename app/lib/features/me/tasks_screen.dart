@@ -116,7 +116,7 @@ class _TaskRow extends ConsumerWidget {
             onTap: () => context.push('/me/tasks/${task.id}'),
             trailing: Semantics(
               label: '启用「${task.name}」',
-              child: Switch(value: task.active, onChanged: (v) => ref.read(tasksProvider.notifier).patch(task.id, {'active': v})),
+              child: AppSwitch(value: task.active, onChanged: (v) => ref.read(tasksProvider.notifier).patch(task.id, {'active': v})),
             ),
           ),
       ),

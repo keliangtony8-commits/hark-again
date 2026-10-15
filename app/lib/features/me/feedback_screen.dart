@@ -19,6 +19,7 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../../ui/sub_page.dart';
 import '../chat/open_conversation.dart';
+import '../../ui/haptics.dart';
 
 class FeedbackNotifier extends AsyncNotifier<FeedbackList?> {
   @override
@@ -229,7 +230,7 @@ class _Detail extends ConsumerWidget {
             primary: true,
             onTap: () {
               Clipboard.setData(ClipboardData(text: f.markdown));
-              HapticFeedback.selectionClick();
+              Haptics.tap();
               showToast(context, '已复制，可以直接贴给要修它的人');
             },
           ),

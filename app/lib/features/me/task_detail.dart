@@ -211,7 +211,7 @@ class _Header extends ConsumerWidget {
               ),
             ]),
           ),
-          Switch(
+          AppSwitch(
             value: task.active,
             onChanged: (v) => ref.read(tasksProvider.notifier).patch(task.id, {'active': v}),
           ),

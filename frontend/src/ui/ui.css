@@ -382,3 +382,20 @@ button.run-row:hover { background: var(--tile); }
 .note-read, .note-form { animation: rise var(--dur) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) { .note-preview, .note-read, .note-form { animation: none; } }
 .note-kind { padding: 2px var(--sp-2); border-radius: var(--r-full); background: var(--tile); color: var(--text-2); }
+
+/* v2.99 图片全屏查看器（blocks/ImageStack.tsx 的 ImageViewer）：和弹层 / 对话框同属盖在内容上的层，样式放这里。 */
+/* 页面底色实底盖满、淡入；横向 scroll-snap 一页一张，整图按比例放进页面（竖图横图都不裁） */
+.image-viewer { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; background: var(--bg); animation: fade var(--dur) var(--ease);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); outline: none; }
+.image-viewer-head, .image-viewer-foot { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--gutter); }
+.image-viewer-page { flex: 1; color: var(--text-2); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.image-viewer-track { flex: 1; min-height: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior: contain; scrollbar-width: none; }
+.image-viewer-track::-webkit-scrollbar { display: none; }
+.image-viewer-slide { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; display: grid; place-items: center; min-width: 0; min-height: 0; }
+.image-viewer-slide img { max-width: 100%; max-height: 100%; object-fit: contain; opacity: 0; transition: opacity var(--dur) var(--ease); }
+.image-viewer-slide img.ok { opacity: 1; }
+.image-viewer-bad { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); color: var(--text-3); font-size: var(--fs-sm); }
+.image-viewer-foot { padding-bottom: var(--sp-4); }
+.image-viewer-cap { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.image-viewer-foot .pill { display: inline-flex; align-items: center; gap: var(--sp-1); }
+@media (prefers-reduced-motion: reduce) { .image-viewer { animation: none; } .image-viewer-slide img { transition: none; } }

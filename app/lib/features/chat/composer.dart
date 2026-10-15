@@ -41,6 +41,7 @@ import 'attachment_tray.dart';
 import 'mentions.dart';
 import 'quote_line.dart';
 import '../../brand.dart';
+import '../../ui/haptics.dart';
 
 /// 正在编辑的那条用户消息。hasFiles：带附件的消息文字清空也能发（只剩附件）。
 class EditDraft {
@@ -231,6 +232,7 @@ class _ComposerState extends ConsumerState<Composer> {
 
   void _send() {
     if (!_canSend) return;
+    Haptics.tap(); // v2.99：发出去那一下轻触
     if (_editing) {
       widget.onSend(_c.text, const []); // 草稿由 didUpdateWidget 在退出编辑时放回
       return;

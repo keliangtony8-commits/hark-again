@@ -141,7 +141,7 @@ class _SkillRowState extends ConsumerState<_SkillRow> {
             if (s.customized) const Padding(padding: EdgeInsets.only(right: Sp.x2), child: RowHint('已自定义')),
             Semantics(
               label: '启用「${s.name}」',
-              child: Switch(value: on, onChanged: _pending == null ? _toggle : null),
+              child: AppSwitch(value: on, onChanged: _pending == null ? _toggle : null),
             ),
           ]),
           onTap: () => context.push('/me/skills/${s.id}'),
@@ -295,7 +295,7 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
                       subtitle: s.enabled ? '我会在合适的时候按它做' : '已停用：我看不到它，也不会用它',
                       trailing: Semantics(
                         label: '启用「${s.name}」',
-                        child: Switch(value: s.enabled, onChanged: _busy ? null : _toggle),
+                        child: AppSwitch(value: s.enabled, onChanged: _busy ? null : _toggle),
                       ),
                     ),
                   ]),

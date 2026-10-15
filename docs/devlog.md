@@ -187,3 +187,29 @@
 **有意的变化**：错峰入场原来写 `animationDelay: calc(var(--stagger) * i)` 的几处（登录设备、浏览器登录、主机规则、装过的工具、对话文件）统一走 `enter` / `--i`（原上限 8 的两处照传 `Math.min(i, 8)`；原来无上限的三处现在第 10 行起同时出现，肉眼无差别）；对话文件弹层的 `.conv-files` 类随之删掉（只剩被删的动画规则在用）。其余外观、读屏文字、交互不变。
 **成本**：纯前端重构，无接口 / 数据库 / 模型调用变化。
 **结果**：迁完并从 RAW_ROWS 删除 11 个文件（LoginSessions、SecurityScreen、ModelUsageList、OAuthSetupSheet、RouterUsageCard、UsageCard、ProjectFiles、useSaveReply、ConversationFilesSheet、BrowserSessionsSection、HostSection）；另外 9 个文件部分迁移、登记数下调（ComputerDetails 19→6、ComputerSection 6→4、ConnectorsScreen 7→1、SkillsScreen 2→1、TasksScreen 2→1、TaskDetailScreen 5→4、TaskMemory 2→1、TopConversations 3→2、ProjectFilePicker 2→1）；HomeScreen / InboxRow / ReplyLanguageRow 原样保留。手写 row/list 81 → 23 处、23 → 12 个文件；`ui/kit.tsx` 的 ListRow 补 href / disabled / role / iconClass，ListGroup 补 label / role。App 未改代码。测试：flutter analyze 0、flutter test 678 过 8 跳过、npm run build 过（架构守卫 216 文件）、后端 smoke 202/202（不含 smoke_stepfun，逐个串行跑）。没做：浏览器截图核对（本机无 Chromium）。
+
+## 2026-10-15 v2.99 E4 ImageStack + 震动反馈 + “我的”页底部搜索
+**依据**：HANDOFF 第五节第 6 项剩下两条（E4 ImageStack + 震动反馈；“我的”页底部搜索），第八节“Hark 发图片的排布（ImageStack）❌”“‘我’页…（底部搜索 ❌）”。`docs/home-redesign.md` 不在仓库，规格按 Hark 公开表现（images 块：同一回复的多张图叠成一摞，点开可翻；关键交互轻触反馈）与代码现状归纳。先写决定再改代码。不碰 VPS、不编 APK。
+**现状（动手前查的）**
+- 图片：后端只有 `show_images` 一条路（1–6 张，一次调用 = 一个 `ImagesBlock`）。App `ImagesBlockView`：单张 4:3，多张横排可滑的 232×176 小图条（`Layout.imageStrip/imageTileWidth`），点一张开 `showImageViewer`（玻璃对话框里只看这一张，不能翻）；Web `ImagesBlock`：同样横排 scroll-snap，点一张**跳新标签页**看原图，没有站内大图。两端不一致，也都不是“一摞”。
+- 震动：App 已有 9 处 `HapticFeedback` 直接散落在 7 个文件（长按聚焦菜单、菜单选中、复制、评分、点气泡看时间、继续、接管、反馈）；没有统一入口，发送 / 下拉刷新 / 开关切换没有。Web 没有任何振动。
+- 搜索：现有搜索都各管一个域——历史抽屉顶部（对话标题 + 内容，全局唯一的对话搜索）、记忆页、技能库、Pages 页的列表筛选。“我的”页没有搜索；设置散在 9 个子页里（外观在偏好设置、两步验证在安全…），找一项设置要猜在哪页。
+**决定**
+1. **ImageStack（两端同构，替换横排小图条与单张大图两种展示）**：一个 `ImagesBlock` = 一摞。单张：照旧 4:3 铺满（宽度上限同一 token），点开看大图。多张：最上面一张 4:3，后面最多露两张（向右下错开 + 轻微旋转、逐层变淡），右下角一个“N 张”小胶囊；第一次出现时后面几张从正下方“扇开”到位（只动 transform / opacity，减少动态时直接到位）。说明文字只显示最上面那张的。点开 = **全屏查看器**：左右滑翻页（App PageView + 每页可捏合缩放；Web 原生横向 scroll-snap，键盘 ← → / Esc），顶部“2 / 4”，底部说明 + 关闭 + 打开原图。Web 不再跳新标签页（“打开原图”按钮保留这条路）。
+   - 全屏查看器的路由放 `ui/sheets.dart`（新 `showAppViewer`，弹层只在这一处）；摞和查看器内容放新文件 App `blocks/image_stack.dart`、Web `blocks/ImageStack.tsx`；尺寸 / 角度 / 时长只在 `theme/tokens.dart` / `tokens.css`，扇开 keyframes 在 `styles/base.css`。
+   - 范围：一摞 = 一个图片块。同一回复里助手调了两次 show_images 仍是两摞（并成一摞要在消息层合并块，和“块 = 一次工具结果”的单一来源冲突，且提示词已要求一次给齐）；商品宫格 / 订单卡的图不变（那是挑选，不是看样子）。
+2. **震动：App 一个入口 `ui/haptics.dart`（`Haptics.tap()` 轻选择 / `Haptics.press()` 长按确认），9 处散落调用全部改走它；新增只在三处：发送消息、下拉刷新触发（PullRefresh 的 onRefresh 起点，松手才触发）、开关切换（新 `AppSwitch`：kit.dart 唯一开关，6 个文件 7 处 `Switch` 改用它）。**翻页、滚动、普通按钮不震（克制）。尊重系统设置：Flutter 引擎 Android 端所有 `HapticFeedback` 类型都走 `View.performHapticFeedback`（不带 FLAG_IGNORE_GLOBAL_SETTING），系统关了“触摸反馈”就不震；`selectionClick`→CLOCK_TICK、`mediumImpact`→KEYBOARD_TAP。不用 `vibrate()`（→ LONG_PRESS，偏重、语义是长按）。架构测试守卫：`HapticFeedback` 只许出现在 `ui/haptics.dart`。
+   - **Web 不做振动**：Web 是电脑端客户端（手机走 App），桌面浏览器无振动；`navigator.vibrate` 在 iOS Safari 不存在、在 Android Chrome 是马达长震而非系统轻触，也不受系统触摸反馈设置约束，与“轻、克制”相反。不留空入口。
+3. **“我的”页底部搜索 = 搜设置与页面，唯一入口**：与历史抽屉的对话搜索不重复（域不同：一个找对话，一个找“某个设置在哪”），记忆 / 技能 / Pages 页内的筛选是各页自己的列表，也不重复，不合并。做法：两端各一份静态索引（App `features/me/me_index.dart`、Web `features/me/meIndex.ts`，同一份条目：标题、所在位置、关键词、路由），“我的”页底部一颗搜索胶囊（固定在底部，和主页输入胶囊同一位置感）；输入时页面主体换成命中结果（ListRow：标题 + 所在位置，点了直达），清空回到原页面；没命中给一行说明（对话请在历史里搜）。不新增接口、不查后端。
+**删除清单**：App `ImagesBlockView` 的横排条与 `_Figure`、`showImageViewer`（玻璃对话框单张大图）、`Layout.imageStrip / imageTileWidth`；7 个文件里直接调用的 `HapticFeedback.*`（及其仅为此的 `services.dart` import）；Web `ImagesBlock` / `Figure` 与 `.blk-images / .blk-figure*` 样式、点图跳新标签页的行为。
+**成本**：纯前端；无接口 / 数据库 / 模型调用变化；无新依赖。查看器只在点开时建，图用已缓存的同一 URL。
+**参考来源（借鉴思路、按本项目 token / 组件自己实现，未引入依赖）**
+- Flutter `HapticFeedback` API：https://api.flutter.dev/flutter/services/HapticFeedback-class.html ；引擎 Android 实现 `PlatformPlugin.vibrateHapticFeedback`：https://github.com/flutter/flutter/blob/main/engine/src/flutter/shell/platform/android/io/flutter/plugin/platform/PlatformPlugin.java （核实“尊重系统触摸反馈设置”与各类型对应的系统常量）。
+- Apple HIG「Playing haptics」：https://developer.apple.com/design/human-interface-guidelines/playing-haptics （只给离散事件、同一动作同一触感、避免滥用、可关闭）。Material 3 haptics 页面已 404，未采用。
+- 缩放与翻页冲突：photo_view 画廊在 scale state 非 initial 时锁 PageView（https://github.com/bluefireteam/photo_view/issues/105 、/issues/216）；flutter/flutter#68594 与 StackOverflow 64748389 的 TransformationController + 放大时禁翻页做法。本项目取同一思路：每页 `TransformationController`，放大 >1.01 倍时 PageView 换 `NeverScrollableScrollPhysics`，双击在原大 / 2.5 倍间切换（以点按处为中心）。**没引入 photo_view**：一个画廊用 InteractiveViewer + 40 行即可，多一个依赖不值。
+**落地结果**
+- [x] ImageStack 两端：App `blocks/image_stack.dart`（ImageStack / ImageGallery / _ZoomPage / _ViewerImage）、`ui/sheets.dart showAppViewer`；Web `blocks/ImageStack.tsx`（样式 blocks.css，查看器样式归 ui/ui.css 与弹层同处）。细节：后面几层不用 Opacity（会互相透），改为实图 + 页面底色薄纱（`Op.stackLayer` / `--stack-veil`）+ 1px 发丝边；图下垫 surface 实底（坏图 / 加载中时后层不透出）；每层固定 ±2°（不随层数放大，叠得整齐）；查看器里竖图横图都按原比例完整显示、坏图显示“这张图片打不开”而不是满屏灰块；页码只在多张时出现。App 用临时截图测试看过明暗两套（单张 / 6 张竖图在上 / 第一张打不开 + 查看器第 1、2 页），截图测试未提交。
+- [x] 震动：`ui/haptics.dart` + `AppSwitch` + 守卫测试 `test/haptics_test.dart`。
+- [ ] **“我的”页底部搜索：本版不做，留下一版**。判断已定（见上第 3 条：与历史抽屉对话搜索不同域、不重复；做成“我的”页唯一的设置搜索，静态索引两端各一份）。没做的原因：用户 17:21 强调“宁可少做一块，也不要粗糙交付”，这一块要两端各做底部浮动胶囊 + 索引 + 结果态 + 空态 + 明暗截图，本轮步数不够做到同样细致。
+- 未验：Web 端没有浏览器可截图（本机无 Chromium），只靠构建 + 代码核对；Web 查看器不做捏合缩放（电脑端点“打开原图”看原尺寸；触屏浏览器可用系统双指缩放）。
+- 测试：flutter analyze 0、flutter test 682 过 8 跳过、npm run build 过（架构守卫 217 文件）、后端 smoke 202/202（不含 smoke_stepfun；smoke_preview_ws 并行跑时端口占用失败一次，单跑过）。

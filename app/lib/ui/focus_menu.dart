@@ -8,13 +8,13 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'glass.dart';
 import 'motion.dart';
 import 'sheets.dart';
+import 'haptics.dart';
 
 /// 包住一条可长按的内容：长按 → 聚焦菜单。actions 在长按那一刻才取（状态最新）；返回空列表 = 不弹。
 class FocusPressable extends StatefulWidget {
@@ -45,7 +45,7 @@ class _FocusPressableState extends State<FocusPressable> {
     } catch (_) {
       shot = null; // 拍不到快照（极少数平台）：照样弹菜单，只是被按的那条也在模糊层下面
     }
-    HapticFeedback.mediumImpact();
+    Haptics.press();
     await showFocusMenu(context, rect: rect, shot: shot, actions: actions, alignEnd: widget.alignEnd);
     shot?.dispose();
   }
@@ -135,7 +135,7 @@ class _FocusMenuPageState extends State<_FocusMenuPage> {
                   icon: Icons.more_horiz_rounded,
                   label: '更多',
                   onTap: () {
-                    HapticFeedback.selectionClick();
+                    Haptics.tap();
                     setState(() => _more = true);
                   },
                 ),

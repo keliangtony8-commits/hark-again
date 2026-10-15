@@ -8,7 +8,6 @@
 import 'package:flutter/material.dart';
 import 'package:assistant/ui/brand_mark.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocks/block_actions.dart';
@@ -28,6 +27,7 @@ import 'message_view.dart';
 import 'open_conversation.dart';
 import 'model_choice.dart';
 import 'slash_actions.dart';
+import '../../ui/haptics.dart';
 
 class ChatView extends ConsumerStatefulWidget {
   const ChatView({super.key, this.projectId = '', this.suggestions = const []});
@@ -50,7 +50,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   /// §I（用户 17:45 定稿）：点哪条显示哪条的时间——每条各自开关，可同时开几条。会话内状态，不持久化；换对话清空。
   final Set<String> _timesShown = {};
   void _toggleTime(String id) {
-    HapticFeedback.selectionClick();
+    Haptics.tap();
     setState(() => _timesShown.contains(id) ? _timesShown.remove(id) : _timesShown.add(id));
   }
 

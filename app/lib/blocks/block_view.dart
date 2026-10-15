@@ -8,6 +8,7 @@ import 'changes_block.dart';
 import 'commerce_blocks.dart';
 import 'connect_block.dart';
 import 'content_blocks.dart';
+import 'image_stack.dart';
 import 'delegate_block.dart';
 import 'form_block.dart';
 import 'interactive_blocks.dart';
@@ -45,7 +46,7 @@ class BlockView extends StatelessWidget {
         PlanReviewBlock b => PlanReviewBlockView(b),
         DraftBlock b => DraftBlockView(b),
         SummaryBlock b => SummaryBlockView(b),
-        ImagesBlock b => ImagesBlockView(b),
+        ImagesBlock b => ImageStack(b),
         ProductsBlock b => ProductsBlockView(b),
         OrderBlock b => OrderBlockView(b),
         FormBlock b => FormBlockView(b),

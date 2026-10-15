@@ -11,7 +11,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/block.dart';
@@ -23,12 +22,13 @@ import '../ui/kit.dart';
 import '../ui/motion.dart';
 import 'browser_block.dart' show LiveScreen;
 import 'browser_live.dart';
+import '../ui/haptics.dart';
 
 /// 推出接管页（根导航，盖住底栏和抽屉）。[block] 随卡片更新（handoff 状态变了页里跟着变）。
 /// [onAnswer] 为空 = 只读场景，没有完成/做不了按钮；返回 false = 没连上，按钮留着。
 Future<void> openBrowserTakeover(BuildContext context,
     {required ValueListenable<BrowserBlock> block, required BrowserLive live, bool Function(bool done)? onAnswer}) {
-  HapticFeedback.mediumImpact();
+  Haptics.press();
   return Navigator.of(context, rootNavigator: true)
       .push(riseRoute<void>(context, (_) => BrowserTakeoverPage(block: block, live: live, onAnswer: onAnswer)));
 }
@@ -132,7 +132,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
     _touch();
     final at = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan);
     if (at == null) return;
-    HapticFeedback.selectionClick();
+    Haptics.tap();
     _dragTo = null;
     _send({'t': 'mouse', 'kind': 'down', 'x': at.dx, 'y': at.dy});
   }

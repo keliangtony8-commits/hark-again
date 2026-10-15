@@ -2,10 +2,9 @@
 // 三张卡的分工和后端 agent/builtin/display.py 的 show_draft / show_summary / show_images 一一对应。
 //   草稿：再深一层的小块（和代码块同一材质），原样文字，右上 复制 / 分享。
 //   摘要：一张卡 = 一份文档：小字来源 + 标题 + Markdown 正文；很长时折起，“展开全文”交叉淡化成整篇。
-//   图片：单张 4:3 铺满；多张横排滑动；下好了淡入，坏图留占位；点开看大图（可捏合缩放）。
+//   图片：v2.99 起是 image_stack.dart 的 ImageStack（一摞，点开全屏左右翻）；这里只留共用的 NetImage。
 import 'package:flutter/material.dart';
 
-import '../core/links.dart';
 import '../core/share.dart';
 import '../models/block.dart';
 import '../theme/app_theme.dart';
@@ -14,7 +13,6 @@ import '../ui/glass.dart';
 import '../ui/kit.dart';
 import '../ui/markdown.dart';
 import '../ui/motion.dart';
-import '../ui/sheets.dart';
 
 Rect? _originOf(BuildContext context) {
   final box = context.findRenderObject() as RenderBox?;
@@ -149,60 +147,6 @@ class _SummaryBlockViewState extends State<SummaryBlockView> {
   }
 }
 
-class ImagesBlockView extends StatelessWidget {
-  const ImagesBlockView(this.block, {super.key});
-  final ImagesBlock block;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = block.items;
-    if (items.isEmpty) return const SizedBox.shrink();
-    if (items.length == 1) {
-      return _Figure(item: items.first, child: AspectRatio(aspectRatio: 4 / 3, child: NetImage(items.first.url)));
-    }
-    return SizedBox(
-      height: Layout.imageStrip + Sp.x6,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: Sp.x2),
-        itemBuilder: (_, i) => FadeSlideIn(
-          delay: Motion.stagger(i),
-          child: SizedBox(
-            width: Layout.imageTileWidth,
-            child: _Figure(item: items[i], child: SizedBox(height: Layout.imageStrip, child: NetImage(items[i].url))),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 一张图 + 一行说明；点了看大图。
-class _Figure extends StatelessWidget {
-  const _Figure({required this.item, required this.child});
-  final ImageItem item;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Pressable(
-        onTap: () => showImageViewer(context, item),
-        semanticLabel: '图片${item.caption == null ? '' : '：${item.caption}'}，查看大图',
-        child: ClipRRect(borderRadius: BorderRadius.circular(Radii.inner), child: child),
-      ),
-      if (item.caption != null && item.caption!.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(top: Sp.x1),
-          child: Text(item.caption!, style: context.text.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-    ],
-  );
-}
-
 /// 网络图：底下先铺一层占位底色，下好了淡入；打不开显示一个安静的坏图标。图片卡、商品宫格、订单卡共用。
 class NetImage extends StatelessWidget {
   const NetImage(this.url, {super.key, this.fit = BoxFit.cover});
@@ -222,33 +166,3 @@ class NetImage extends StatelessWidget {
     ),
   );
 }
-
-/// 大图：玻璃对话框里一张可捏合缩放的图 + 说明 + 打开原图。
-Future<void> showImageViewer(BuildContext context, ImageItem item) => showAppDialog<void>(
-  context,
-  builder: (ctx) => GlassDialog(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(Radii.inner),
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: InteractiveViewer(maxScale: 4, child: NetImage(item.url, fit: BoxFit.contain)),
-          ),
-        ),
-        if (item.caption != null && item.caption!.isNotEmpty)
-          Padding(padding: const EdgeInsets.only(top: Sp.x3), child: Text(item.caption!, style: ctx.text.bodyMedium)),
-        const SizedBox(height: Sp.x4),
-        Row(
-          children: [
-            Expanded(child: PillButton(label: '关闭', onTap: () => Navigator.of(ctx).pop())),
-            const SizedBox(width: Sp.x2),
-            Expanded(child: PillButton(label: '打开原图', icon: Icons.north_east_rounded, primary: true, onTap: () => openUrl(item.url))),
-          ],
-        ),
-      ],
-    ),
-  ),
-);

@@ -152,19 +152,31 @@
 .blk-summary-toggle:hover { color: var(--text); }
 .blk-summary-toggle .turn { display: inline-flex; transition: transform var(--dur) var(--ease); }
 .blk-summary-toggle .turn.open { transform: rotate(180deg); }
-.blk-images { display: flex; gap: var(--sp-2); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: var(--sp-1); }
-.blk-figure { margin: 0; flex: 0 0 232px; scroll-snap-align: start; min-width: 0; }
-.blk-figure-frame { display: block; height: 176px; border-radius: var(--r-inner); overflow: hidden; background: var(--tile); }
-.blk-images.single .blk-figure { flex: 1 1 auto; max-width: 520px; }
-.blk-images.single .blk-figure-frame { height: auto; aspect-ratio: 4 / 3; }
-.blk-figure img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
-.blk-figure img.ok { opacity: 1; }
-.blk-figure-frame:hover img.ok { transform: scale(1.02); }
-.blk-figure-bad { display: grid; place-items: center; width: 100%; height: 100%; color: var(--text-3); }
-.blk-figure figcaption { margin-top: var(--sp-1); font-size: var(--fs-xs); color: var(--text-2);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (prefers-reduced-motion: reduce) { .blk-figure img, .blk-summary-toggle .turn { transition: none; } }
+/* v2.99 E4 图片一摞（= App blocks/image_stack.dart）：最上面一张 4:3，后面最多两层向右下错开 --stack-peek、交替轻转 --stack-turn，
+   每层盖一层底色薄纱（不用 opacity，半透明层会互相透出来）；1px 发丝边分层。第一次出现扇开（stack-fan，只动 transform）。 */
+.image-stack { margin: 0; max-width: var(--image-stack-max); }
+.image-stack-pile { position: relative; display: block; width: calc(100% - var(--layers) * var(--stack-peek)); margin: 0 0 calc(var(--layers) * var(--stack-peek)); padding: 0;
+  border: 0; background: none; cursor: zoom-in; border-radius: var(--r-inner); transition: transform var(--dur-fast) var(--ease); }
+.image-stack-pile:active { transform: scale(.98); }
+.image-stack-pile:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.image-stack-card { position: relative; display: block; aspect-ratio: 4 / 3; border-radius: var(--r-inner); overflow: hidden; background: var(--stack-base); }
+.image-stack-card > img, .image-stack-bad { background: var(--tile); }
+.image-stack-card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; border: 1px solid var(--border); pointer-events: none; }
+.image-stack-card.back { position: absolute; inset: 0;
+  transform: translate(calc(var(--d) * var(--stack-peek)), calc(var(--d) * var(--stack-peek))) rotate(calc(var(--turn) * var(--stack-turn)));
+  animation: stack-fan var(--dur-stack-fan) var(--spring) both; }
+.image-stack-card.back::before { content: ""; position: absolute; inset: 0; z-index: 1; background: var(--stack-veil); opacity: calc(var(--d) * var(--stack-layer)); }
+.image-stack-card img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity var(--dur) var(--ease); }
+.image-stack-card img.ok { opacity: 1; }
+.image-stack-bad { display: grid; place-items: center; width: 100%; height: 100%; color: var(--text-3); }
+.image-stack-count { position: absolute; right: var(--sp-2); bottom: var(--sp-2); padding: 2px var(--sp-2); border-radius: var(--r-full);
+  background: var(--ink); color: var(--on-ink); font-size: var(--fs-xs); line-height: var(--lh); }
+.image-stack figcaption { margin-top: var(--sp-1); font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) {
+  .image-stack-card.back { animation: none; }
+  .image-stack-card img, .image-stack-pile { transition: none; }
+  .blk-summary-toggle .turn { transition: none; }
+}
 
 /* 商品宫格 + 订单卡（v0.81，= App commerce_blocks.dart） */
 .blk-img-bad { display: grid; place-items: center; width: 100%; height: 100%; color: var(--text-3); }

@@ -217,6 +217,9 @@ abstract final class Motion {
   static const morph = Duration(milliseconds: 280); // 左上 ≡ ↔ +：三条线旋转成十字
   static const morphCurve = Cubic(0.65, 0, 0.35, 1); // easeInOutCubic：来回对称（= 网页 --ease-morph）
   static const pageRise = 8.0; // v2.93 §Q 进出项目页：新页从下方 8px 浮上来 + 淡入（与 ≡/+ 同一个 Motion.morph 时长）
+  // v2.99 E4 ImageStack：后面几张第一次出现时从正下方扇开到位（= 网页 --stack-fan / stack-fan keyframes）
+  static const stackFan = Duration(milliseconds: 420);
+  static const stackTurn = 0.035; // 后面每层旋转多少弧度（约 2°），一层向右一层向左
   static const pillDrop = 8.0; // 标题药丸从上方落下的距离（出现用 spring，过冲约 2–3%）
 
   /// 列表错峰入场：第 i 项晚 i 拍，超过 10 项不再加（长列表不拖沓）。
@@ -291,6 +294,7 @@ abstract final class QrColors {
 /// 不透明度
 abstract final class Op {
   static const dimmed = 0.6; // 停用/下线的行：还在，但退到背景里
+  static const stackLayer = 0.22; // 图片一摞后面每多一层淡多少（第一层 0.78、第二层 0.56）
 }
 
 /// 无障碍底线
@@ -335,7 +339,9 @@ abstract final class Layout {
   static const skeletonHero = 148.0, skeletonStat = 104.0, skeletonChart = 200.0; // 用量页骨架：月卡 / 统计格 / 每日图（与内容同高，换态不跳版）
   static const summaryFold = 280.0; // 摘要卡折起时正文露多高（再长就“展开全文”）
   static const attachThumb = 64.0, attachChip = 184.0; // 输入框附件托盘：图片方缩略图边长 / 文件名片宽（同高 attachThumb）
-  static const imageStrip = 176.0, imageTileWidth = 232.0; // 图片卡多张时横排：每张的高 / 宽；单张按 4:3 铺满
+  static const imageStackMax = 360.0; // v2.99 E4 图片一摞（ImageStack）最宽多宽：单张 / 最上面那张都按 4:3（= 网页 --image-stack-max）
+  static const stackPeek = 8.0; // 一摞后面每层向右下露出多少
+  static const stackLayers = 2; // 后面最多露几层（再多只算进“N 张”）
   static const productTileMin = 148.0; // 商品宫格每格最窄多宽（手机两列、平板更多列）
   static const offerImageRatio = 2.0; // 主页建议卡顶部配图的宽高比（宽图，不把卡撑太高）
   static const offerImageRatioWide = 2.5; // 窗口 ≥ contentMax（电脑 / 平板）时压扁一点，别一张图占半屏（= 网页 home.css ≥720px 的 5:2，v2.94）

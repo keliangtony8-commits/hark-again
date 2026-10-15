@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { copyText } from "../lib/copy";
-import type { DraftBlock as D, ImagesBlock as I, SummaryBlock as S } from "../lib/types";
+import type { DraftBlock as D, SummaryBlock as S } from "../lib/types";
 import CopyButton from "../ui/CopyButton";
-import { IconChevronDown, IconEdit, IconImageOff, IconShare } from "../ui/icons";
+import { IconChevronDown, IconEdit, IconShare } from "../ui/icons";
 import Markdown from "../ui/Markdown";
 
-// 内容成品类的卡（= App blocks/content_blocks.dart）：草稿（拿去发）、摘要（自己读）、图片（看样子）。
+// 内容成品类的卡（= App blocks/content_blocks.dart）：草稿（拿去发）、摘要（自己读）。图片（看样子）v2.99 起在 ImageStack.tsx。
 
 /** 草稿：再深一层的小块，原样文字，右上 复制 / 分享（浏览器支持系统分享时才有）。 */
 export function DraftBlock({ block }: { block: D }) {
@@ -53,32 +53,5 @@ export function SummaryBlock({ block }: { block: S }) {
         </button>
       )}
     </article>
-  );
-}
-
-/** 图片：单张 4:3 铺满，多张横排滑动；下好了淡入，坏图留占位；点开新标签页看原图。 */
-export function ImagesBlock({ block }: { block: I }) {
-  const items = block.items.filter((i) => /^https?:\/\//i.test(i.url));
-  if (!items.length) return null;
-  return (
-    <div className={"blk-images" + (items.length === 1 ? " single" : "")}>
-      {items.map((it, i) => <Figure key={it.url} url={it.url} caption={it.caption} i={i} />)}
-    </div>
-  );
-}
-
-function Figure({ url, caption, i }: { url: string; caption?: string | null; i: number }) {
-  const [state, setState] = useState<"loading" | "ok" | "bad">("loading");
-  return (
-    <figure className="blk-figure enter" style={{ ["--i" as string]: i }}>
-      <a className="blk-figure-frame" href={url} target="_blank" rel="noopener noreferrer"
-        aria-label={`图片${caption ? "：" + caption : ""}，打开原图`}>
-        {state === "bad"
-          ? <span className="blk-figure-bad"><IconImageOff /></span>
-          : <img src={url} alt={caption ?? ""} loading="lazy" referrerPolicy="no-referrer" className={state === "ok" ? "ok" : ""}
-              onLoad={() => setState("ok")} onError={() => setState("bad")} />}
-      </a>
-      {caption && <figcaption>{caption}</figcaption>}
-    </figure>
   );
 }

@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'glass.dart';
 import 'motion.dart';
+import 'haptics.dart';
 
 /// 页面骨架：统一的左右留白 + 平板上限制最大宽度。
 class PageBody extends StatelessWidget {
@@ -166,7 +167,32 @@ class PullRefresh extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      RefreshIndicator(onRefresh: onRefresh, edgeOffset: MediaQuery.paddingOf(context).top, child: child);
+      RefreshIndicator(
+        onRefresh: () {
+          Haptics.tap(); // v2.99：拉过阈值、开始刷新那一下轻触（松手才触发，拉着不放不会连震）
+          return onRefresh();
+        },
+        edgeOffset: MediaQuery.paddingOf(context).top,
+        child: child,
+      );
+}
+
+/// 开关（全 App 唯一，v2.99）：系统 Switch + 切换时轻触一下（ui/haptics.dart）。页面不直接用 Switch（test/haptics_test.dart 守卫）。
+class AppSwitch extends StatelessWidget {
+  const AppSwitch({super.key, required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Switch(
+        value: value,
+        onChanged: onChanged == null
+            ? null
+            : (v) {
+                Haptics.tap();
+                onChanged!(v);
+              },
+      );
 }
 
 /// 列表行（全 App 唯一，v2.97 E1）：行首图标 + 标题（+ 副标题 / 问题）+ 行尾值 / 控件 / 箭头。放在 [ListGroup] 里。
@@ -712,7 +738,7 @@ class _CopyActionState extends State<CopyAction> {
 
   void _copy() {
     Clipboard.setData(ClipboardData(text: widget.text));
-    HapticFeedback.selectionClick();
+    Haptics.tap();
     SemanticsService.sendAnnouncement(View.of(context), '已复制', Directionality.of(context));
     _reset?.cancel();
     setState(() => _reset = Timer(Timing.copiedHold, () {
