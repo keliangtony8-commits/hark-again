@@ -36,13 +36,12 @@
 - 已发布：v2.85–v2.92（v2.90.1 用户气泡改灰；v2.90.3 已部署过一次，见下）。
 - v2.89：浏览器实时推流（CDP screencast，单条 WS，取代截图轮询）。
 - v2.90：运行中连发“按件回复”（`backend/app/message_intake.py` 单入口；补充并入 / 附和不回 / 问进度一句话 / 新问题并行一路；`messages.answered_by` 账本，迁移 0064；回复离原话远才画引用线）。
-- 已发布到 git：v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）。VPS 上是 v2.92.0；**v2.93 未部署、未出 APK**。
+- 已发布到 git：v2.91、v2.91.1、v2.92、v2.93（tag v2.93，2026-10-15）。**2026-10-15 11:41 已部署 v2.93.0**（`/api/version`=2.93.0，容器全部 Up，.env 备份 /root/env.bak.v293，磁盘 88%，下次先 prune）；**未出 APK**。
 - VPS：GreenCloud 2C/3.8G Debian 12，IP 172.93.163.240，域名 toyuis.itsllm.com。部署方式见 `deploy/`（git archive → 上传 → `deploy/update.sh`）。
   - **2026-10-15 约 11:05 已部署 v2.92.0**（`/api/version` = 2.92.0，容器全部 Up）。旧版备份 `/root/app-v2911-backup.tgz`，.env 备份 `/root/env.bak.v292`；`docker builder prune` 后磁盘 80%。
   - 真模型（StepFun）验证通过：主聊天说“以后叫我小测，你就叫阿星”→ 调用 set_names（步骤“保存称呼”），profile 变为 小测 / 阿星；验证后已删测试对话和 identity 行，greet 恢复为 true（保留用户自己的首次问候体验）。
   - 未验：首次问候对话（greet 流程本身）在真机上的表现；回复里出现“一直陪着你”偏口语，提示词可再收紧。v2.92 安装包（APK）尚未构建（用户说不急）。
   - 坑：部署时用 `pgrep -f 'deploy/update.sh'` 轮询会匹配到轮询命令自身（永远“还在跑”），改用 pid 文件或 `pgrep -x`/排除自身。
-  - v2.93 未部署（本轮按要求不碰 VPS）。
 
 ## 五、用户提过但还没完成的要求（按优先级）
 > 完整原话与决定见 `docs/home-redesign.md`（A–P 各节）和 `docs/devlog.md`；凡标注“剩/待/未做”的都算未完成，接手后先逐节核对一遍。
@@ -67,7 +66,8 @@
    - [x] Web（`npm run build` 通过）：TopBar `isShellRoot` + 滑块按前缀、ProjectScreen 进外壳 + 标题行（‹ / 项目名 / ⋯）、项目抽屉从标题行下滑出、列表大字 + `projectIsCurrent` + 汇总胶囊、ProjectHome 对话列表、MenuPlus 记上一颗形状做 morph、Sheet portal + visualViewport + sticky 按钮行（删掉两处多余的外层 createPortal）
    - [ ] Web 截图核对（手机宽度：列表 / 项目 / 抽屉 / 新建项目弹层 / 新面板弹层）
    - [x] 测试（最终代码上）：flutter analyze 0、flutter test 671 过（8 跳过）、npm run build 过、后端 smoke 201/201（不含需真密钥的 smoke_stepfun）；protocol/CHANGELOG/VERSION 2.93.0、tag v2.93、push
-   - [ ] 部署 VPS + 出 APK（v2.92 的 APK 也还没出，可直接出 2.93）
+   - [x] 部署 VPS（2026-10-15 11:41）
+   - [ ] 出 APK（v2.92 的也没出，直接出 2.93）
    - [ ] 真机看 App 项目页 +↔≡ 切换手感、明/暗；手机浏览器验弹层三处不再被挡
    - [ ] App 截图回归里 emoji 无字体显示为空白（仅测试环境）
 5. ✅（v2.92.0 已做，存 app_settings 的 identity 一行而非 users 表——只有一个主人；详见 devlog 2026-10-15 v2.92）**v2.92 §P 名字与头像**：首次进对话由助手**在聊天里**问称呼和是否给助手取名（不做表单引导页）；不取名默认叫 Toyuis；`users.display_name`、`users.avatar`、`app_settings.assistant_name`；头像可上传，无图=纯色圆+首字母（复用 Avatar）；“我”页点名字/头像可改；助手名进系统提示词。**语气**：正式、不开玩笑，但初次打招呼可亲切。定稿开场：“你好，我是 Toyuis，很高兴为你服务。请问我该如何称呼你？如果你愿意，也可以为我取一个名字；不取的话，我就继续叫 Toyuis。”
@@ -116,8 +116,8 @@
 | 回复里有工具调用符号、排版随意；文案口语化不专业 | ✅ v2.88 | |
 | 发送时气泡往上弹一下 | ✅ v2.88 | |
 | 动效既要有又要流畅 | ✅ 规则（只动 transform/opacity） | |
-| 项目页左上角 ≡、对话条目带状态、进场/上滑浮出总结标题、细腻有小动效 | ⚠️ v2.91 已部署（随 v2.92）；v2.93 按 Hark 重做（顶栏常驻、+↔≡、大字项目名+汇总状态、项目内只列对话）已提交未部署、未真机看 | §N / §Q，devlog 2026-10-15 |
-| 手机网页弹层被顶栏/输入框/浏览器工具栏挡住，App 弹层也查 | ⚠️ v2.93 已修（Sheet portal + visualViewport + 按钮行常驻；App useSafeArea + 提交钮钉底），未部署未真机验 | §Q |
+| 项目页左上角 ≡、对话条目带状态、进场/上滑浮出总结标题、细腻有小动效 | ⚠️ v2.91 已部署（随 v2.92）；v2.93 按 Hark 重做（顶栏常驻、+↔≡、大字项目名+汇总状态、项目内只列对话）已部署、未真机看 | §N / §Q，devlog 2026-10-15 |
+| 手机网页弹层被顶栏/输入框/浏览器工具栏挡住，App 弹层也查 | ⚠️ v2.93 已修（Sheet portal + visualViewport + 按钮行常驻；App useSafeArea + 提交钮钉底），已部署，未真机验 | §Q |
 | 运行中能继续发，意思相近合并回复，要有判断 | ✅ v2.90；⚠️ 准确率重评未做 | 第五节 3 |
 | 名字头像自定义，首次正式而亲切地问，不取名叫 Toyuis | ✅ v2.92.0 已部署，真模型 set_names 已验；首次问候真机未看 | §P（v2.92） |
 | 做交接文档，把没做的都写清楚 | ✅ 本文件 | |
