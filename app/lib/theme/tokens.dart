@@ -232,10 +232,10 @@ class SkyTable {
   @override
   int get hashCode => Object.hash(night, dawn, day, dusk);
 
-  /// 浅色：学 Hark 浅色（顶部天蓝 → 中段淡 → 底部暖米色），夜里是偏紫的灰蓝。v3.3 B2 整体提亮（只抬 OKLab 明度、保色相）：
+  /// 浅色：学 Hark 浅色（顶部天蓝 → 中段淡 → 底部暖米色），夜里也是钢蓝 → 暖金（v3.5 照 Hark 浅色夜间截图，原偏紫灰蓝）。v3.3 B2 整体提亮（只抬 OKLab 明度、保色相）：
   /// 次要字 text2 压在顶部 / 夜间最暗处也要 ≥ 4.5，所以顶色比 Hark 浅得多。
   static const light = SkyTable(
-    night: SkyPhase(Color(0xFFC7D1F0), Color(0xFFD3D0DD), Color(0xFFC8D1EE), Color(0xFFD4CEEB), Color(0xFFD2CFE0)),
+    night: SkyPhase(Color(0xFFB6D8F5), Color(0xFFE7D19F), Color(0xFFBDD7EE), Color(0xFFC1D8E1), Color(0xFFE3D3AC)),
     dawn: SkyPhase(Color(0xFFC0D1FD), Color(0xFFF1D9C6), Color(0xFFC6D1F2), Color(0xFFF7D7BF), Color(0xFFD8CDE7)),
     day: SkyPhase(Color(0xFFADD6FE), Color(0xFFE6DCC2), Color(0xFFB1D6F5), Color(0xFFF4EEDF), Color(0xFFEBDBBF)), // v3.3 验收：底部柔光原 #C0D4E2（冷蓝灰）把暖米底盖成灰绿，改暖沙
     dusk: SkyPhase(Color(0xFFC5D0FB), Color(0xFFEBCDB6), Color(0xFFD2CDF7), Color(0xFFF3D2B4), Color(0xFFD8CDE5)),
