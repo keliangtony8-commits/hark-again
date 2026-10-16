@@ -1,6 +1,6 @@
 // 流光壁纸（v3.3，Toyuis 自写，思路参考 mesh_gradient (MIT) 的“底色 + 几团柔光缓慢流动”，未复制其代码）：
 // 竖向底色渐变 + 三团高斯柔光沿各自的慢速椭圆轨道漂移 + 轻微抖动去色带。每像素只有 3 次 exp，整屏 < 0.5ms。
-// uFade：> 0 时只画顶部一条（ShellPage 的上沿渐隐：clear 以上全不透明、到 solid 渐成透明），代替整页 ShaderMask 离屏层。
+// uFade：> 0 时只画一条渐隐（ShellPage 的上沿渐隐：clear 以上全不透明、到 solid 渐成透明；v3.5 solid < clear 时是底部浮条下的渐隐），代替整页 ShaderMask 离屏层。
 #include <flutter/runtime_effect.glsl>
 
 uniform vec2 uSize;      // 画布大小（逻辑像素）
@@ -42,7 +42,9 @@ void main() {
 
   float a = 1.0;
   if (uFade.x > 0.5) {
-    a = 1.0 - smoothstep(uFade.y, uFade.z, px.y);
+    // = Sky.fadeAlpha：z < y 时是底部渐隐（方向反过来）；不用 smoothstep(y, z)，因为 edge0 > edge1 在 GLSL 里没有定义
+    float x = clamp((px.y - uFade.y) / (uFade.z - uFade.y), 0.0, 1.0);
+    a = 1.0 - x * x * (3.0 - 2.0 * x);
   }
   fragColor = vec4(col * a, a); // 预乘 alpha
 }

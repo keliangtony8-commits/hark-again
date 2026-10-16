@@ -117,8 +117,14 @@ class _BlurGroupState extends State<BlurGroup> {
 /// 和 Backdrop 同一处判断：玻璃模式 = 同一张流光壁纸（SkyLayer 按屏幕坐标逐像素对齐、共用 SkyClock）；减少透明度 = 实色 bg。
 /// 不挡点击、不进读屏（和原来被遮罩的内容一样仍可点）。
 class BackdropFade extends StatelessWidget {
-  const BackdropFade({super.key, required this.clear, required this.solid});
+  const BackdropFade({super.key, required this.clear, required this.solid}) : local = false;
+
+  /// v3.5 底部浮条下的渐隐（FloatingFooter）：[solid] 以上内容全显、到 [clear] 全是壁纸（solid < clear），坐标是条自身的本地 y。
+  const BackdropFade.bottom({super.key, required this.solid, required this.clear}) : local = true;
   final double clear, solid;
+
+  /// clear / solid 是条自身的本地 y（底部条）；否则是屏幕 y（上沿条从屏幕顶开始）。
+  final bool local;
 
   /// 浮动顶栏 / 子页标题胶囊下，内容完全被壁纸盖住到哪一行（状态栏 [top] + 以下）：没有 header 时到胶囊中线（两侧露一点点渐隐），
   /// 有 header 时到 header 底边（标题下面绝不叠字）。ShellPage 和 SubPage 共用。
@@ -132,7 +138,7 @@ class BackdropFade extends StatelessWidget {
   Widget build(BuildContext context) {
     final Widget strip = GlassMode.solidOf(context)
         ? RepaintBoundary(child: CustomPaint(painter: _SolidFadePainter(context.palette.bg, clear, solid), child: const SizedBox.expand()))
-        : SkyLayer(fade: (clear, solid));
+        : SkyLayer(fade: (clear, solid), fadeLocal: local);
     return IgnorePointer(child: ExcludeSemantics(child: strip));
   }
 }
@@ -145,16 +151,15 @@ class _SolidFadePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    // 条从屏幕顶开始（ShellPage 把它放在 top: 0），所以本地 y = 屏幕 y；色标按 Sky.fadeAlpha 取，和着色器同一条曲线
+    // 上沿条从屏幕顶开始（ShellPage 把它放在 top: 0），底部条用本地 y，两种都按条自身的 y 取色标；按 Sky.fadeAlpha 取，和着色器同一条曲线。
+    // 色标按 y 升序排：上沿条 clear < solid，底部条 solid < clear，两端外侧各补一个端点色。
     const n = 6;
-    final stops = <double>[], colors = <Color>[];
-    for (var k = 0; k <= n; k++) {
-      final y = clear + (solid - clear) * k / n;
-      stops.add((y / size.height).clamp(0.0, 1.0));
-      colors.add(color.withValues(alpha: Sky.fadeAlpha(y, clear, solid)));
-    }
+    final lo = clear < solid ? clear : solid, hi = clear < solid ? solid : clear;
+    final ys = [0.0, for (var k = 0; k <= n; k++) lo + (hi - lo) * k / n, size.height];
+    final stops = [for (final y in ys) (y / size.height).clamp(0.0, 1.0)];
+    final colors = [for (final y in ys) color.withValues(alpha: Sky.fadeAlpha(y, clear, solid))];
     final rect = Offset.zero & size;
-    canvas.drawRect(rect, Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [color, ...colors], stops: [0, ...stops]).createShader(rect));
+    canvas.drawRect(rect, Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: colors, stops: stops).createShader(rect));
   }
 
   @override

@@ -31,8 +31,11 @@ class SkyShader {
 /// 整屏壁纸（自身是重绘边界：每帧只有这一层重画）。fade != null 时只画上沿渐隐条（clear 以上不透明，到 solid 透明）。
 /// 不驱动（不可见 / 被盖住）时画笔不听时钟：哪怕别的层还在让 SkyClock 走，这一层也不重画；恢复时重画一次，直接取时钟此刻的天色和柔光位置。
 class SkyLayer extends StatefulWidget {
-  const SkyLayer({super.key, this.fade, this.clock, this.coverable = false});
+  const SkyLayer({super.key, this.fade, this.fadeLocal = false, this.clock, this.coverable = false});
   final (double clear, double solid)? fade;
+
+  /// [fade] 是条自身的本地 y（底部浮条下的渐隐条，位置随布局变；画时加上条在屏幕上的位置）。默认是屏幕 y（上沿条从屏幕顶开始）。
+  final bool fadeLocal;
 
   /// 测试注入；默认全 App 共用的 SkyClock.instance。
   final SkyClock? clock;
@@ -134,7 +137,7 @@ class SkyLayerState extends State<SkyLayer> {
     final p = context.palette;
     return RepaintBoundary(
       child: CustomPaint(
-        painter: _SkyPainter(sky: p.sky, clock: _clock, repaint: _repaint, screen: MediaQuery.sizeOf(context), fade: widget.fade, context: context),
+        painter: _SkyPainter(sky: p.sky, clock: _clock, repaint: _repaint, screen: MediaQuery.sizeOf(context), fade: widget.fade, fadeLocal: widget.fadeLocal, context: context),
         child: const SizedBox.expand(),
       ),
     );
@@ -235,8 +238,9 @@ class _SkyCoverState extends State<SkyCover> {
 }
 
 class _SkyPainter extends CustomPainter {
-  _SkyPainter({required this.sky, required this.clock, required Listenable repaint, required this.screen, required this.fade, required this.context}) : super(repaint: repaint);
+  _SkyPainter({required this.sky, required this.clock, required Listenable repaint, required this.screen, required this.fade, this.fadeLocal = false, required this.context}) : super(repaint: repaint);
   final SkyTable sky;
+  final bool fadeLocal;
   final SkyClock clock;
   final Size screen;
   final (double, double)? fade;
@@ -249,6 +253,8 @@ class _SkyPainter extends CustomPainter {
     final ro = context.findRenderObject();
     final origin = ro is RenderBox && ro.attached && ro.hasSize ? ro.localToGlobal(Offset.zero) : Offset.zero;
     final rect = Offset.zero & size;
+    final dy = fadeLocal ? origin.dy : 0.0;
+    final fade = this.fade == null ? null : (this.fade!.$1 + dy, this.fade!.$2 + dy);
     final program = SkyShader.program;
     if (program != null && screen.height > 0) {
       final s = program.fragmentShader();
@@ -283,7 +289,7 @@ class _SkyPainter extends CustomPainter {
       final y = k / (n - 1);
       final sy = (origin.dy + y * size.height) / h;
       var col = Color.lerp(phase.top, phase.bottom, Sky.ramp(sy))!;
-      if (fade != null) col = col.withValues(alpha: Sky.fadeAlpha(origin.dy + y * size.height, fade!.$1, fade!.$2));
+      if (fade != null) col = col.withValues(alpha: Sky.fadeAlpha(origin.dy + y * size.height, fade.$1, fade.$2));
       colors.add(col);
       stops.add(y);
     }
@@ -291,5 +297,5 @@ class _SkyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SkyPainter old) => old.sky != sky || old.clock != clock || old.screen != screen || old.fade != fade;
+  bool shouldRepaint(_SkyPainter old) => old.sky != sky || old.clock != clock || old.screen != screen || old.fade != fade || old.fadeLocal != fadeLocal;
 }

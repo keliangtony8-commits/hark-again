@@ -67,6 +67,13 @@
 
 /* 浮动输入胶囊（聊天页、主页、项目页同一位置）：贴在底部，内容从下面滚过 */
 .floating-footer { position: absolute; z-index: 16; left: 0; right: 0; bottom: 0; pointer-events: none; }
+/* v3.5 底部浮条下的渐隐（= App FloatingFooter BackdropFade.bottom，Sky.fadeAlpha 同一条缓入缓出）：条贴底、比底条高 16px（kit.tsx）；
+   上沿（底条上沿再往上 16px = App Layout.topFadeRamp）全透明 → 往下到底条上沿 + 胶囊半高起全是壁纸。双类名：压过 base.css .sky-fade 的 top: 0。 */
+.sky-fade.sky-fade-footer { top: auto; bottom: 0; --bf: calc(var(--sp-4) + var(--topbar-h) / 2);
+  --fade: linear-gradient(to bottom, transparent 0,
+    rgba(0, 0, 0, .1) calc(var(--bf) * .2), rgba(0, 0, 0, .35) calc(var(--bf) * .4),
+    rgba(0, 0, 0, .65) calc(var(--bf) * .6), rgba(0, 0, 0, .9) calc(var(--bf) * .8), #000 var(--bf));
+  -webkit-mask-image: var(--fade); mask-image: var(--fade); }
 .floating-footer > * { pointer-events: auto; }
 .launch-chips { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; max-width: var(--content-w); margin: 0 auto var(--sp-3); padding: 0 var(--gutter); }
 .launch-chips button { height: 34px; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); color: var(--text); animation: float-up var(--dur) var(--ease) both; }

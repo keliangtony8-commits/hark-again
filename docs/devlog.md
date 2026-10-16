@@ -475,3 +475,11 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 5. 测试：sub_page_test 改量“标题无玻璃底、整屏居中、动作胶囊贴右边距同高”，新增“能退的子页出圆钮、位置 = 顶栏圆钮、点了退回”；shell_test 的 `pageBack()`（只认 Material BackButton）改点“返回”。
 
 **成本 / 帧**：App 每个子页取背景从 1 次（整宽胶囊）变成 ≤2 次（返回钮 + 动作胶囊，同一个 BackdropGroup 里合并取样）。Web 子页多一条渐隐条、玻璃面从 1 块变 ≤2 块小的；4× CPU 手机视口滚动（work/frames.py，每路由 400 帧，各跑 4 轮）：median 16ms、p95 18–20ms 新旧一样；>20ms 帧 子页（定时任务 + 记忆）合计 新 37 / 旧 15。拆因：关掉渐隐条 → 15（= 旧），关掉标题行毛玻璃 → 43（不是它）；isolation、will-change、把标题行挪出滚动区（= 顶栏结构）都不降。即多出来的就是渐隐条本身的成本，而同一轮里一级页主页 / 我的（本来就有这条，没改）>20ms 是每轮 4–11，子页现在每轮 2–12，落在同一水平。结论：标题没底就必须渐隐（否则滚上去的字和标题叠），这是全站已接受的同一种渐隐，保留；不另造一套。
+
+## 2026-10-16 v3.5 底部浮条渐隐（两端，用户 21:35“会更好看就改”）
+- 起因：App“我的”退出登录条静止时半截压在“搜索设置”浮条下，硬切。用户先同意不改，追问后说“会更好看就改”。只给“我的”页加会两端 / 各页不一致 → **统一做在 FloatingFooter 里**，所有底部浮条（主页 / 项目 LaunchComposer、聊天 Composer、“我的”搜索）一起有。
+- 做法（替换不叠加，复用顶部渐隐的同一套）：
+  - App：`Sky.fadeAlpha` / sky.frag 的 uFade 支持 solid < clear = 方向反过来（式子同一个，着色器改成显式 smoothstep 式，因为 GLSL smoothstep(edge0 > edge1) 无定义）；`SkyLayer(fadeLocal:)` 让条用本地 y（画时加条的屏幕位置）；`BackdropFade.bottom`；减少透明度时 `_SolidFadePainter` 色标按 y 升序排、两种方向通用。FloatingFooter 在内容和 behind（FrostScrim）之间放一条高 = 底条高 + `Layout.topFadeRamp`，solid = 条顶、clear = 底条上沿 + `Layout.bottomFadeClear`（= topBar / 2 ≈ 胶囊中线）。聊天列表底留白 `Sp.x2` → `Layout.topFadeRamp`（静止时最后一条不被淡，= 网页 .thread-inner 的 sp-4）。
+  - Web：FloatingFooter 自己量高、在底条前渲染 `SkyFade kind="footer" height={h + 16}`；`.sky-fade.sky-fade-footer` 贴底 + 反向 mask（同 6 个色标）。SkyFade 的 ResizeObserver 加观察自身（底条长高时条的视口位置会变）。坑：`.sky-fade-footer` 单类名被 base.css `.sky-fade { top: 0 }` 压住，条跑到顶上 → 用双类名。
+- 验证：flutter analyze 0、flutter test 736 过 / 9 跳过；Web tsc、npm test 14/14、架构守卫、build 过；截图 App（me / me-end / 聊天回到最新 / 主页暗色）+ Web 全套 phone/desktop × 明暗看过：卡片 / 退出登录 / 气泡滚到浮条处淡进壁纸，滑到底退出登录条完整露出。
+- 帧耗时：App perf_frame_test 新旧交替各 2 轮，backdropLayers / shaderMaskLayers / fadeRebuilds 不变，每帧元素 +3（多一条），CPU 中位在噪声内（shell-scroll 新 13.2/11.1 vs 旧 10.6/9.5ms，me-scroll 4.9/3.0 vs 2.9/2.5，chat-stream 34.5/36.4 vs 36.8/33.7）。Web 4×CPU 手机视口新旧交替各 4 轮：median 16ms、p95 19–20ms 不变；>20ms 帧主页 47 vs 19、“我的” 36 vs 27（4 轮合计）——多一条动态壁纸副本 + mask 的成本，和 v3.5 子页渐隐条同类同量级。**未验证**：真机 Flutter profile、真 GPU 浏览器。

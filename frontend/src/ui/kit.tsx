@@ -21,18 +21,26 @@ export function PageHeader({ title, back, action }: { title: string; back?: bool
  *  让下面的滚动内容留出同样的空（输入胶囊会随附件/编辑条/多行文字长高）。和 App ui/kit.dart FloatingFooter 同义。 */
 export function FloatingFooter({ children, onHeight }: { children: ReactNode; onHeight: (h: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState(0);
   const cb = useRef(onHeight);
   cb.current = onHeight;
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const report = () => cb.current(el.offsetHeight);
+    const report = () => { cb.current(el.offsetHeight); setH(el.offsetHeight); };
     report();
     const ro = new ResizeObserver(report);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  return <div ref={ref} className="floating-footer">{children}</div>;
+  // v3.5 底部渐隐（= App FloatingFooter 的 BackdropFade.bottom）：底条上沿再往上 16px 以上内容全显，到胶囊中线全是壁纸，滚过的内容淡进壁纸不被硬切；
+  // 所以滚动内容底部留白要 ≥ --footer-h + 16px（.thread-inner / .page.has-composer 已是）
+  return (
+    <>
+      {h > 0 && <SkyFade kind="footer" height={h + 16} />}
+      <div ref={ref} className="floating-footer">{children}</div>
+    </>
+  );
 }
 
 /** 页面骨架：可滚动内容 + 可选的子页面标题栏 + 可选的底部浮层（一级页面的输入胶囊、“我的”页的设置搜索）。所有页同一阅读宽度 --content-w、居中

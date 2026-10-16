@@ -274,8 +274,9 @@ abstract final class Sky {
   }
 
   /// ShellPage 上沿渐隐条在 clear → solid 之间的不透明度（1 → 0，smoothstep 缓入缓出；= sky.frag uFade）。
+  /// v3.5：solid < clear 是底部渐隐（底部浮条下：solid 以上内容全显，到 clear 全是壁纸），同一个式子，方向自然反过来。
   static double fadeAlpha(double y, double clear, double solid) {
-    if (solid <= clear) return y < solid ? 1 : 0;
+    if (solid == clear) return y < solid ? 1 : 0;
     final x = ((y - clear) / (solid - clear)).clamp(0.0, 1.0);
     return 1 - x * x * (3 - 2 * x);
   }
@@ -443,6 +444,7 @@ abstract final class Layout {
   static const shellTop = topBarTop + topBar + Sp.x3; // 一级页面内容要让出的顶部高度（不含状态栏）= 顶栏 + 12（子页标题胶囊同一条，v3.5）
   static const shellHeaderTop = topBarTop + topBar + Sp.x2; // 一级页 header 行（主聊天标题）的顶边：紧贴顶栏下面
   static const topFadeRamp = Sp.x4; // 让位线下面再渐显这么高（缓入），滚上去的深色气泡不再在标题下切出硬边；≤ 聊天列表顶部留白
+  static const bottomFadeClear = topBar / 2; // v3.5 底部浮条下的渐隐：从底条上沿往下这么高处起全是壁纸（往上 topFadeRamp 起开始淡）（≈ 胶囊中线，= 顶栏下 clear 在顶栏中线）
   static const avatarLarge = 72.0; // “我的”页头的大头像
   static const wheel = 200.0; // 头像色轮直径
   static const segmentsMax = 320.0; // 分段导航最宽多宽（平板上不拉满）
