@@ -120,6 +120,14 @@ class BackdropFade extends StatelessWidget {
   const BackdropFade({super.key, required this.clear, required this.solid});
   final double clear, solid;
 
+  /// 浮动顶栏 / 子页标题胶囊下，内容完全被壁纸盖住到哪一行（状态栏 [top] + 以下）：没有 header 时到胶囊中线（两侧露一点点渐隐），
+  /// 有 header 时到 header 底边（标题下面绝不叠字）。ShellPage 和 SubPage 共用。
+  static double clearOf(double top, double headerHeight) =>
+      top + (headerHeight > 0 ? Layout.shellHeaderTop + headerHeight : Layout.topBarTop + Layout.topBar / 2);
+
+  /// 内容从哪一行起完全显出来：让位线 [inset] 再往下 [Layout.topFadeRamp]（缓入渐显，不切硬边）。
+  static double solidOf(double inset) => inset + Layout.topFadeRamp;
+
   @override
   Widget build(BuildContext context) {
     final Widget strip = GlassMode.solidOf(context)

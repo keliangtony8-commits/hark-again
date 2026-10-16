@@ -6,8 +6,8 @@
   --surface-2: #f1efec;
   --border: #e8e5e0;
   --text: #111111;
-  --text-2: #5c5852; /* v3.3 原 #64605a：压在流光壁纸上也 ≥ 4.5 */
-  --text-3: #7a746c;  /* 次要信息：对底色、对壁纸 ≥ 3:1（v3.3 原 #857f77） */
+  --text-2: #4a4640; /* v3.5 原 #5c5852（v3.3 原 #64605a）：浅色夜间壁纸调浓后压在上面也 ≥ 4.5 */
+  --text-3: #605b54;  /* 次要信息：对底色、对壁纸 ≥ 3:1（v3.5 原 #7a746c，v3.3 原 #857f77） */
   --accent: #111111;  /* 白字压上去 ≥ 4.5:1 */
   --accent-soft: #edebe7;
   --on-accent: #ffffff;
@@ -22,8 +22,8 @@
 
   /* v3.3「流光」壁纸色表（= App theme/tokens.dart SkyTable.light，scripts/check-contrast.mjs 查两端同值 + 全天每 15 分钟 × 底色与三团柔光：--text / --text-2 ≥ 4.5、--text-3 ≥ 3）：
      四个时段 × 竖向底色 top→bottom + 三团柔光 a（左上）b（右中）c（底部）。lib/sky.ts 按钟点在相邻时段间插值，写到 --sky-top/bottom/a/b/c，
-     画法在 styles/base.css .sky。浅色 = 学 Hark 浅色：顶部天蓝 → 中段淡 → 底部暖米色；夜里也是蓝 → 暖金（v3.5 照 Hark 浅色夜间截图，原是偏紫灰蓝；亮度守在次要字 4.5 线以上，所以比 Hark 浅）。 */
-  --sky-night-top: #b6d8f5; --sky-night-bottom: #e7d19f; --sky-night-a: #bdd7ee; --sky-night-b: #c1d8e1; --sky-night-c: #e3d3ac;
+     画法在 styles/base.css .sky。浅色 = 学 Hark 浅色：顶部天蓝 → 中段淡 → 底部暖米色；夜里也是钢蓝 → 中段发亮的浅青白（右中柔光）→ 底部暖金、正中一团奶油光（v3.5 照 Hark 浅色夜间截图，原是偏紫灰蓝；次要字同版压深一档换来更浓的天）。 */
+  --sky-night-top: #8ebbe3; --sky-night-bottom: #dcc58a; --sky-night-a: #86bcea; --sky-night-b: #c6dfe8; --sky-night-c: #efe4c4;
   --sky-dawn-top: #c0d1fd; --sky-dawn-bottom: #f1d9c6; --sky-dawn-a: #c6d1f2; --sky-dawn-b: #f7d7bf; --sky-dawn-c: #d8cde7;
   --sky-day-top: #add6fe; --sky-day-bottom: #e6dcc2; --sky-day-a: #b1d6f5; --sky-day-b: #f4eedf; --sky-day-c: #ebdbbf;
   --sky-dusk-top: #c5d0fb; --sky-dusk-bottom: #ebcdb6; --sky-dusk-a: #d2cdf7; --sky-dusk-b: #f3d2b4; --sky-dusk-c: #d8cde5;

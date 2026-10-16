@@ -1,5 +1,6 @@
 // v0.50：子页面统一外框 SubPage（壁纸 + 玻璃标题栏）、卡片/分组列表换成玻璃材质、下拉刷新让位。
 import 'package:assistant/theme/app_theme.dart';
+import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/glass.dart';
 import 'package:assistant/ui/kit.dart';
 import 'package:assistant/ui/sub_page.dart';
@@ -30,7 +31,7 @@ Widget _page() => SubPage(
     );
 
 void main() {
-  testWidgets('子页面：壁纸 + 玻璃标题栏（模糊），内容让出标题栏高度、从它下面滚过', (tester) async {
+  testWidgets('子页面：壁纸 + 悬浮玻璃标题胶囊（模糊，v3.5 = 一级页顶栏位置），内容让出同一条让位线、从它下面滚过', (tester) async {
     await tester.pumpWidget(_app(_page()));
     await tester.pumpAndSettle();
     expect(find.byType(Backdrop), findsOneWidget);
@@ -38,7 +39,16 @@ void main() {
     expect(find.descendant(of: find.byType(GlassAppBar), matching: find.byType(BackdropFilter)), findsOneWidget);
     expect(find.text('记忆'), findsOneWidget);
     expect(find.byTooltip('新增'), findsOneWidget);
-    expect(_bodyTop, greaterThanOrEqualTo(kToolbarHeight)); // extendBodyBehindAppBar：让位线 = 标题栏底
+    expect(_bodyTop, Layout.shellTop); // extendBodyBehindAppBar：让位线 = 一级页同一条（测试里状态栏为 0）
+    // 胶囊：离顶 topBarTop、左右 gutter、高 topBar、全圆角玻璃面（和一级页顶栏同一个 GlassSurface）
+    final pill = tester.getRect(find.descendant(of: find.byType(GlassAppBar), matching: find.byType(GlassSurface)));
+    final w = tester.getSize(find.byType(Scaffold)).width;
+    expect(pill, Rect.fromLTWH(Layout.gutter, Layout.topBarTop, w - 2 * Layout.gutter, Layout.topBar));
+    expect(tester.widget<GlassSurface>(find.descendant(of: find.byType(GlassAppBar), matching: find.byType(GlassSurface))).radius, Radii.full);
+    // 胶囊四周露出的内容由渐隐带盖住（ShellPage 同参数）
+    final fade = tester.widget<BackdropFade>(find.byType(BackdropFade));
+    expect(fade.clear, BackdropFade.clearOf(0, 0));
+    expect(fade.solid, BackdropFade.solidOf(Layout.shellTop));
     final refresh = tester.widget<RefreshIndicator>(find.byType(RefreshIndicator));
     expect(refresh.edgeOffset, _bodyTop); // 转圈从标题栏下面出来
     expect(find.byType(ListGroup), findsOneWidget); // 分组只有 ListGroup 一种实现（v2.97 E1）

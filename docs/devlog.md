@@ -437,3 +437,19 @@ top #b6d8f5（钢蓝，Hark 顶部色相）· bottom #e7d19f（暖金，Hark 22:
 dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 过渡自然从蓝金过到现有黎明色）。
 **成本**：只换常量，零运行时成本。验证：配色守门（全天采样）、App sky_test、截图浅色夜间（App + Web）。
 **结果**：配色守门全天采样通过（浅色次要字最差仍 4.63、最次要字 3.03，最差点不在夜间）；npm test 14/14；App sky_test 19/19（沙盒跑 flutter test 要 NO_PROXY=127.0.0.1,localhost，否则测试监听的 websocket 走代理 404）。截图：Web `shots.py … sky` 浅色夜间 手机 / 桌面 × 主页 / 项目 / 聊天 / 我的；App app_shots_test 以 TZ=Etc/GMT-14（本地 02:00）出图，两端都是上钢蓝 → 中浅青灰 → 下暖金，和 Hark 22:20 / 23:02 走向一致，只是顶部浅（守门线）。
+
+## 2026-10-16 v3.5 App 子页标题栏 → 悬浮玻璃胶囊（HANDOFF 第二节第 21 条①，照 Hark；先写决定再改）
+**现状**：Web 子页 `.page-head` 早就是悬浮胶囊（离窗口上沿 topbar-top、左右 gutter、高 topbar-h、圆角 full、glass + chrome-edge 发丝边 + elev-float 投影 + 毛玻璃，sticky），滚上去的内容由 v3.4 的 SkyFade 渐隐带盖住。App `ui/sub_page.dart GlassAppBar` 还是贴边整条栏（状态栏 + 56 高、整宽毛玻璃、底部发丝线）。Hark 项目页标题也是导航下方一颗悬浮小胶囊，内容从胶囊四周露出来的地方被壁纸渐隐。
+**决定（替换不叠加，只改 sub_page.dart，20 个 SubPage 调用方不动）**
+1. `GlassAppBar` = 一颗悬浮胶囊：位置 / 尺寸照一级页顶栏（状态栏下 Layout.topBarTop、左右 Layout.gutter + 安全区、高 Layout.topBar），面 = 顶栏同一个 `GlassSurface(blur: true, radius: full)`（玻璃、chromeEdge、高光、floatShadow，减少透明度时实色）；里面还是 AppBar（primary: false、toolbarHeight = Layout.topBar，返回 / 标题 / actions 不变）。删掉整宽 BackdropFilter 和底部发丝线。
+2. 让位：preferredSize = Layout.shellTop（= 一级页 inset，内容让位线两种页面同一条）。
+3. 胶囊四周会露出滚上去的内容 → SubPage 在 body 上叠一条 `BackdropFade`（ShellPage 同参数：clear = 状态栏 + 胶囊中线，solid = 让位线 + topFadeRamp），不新建组件。
+**成本**：毛玻璃面积从整宽 (状态栏+56)×屏宽 变成 52×(屏宽−48) 的胶囊，取背景仍是 BlurGroup 一次；新增一条和一级页同样的 SkyLayer 渐隐带（一级页已在用，帧测里 backdropLayers 不变）。验证：sub_page_test 改断言、全量 flutter test、App 截图（我的子页 / 项目聊天）、perf_frame_test。
+
+## 2026-10-16 v3.5 浅色夜间第二版：调浓 + 次要字压深一档（用户 20:05“还行吧”、20:06“你想想吧，反正就是要有美感！”= 交给我定，以美感优先；HANDOFF 第二节第 22 条）
+**问题**：第一版（fb3f9a6）色相对了但整体太淡：亮度被次要字 #5c5852 的 4.5 线卡在 ≥0.62，比 Hark（顶 0.14）淡得多；直接调浓的中段蓝 + 金在 sRGB 插值里混成橄榄灰，发脏。
+**决定（两全，不放松守门）**
+1. 浅色 --text-2 #5c5852 → #4a4640、--text-3 #7a746c → #605b54（两端同值）：壁纸可用亮度下限从 0.62 降到 ≈0.45。和正文 #111 的层级差从 2.66 变 2.02，截图看次要字仍明显次一级；在卡片上更清楚。
+2. 浅色 night：top #8ebbe3（钢蓝，Hark 色相）· a #86bcea（左上更深的蓝团）· b #c6dfe8（右中一团发亮的浅青白——Hark 中段那片亮光，也负责把蓝金之间的橄榄灰冲掉）· c #efe4c4（底部正中奶油光）· bottom #dcc58a（暖金，四角）。
+3. 流光（三团柔光漂移、按钟点插值）不动，只换常量。
+**过程**：第二版先试 b #92bdd0 / c #e3c88a，和 Hark 并排看中段发灰绿 → 改成上面这组，中段变成发亮的浅青白、底部奶油光 + 金边，与 Hark 23:02 走向一致（Hark 顶部还更深，那是守门线以下，不取）。

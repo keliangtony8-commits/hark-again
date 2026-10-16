@@ -29,7 +29,7 @@ Widget _glass(String label) => GlassSurface(blur: true, child: SizedBox(width: 6
 void main() {
   test('有标题行：标题底边以上全被壁纸盖住，让位线以下全显', () {
     const top = 24.0;
-    final clear = ShellPage.fadeClearOf(top, Layout.chatTitle);
+    final clear = BackdropFade.clearOf(top, Layout.chatTitle);
     final headerBottom = top + Layout.topBarTop + Layout.topBar + Sp.x2 + Layout.chatTitle;
     final inset = top + Layout.shellTop + Layout.chatTitle + Sp.x2;
     expect(clear, greaterThanOrEqualTo(headerBottom));
@@ -38,14 +38,14 @@ void main() {
 
   test('没有标题行：盖到顶栏中线，让位线以下全显', () {
     const top = 24.0;
-    final clear = ShellPage.fadeClearOf(top, 0);
+    final clear = BackdropFade.clearOf(top, 0);
     expect(clear, greaterThan(top + Layout.topBarTop));
     expect(clear, lessThan(top + Layout.shellTop));
   });
 
   test('让位线下再缓入渐显一段（不切硬边），且不超过聊天列表顶部留白；渐隐条的 α 与原遮罩互补', () {
     const inset = 100.0;
-    final solid = ShellPage.fadeSolidOf(inset);
+    final solid = BackdropFade.solidOf(inset);
     expect(solid, inset + Layout.topFadeRamp);
     expect(Layout.topFadeRamp, lessThanOrEqualTo(Sp.x4));
     const clear = 60.0;
@@ -79,7 +79,7 @@ void main() {
     expect(fade, findsOneWidget);
     expect(find.descendant(of: fade, matching: find.byType(SkyLayer)), findsOneWidget);
     final f = tester.widget<BackdropFade>(fade);
-    expect(f.clear, ShellPage.fadeClearOf(0, Layout.chatTitle));
+    expect(f.clear, BackdropFade.clearOf(0, Layout.chatTitle));
     expect(tester.getRect(fade), Rect.fromLTWH(0, 0, tester.view.physicalSize.width, f.solid)); // 从屏幕顶到全显那一行
 
     // 绘制顺序 = 元素顺序：内容 → 渐隐条 → 左侧按钮 → 标题
