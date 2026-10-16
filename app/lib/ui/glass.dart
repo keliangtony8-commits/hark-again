@@ -79,8 +79,11 @@ List<BoxShadow> floatShadow(Palette p) =>
     [BoxShadow(color: p.shadow.withValues(alpha: p.shadow.a * Elevation.floatAlpha), blurRadius: Elevation.floatBlur, offset: const Offset(0, Elevation.floatY))];
 
 class Backdrop extends StatelessWidget {
-  const Backdrop({super.key, this.child});
+  const Backdrop({super.key, this.child, this.coverable = false});
   final Widget? child;
+
+  /// 外壳那层（app_shell.dart）：被外壳分支里的不透明子页完全盖住时暂停（ui/sky.dart SkyCoverScope / SkyCover）。
+  final bool coverable;
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +91,7 @@ class Backdrop extends StatelessWidget {
     final body = child ?? const SizedBox.expand();
     if (GlassMode.solidOf(context)) return ColoredBox(color: p.bg, child: body);
     // v3.3 流光壁纸（ui/sky.dart）：自身是重绘边界，只有这一层随 SkyClock 重画
-    return Stack(fit: StackFit.passthrough, children: [const Positioned.fill(child: SkyLayer()), body]);
+    return Stack(fit: StackFit.passthrough, children: [Positioned.fill(child: SkyLayer(coverable: coverable)), body]);
   }
 }
 

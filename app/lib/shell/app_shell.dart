@@ -14,6 +14,7 @@ import '../features/home/inbox.dart';
 import '../theme/look.dart';
 import '../ui/glass.dart';
 import '../ui/motion.dart';
+import '../ui/sky.dart';
 import 'top_bar.dart';
 
 /// 一级页面的路径，顺序 = 分支顺序 = 顶栏分段顺序。
@@ -57,8 +58,10 @@ class AppShell extends ConsumerWidget {
       // 横幅在组外：它盖在顶栏上，要模糊的正是顶栏。
       body: InboxWatcher(
           child: BlurGroup(
-              child: Stack(children: [
-        const Positioned.fill(child: Backdrop()),
+              child: SkyCoverScope(
+                  child: Stack(children: [
+        // 外壳壁纸：分支里的不透明子页（SubPage）进场完成后完全盖住它 → 暂停，返回一开始就恢复（ui/sky.dart SkyCover）
+        const Positioned.fill(child: Backdrop(coverable: true)),
         Positioned.fill(child: shell),
         Positioned(
           top: 0,
@@ -77,7 +80,7 @@ class AppShell extends ConsumerWidget {
             ),
           ),
         ),
-      ]))),
+      ])))),
     );
   }
 }

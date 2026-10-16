@@ -906,6 +906,10 @@ class SkyClock with WidgetsBindingObserver {
   @visibleForTesting
   Duration? get period => _period;
 
+  /// 当前订阅者个数（动画 + 静止）。
+  @visibleForTesting
+  int get subscribers => _animators + _still;
+
   static double _nowHour() {
     final n = DateTime.now();
     return n.hour + n.minute / 60 + n.second / 3600;

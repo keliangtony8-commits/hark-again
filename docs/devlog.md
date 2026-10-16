@@ -368,3 +368,18 @@
   - 发现（未改，不在本块范围）：子页面（SubPage）自带一层 Backdrop，在外壳分支里打开时，外壳的那层壁纸仍在底下每 33ms 重画（被完全盖住）。可以让 SubPage 在外壳里不再画自己的壁纸、或外壳在子页时停掉壁纸，需要连同 FloatAway / 转场一起定。
 - 结果：flutter analyze 0；全量 flutter test **729 过 / 8 跳过 / 0 失败**（新增 perf_frame_test 3 例；shell_page_test 改为 7 例：渐隐条位置 / 绘制顺序 / 不挡点击 / 减少透明度实色 / 分组与盖层 / 转场另成一组）。
 - 参考：Flutter API 文档与源码 `BackdropGroup`、`BackdropFilter.grouped`（packages/flutter/lib/src/widgets/basic.dart，3.47.7）；Impeller `Canvas::SaveLayer` 的 backdrop_id / `FirstPassDispatcher::saveLayer`（engine/src/flutter/impeller/display_list/canvas.cc、dl_dispatcher.cc：同 id 计数、第一个取背景并缓存、滤镜全同则整张只模糊一次）；Flutter 官方视频 “BackdropFilter” 与 docs “Performance best practices”（saveLayer / ShaderMask 离屏代价）；flutter_markdown_plus 1.0.12 `MarkdownWidget.didUpdateWidget`（样式表 != 才重新解析）。
+
+## 2026-10-16 v3.3 B4：被不透明子页盖住时外壳壁纸暂停（App + Web）
+- 问题（B3 留下的发现）：App 外壳分支里打开 SubPage（项目档案 /projects/:id/brief、项目电脑 /projects/:id/computer）时，SubPage 自带一层 Backdrop 壁纸，把外壳底下那层 SkyLayer 完全盖住；但外壳那层的画笔 `repaint` 直接挂在共享的 `SkyClock.time` 上，只要还有任何一层在动（正是子页那层），它就每 33ms 重录一次。B1 的“TickerMode 关就不订阅”只管了 Timer 档位，没管画笔监听，所以被盖住的层照样重画。
+- 决定（语义照 Flutter 自己的 `TransitionRoute.opaque`：“不透明路由的进场转场完成后，下面的路由不再构建”）：
+  1. `SkyLayer` 不驱动（TickerMode 关）时**画笔不再监听 time / hour**（只留着色器加载完成那一下）；恢复驱动时强制重画一次，直接取共享时钟的当前 time / hour——暂停期间时钟照常走（子页那层在驱动它），所以恢复那一帧就是此刻的天色和柔光位置，和刚才子页上看到的完全一致，不跳色、不闪。
+  2. `Backdrop(coverable: true)`（只有 AppShell 用）向下提供一个“盖住计数”；`SubPage` 在自己的路由 `ModalRoute.of(context)` 满足 `opaque && animation.status == completed` 且自己在台上（TickerMode 开：不在后台分支、没被上面的页面盖成 offstage）时报“盖住”，否则撤销。外壳壁纸外包 `TickerMode(enabled: 计数 == 0)`。
+     - 转场中（push 进行中、pop / 返回手势一开始 status 就离开 completed）照常显示和动；pop 的第一帧之前就已恢复。
+     - 切到别的 Tab：那个分支整体 TickerMode 关 → 子页撤销，外壳壁纸立刻恢复（新 Tab 的一级页面要用它）。
+     - “我的”及其子页走根导航器，不是外壳的后代，找不到计数 → 不参与（外壳整条路由在 Overlay 里 offstage，本来就不画）。
+  3. 顶栏 FloatAway 的判定（shellBarShown）一字不改，淡出时机不变；不删任何效果。
+- 替换了什么：SkyLayer 画笔“永远挂 time”的写法删掉，改成按驱动档挂；没有新增第二套暂停机制（TickerMode 仍是唯一开关，计数只决定外壳那一个 TickerMode）。
+- 成本：子页静止时少一整屏着色器重录（每 33ms 一次）+ 外壳 BlurGroup 里顶栏那块的重新取背景；新增一个 InheritedWidget + 每个 SubPage 一个路由状态监听，可忽略。
+- Web：只有一层全局 `.sky`（main.tsx），子页面是透明的、透出的就是这层，**子页不会盖住壁纸，不存在这份浪费**。真正整屏不透明盖住壁纸的是“云浏览器接管页”（.takeover，--card 实色）和“看大图”（.image-viewer，--bg 实色）：进场动画结束后根上挂 `data-sky-covered`，`.sky`（含顶部渐隐条里的副本）`content-visibility: hidden` 跳过柔光渲染；关掉时在同一次提交里撤掉。选 content-visibility 而不是 animation-play-state：paused 会冻住动画本地时间并在恢复时改写 startTime，顶部渐隐条副本靠 startTime=0 与全屏层逐像素对齐（syncSky），会错位；content-visibility 跳过期间不推进本地时间但 startTime 不动，恢复时按文档时间线算出“此刻”的位置，和 App 的“恢复取当前时刻”一致。
+- 参考：Flutter API `TransitionRoute.opaque`（“When an opaque route's entrance transition is complete, the routes behind the opaque route will not be built”）、`ModalRoute.of`、`TickerMode.valuesOf`、Overlay 对 offstage 条目包 `TickerMode(enabled: false)`（packages/flutter/lib/src/widgets/overlay.dart）；go_router 18.1 StatefulNavigationShell 非当前分支 `Offstage + TickerMode(enabled: isActive)`（lib/src/route.dart）；CSSWG #5611 决议 + MDN content-visibility（跳过的子树里 CSS 动画不推进、可见后恢复），WPT content-visibility-animation-becomes-visible.html。
+- 结果（2026-10-16）：flutter analyze 0；全量 flutter test **732 过 / 8 跳过 / 0 失败**（新增 sky_test 2 例、shell_test 1 例）；web `npm run build` 过、`npm test` 14/14（新增 coverSky 计数 1 例）；后端 smoke **202/202**（不含 smoke_stepfun）。未做：浏览器实看浮层关闭那一帧（沙盒无 Chromium）、真机看返回无闪。

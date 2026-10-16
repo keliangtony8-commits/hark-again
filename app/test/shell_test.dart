@@ -1,11 +1,14 @@
 // 设计 v2 外壳：浮动顶栏只在一级页面出现，进子页面淡出；头像进入“我的”（盖在外壳上，返回回到原处）；
 // 深链直接落在 /me/… 时，“我的”的返回去主页而不是退出 App；一级页面的上下文按钮各就各位。
+import 'dart:async';
+
 import 'package:assistant/app.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/shell/top_bar.dart';
 import 'package:assistant/ui/motion.dart';
+import 'package:assistant/ui/sky.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -133,5 +136,47 @@ void main() {
     await _settle(tester);
     expect(router.state.uri.path, '/home');
     expect(_barShown(tester), isTrue);
+  });
+
+  testWidgets('v3.3 B4：外壳分支里打开子页（自带不透明壁纸）→ 外壳壁纸暂停、不重绘；返回一开始 / 切 Tab 就恢复，顶栏时机不变', (tester) async {
+    final router = await _pump(tester);
+    final shellSky = find.byWidgetPredicate((w) => w is SkyLayer && w.coverable);
+    bool driving() => tester.state<SkyLayerState>(shellSky).driving;
+    RenderObject paint() => tester.renderObject(find.descendant(of: shellSky, matching: find.byType(CustomPaint)));
+    bool repaintsOnTick() {
+      SkyClock.instance.time.value += 0.033; // 共享时钟走一格（子页那层仍在驱动它）
+      return paint().debugNeedsPaint;
+    }
+
+    router.go('/projects/p1');
+    await _settle(tester);
+    expect(driving(), isTrue);
+    await tester.pump();
+    expect(repaintsOnTick(), isTrue, reason: '一级页面 / 项目页：外壳壁纸就是看到的那层');
+
+    unawaited(router.push('/projects/p1/brief'));
+    await _settle(tester);
+    expect(_barShown(tester), isFalse);
+    expect(driving(), isFalse, reason: '子页进场完成、完全盖住：外壳那层退订 SkyClock');
+    await tester.pump();
+    expect(repaintsOnTick(), isFalse, reason: '时钟仍在走（子页那层在驱动），但外壳那层不重画');
+
+    router.go('/home'); // 切 Tab：项目分支（连同子页）进后台，主页要用外壳壁纸
+    await _settle(tester);
+    expect(driving(), isTrue);
+    router.go('/projects/p1/brief');
+    await _settle(tester);
+    expect(driving(), isFalse);
+
+    router.pop();
+    await tester.pump(); // pop 的第一帧：已恢复，且这一帧就按此刻重画
+    expect(driving(), isTrue, reason: '返回一开始就恢复，不等转场结束');
+    await _settle(tester);
+    expect(router.state.uri.path, '/projects/p1');
+    expect(_barShown(tester), isTrue);
+    expect(driving(), isTrue);
+    await tester.pump();
+    expect(repaintsOnTick(), isTrue);
+    expect(tester.takeException(), isNull);
   });
 }

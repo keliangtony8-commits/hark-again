@@ -102,6 +102,8 @@ a { color: var(--accent); text-decoration: none; }
 /* 减少透明度：壁纸换成实色、不画柔光（= App Backdrop solid → ColoredBox(p.bg)） */
 :root[data-solid] .sky { background: var(--bg); }
 :root[data-solid] .sky-blob { display: none; }
+/* 整屏不透明浮层盖住时（lib/sky.ts coverSky → <html data-sky-covered>）：跳过壁纸内容渲染，柔光不再合成；撤销后按文档时间线回到此刻，无跳变 */
+:root[data-sky-covered] .sky { content-visibility: hidden; }
 /* 减少动态：柔光静止在原位（颜色仍按钟点变，一分钟一次，看不出动） */
 @media (prefers-reduced-motion: reduce) { .sky-blob, .sky-blob > i { animation: none !important; } }
 

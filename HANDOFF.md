@@ -1,12 +1,14 @@
-# Toyuis 交接文档（2026-10-15，v3.0.2）
+# Toyuis 交接文档（2026-10-16，v3.3.0）
 
 > **给每个接手的 agent**：先读第二节宗旨（1–17 条）。用户在对话里说出的任何纲领性要求，当轮用明确、不会被误解的话（不必照抄原话）带日期补进第二节，这是硬规矩（见第 16 条）。
 
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
-## 〇、最新交接（2026-10-16 16:05，接手先读这一节）
-**线上 = v3.2.1（服务器 + APK 已发）。下面的 v3.3 工作全部未测试、未提交到 main，放在分支 `wip/v3.3`。不要部署，不要覆盖 v3.2.1。**
+## 〇、最新交接（2026-10-16 17:50，接手先读这一节）
+**v3.3.0 已发版：合并进 main、tag v3.3、已 push（下面 A/B 全部完成，全量校验见 B 末尾）。服务器仍是 v3.2.1，未部署（用户明确说“更新服务器”才部署）。**
+- 未验证：真机 profile 光栅耗时、真机/浏览器上看新浅色壁纸与返回/浮层关闭那一帧；这些等用户真机验收时一起看。
+- 下一步：按第五节继续下一项。
 
 ### A. 已完成且测试通过（可直接保留）
 1. 项目列表按 Hark：名字占满整行最多 3 行、状态胶囊另起一行；删页头摘要 / 列表 emoji / App 行尾 ⋯（改长按菜单）；Web ⋯ 在胶囊行右端。文件：app/lib/features/projects/projects_screen.dart、test/projects_screen_test.dart、frontend/src/features/projects/ProjectsScreen.tsx、projects.css。
@@ -33,13 +35,19 @@
    - **⚠ 发现（未改，需定）**：浅色壁纸上 `--text-2`（#64605a）只有 1.60–1.95:1（对顶色）/ 3.51–4.60:1（对底色），`--text-3` 更低；截图里“安全”页页头说明、分区标题直接压在壁纸上明显发灰看不清。App 同一张表同样如此（sky_test 只测正文）。两端要一起改：要么浅色 SkyTable 顶色提亮，要么壁纸上的次要字改用 --text。
 3. **卡顿根因（用户：16GB 手机也卡；不准删功能/效果）**
    - **App 已完成（2026-10-16，未提交；决定 + 测量见 devlog「v3.3 B3 App」）**：①毛玻璃分组 `BlurGroup`（glass.dart；BackdropGroup + 固定 key）开在 AppShell（顶栏 + 一级页面左侧按钮 / header，横幅在组外）、ShellPage 内容、SubPage、云浏览器接管页；GlassSurface / 子页标题栏改 `BackdropFilter.grouped`；弹层 / 对话框 / 磨砂遮罩仍独立；“我的”页不分组（返回钮在滚动列表里，规则见 glass.dart 文件头）。读引擎源码确认语义：组里第一个画到的取背景，所以排了绘制顺序（ShellPage 内容→渐隐条→左侧按钮→header；输入胶囊永远先画：底条 Column verticalDirection.up、输入行 rtl，布局不变），转场中 / 上面压着路由 / 主聊天抽屉露出时 ShellPage 的按钮另成一组。②kit.dart TopFade 删除 → ShellPage 顶部 `BackdropFade`（玻璃 = SkyLayer(fade)，减少透明度 = 实色 bg），shell_page_test 重写 7 例。③ChatView 行缓存（同一 Message 实例 + 同一组行状态 → 同一个 widget 实例）。④AppMarkdown 样式表按 ThemeData + 减少透明度缓存。⑤新 test/perf_frame_test.dart：改前→改后 聊天流式其他行重建 305→0、每帧重建元素 695→362、CPU 每帧 ~32→~22ms；一级页滚动 每帧元素 440→100、CPU 15.5→6.5ms；取背景次数 聊天 / 主页 3→2、项目列表 2→1；整页 ShaderMask 1→0。flutter analyze 0，全量 729 过 / 8 跳过 / 0 失败。
-   - App 未做：真机 profile 光栅耗时（沙盒无设备）；发现 SubPage 在外壳分支里时外壳壁纸仍在底下每 33ms 重画（被盖住），见 devlog，待定。
+   - App 未做：真机 profile 光栅耗时（沙盒无设备）。
+   - **B4 外壳壁纸被子页盖住时暂停：已完成（2026-10-16，未提交；决定见 devlog「v3.3 B4」）**。App：SkyLayer 不驱动时画笔不再听共享时钟（原来只退订 Timer、画笔仍挂在 time 上，被盖住照样每 33ms 重画）；ui/sky.dart 新 `SkyCoverScope`（AppShell 最外层）+ `SkyCover`（SubPage 包一层）：本页路由 opaque && 进场 completed && 在台上 → 外壳那层（`Backdrop(coverable: true)`）暂停；转场中 / pop 一开始 / 切 Tab 立刻恢复，恢复那一帧直接取时钟此刻（暂停期间子页那层在驱动时钟，不跳色）。顶栏 FloatAway 判定没动。测试：sky_test +2（转场中照常、完成后外壳订阅数 1→0 且时钟走也不重绘、pop 第一帧恢复并重画、叠两层子页 / 半透明路由 / 无 Scope）、shell_test +1（真路由 /projects/p1/brief：暂停、切到主页恢复、回来再暂停、pop 第一帧恢复）。Web：只有一层全局 .sky，子页透明、不盖壁纸（无此浪费）；真正整屏实色盖住的是云浏览器接管页和看大图 → 进场动画结束后 `<html data-sky-covered>`，`.sky { content-visibility: hidden }`（不用 animation-play-state：会改写 startTime 让渐隐条副本错位），卸载同一次提交撤销；`lib/sky.ts coverSky` + `ui/Sky.tsx useSkyCover`，tests/sky.test.ts +1。未做：没有浏览器（沙盒无 Chromium/Playwright）实看撤销那一帧；真机看返回无闪。
    - 约 9 处独立 BackdropFilter（top_bar、GlassIconButton、composer、project_switcher、chat_view JumpLatest/ErrorBar、inbox、me 搜索、browser_takeover、sub_page 标题）每帧各自模糊 → 用 BackdropGroup + BackdropFilter.grouped。注意：同组只在第一个滤镜处取一次背景，所以分组放三处：AppShell（横幅不进组）、ShellPage 内容、SubPage；ShellPage 绘制顺序 内容→顶部渐隐条→header→lead。
    - kit.dart TopFade = 整页 ShaderMask(dstIn) 离屏层 → 删掉，改为 ShellPage 顶部一条 SkyLayer(fade: (clear, solid))（sky.dart 已支持 fade 参数），改 test/shell_page_test.dart。
    - chat_view.dart 流式时整列重建 → 按 Message 实例 + 行状态缓存行 widget（ChatController 只替换最后一条，其余实例不变）。
    - Markdown：AppMarkdown 每次 build 新建 MarkdownStyleSheet → 缓存。
    - Web：shell.css 6-15 `.page` 与 chat.css:90 `.thread` 的 mask-image 让整个滚动区离屏 → 改顶部窄条。**Web 已完成（2026-10-16，未提交）**：两处去掉整区 mask，换成 `ui/Sky.tsx SkyFade`（一条渐隐带高的壁纸副本，按视口位置反向偏移，漂移动画 startTime 对齐；窄条自己的 mask = 原遮罩反过来），滚动区加 isolation 保持层叠。实测：隐藏内容后有/无窄条逐像素最大差 1/255（浅/深 × 桌面/手机 × 页面/聊天）。4× CPU 无头 Chromium 下新旧都 60fps，软件渲染看不出差别；真 GPU 的 Chrome trace 未做。
    - 完成后：Flutter profile/frame timing，Web Chrome 4× CPU trace。
+
+### B'. 全量校验（2026-10-16 B4 之后，工作区含 B1–B4 全部改动，未提交）
+- app：`flutter analyze` 0 问题；全量 `flutter test` **732 过 / 8 跳过 / 0 失败**。
+- frontend：`npm run build`（check-arch + check-contrast + tsc -b + vite）通过；`npm test` **14/14**。
+- 后端：backend/.venv 逐个跑 tests/smoke_*.py：**202/202 过**（共 203 个，跳过需真密钥的 smoke_stepfun；smoke_preview_ws 本次一次过）。
 
 ### C. 发布步骤（全部通过后）
 VERSION → 3.3.0，`python3 brand/sync.py`，CHANGELOG 加一节（含“删除/合并”行），合并到 main，tag v3.3，GitHub Actions 出 APK。服务器只有用户明确说“更新服务器”才部署；部署前删除服务器上 tag 里不存在的旧源码文件（见第二节第 17 条 / work/vps/README.md）。

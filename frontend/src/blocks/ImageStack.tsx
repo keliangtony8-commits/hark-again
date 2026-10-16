@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ImagesBlock as I } from "../lib/types";
 import { IconArrowUpRight, IconClose, IconImageOff } from "../ui/icons";
+import { useSkyCover } from "../ui/Sky";
 
 // 图片一摞（v2.99 E4 ImageStack，= App blocks/image_stack.dart）：一个图片块（后端 show_images 一次的结果）= 一摞。
 // 单张：4:3 铺满；多张：最上面一张 4:3，后面最多露两层（向右下错开 + 交替轻转 + 一层底色薄纱），右下角“N 张”。
@@ -50,6 +51,7 @@ function Img({ url, alt = "" }: { url: string; alt?: string }) {
 function ImageViewer({ items, onClose }: { items: Item[]; onClose: () => void }) {
   const track = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
+  useSkyCover(box); // 整屏实色 --bg：进场完成后壁纸柔光停渲染（v3.3 B4）
   const [at, setAt] = useState(0);
   const n = items.length;
   const go = (i: number) => {

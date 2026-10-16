@@ -1,5 +1,6 @@
 // v3.3 流光壁纸：关键帧插值、浅 / 深两套正文与次要字 text2 对壁纸任意一处 ≥ 4.5、最次要字 text3 ≥ 3（v3.3 B2）、SkyClock 单 Timer（测试环境不起、无订阅 / 后台停、
 // 减少动态只换天色不漂移）、着色器加载不了时回退竖向渐变。
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -185,6 +186,81 @@ void main() {
       await tester.pumpWidget(_host(const SkyLayer()));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(_host(const SizedBox(height: 80, child: SkyLayer(fade: (40, 80)))));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('被不透明子页盖住时暂停（v3.3 B4）', () {
+    // 外壳 = SkyCoverScope + 一层 coverable 壁纸（独立时钟，便于数订阅）+ 导航器；子页 = SubPage 同款 SkyCover + Backdrop。
+    Widget shell(SkyClock c, GlobalKey<NavigatorState> nav) => _host(SkyCoverScope(
+          child: Stack(children: [
+            Positioned.fill(child: SkyLayer(coverable: true, clock: c)),
+            Navigator(key: nav, onGenerateRoute: (_) => PageRouteBuilder<void>(opaque: false, pageBuilder: (_, _, _) => const SizedBox.expand())),
+          ]),
+        ));
+    Route<void> sub() => MaterialPageRoute<void>(builder: (_) => const SkyCover(child: Backdrop(child: Text('子页'))));
+    RenderObject paintOf(WidgetTester t) => t.renderObject(find.descendant(of: find.byWidgetPredicate((w) => w is SkyLayer && w.coverable), matching: find.byType(CustomPaint)));
+
+    testWidgets('进场转场中照常；完成后外壳订阅数归零、时钟走也不重画；返回第一帧就恢复并重画；全程无异常', (tester) async {
+      final c = SkyClock.forTest(frozen: true); // 不起 Timer，只数订阅
+      final nav = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(shell(c, nav));
+      expect(c.subscribers, 1);
+
+      unawaited(nav.currentState!.push(sub()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100)); // 转场中：子页还没完全盖住
+      expect(c.subscribers, 1, reason: '转场中外壳壁纸必须照常显示和流动');
+      c.time.value += 0.1;
+      expect(paintOf(tester).debugNeedsPaint, isTrue);
+
+      await tester.pumpAndSettle();
+      expect(c.subscribers, 0, reason: '进场完成、被不透明子页完全盖住：外壳退订');
+      await tester.pump();
+      c.time.value += 0.1;
+      c.hour.value += 0.5;
+      expect(paintOf(tester).debugNeedsPaint, isFalse, reason: '暂停期间时钟照走，外壳那层不重画');
+
+      nav.currentState!.pop();
+      expect(c.subscribers, 1, reason: 'pop 一开始（status 离开 completed）就恢复，先于第一帧转场');
+      expect(paintOf(tester).debugNeedsPaint, isTrue, reason: '恢复时重画一次，直接取时钟此刻的天色和柔光位置');
+      await tester.pumpAndSettle();
+      expect(c.subscribers, 1);
+      expect(find.text('子页'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('子页上再压一层子页、半透明路由、根导航器（无 Scope）都不出错；卸载后计数回零', (tester) async {
+      final c = SkyClock.forTest(frozen: true);
+      final nav = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(shell(c, nav));
+      unawaited(nav.currentState!.push(sub()));
+      await tester.pumpAndSettle();
+      unawaited(nav.currentState!.push(sub()));
+      await tester.pumpAndSettle();
+      expect(c.subscribers, 0, reason: '上面那层接着盖，下面那层 offstage 后撤销');
+      nav.currentState!.pop();
+      await tester.pump();
+      expect(c.subscribers, 0, reason: '下面那层子页回到台上，仍然盖住');
+      await tester.pumpAndSettle();
+      expect(c.subscribers, 0);
+
+      // 半透明（opaque: false）的路由盖不住：不暂停
+      unawaited(nav.currentState!.push(PageRouteBuilder<void>(opaque: false, pageBuilder: (_, _, _) => const SkyCover(child: SizedBox.expand()))));
+      await tester.pumpAndSettle();
+      expect(c.subscribers, 0, reason: '下面的不透明子页仍在台上');
+      nav.currentState!.pop();
+      await tester.pumpAndSettle();
+      nav.currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(c.subscribers, 1);
+
+      unawaited(nav.currentState!.push(PageRouteBuilder<void>(opaque: false, pageBuilder: (_, _, _) => const SkyCover(child: SizedBox.expand()))));
+      await tester.pumpAndSettle();
+      expect(c.subscribers, 1, reason: '半透明路由透得出外壳壁纸，不暂停');
+
+      await tester.pumpWidget(_host(const SkyCover(child: SizedBox()))); // 没有 Scope：什么也不做
+      expect(c.subscribers, 0);
       expect(tester.takeException(), isNull);
     });
   });

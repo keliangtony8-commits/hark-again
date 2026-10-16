@@ -6,6 +6,7 @@ import {
 } from "../lib/browserView";
 import type { BrowserBlock as T } from "../lib/types";
 import { IconBack, IconClose, IconRefresh, IconSend } from "../ui/icons";
+import { useSkyCover } from "../ui/Sky";
 import { HandoffBar } from "./HandoffBar";
 import { LiveScreen } from "./LiveScreen";
 
@@ -18,6 +19,8 @@ export default function BrowserTakeover({ block, live, onAnswer, onClose }: {
   block: T; live: BrowserLive; onAnswer?: (done: boolean) => boolean; onClose: () => void;
 }) {
   const stage = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  useSkyCover(root); // 整屏实色：进场完成后壁纸柔光停渲染（v3.3 B4）
   const [touched, setTouched] = useState(false);
   const [offline, setOffline] = useState(false);
   const [keys, setKeys] = useState("");
@@ -135,7 +138,7 @@ export default function BrowserTakeover({ block, live, onAnswer, onClose }: {
   const h = block.handoff ?? null;
   const line = h && h.state !== "pending" ? handoffStateLine(h) : "";
   return createPortal(
-    <div className="takeover" role="dialog" aria-modal="true" aria-label={`接管 ${block.site ?? "云浏览器"}`}>
+    <div ref={root} className="takeover" role="dialog" aria-modal="true" aria-label={`接管 ${block.site ?? "云浏览器"}`}>
       <div className="takeover-head">
         <button className="icon-btn" aria-label="关闭" title="关闭（Esc）" onClick={onClose}><IconClose /></button>
         <b className="takeover-site">{block.site ?? "云浏览器"}</b>

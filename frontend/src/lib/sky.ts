@@ -60,6 +60,21 @@ function paint() {
   for (const p of SKY_PARTS) root.style.setProperty(`--sky-${p}`, c[p]);
 }
 
+/** 整屏不透明浮层（云浏览器接管、看大图）盖住壁纸时的计数（v3.3 B4，= App ui/sky.dart SkyCover）：
+ *  计数 > 0 时 <html data-sky-covered>，base.css 让每层 .sky（含顶部渐隐条里的副本）content-visibility: hidden，跳过柔光渲染。
+ *  不用 animation-play-state: paused：它会冻住本地时间、恢复时改写 startTime，渐隐条副本靠 startTime = 0 与全屏层对齐（syncSky）会错位；
+ *  content-visibility 跳过期间 startTime 不动，恢复时按文档时间线直接到“此刻”的位置。返回撤销函数（只生效一次）。 */
+let skyCovers = 0;
+export function coverSky(root: { dataset: DOMStringMap } = document.documentElement): () => void {
+  if (skyCovers++ === 0) root.dataset.skyCovered = "";
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    if (--skyCovers === 0) delete root.dataset.skyCovered;
+  };
+}
+
 /** 让一层壁纸里的漂移动画对齐到同一个时间原点：全屏那层和顶部渐隐条里的副本逐像素重合（ui/Sky.tsx 挂载时调）。 */
 export function syncSky(el: Element) {
   for (const a of el.getAnimations({ subtree: true })) a.startTime = 0;

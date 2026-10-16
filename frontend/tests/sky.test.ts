@@ -77,3 +77,16 @@ for (const [name, th] of [["浅色", lightTheme], ["深色", darkTheme]] as cons
     }
   });
 }
+
+test("coverSky：整屏浮层盖住计数（v3.3 B4）——第一个挂上标记、最后一个撤掉才摘，撤销只生效一次", async () => {
+  const { coverSky } = await import("../src/lib/sky.ts");
+  const root = { dataset: {} as Record<string, string | undefined> } as { dataset: DOMStringMap };
+  const a = coverSky(root);
+  assert.equal(root.dataset.skyCovered, "");
+  const b = coverSky(root);
+  a();
+  a(); // 重复撤销不算数
+  assert.equal(root.dataset.skyCovered, "", "还有一层盖着");
+  b();
+  assert.equal("skyCovered" in root.dataset, false);
+});
