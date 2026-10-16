@@ -6,6 +6,9 @@
 // v3.0：底部一颗玻璃搜索胶囊 = 全 App 唯一的设置搜索（索引 me_index.dart；对话在历史抽屉里搜）。输入即筛：页头保留，
 //   下面换成结果（分区图标 + 标亮标题 + 所在位置），点了直达，带定位 id 的进页后滚到那一项闪一下（ui/kit.dart Spotlight）。
 //   胶囊放在 FloatingFooter 里：它量出胶囊实高交给 PageBody 留白，滚到底“退出登录”不会被挡住。
+// v3.3 视觉验收：顶部一条 BackdropFade（和一级页面 ShellPage 同一个组件）：状态栏以上全是壁纸，翻下去内容不进状态栏、不切硬边；
+//   再渐显 Layout.topFadeRamp（= 页头上留白），静止时页头正好在全显处。放在 FloatingFooter 的 behind 格 = 画在列表之后、搜索胶囊之前：
+//   “我的”不进 BlurGroup（返回钮在列表里，见 devlog「v3.3 B3」），胶囊和返回钮各自独立模糊；渐隐条只占顶部一截、不和胶囊重叠，胶囊取到的背景不变。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -61,6 +64,7 @@ class _MeScreenState extends ConsumerState<MeScreen> {
     // 通常是从头像 push 进来，返回即回去；深链（OAuth 回调）直接落在 /me/… 时栈底就是这里，返回改去主页而不是退出 App
     final root = ModalRoute.of(context)?.isFirst ?? false; // 按“本页在导航栈底”判断（context.canPop 看的是整个路由器，上面压着子页时也为真）
     final searching = _query.trim().isNotEmpty;
+    final top = MediaQuery.paddingOf(context).top;
     return PopScope(
       canPop: !root && !searching, // 搜着的时候返回键先清空搜索（= iOS 设置搜索的“取消”）
       onPopInvokedWithResult: (didPop, _) {
@@ -75,6 +79,16 @@ class _MeScreenState extends ConsumerState<MeScreen> {
         backgroundColor: Colors.transparent,
         body: Backdrop(
           child: FloatingFooter(
+            // 渐隐带：状态栏底边 → 页头静止时的顶边（_MeBody 的上留白 = Layout.topFadeRamp）
+            behind: Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                key: const Key('me-fade'),
+                width: double.infinity,
+                height: top + Layout.topFadeRamp,
+                child: BackdropFade(clear: top, solid: top + Layout.topFadeRamp),
+              ),
+            ),
             footer: _SearchBar(
               controller: _search,
               focusNode: _focus,
@@ -145,7 +159,8 @@ class _MeBody extends ConsumerWidget {
     final hits = searchMe(query);
     final searching = query.trim().isNotEmpty;
 
-    return PageBody(children: [
+    // 上留白 = 顶部渐隐带的高度（一级页面同一个 Layout.topFadeRamp）：静止时页头正好在全显处、一点不被盖
+    return PageBody(padding: const EdgeInsets.fromLTRB(Layout.gutter, Layout.topFadeRamp, Layout.gutter, Sp.x7), children: [
       // 页头一行：返回钮 + 名字/域名（不再单独占一行返回钮 + 一行页名，整页省出一屏）
       FadeSlideIn(
         child: Row(children: [

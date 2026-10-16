@@ -14,6 +14,7 @@ subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=root, c
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from app import conversation_title, live_turns, llm
 from app.agent import loop
 from app.auth import issue_token
 from app.db import SessionLocal
@@ -33,6 +34,15 @@ async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     await asyncio.sleep(3600)
     yield Turn(text="")
 loop.stream_turn = fake_stream_turn
+async def offline_complete(messages, **kw):  # 后台起标题也走假的：不出网（真连 http://x 经代理，快慢不定）
+    raise RuntimeError("offline")
+llm.complete = offline_complete
+
+async def settle():
+    """在 ws 会话自己的事件循环里等这几轮的收尾和后台起标题做完：会话一退出 TestClient 就掐掉这个循环，
+    停在 SQLite 语句中间的后台任务会把读锁一直占着（下一段写库要等满 5 秒 busy timeout）。"""
+    await live_turns.drain()
+    await conversation_title.drain()
 
 app = FastAPI(); app.include_router(rws.router); app.include_router(rconv.router)
 c = TestClient(app)
@@ -97,11 +107,11 @@ with c.websocket_connect(f"/ws?token={token}") as ws:
     ev = until(ws, "message.done", "error")
     assert ev[0]["replaced"] == [stopped["id"]] and ev[-1]["message"]["blocks"][0]["text"] == "完整回答", ev
     assert asyncio.run(rows(cid))[-1] == ("assistant", "done", "完整回答")
+    ws.portal.call(settle)
 
 # 断线：turn_offline_minutes=0（旧行为）时断线即停，半截回复照样落库、排在后面的那条不再跑。
 # TestClient 退出时会直接停掉事件循环，测不到真实断线，所以直接驱动 live_turns：等它吐字 → Conn.close()（= 断线）→ 查库。
 # 断线后继续写 / 重连续传的情形见 tests/smoke_live_turns.py。
-from app import live_turns
 from app.config import settings
 mode["m"] = "hang"
 settings.turn_offline_minutes = 0

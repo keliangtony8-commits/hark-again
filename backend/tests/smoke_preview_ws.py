@@ -13,11 +13,13 @@ from types import SimpleNamespace as NS
 tmp = tempfile.mkdtemp()
 
 
-def free_port() -> int:
-    s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
+def bound() -> socket.socket:
+    """绑好的端口直接交给服务用（不先 close 再让服务去绑：并行跑时中间会被别的进程抢走）。"""
+    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", 0)); return s
 
 
-RUNNER_PORT, BACK_PORT, SVC = free_port(), free_port(), free_port()
+runner_sock, back_sock, svc_sock = bound(), bound(), bound()
+RUNNER_PORT, BACK_PORT, SVC = (x.getsockname()[1] for x in (runner_sock, back_sock, svc_sock))
 os.environ.update(DATABASE_URL=f"sqlite+aiosqlite:///{tmp}/t.db", LLM_BASE_URL="http://x", LITELLM_MASTER_KEY="k",
   OWNER_USERNAME="u", OWNER_PASSWORD="p", JWT_SECRET="s"*32, VAULT_KEY="", DATA_DIR=tmp,
   CHAT_MODELS=json.dumps({"fast": "快速"}), DEFAULT_MODEL="fast", VISION_MODELS='[]',
@@ -44,6 +46,8 @@ def process_request(conn, request):
     if request.path.startswith("/http"):
         body = json.dumps({k.lower(): v for k, v in request.headers.raw_items()}).encode()
         return Response(200, "OK", Headers([("Content-Type", "application/json"), ("Content-Length", str(len(body)))]), body)
+    # 握手在这里记：它在回 101 之前跑，链路另一头的浏览器拿到握手结果时一定已经记下（handler 要等 101 发出去之后才被调度）
+    seen.append((request.path, {k.lower(): v for k, v in request.headers.raw_items()}))
     return None
 
 
@@ -52,7 +56,6 @@ def select_subprotocol(conn, offered):
 
 
 async def handler(conn):
-    seen.append((conn.request.path, {k.lower(): v for k, v in conn.request.headers.raw_items()}))
     try:
         async for msg in conn:
             if msg == "close-4001":
@@ -71,14 +74,14 @@ svc_ready = threading.Event()
 
 def run_svc():
     async def main():
-        async with serve(handler, "0.0.0.0", SVC, process_request=process_request, select_subprotocol=select_subprotocol):
+        async with serve(handler, sock=svc_sock, process_request=process_request, select_subprotocol=select_subprotocol):
             svc_ready.set()
             await asyncio.Future()
     asyncio.run(main())
 
 
 threading.Thread(target=run_svc, daemon=True).start()
-svc_ready.wait(5)
+assert svc_ready.wait(10), "upstream service never came up"
 
 # ---- 真 runner：docker 换假的 ----
 class NotFound(Exception):
@@ -120,18 +123,17 @@ from app import preview
 from app.main import app as main_app
 
 
-def up(app, port):
-    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", ws="websockets"))
-    threading.Thread(target=srv.run, daemon=True).start()
-    for _ in range(100):
-        try:
-            socket.create_connection(("127.0.0.1", port), 0.2).close(); return srv
-        except OSError:
-            time.sleep(0.1)
-    raise SystemExit(f"port {port} never came up")
+def up(app, sock):
+    srv = uvicorn.Server(uvicorn.Config(app, log_level="warning", ws="websockets"))
+    threading.Thread(target=srv.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    end = time.time() + 30
+    while not srv.started:  # uvicorn 启动（含 lifespan）做完才置位：等这个条件，不按端口能不能连猜
+        assert time.time() < end, f"port {sock.getsockname()[1]} never came up"
+        time.sleep(0.02)
+    return srv
 
 
-rsrv, bsrv = up(runner.app, RUNNER_PORT), up(main_app, BACK_PORT)
+rsrv, bsrv = up(runner.app, runner_sock), up(main_app, back_sock)
 
 # 1) 规则（两边同一份）
 for mod in (preview, runner):
@@ -210,7 +212,8 @@ async def main():
     old, _ = preview.sign("me", SVC, now=time.time() - 25 * 3600)
     assert await refused(f"{BASE}/{old}/x"), "过期签名"
     assert await refused(f"{BASE}/{tok[:-2]}zz/x"), "伪造签名"
-    dead, _ = preview.sign("me", free_port())
+    nobody = bound()  # 只 bind 不 listen：这个号被我们占着，别的进程拿不走，连上必被拒
+    dead, _ = preview.sign("me", nobody.getsockname()[1])
     assert await refused(f"{BASE}/{dead}/x"), "端口上没人"
     containers["sbx-me"].status = "exited"
     assert await refused(f"{BASE}/{tok}/x"), "电脑休眠"

@@ -1,5 +1,5 @@
 /* 我的（设计 v2）：没有标题栏，左上一个圆形玻璃返回；大头像 + 衬线“我的”；卡片节奏同主页 */
-.me .page-inner { padding-top: calc(var(--topbar-top) + env(safe-area-inset-top)); }
+.me .page-inner { padding-top: calc(var(--topbar-top) + env(safe-area-inset-top)); } /* 改这里或 .me-head 上留白，同步 shell.css “我的”渐隐带 --fade-b */
 .me-top { height: var(--topbar-h); display: flex; align-items: center; }
 .me-top .glass-btn { width: var(--topbar-h); height: var(--topbar-h); }
 .me-head { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-2) 0 var(--sp-5); }

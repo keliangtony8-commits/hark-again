@@ -103,16 +103,21 @@ def script(job_id: str, timeout: int, keep_alive: bool = False) -> str:
     """run.sh：从工作区根目录跑；timeout 自成进程组（取消时整组杀），-k 5 超时后再给 5 秒强杀。
     timeout 0 = 不限时（GNU timeout 的 0 就是关掉计时，仍做进程组组长）——常驻任务用。
     日志用 >> 追加：常驻任务重启接着写同一份；轮转时后端直接截断它（O_APPEND 写入跟着新末尾走）。
-    普通任务先把自己的 oom_score_adj 调高（子进程继承）：内存打满时内核优先杀它们，常驻服务留下。"""
+    普通任务先把自己的 oom_score_adj 调高（子进程继承）：内存打满时内核优先杀它们，常驻服务留下。
+    取消和启动的竞态（start_job 返回时 run.sh 可能还没写 pid）：set -m 让 bash 在 fork 后父子两边都 setpgid，
+    拿到 $! 时进程组已经在了；pid 原子写（tmp + mv）；写完 pid 再看取消标记——stop() 先写标记再叫沙盒按 pid 整组杀，
+    两边各自“先写后读”，标记早于 pid 就由这里自己杀，晚于就由沙盒杀，不会两边都扑空。"""
     j = f"{JOBS_DIR}/{job_id}"
     return (
         "#!/bin/bash\n"
         'cd "$(dirname "$0")/../.." || exit 1\n'
         f"J={j}\n"
+        "set -m\n"
         + ("" if keep_alive else f"echo {OOM_ADJ} > /proc/self/oom_score_adj 2>/dev/null\n") +
         f"before=$({OOM_COUNT})\n"
         f'timeout -k 5 {int(timeout)} bash -l "$J/cmd.sh" >> "$J/log" 2>&1 < /dev/null &\n'
-        'echo $! > "$J/pid"\n'
+        'echo $! > "$J/pid.tmp" && mv "$J/pid.tmp" "$J/pid"\n'
+        '[ -e "$J/cancelled" ] && kill -TERM -- -$! 2>/dev/null\n'
         "wait $!\n"
         "code=$?\n"
         f'after=$({OOM_COUNT})\n'

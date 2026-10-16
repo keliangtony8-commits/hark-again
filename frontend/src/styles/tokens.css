@@ -25,7 +25,7 @@
      画法在 styles/base.css .sky。浅色 = 学 Hark 浅色：顶部天蓝 → 中段淡 → 底部暖米色；夜里是偏紫的灰蓝（v3.3 B2 整体提亮，次要字压在最暗处也看得清）。 */
   --sky-night-top: #c7d1f0; --sky-night-bottom: #d3d0dd; --sky-night-a: #c8d1ee; --sky-night-b: #d4ceeb; --sky-night-c: #d2cfe0;
   --sky-dawn-top: #c0d1fd; --sky-dawn-bottom: #f1d9c6; --sky-dawn-a: #c6d1f2; --sky-dawn-b: #f7d7bf; --sky-dawn-c: #d8cde7;
-  --sky-day-top: #add6fe; --sky-day-bottom: #e6dcc2; --sky-day-a: #b1d6f5; --sky-day-b: #f4eedf; --sky-day-c: #c0d4e2;
+  --sky-day-top: #add6fe; --sky-day-bottom: #e6dcc2; --sky-day-a: #b1d6f5; --sky-day-b: #f4eedf; --sky-day-c: #ebdbbf;
   --sky-dusk-top: #c5d0fb; --sky-dusk-bottom: #ebcdb6; --sky-dusk-a: #d2cdf7; --sky-dusk-b: #f3d2b4; --sky-dusk-c: #d8cde5;
   /* 设计 v2「浮层 + 毛玻璃」：与 App theme/tokens.dart 的 Palette.glass/... 同值 */
   --glass: rgba(255, 255, 255, 0.85);        /* 玻璃着色（下面是模糊后的内容） */
