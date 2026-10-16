@@ -1,4 +1,4 @@
-// v3.3 流光壁纸：关键帧插值、浅 / 深两套正文对壁纸任意一处 ≥ 4.5、SkyClock 单 Timer（测试环境不起、无订阅 / 后台停、
+// v3.3 流光壁纸：关键帧插值、浅 / 深两套正文与次要字 text2 对壁纸任意一处 ≥ 4.5、最次要字 text3 ≥ 3（v3.3 B2）、SkyClock 单 Timer（测试环境不起、无订阅 / 后台停、
 // 减少动态只换天色不漂移）、着色器加载不了时回退竖向渐变。
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -76,23 +76,26 @@ void main() {
     });
   });
 
-  group('正文对壁纸对比度 ≥ 4.5（全天每 15 分钟、每一处）', () {
+  // 网页 scripts/check-contrast.mjs 与 tests/sky.test.ts 用同一采样、同一阈值（两端同一张色表）。
+  group('文字对壁纸对比度（全天每 15 分钟 × 底色与三团柔光峰值）：正文 / 次要字 ≥ 4.5，最次要字 ≥ 3', () {
     for (final (name, p) in [('浅色', Palette.light), ('深色', Palette.dark)]) {
-      test(name, () {
-        var worst = double.infinity;
-        var where = '';
-        for (var q = 0; q < 24 * 4; q++) {
-          final h = q / 4;
-          for (final (at, c) in _samples(p.sky.at(h))) {
-            final r = _contrast(p.text, c);
-            if (r < worst) {
-              worst = r;
-              where = '$h 点 $at';
+      for (final (what, fg, min) in [('正文 text', p.text, 4.5), ('次要字 text2', p.text2, 4.5), ('最次要字 text3', p.text3, 3.0)]) {
+        test('$name $what ≥ $min', () {
+          var worst = double.infinity;
+          var where = '';
+          for (var q = 0; q < 24 * 4; q++) {
+            final h = q / 4;
+            for (final (at, c) in _samples(p.sky.at(h))) {
+              final r = _contrast(fg, c);
+              if (r < worst) {
+                worst = r;
+                where = '$h 点 $at';
+              }
             }
           }
-        }
-        expect(worst, greaterThanOrEqualTo(4.5), reason: '$name 最差 ${worst.toStringAsFixed(2)} @ $where');
-      });
+          expect(worst, greaterThanOrEqualTo(min), reason: '$name $what 最差 ${worst.toStringAsFixed(2)} @ $where');
+        });
+      }
     }
   });
 

@@ -324,3 +324,47 @@
 - 改法（= App 把 TopFade 整页 ShaderMask 换成 SkyLayer(fade:)）：滚动区去掉遮罩，换成一条只有渐隐带高的 `.sky-fade`（ui/Sky.tsx `SkyFade`），里面是同一张壁纸的副本（按自身在视口里的位置反向偏移，与全屏壁纸逐像素对齐；漂移动画用 Web Animations 把 startTime 对齐到同一时间原点），用窄条自己的 mask 从“全是壁纸”渐变到“全透明”。壁纸以 α 盖在内容上 = 内容以 1-α 透到壁纸，视觉不变：`.page` 用原来的 6 个色标（反过来），`.thread` 用原来的两点。滚动区加 `isolation: isolate`，保持原来遮罩带来的层叠关系（内容里的浮层仍在渐隐条下面）。
 - 成本：遮罩面积从整屏滚动区降到约 100px 一条；每条多 3 个柔光副本（被窄条裁掉，只栅格化可见的那一小块）。
 **测试（2026-10-16）**：`npm run build` 过（架构守卫 222 文件、配色守门 14 对 × 2 套 + 壁纸 20 色 × 2 套且与 App 同值、tsc -b、vite build）；`npm test` 11/11（swr 7、sky 4）；系统 Chromium（apt）跑截图：用量页返回首帧 0 骨架、渐隐条与全屏壁纸逐像素差 ≤1/255、reduce-motion 下 0 个动画在跑、减少透明度下壁纸 = 实色 --bg、无页面报错。**发现**：浅色壁纸上次要字 --text-2 对比度 1.60–4.60（见 HANDOFF 第〇节 B2），两端同表，未改。
+
+## 2026-10-16 v3.3 B2 流光壁纸：次要字对比度（App + Web 同一张色表）
+- 问题：壁纸全天采样（每 15 分钟 × 底色 11 个高度 + 三团柔光峰值），浅色 text2 1.60–5.10、text3 1.02–3.23；深色 text2 3.97–7.56、text3 2.61–4.98。页头说明、分区标题直接压在壁纸上发灰。
+- 决定（主代理定）：不删效果、不改字的层级（次要字不换成正文色）。改天色关键帧：浅色顶部 / 夜间几帧提亮，深色柔光压暗；保留“夜里暗蓝紫灰、白天亮蓝→暖米、柔和流动”。
+- 做法：每个关键色在 OKLab 里只抬 / 压明度、尽量保留色相与彩度（超色域时按比例收彩度；浅色夜间彩度 ×0.75、黎明 / 黄昏 ×0.85，免得提亮后比白天还艳），二分到“该色亮度够”，再用与 sky_test 相同的采样（Sky.ramp + blobMix + 15 分钟插值）验证并留 ≥0.02 余量。脚本只在本地算，结果直接写进两端色表。
+- 浅色只调天色不够体面：要让 #64605a 达 4.5、#857f77 达 3，壁纸每一处相对亮度都得 ≥0.757（≈L* 90），整张图几乎褪成白，白天的亮蓝、上下渐变都没了。所以按授权**两端同步微调 token**：text2 #64605a → #5c5852、text3 #857f77 → #7a746c（都只深一点，text2 / text3 之间的亮度比 1.53 → 1.54，层级不变；对 bg / surface / surface2 分别 6.42 / 7.06 / 6.16 与 4.20 / 4.62 / 4.03，只升不降）。这样壁纸亮度门槛降到 0.64，白天顶色还是看得出的天蓝 #add6fe。
+- 深色只动天色：黎明 / 白天 / 黄昏的柔光略压暗（夜间不变），text2 / text3 token 不动。
+- 守门：App test/sky_test.dart 加“次要字对壁纸”一组（浅深 × text2 ≥4.5、text3 ≥3.0，同一采样）；Web check-contrast.mjs 改为同一采样（关键帧插值 + ramp + blobMix），正文 / text-2 / text-3 三条阈值全查（替换掉原来“只查 20 个关键色 + 深色 text-2 只查 top/bottom”那条）；tests/sky.test.ts 加浅深两套同阈值单测。
+- 成本：只改色值和测试，运行时零变化。
+- 参考：WCAG 2.x 相对亮度 / 对比度公式（W3C Understanding SC 1.4.3）；OKLab（Björn Ottosson, 2020）做“保色相只改明度”。
+- 结果（2026-10-16）：对壁纸最低对比度 浅色 text 12.37 / text2 4.63 / text3 3.03（原 4.84 / 1.60 / 1.02），深色 text 11.83 / text2 4.74 / text3 3.13（原 9.89 / 3.97 / 2.61）。`flutter test test/sky_test.dart` 17/17、`test/a11y_test.dart` 12/12；web `npm run build` 过（配色守门含壁纸全天采样）、`npm test` 13/13。改旧值必红（实测把 --text-2 改回 #64605a → 两端不同值 + 次要字/壁纸 4.09）。未做：真机 / 浏览器截图肉眼看新浅色壁纸。
+
+## 2026-10-16 v3.3 B3 App：卡顿根因（BackdropGroup / 去整页 ShaderMask / 流式只重建最后一条 / Markdown 样式缓存）
+- 范围：只动 app/（不碰 tokens.dart 色值、sky_test）。不删任何功能和效果。
+- **毛玻璃分组**（官方 API：Flutter 3.47 `BackdropGroup` + `BackdropFilter.grouped`，源码 widgets/basic.dart；引擎 impeller/display_list/canvas.cc `SaveLayer` 的 backdrop_id 分支）：
+  - 语义（读引擎源码确认）：同一个 BackdropKey 的滤镜，**第一个**画到时才“翻转”渲染目标取一次背景，滤镜全相同时整张背景只模糊一次，后面的成员直接从这张结果里取自己那块。所以：①成员彼此不能重叠；②第一个成员画下之后、后面成员底下又画的东西，后面成员看不到；③第一个成员若在淡入淡出（Opacity 离屏层）里，取到的是离屏层的背景，其他成员会跟着错。
+  - 分三组：AppShell（顶栏分段 + 一级页面的左侧按钮 / header 药丸；收件箱横幅在组外，它要模糊顶栏）、ShellPage 内容（输入胶囊、回到最新、错误条、主页输入框的“收起”钮）、SubPage（玻璃标题栏 + 子页里的浮层）。另把云浏览器接管页的两颗玻璃钮编一组。“我的”页不分组：返回钮在滚动列表里、搜索胶囊在列表之后，返回钮先画会让搜索胶囊看不到它后面画的列表（规则②）。弹层 / 对话框 / 磨砂遮罩各自独立（在根路由或要模糊成员本身）。
+  - 绘制顺序按规则②③排：ShellPage = 内容 → 顶部渐隐条 → 左侧按钮（稳定、不淡入，做“取背景”的那一个）→ header（药丸有进场淡入，排在后面只当读者）；输入胶囊永远第一个画（底条 Column 用 verticalDirection.up、输入行用 rtl 排版，布局不变、只换绘制先后；读屏 / 焦点顺序按几何排序不受影响）。
+  - 例外处理（规则②③）：ShellPage 所在路由在转场（项目页淡入上浮）或主聊天历史抽屉露出时，左侧按钮 / header 临时改用页内自己的一组，顶栏变成 AppShell 组里唯一成员 = 照常单独模糊；抽屉是否露出由抽屉内容自己挂载 / 卸载上报（DrawerController 只在露出时才建内容），不改顶栏让位的时机。
+  - 壁纸：SkyLayer 已自带 RepaintBoundary，SkyClock 每 33ms 只重录这一层；但它上面的毛玻璃每帧都必须重新模糊（背景在变），这是效果本身的成本，只能把“取背景”的次数降下来。分组后主聊天页每帧翻转 3 次 → 2 次（顶栏组 1 + 输入组 1），项目页 4 → 2，带回到最新 / 错误条时 5–6 → 2；代价是共享组按整张背景模糊一次（引擎自带降采样）而不是只模糊各自那一小块。
+- **TopFade 整页 ShaderMask(dstIn) 删除** → ShellPage 顶部一条 `BackdropFade`（glass.dart，和 Backdrop 同一处判断：玻璃模式 = SkyLayer(fade: (clear, solid))，与全屏壁纸逐像素对齐；减少透明度 = 实色 bg 渐隐）。壁纸以 α 盖在内容上 = 内容以 1−α 透出壁纸，视觉不变；离屏层从整页降为 0。顺带：原来输入胶囊等毛玻璃在 ShaderMask 离屏层里，只能模糊“内容 + 透明”，现在模糊的是“壁纸 + 内容”（壁纸本身是柔和渐变，模糊前后几乎一样）。
+- **聊天流式只重建最后一条**：ChatController 每个 delta 只换最后一条 Message（其余实例不变）。ChatView 按 消息 id 缓存行 widget，命中条件 = 同一个 Message 实例 + 同一组行状态（时间开关、重新生成 / 继续、引用行、可编辑、定位闪烁、跨天分隔、刚发出），命中就返回同一个 widget 实例，Flutter 直接跳过这一行的重建。
+- **AppMarkdown**：MarkdownStyleSheet 按 ThemeData 实例（含浅 / 深、字体）+ 减少透明度缓存（Expando 挂在 ThemeData 上，主题换了自动失效），不再每次 build 新建 + 深比较。
+- 删除：kit.dart `TopFade`（及 ramp / alphaAt）、shell_page_test 里对应断言；glass.dart / sub_page.dart 的独立 BackdropFilter 改 grouped。
+- 验证：新 test/perf_frame_test.dart（flutter test 里没有真 GPU 光栅，量的是 每帧重建的元素数 / 消息行重建数 / 毛玻璃层数与“取背景”次数 / 离屏遮罩层数 / CPU 侧 build+layout+paint 耗时），改前改后同一份测试各跑一次。
+- **实现补充**：组用 `BlurGroup`（glass.dart：BackdropGroup + 自己持有的 BackdropKey；不能直接写 `BackdropGroup(child:)`，它不给 key 时每次 build 新建一个，组里所有滤镜跟着重建；不叫 GlassGroup，那是 v2.97 删掉的旧名、架构测试禁用）。ShellPage 的“另成一组”还加了一条：本页路由上面压着别的路由（isCurrent = false，新页正推进来）时也另成一组。主聊天抽屉“露出”由 chat_scaffold 的 `_Shown` 在抽屉内容挂载 / 卸载后的下一帧上报给 `ShellPage(covered:)`。
+- **测量（2026-10-16，flutter test 引擎，412×915，同一份 test/perf_frame_test.dart 先在改前代码的 worktree 跑、再在改后跑；没有真 GPU，光栅只能看层数）**：
+  | 场景 | 指标 | 改前 | 改后 |
+  |---|---|---|---|
+  | 聊天流式（30 条历史，40 个 delta 帧） | 每帧重建元素数（中位） | 695 | 362 |
+  | | 最后一条以外的消息行重建（40 帧合计） | 305 | **0** |
+  | | CPU 侧 build+layout+paint 每帧（中位） | 31.5–33.9 ms | 21.0–23.0 ms |
+  | | 毛玻璃层 / 取背景次数 | 3 / 3 | 3 / **2** |
+  | | ShaderMask 离屏层 | 1（整页） | **0** |
+  | 一级页面滚动（60 条，30 帧） | 每帧重建元素数（中位） | 440 | 100 |
+  | | CPU 每帧（中位） | 15.5 ms | 6.5 ms |
+  | | 取背景次数 / ShaderMask | 3 / 1 | 2 / 0 |
+  | 主页 | 取背景次数 / ShaderMask | 3 / 1 | 2 / 0 |
+  | 项目列表 | 取背景次数 / ShaderMask | 2 / 1 | 1 / 0 |
+  - 剩下的 362：最后一条本身（Markdown 重新解析）+ 外层 ChatView / 底条的轻量包装（列表的 KeepAlive / KeyedSubtree 等），不再随对话长度增长。
+  - 没测到的：真机 profile 模式光栅耗时（沙盒没有设备 / GPU）；Impeller 共享背景的实际省时只能按引擎源码推断（每组一次 FlipBackdrop + 一次整张降采样模糊）。真机验证方法：`flutter run --profile` + DevTools Performance，看聊天流式和主页静止时 raster 线程（壁纸 30fps 时每帧都要合成）。
+  - 发现（未改，不在本块范围）：子页面（SubPage）自带一层 Backdrop，在外壳分支里打开时，外壳的那层壁纸仍在底下每 33ms 重画（被完全盖住）。可以让 SubPage 在外壳里不再画自己的壁纸、或外壳在子页时停掉壁纸，需要连同 FloatAway / 转场一起定。
+- 结果：flutter analyze 0；全量 flutter test **729 过 / 8 跳过 / 0 失败**（新增 perf_frame_test 3 例；shell_page_test 改为 7 例：渐隐条位置 / 绘制顺序 / 不挡点击 / 减少透明度实色 / 分组与盖层 / 转场另成一组）。
+- 参考：Flutter API 文档与源码 `BackdropGroup`、`BackdropFilter.grouped`（packages/flutter/lib/src/widgets/basic.dart，3.47.7）；Impeller `Canvas::SaveLayer` 的 backdrop_id / `FirstPassDispatcher::saveLayer`（engine/src/flutter/impeller/display_list/canvas.cc、dl_dispatcher.cc：同 id 计数、第一个取背景并缓存、滤镜全同则整张只模糊一次）；Flutter 官方视频 “BackdropFilter” 与 docs “Performance best practices”（saveLayer / ShaderMask 离屏代价）；flutter_markdown_plus 1.0.12 `MarkdownWidget.didUpdateWidget`（样式表 != 才重新解析）。

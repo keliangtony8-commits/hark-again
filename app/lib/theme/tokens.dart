@@ -85,8 +85,8 @@ class Palette {
     surface2: Color(0xFFF1EFEC),
     border: Color(0xFFE8E5E0),
     text: Color(0xFF111111),
-    text2: Color(0xFF64605A),
-    text3: Color(0xFF857F77), // 次要信息（时间戳、图标）：对底色 ≥ 3:1
+    text2: Color(0xFF5C5852), // v3.3 原 #64605A：压在流光壁纸上也要 ≥ 4.5（test/sky_test.dart）
+    text3: Color(0xFF7A746C), // 次要信息（时间戳、图标）：对底色、对壁纸 ≥ 3:1（v3.3 原 #857F77）
     accent: Color(0xFF111111), // 唯一强调色 = 墨色：未读点、进度、链接
     accentSoft: Color(0xFFEDEBE7),
     onAccent: Color(0xFFFFFFFF),
@@ -198,7 +198,8 @@ class SkyPhase {
 }
 
 /// 一套主题的四个时段；at(钟点) 在相邻两个关键帧之间线性插值（Sky.keyframes），黎明 / 黄昏平滑过渡。
-/// 浅色整天都够亮压得住深色正文（test/sky_test.dart：正文对壁纸任意一处 ≥ 4.5），深色整天都是暗的。
+/// 浅色整天都够亮、深色整天都够暗：正文 / 次要字 / 最次要字对壁纸任意一处（全天每 15 分钟 × 底色与三团柔光）
+/// 分别 ≥ 4.5 / 4.5 / 3（test/sky_test.dart；网页 check-contrast.mjs 同一采样）。
 @immutable
 class SkyTable {
   const SkyTable({required this.night, required this.dawn, required this.day, required this.dusk});
@@ -231,20 +232,21 @@ class SkyTable {
   @override
   int get hashCode => Object.hash(night, dawn, day, dusk);
 
-  /// 浅色：学 Hark 浅色（顶部偏深的天蓝 → 中段淡 → 底部暖米色），顶色比 Hark 提亮一点让深色正文 ≥ 4.5；夜里是偏紫的灰蓝，仍是“浅色”。
+  /// 浅色：学 Hark 浅色（顶部天蓝 → 中段淡 → 底部暖米色），夜里是偏紫的灰蓝。v3.3 B2 整体提亮（只抬 OKLab 明度、保色相）：
+  /// 次要字 text2 压在顶部 / 夜间最暗处也要 ≥ 4.5，所以顶色比 Hark 浅得多。
   static const light = SkyTable(
-    night: SkyPhase(Color(0xFF7480A6), Color(0xFFC4C0D2), Color(0xFF8E98BD), Color(0xFFA9A1C6), Color(0xFFBDB9CF)),
-    dawn: SkyPhase(Color(0xFF7C8FC2), Color(0xFFF1D9C6), Color(0xFFB4C0E6), Color(0xFFF7D7BF), Color(0xFFCEC1DF)),
-    day: SkyPhase(Color(0xFF5B8BB9), Color(0xFFE6DCC2), Color(0xFF9CC0DE), Color(0xFFF4EEDF), Color(0xFFB8CCD9)),
-    dusk: SkyPhase(Color(0xFF7A86B4), Color(0xFFEBCDB6), Color(0xFFA9A2D2), Color(0xFFF3D2B4), Color(0xFFC9BCD8)),
+    night: SkyPhase(Color(0xFFC7D1F0), Color(0xFFD3D0DD), Color(0xFFC8D1EE), Color(0xFFD4CEEB), Color(0xFFD2CFE0)),
+    dawn: SkyPhase(Color(0xFFC0D1FD), Color(0xFFF1D9C6), Color(0xFFC6D1F2), Color(0xFFF7D7BF), Color(0xFFD8CDE7)),
+    day: SkyPhase(Color(0xFFADD6FE), Color(0xFFE6DCC2), Color(0xFFB1D6F5), Color(0xFFF4EEDF), Color(0xFFC0D4E2)),
+    dusk: SkyPhase(Color(0xFFC5D0FB), Color(0xFFEBCDB6), Color(0xFFD2CDF7), Color(0xFFF3D2B4), Color(0xFFD8CDE5)),
   );
 
-  /// 深色：夜里深灰蓝 / 深紫，白天稍微偏蓝一点，始终是暗底（白字 ≥ 7，次要字对底色 ≥ 4.5）。
+  /// 深色：夜里深灰蓝 / 深紫，白天稍微偏蓝一点，始终是暗底；柔光不能太亮（次要字 text2 对柔光峰值也要 ≥ 4.5）。
   static const dark = SkyTable(
     night: SkyPhase(Color(0xFF0B1024), Color(0xFF1C1A33), Color(0xFF2A2F5C), Color(0xFF3A2C55), Color(0xFF1F3346)),
-    dawn: SkyPhase(Color(0xFF121A36), Color(0xFF2A2340), Color(0xFF3B3A6E), Color(0xFF5A3B5E), Color(0xFF2C3A5A)),
-    day: SkyPhase(Color(0xFF14213F), Color(0xFF23304A), Color(0xFF2A4270), Color(0xFF3A4E6E), Color(0xFF2F3D5C)),
-    dusk: SkyPhase(Color(0xFF141A38), Color(0xFF2B2244), Color(0xFF44386E), Color(0xFF5B3A5A), Color(0xFF2D3A60)),
+    dawn: SkyPhase(Color(0xFF121A36), Color(0xFF2A2340), Color(0xFF363468), Color(0xFF4E2F51), Color(0xFF2C3A5A)),
+    day: SkyPhase(Color(0xFF14213F), Color(0xFF23304A), Color(0xFF223966), Color(0xFF283B59), Color(0xFF2C3A59)),
+    dusk: SkyPhase(Color(0xFF141A38), Color(0xFF2B2244), Color(0xFF3E3267), Color(0xFF4F2F4E), Color(0xFF2C395F)),
   );
 }
 

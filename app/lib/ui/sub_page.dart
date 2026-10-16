@@ -7,6 +7,8 @@
 // 下拉刷新用 kit 的 PullRefresh：它读同一个让位线，转圈从标题栏下面出来而不是被挡住。
 //
 // 页面只换 Scaffold → SubPage，不自己写 AppBar 颜色/模糊。新建等页面级动作放 actions（标题栏右侧），不用悬浮钮。减少透明度时标题栏变实色、不模糊。
+// 毛玻璃分组（v3.3）：整页一个 BackdropGroup，标题栏和页里的浮层（GlassSurface blur）共享一次取背景。
+//   Scaffold 先画 body 再画标题栏，标题栏底下的内容在 body 里已经画完，所以谁先取背景都对（规则见 glass.dart 文件头）。
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -35,11 +37,13 @@ class SubPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Backdrop(
-    child: Scaffold(
-      backgroundColor: Colors.transparent, // 透出壁纸
-      extendBodyBehindAppBar: true,
-      appBar: GlassAppBar(title: title, actions: actions, leading: leading, leadingWidth: leadingWidth),
-      body: body,
+    child: BlurGroup(
+      child: Scaffold(
+        backgroundColor: Colors.transparent, // 透出壁纸
+        extendBodyBehindAppBar: true,
+        appBar: GlassAppBar(title: title, actions: actions, leading: leading, leadingWidth: leadingWidth),
+        body: body,
+      ),
     ),
   );
 }
@@ -78,7 +82,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
     if (solid) return bar;
     return ClipRect(
-      child: BackdropFilter(
+      child: BackdropFilter.grouped(
         filter: ImageFilter.blur(sigmaX: Glass.blur, sigmaY: Glass.blur),
         child: bar,
       ),
