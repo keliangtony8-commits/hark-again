@@ -460,3 +460,18 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 - 不用 ListGroup + ListRow：那是白卡片组（Hark 明确不放卡片组里），且行高 64 + 组内边距让“我的”在 412×915 上多出 28px，超过一屏线（design_p3_test 918 > 915）；52 高的独立条正好守住。App 是 me_screen.dart `_LogoutBar`，Web 是 `.me-logout-bar`；按压反馈两端同为缩到 0.98（App 用 motion.dart Pressable——架构守卫不许 features 里手写 InkWell 行；Web :active）。App 仍先 confirmDanger，Web 原来就直接退（两端这点原本就不一致，没在这次改）。
 - 顺手发现（没改）：App“我的”静止时，最底下的退出登录被底部“搜索设置”浮条盖住，要滚一下才露出来——design_p3_test 只量到屏幕底 915，没量到浮条上沿。旧胶囊同样如此，记进 HANDOFF 待办。
 **Web 项目列表**：去掉行上 ⋯（它让状态行留了 32px 最小高、行 min-height 56）；菜单 = 右键 / 长按，弹原地聚焦菜单（ui/FocusMenu，和消息菜单同一套，= App 长按）。安卓 Chrome 长按、桌面右键、键盘菜单键 / Shift+F10 都发 contextmenu；iOS Safari 长按不发，用 500ms 触摸计时补，触发后吞掉随后那次点按；链接关掉系统长按预览和选字。同样 5 项操作项目内的项目名药丸里也有，功能没少。
+
+## 2026-10-16 v3.5 子页标题照 Hark 子页（两端）
+
+**依据**：用户 20:49 发 Hark 钱包 / 安全 / 系统偏好设置截图——子页没有标题栏、也没有胶囊：左边一颗独立圆玻璃返回钮（‹），标题居中裸字，说明文字和卡片直接接在下面。上一版（ef2bc21 前）照 Web 做成“整宽玻璃胶囊里放 返回 + 标题 + 动作”，不对。
+
+**决定**
+1. **替换不叠加**：两端删掉整宽胶囊（App `GlassAppBar` 里的 GlassSurface + AppBar；Web `.page-head` 的玻璃底、`.spacer`）。
+2. 版式：[圆玻璃返回钮 = 一级页顶栏圆钮同尺寸] — 居中裸字标题（按整行居中，两侧再宽也不压字、放不下省略号）— [右侧动作收进一颗玻璃胶囊]（Hark 子页没有动作可参照，取顶栏同材质的胶囊，单个动作时接近圆钮）。位置 / 高度 = 一级页顶栏，让位线不变。
+   - App：`NavigationToolbar`（centerMiddle）；返回钮规则照 AppBar：给了 leading 用它，否则 `impliesAppBarDismissal` 才出，点了 maybePop；标题 Semantics header。
+   - Web：`grid 1fr auto 1fr`；返回钮 `.glass-btn.glass`；动作包 `.page-head-actions`。
+3. 标题没有底了，滚上去的内容靠渐隐：App 本来就有 BackdropFade；Web 子页打开 `.sky-fade-page`（中线以上全是壁纸，到内容静止顶边全显），标题行 sticky z4 盖在渐隐条 z1 上。
+4. 返回图标两端统一成 ‹（App `arrow_back_ios_new_rounded` = Web IconBack = Hark），“我的”页返回钮同换。
+5. 测试：sub_page_test 改量“标题无玻璃底、整屏居中、动作胶囊贴右边距同高”，新增“能退的子页出圆钮、位置 = 顶栏圆钮、点了退回”；shell_test 的 `pageBack()`（只认 Material BackButton）改点“返回”。
+
+**成本 / 帧**：App 每个子页取背景从 1 次（整宽胶囊）变成 ≤2 次（返回钮 + 动作胶囊，同一个 BackdropGroup 里合并取样）。Web 子页多一条渐隐条、玻璃面从 1 块变 ≤2 块小的；4× CPU 手机视口滚动（work/frames.py，每路由 400 帧，各跑 4 轮）：median 16ms、p95 18–20ms 新旧一样；>20ms 帧 子页（定时任务 + 记忆）合计 新 37 / 旧 15。拆因：关掉渐隐条 → 15（= 旧），关掉标题行毛玻璃 → 43（不是它）；isolation、will-change、把标题行挪出滚动区（= 顶栏结构）都不降。即多出来的就是渐隐条本身的成本，而同一轮里一级页主页 / 我的（本来就有这条，没改）>20ms 是每轮 4–11，子页现在每轮 2–12，落在同一水平。结论：标题没底就必须渐隐（否则滚上去的字和标题叠），这是全站已接受的同一种渐隐，保留；不另造一套。

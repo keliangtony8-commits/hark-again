@@ -166,7 +166,7 @@ class _MeBody extends ConsumerWidget {
         child: Row(children: [
           root
               ? GlassIconButton(icon: Icons.close_rounded, tooltip: '回到主页', onTap: () => context.go('/home'))
-              : GlassIconButton(icon: Icons.arrow_back_rounded, tooltip: '返回', onTap: () => Navigator.of(context).maybePop()),
+              : GlassIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '返回', onTap: () => Navigator.of(context).maybePop()),
           const SizedBox(width: Sp.x4),
           // v2.92 §P：头像 + 名字一起点 → 改称呼 / 助手名 / 头像
           Expanded(

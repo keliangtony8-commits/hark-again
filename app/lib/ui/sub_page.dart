@@ -1,18 +1,19 @@
 // 子页面（“我的”里的每一项、项目的档案页、项目聊天）的统一外框（设计 v2）。
-// 一级页面是 ShellPage（浮动顶栏），子页面是 SubPage：同一张壁纸（Backdrop），顶上是一颗悬浮玻璃标题胶囊（v3.5 照 Hark，
-// = 网页 .page-head）：和一级页顶栏同位置、同高、同材质，只是里面放 返回 + 标题 + 右侧动作。
-// 胶囊四周露出来的那一截由 BackdropFade 渐隐带盖住（和 ShellPage 同参数），滚上去的内容不和标题叠字。
+// 一级页面是 ShellPage（浮动顶栏），子页面是 SubPage：同一张壁纸（Backdrop），顶上没有标题栏（v3.5 照 Hark 钱包 / 安全 / 系统偏好设置截图，
+// = 网页 .page-head）：左边一颗独立的圆玻璃返回钮（= 一级页顶栏圆钮、“我的”页返回钮），标题是居中的裸字，右侧动作收进一颗玻璃胶囊；
+// 和一级页顶栏同一行位置、同高。四周露出来的那一截由 BackdropFade 渐隐带盖住（和 ShellPage 同参数），滚上去的内容不和标题叠字。
 //
 // 让位：Scaffold(extendBodyBehindAppBar) 会把标题栏高度（= Layout.shellTop，和一级页同一条让位线）加进 MediaQuery.padding.top，
 // 页面里的 PageBody / 聊天列表照常读安全区就会让出来（和 ShellPage、FloatingFooter 是同一个约定）。
 // 下拉刷新用 kit 的 PullRefresh：它读同一个让位线，转圈从标题栏下面出来而不是被挡住。
 //
-// 页面只换 Scaffold → SubPage，不自己写 AppBar 颜色/模糊。新建等页面级动作放 actions（胶囊右侧），不用悬浮钮。减少透明度时胶囊变实色、不模糊。
+// 页面只换 Scaffold → SubPage，不自己写标题栏。新建等页面级动作放 actions（右侧玻璃胶囊），不用悬浮钮。减少透明度时圆钮 / 胶囊变实色、不模糊。
 // 自带整屏不透明壁纸：在外壳分支里打开、进场完成后，外壳底下那层壁纸暂停（SkyCover，规则见 ui/sky.dart）。
-// 毛玻璃分组（v3.3）：整页一个 BackdropGroup，标题胶囊和页里的浮层（GlassSurface blur）共享一次取背景。
-//   Scaffold 先画 body（含渐隐带）再画标题胶囊，胶囊底下的内容在 body 里已经画完，所以谁先取背景都对（规则见 glass.dart 文件头）。
+// 毛玻璃分组（v3.3）：整页一个 BackdropGroup，返回钮 / 动作胶囊和页里的浮层（GlassSurface blur）共享一次取背景。
+//   Scaffold 先画 body（含渐隐带）再画标题行，圆钮底下的内容在 body 里已经画完，所以谁先取背景都对（规则见 glass.dart 文件头）。
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'glass.dart';
 import 'sky.dart';
@@ -58,8 +59,10 @@ class SubPage extends StatelessWidget {
   );
 }
 
-/// 悬浮玻璃标题胶囊（v3.5，= 网页 .page-head）：一级页顶栏同一个位置、高度和材质（GlassSurface blur + 全圆角），
-/// 里面是 AppBar（返回、标题、动作沿用 AppBarTheme 的字和色）。
+/// 子页标题行（v3.5 照 Hark）：[圆玻璃返回钮] 居中裸字标题 [动作玻璃胶囊]，没有整条栏、没有标题底。
+/// 位置 = 一级页顶栏（gutter / topBarTop / topBar 高）；让位 = Layout.shellTop（同一条让位线）。
+/// 返回钮图标 = ‹（arrow_back_ios_new，= Hark / 网页 IconBack，“我的”页同款）；规则跟 AppBar：给了 [leading] 用它，否则路由能退（impliesAppBarDismissal）才出，点了 maybePop。
+/// 标题用 NavigationToolbar 真居中（按整屏宽居中，两侧放不下时自动让开、不和钮叠）。
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   const GlassAppBar({super.key, required this.title, this.actions = const [], this.leading, this.leadingWidth});
   final Widget title;
@@ -73,28 +76,40 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.paddingOf(context);
+    final back = leading ??
+        ((ModalRoute.of(context)?.impliesAppBarDismissal ?? false)
+            ? GlassIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '返回', onTap: () => Navigator.of(context).maybePop())
+            : null);
+    final style = Theme.of(context).appBarTheme.titleTextStyle ?? Theme.of(context).textTheme.titleLarge;
     return Padding(
       padding: EdgeInsets.fromLTRB(pad.left + Layout.gutter, pad.top + Layout.topBarTop, pad.right + Layout.gutter, 0),
       child: Align(
         alignment: Alignment.topCenter,
         child: SizedBox(
           height: Layout.topBar,
-          child: GlassSurface(
-            blur: true,
-            radius: Radii.full,
-            child: AppBar(
-              primary: false,
-              toolbarHeight: Layout.topBar,
-              title: title,
-              leading: leading,
-              leadingWidth: leadingWidth,
-              actions: [
-                ...actions,
-                if (actions.isNotEmpty) const SizedBox(width: Sp.x1),
-              ],
-              backgroundColor: Colors.transparent,
-              scrolledUnderElevation: 0,
+          child: NavigationToolbar(
+            leading: back == null || leadingWidth == null ? back : SizedBox(width: leadingWidth, child: Align(alignment: Alignment.centerLeft, child: back)),
+            middle: Semantics(
+              header: true,
+              child: DefaultTextStyle.merge(style: style, maxLines: 1, overflow: TextOverflow.ellipsis, child: title),
             ),
+            trailing: actions.isEmpty
+                ? null
+                : SizedBox(
+                    height: Layout.topBar,
+                    child: GlassSurface(
+                      blur: true,
+                      radius: Radii.full,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Sp.x1),
+                        child: IconTheme.merge(
+                          data: IconThemeData(color: context.palette.text),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: actions),
+                        ),
+                      ),
+                    ),
+                  ),
+            middleSpacing: Sp.x3,
           ),
         ),
       ),

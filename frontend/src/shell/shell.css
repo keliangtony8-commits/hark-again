@@ -17,7 +17,12 @@
     rgba(0, 0, 0, .1) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .8),
     transparent var(--fade-b));
   -webkit-mask-image: var(--fade); mask-image: var(--fade); }
-.shell:not(.has-bar) .sky-fade-page { display: none; } /* 子页面自带标题栏，不渐隐（= 原来只有 .shell.has-bar .page 有遮罩） */
+.shell:not(.has-bar) .sky-fade-page { display: none; } /* 没有顶栏、也没有下面两种页头的整屏页不渐隐 */
+/* 子页面（v3.5 标题行没有玻璃底了，= App SubPage 的 BackdropFade）：标题行中线以上全是壁纸，到内容静止时的顶边（行下 sp-5）恰好全显。
+   标题行是 .page 里的 sticky（z 4），盖在这条（z 1）上面；.page 不建层叠上下文，两者同层比 z。 */
+.shell .page:has(> .page-head) + .sky-fade-page { display: block;
+  --fade-a: calc(var(--topbar-top) + var(--topbar-h) / 2 + env(safe-area-inset-top));
+  --fade-b: calc(var(--topbar-top) + var(--topbar-h) + var(--sp-5) + env(safe-area-inset-top)); }
 /* “我的”没有顶栏也没有标题栏（返回钮在滚动内容里）：同一条渐隐（= App me_screen.dart 的 BackdropFade）。刘海 / 状态栏以上全是壁纸，
    到页头静止时的顶边（.me .page-inner 上留白 + .me-head 上留白）恰好全显：翻下去内容不切在顶边、不进状态栏，静止时页头不被盖。 */
 .shell .page.me + .sky-fade-page { display: block;

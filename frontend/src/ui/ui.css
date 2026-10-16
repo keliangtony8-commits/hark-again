@@ -3,21 +3,25 @@
 /* --inset-top / --inset-bottom 由外壳给：一级页面要让出浮动顶栏，带输入胶囊的页面要让出底部（.page.has-composer） */
 .page-inner { max-width: var(--content-w); margin: 0 auto; padding: calc(var(--inset-top, 0px) + var(--sp-4)) var(--gutter) var(--sp-7); }
 .page.has-composer .page-inner { padding-bottom: calc(var(--footer-h) + var(--sp-5)); }
-/* 子页面标题栏：顶部一条浮动玻璃胶囊（和一级页面的顶栏同位置、同高度） */
-.page-head { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--topbar-h); padding: 0 var(--sp-1);
+/* 子页面标题行（v3.5 照 Hark 钱包 / 安全 / 系统偏好设置截图，= App ui/sub_page.dart GlassAppBar）：没有整条栏、没有标题底——
+   左边一颗独立的圆玻璃返回钮，标题居中裸字，右侧操作收进一颗玻璃胶囊；和一级页顶栏同一行位置、同高。
+   三栏 1fr auto 1fr：标题按整行居中，两侧再宽也不会压到它。滚上去的内容由 .sky-fade-page 渐隐（shell.css）。 */
+.page-head { display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; align-items: center; gap: var(--sp-3); height: var(--topbar-h);
   position: sticky; top: calc(var(--topbar-top) + env(safe-area-inset-top)); z-index: 4;
   width: min(calc(100% - 2 * var(--gutter)), calc(var(--content-w) - 2 * var(--gutter))); margin: calc(var(--topbar-top) + env(safe-area-inset-top)) auto 0;
+  animation: float-in var(--dur) var(--ease) both; }
+.page-head > .glass-btn { grid-column: 1; justify-self: start; width: var(--topbar-h); height: var(--topbar-h); }
+.page-head-actions { grid-column: 3; justify-self: end; display: flex; align-items: center; height: var(--topbar-h); padding: 0 var(--sp-1);
   border-radius: var(--r-full); background: var(--glass); border: 1px solid var(--chrome-edge); box-shadow: var(--elev-float);
-  -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); animation: float-in var(--dur) var(--ease) both; }
+  -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); }
 .page-head + .page-inner { padding-top: var(--sp-5); }
-.page-head h1 { flex: 1; margin: 0; font-size: var(--fs-md); font-weight: var(--fw-strong); }
-.page-head h1 { padding-left: var(--sp-1); }
+.page-head h1 { grid-column: 2; margin: 0; min-width: 0; text-align: center; font-size: var(--fs-md); font-weight: var(--fw-strong);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 一级页面的大标题（顶栏下方，衬线点缀） */
 /* 一级页面页头（主页、项目）：小标签一行 + 衬线大标题，= App 的 _Hero / _Header（Layout.headTop 节奏） */
 .page-hero { padding: var(--sp-5) var(--sp-1) var(--sp-5); animation: rise var(--dur) var(--ease) both; }
 .page-hero-label { display: block; min-height: 1.5em; font-size: var(--fs-xs); color: var(--text-3); }
 .page-hero h1 { font-weight: var(--fw-strong); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: var(--sp-2) 0 0; }
-.page-head .spacer { width: 40px; }
 
 .section { margin-top: var(--section-gap); }
 .section:first-child { margin-top: 0; }

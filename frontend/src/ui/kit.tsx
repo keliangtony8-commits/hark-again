@@ -5,14 +5,14 @@ import { IconBack, IconCheck, IconChevron, IconClose, IconSearch } from "./icons
 import { SkyFade } from "./Sky";
 import "./ui.css";
 
-/** 子页面的浮动玻璃标题栏（返回 + 标题 + 右侧操作），和一级页面的顶栏同位置。 */
+/** 子页面标题行（v3.5 照 Hark，= App GlassAppBar）：[圆玻璃返回钮] 居中裸字标题 [操作玻璃胶囊]，和一级页面的顶栏同位置、同高。 */
 export function PageHeader({ title, back, action }: { title: string; back?: boolean; action?: ReactNode }) {
   const nav = useNavigate();
   return (
     <header className="page-head">
-      {back && <button className="icon-btn" onClick={() => nav(-1)} aria-label="返回"><IconBack /></button>}
+      {back && <button className="glass-btn glass" onClick={() => nav(-1)} aria-label="返回" title="返回"><IconBack /></button>}
       <h1>{title}</h1>
-      {action ?? (back ? <span className="spacer" /> : null)}
+      {action && <div className="page-head-actions">{action}</div>}
     </header>
   );
 }
