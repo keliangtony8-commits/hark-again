@@ -73,7 +73,7 @@
 - 后端：backend/.venv 逐个跑 tests/smoke_*.py：**202/202 过**（共 203 个，跳过需真密钥的 smoke_stepfun；smoke_preview_ws 本次一次过）。
 
 ### C. 发布步骤（全部通过后）
-VERSION → 3.3.0，`python3 brand/sync.py`，CHANGELOG 加一节（含“删除/合并”行），合并到 main，tag v3.3，GitHub Actions 出 APK。服务器只有用户明确说“更新服务器”才部署；部署前删除服务器上 tag 里不存在的旧源码文件（见第二节第 17 条 / work/vps/README.md）。
+VERSION → 3.3.0，`python3 brand/sync.py`，CHANGELOG 加一节（含“删除/合并”行），合并到 main，tag v3.3，push（APK 按第二节第 12 条等用户要时才编；GitHub Actions 的 app.yml 是每次 push 自动跑的测试 + 构建检查，产物只留在 GitHub，不算交付）。服务器只有用户明确说“更新服务器”才部署；部署前删除服务器上 tag 里不存在的旧源码文件（见第二节第 17 条 / work/vps/README.md）。
 
 ### D. 参考
 - 流光着色器设计参考 mesh_gradient（MIT，Ben Fornefeld），未复制代码；需在 NOTICE 加一行。
