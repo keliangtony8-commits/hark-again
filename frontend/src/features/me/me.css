@@ -22,7 +22,7 @@
 .me-group { margin-top: var(--card-gap); }
 /* v3.0 底部设置搜索（= App me_screen.dart _SearchBar）：和输入胶囊同一位置（.composer-wrap 的留白、同一阅读宽度）、同一玻璃（.glass），
    单行所以全圆角、和输入胶囊同高；聚焦只把发丝边加深一点（= .composer:focus-within）。结果区紧跟页头，和用量卡同一节奏。 */
-.me-search { max-width: var(--content-w); margin: 0 auto; padding: 0 var(--gutter) calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+.me-search { max-width: calc(var(--content-w) - 2 * var(--sp-3)); margin: 0 auto; padding: 0 calc(var(--gutter) + var(--sp-3)) calc(var(--sp-4) + env(safe-area-inset-bottom)); } /* v3.3 按 Hark：两侧再内收，小而精 */
 .me-search .search-field.glass { height: 56px; padding: 0 var(--sp-2) 0 var(--sp-5); background: var(--glass); border-color: var(--glass-border); }
 .me-search .search-field.glass:focus-within { border-color: color-mix(in srgb, var(--text) 22%, var(--glass-border)); }
 .me-search .search-field input { font-size: var(--fs-md); }

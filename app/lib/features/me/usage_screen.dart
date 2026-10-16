@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api.dart';
+import '../../core/swr.dart';
 import '../../core/share.dart';
 import '../../models/usage.dart';
 import '../../models/usage_csv.dart';
@@ -19,8 +19,8 @@ import 'usage_chart.dart';
 import 'usage_day.dart';
 import 'usage_router.dart';
 
-final usageProvider = FutureProvider.autoDispose<UsageReport>(
-    (ref) async => UsageReport.fromJson((await ref.read(apiProvider).get('/api/usage') as Map).cast<String, dynamic>()));
+/// 用量报表：SWR（core/swr.dart），落盘——再进页面、冷启动都先显示上次的报表，后台再取新的。
+final usageProvider = swrGet<UsageReport>('/api/usage', (j) => UsageReport.fromJson(jsonMap(j)), diskKey: 'usage');
 
 /// 我的页那一行的副标题；没加载到就给一句静态说明。
 String usageSubtitle(UsageReport? r) {
@@ -40,12 +40,11 @@ class UsageScreen extends ConsumerWidget {
     return SubPage(
       title: const Text('用量与花费'),
       actions: [_ExportButton(value.value)],
-      // 骨架 → 报表 / 失败 交叉淡化（FadeSwitcher 按 key 换态）；下拉刷新时保留旧报表，数字从旧值滚到新值（CountUp）
+      // 只有第一次没数据才是骨架；之后再进来首帧就是上次的报表（SWR），后台取到新的数字从旧值滚到新值（CountUp）
       body: FadeSwitcher(
-        child: value.when(
-          skipLoadingOnReload: true,
+        child: value.swr(
           loading: () => const PageBody(key: ValueKey('loading'), children: [_ReportSkeleton()]),
-          error: (e, _) => PageBody(key: const ValueKey('error'), children: [
+          error: (e) => PageBody(key: const ValueKey('error'), children: [
             EmptyHint(
               icon: Icons.cloud_off_rounded,
               title: '加载失败',
@@ -56,8 +55,8 @@ class UsageScreen extends ConsumerWidget {
           data: (r) => PullRefresh(
             key: const ValueKey('data'),
             onRefresh: () {
-              ref.invalidate(usageDayProvider); // 过去某天的明细也一起重取
-              return ref.refresh(usageProvider.future);
+              ref.invalidate(usageDayProvider); // 选中那天的明细也后台重取（有缓存照常显示）
+              return ref.read(usageProvider.notifier).reload();
             },
             child: _Report(r),
           ),

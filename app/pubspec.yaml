@@ -35,6 +35,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/mark.png
+  # v3.3 流光壁纸（ui/sky.dart）：一个片元着色器，整屏一次绘制
+  shaders:
+    - shaders/sky.frag
   # v3.2：中英同一套 MiSans（小米，免费商用可嵌入，须注明；常用字子集，许可见 assets/fonts/MiSans-LICENSE.txt）。
   fonts:
     - family: MiSans

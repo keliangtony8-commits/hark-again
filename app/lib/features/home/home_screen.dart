@@ -111,7 +111,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onRefresh: _refreshAll,
             child: PageBody(children: [
               FadeSwitcher(
-                child: cards.isLoading
+                child: !cards.hasValue // 只有第一次没数据才骨架；下拉刷新、后台重取时照常显示（core/swr.dart）
                     ? const SkeletonList(key: ValueKey('loading'), rows: 3)
                     : Column(key: const ValueKey('stack'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                         for (var i = 0; i < stack.length; i++) FadeSlideIn(delay: Motion.stagger(i), child: stack[i]),

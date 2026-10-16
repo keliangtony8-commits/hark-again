@@ -9,35 +9,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
+import '../../core/swr.dart';
 import '../../models/browser_session.dart';
 import '../../theme/tokens.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 
-class BrowserSessionsNotifier extends AsyncNotifier<List<BrowserSession>> {
-  static const _path = '/api/browser/sessions';
+/// 加载 / 静默刷新规则在 core/swr.dart（只在内存）；这里只管退出。
+class BrowserSessionsNotifier extends SwrNotifier<List<BrowserSession>> {
+  @override
+  String get path => '/api/browser/sessions';
   Api get _api => ref.read(apiProvider);
 
   @override
-  Future<List<BrowserSession>> build() async => _parse(await _api.get(_path));
-
-  List<BrowserSession> _parse(dynamic j) => sortBrowserSessions(
+  List<BrowserSession> parse(Object? j) => sortBrowserSessions(
       [for (final x in ((j as Map)['sessions'] as List? ?? const [])) BrowserSession.fromJson((x as Map).cast<String, dynamic>())]);
-
-  /// 静默刷新：失败保留旧数据。
-  Future<void> reload() async {
-    try {
-      state = AsyncData(_parse(await _api.get(_path)));
-    } on ApiError {
-      if (!state.hasValue) rethrow;
-    }
-  }
 
   /// 退出登录：成功后先从列表里拿掉（不等刷新），出错抛给调用方提示。
   Future<void> signOut(String name) async {
-    await _api.delete('$_path/${Uri.encodeComponent(name)}');
+    await _api.delete('$path/${Uri.encodeComponent(name)}');
     state = AsyncData([for (final s in state.value ?? const <BrowserSession>[]) if (s.name != name) s]);
+    resync();
   }
 }
 

@@ -1,19 +1,19 @@
 /* v2.93 §Q 项目列表（= App _ProjectRow）：一行一个大字项目名，行尾状态胶囊 + ⋯；不是“当前”的项目名用三级色（静态，不做颜色动画）。
    骨架与行同高，换成内容不跳版 */
-.project-hero { padding-bottom: var(--sp-3); }
+.project-hero { height: var(--sp-5); }
 .project-list { display: flex; flex-direction: column; max-width: var(--content-w); }
-.project-skel { height: 48px; margin: var(--sp-2) 0 !important; border-radius: var(--r-inner); }
-.project-row { position: relative; display: flex; align-items: center; gap: var(--sp-2); min-height: 64px; }
+.project-skel { height: 88px; margin: var(--sp-2) 0 !important; border-radius: var(--r-inner); }
+.project-row { position: relative; display: block; }
 .project-row:has(.menu.open) { z-index: 3; } /* 入场动画让每行自成层叠上下文：菜单打开时抬高本行，弹出层才盖得住下一行 */
-.project-row-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-3); min-height: 64px; color: var(--text); border-radius: var(--r-inner);
+.project-row-link { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3) 0; min-height: 56px; color: var(--text); border-radius: var(--r-inner);
   transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease); }
 .project-row-link:hover { transform: translateX(2px); }
 .project-row-link:active { transform: scale(.98); transition-duration: var(--dur-fast); }
-.project-row-emoji { flex: none; font-size: 22px; }
-.project-row-name { flex: 1; min-width: 0; font-weight: var(--fw-strong); font-size: var(--fs-xl); line-height: 1.2; letter-spacing: var(--display-tracking);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-row-name { max-width: 100%; font-weight: var(--fw-strong); font-size: var(--fs-xl); line-height: 1.2; letter-spacing: var(--display-tracking);
+  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.project-row-status { display: flex; min-height: 32px; align-items: center; }
 .project-row.is-quiet .project-row-name { color: var(--text-3); }
-.project-row.is-quiet .project-row-emoji { opacity: .5; }
+.project-row > .menu { position: absolute; right: 0; bottom: var(--sp-3); }
 .project-row > .menu .menu-trigger { color: var(--text-3); }
 .project-new { flex: none; padding: 0 var(--sp-5); }
 @media (prefers-reduced-motion: reduce) { .project-row-link, .project-row-link:hover { transition: none; transform: none; } }

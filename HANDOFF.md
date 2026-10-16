@@ -5,6 +5,40 @@
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
+## 〇、最新交接（2026-10-16 16:05，接手先读这一节）
+**线上 = v3.2.1（服务器 + APK 已发）。下面的 v3.3 工作全部未测试、未提交到 main，放在分支 `wip/v3.3`。不要部署，不要覆盖 v3.2.1。**
+
+### A. 已完成且测试通过（可直接保留）
+1. 项目列表按 Hark：名字占满整行最多 3 行、状态胶囊另起一行；删页头摘要 / 列表 emoji / App 行尾 ⋯（改长按菜单）；Web ⋯ 在胶囊行右端。文件：app/lib/features/projects/projects_screen.dart、test/projects_screen_test.dart、frontend/src/features/projects/ProjectsScreen.tsx、projects.css。
+2. “我的”底部搜索胶囊两侧内收到 Layout.gutter + Sp.x3（=36），Web .me-search 同值；me_search_test 有断言。
+   - 已跑：`flutter test test/projects_screen_test.dart test/me_search_test.dart` 27 项全过；web `tsc -b` + check-arch 通过。
+
+### B. 写了但没验证（接手第一步：让 App 编译通过）
+环境：/tmp 被清过，先 `git clone --depth 1 -b stable https://github.com/flutter/flutter.git /tmp/flutter`，`cd app && flutter pub get`。
+1. **SWR 统一缓存（用户要求：切页不要每次出骨架屏，先显示上次内容、后台静默刷新）**
+   - 新 app/lib/core/swr.dart（SwrCache 64 条 LRU、SwrNotifier、swrGet/swrGetFamily、AsyncValue.swr）。
+   - 已改：core/resource.dart、session.dart、usage_screen/usage_day、conversation_files/memory/usage/share、feedback/security/task_detail、login_sessions、reply_language、computer/host/browser_sessions、memory_digest、memory_notes、home_screen、kit.dart AsyncBody、test/design_p3_test.dart（已补 import）。
+   - 待做：flutter analyze 修到 0；修所有引用这些 provider 的测试；新增 test/swr_test.dart（二次进入不出骨架 / 后台刷新替换 / 有缓存出错仍显示 / 退出登录清空）；全量 flutter test。
+   - **Web 未开始**：要写 frontend/src/lib/swr.ts + hooks/useSwr.ts，useResource 基于它，替换 ConversationFilesSheet、ConversationMemory、ShareSheet、BrowserSessionsSection、HostSection、useComputer、DayBreakdown、FeedbackDetail、FeedbackScreen、LoginSessions、ReplyLanguageRow、SecurityScreen、UsageCard、useConversationUsage、useTaskRuns、useServerVersion、useMemoryDigest 里的 useEffect+http.get。
+2. **流光壁纸（用户要求：随时间变化，夜里暗蓝紫灰、白天亮蓝→暖米，柔和流动，绝不能卡）**
+   - 已写：app/shaders/sky.frag（pubspec 已注册）；tokens.dart 删 Palette.backdrop → `SkyTable sky`（浅/深 × 夜/黎明/白天/黄昏，Sky.keyframes 插值，Sky.frame=33ms）；motion.dart 末尾 `SkyClock`（单 Timer≈30fps、无订阅/后台/测试环境 FLUTTER_TEST 时停）；新 app/lib/ui/sky.dart（SkyLayer：着色器，加载失败回退竖向渐变）；glass.dart Backdrop 改用 SkyLayer。
+   - 待做：编译验证；grep 其他引用 `p.backdrop`/`backdrop:` 的地方（含测试、对比度测试）改掉；test/sky_test.dart（插值、正文对比度 ≥4.5、测试环境不起计时器）；截图看浅/深效果。
+   - Web 未开始：tokens.css 同一张色表、src/lib/sky.ts 每分钟设 --sky-* 变量、base.css 固定 .sky 层三团 radial-gradient 只动 transform、reduce-motion 不动。
+3. **卡顿根因（用户：16GB 手机也卡；不准删功能/效果）——还没改代码**
+   - 约 9 处独立 BackdropFilter（top_bar、GlassIconButton、composer、project_switcher、chat_view JumpLatest/ErrorBar、inbox、me 搜索、browser_takeover、sub_page 标题）每帧各自模糊 → 用 BackdropGroup + BackdropFilter.grouped。注意：同组只在第一个滤镜处取一次背景，所以分组放三处：AppShell（横幅不进组）、ShellPage 内容、SubPage；ShellPage 绘制顺序 内容→顶部渐隐条→header→lead。
+   - kit.dart TopFade = 整页 ShaderMask(dstIn) 离屏层 → 删掉，改为 ShellPage 顶部一条 SkyLayer(fade: (clear, solid))（sky.dart 已支持 fade 参数），改 test/shell_page_test.dart。
+   - chat_view.dart 流式时整列重建 → 按 Message 实例 + 行状态缓存行 widget（ChatController 只替换最后一条，其余实例不变）。
+   - Markdown：AppMarkdown 每次 build 新建 MarkdownStyleSheet → 缓存。
+   - Web：shell.css 6-15 `.page` 与 chat.css:90 `.thread` 的 mask-image 让整个滚动区离屏 → 改顶部窄条。
+   - 完成后：Flutter profile/frame timing，Web Chrome 4× CPU trace。
+
+### C. 发布步骤（全部通过后）
+VERSION → 3.3.0，`python3 brand/sync.py`，CHANGELOG 加一节（含“删除/合并”行），合并到 main，tag v3.3，GitHub Actions 出 APK。服务器只有用户明确说“更新服务器”才部署；部署前删除服务器上 tag 里不存在的旧源码文件（见第二节第 17 条 / work/vps/README.md）。
+
+### D. 参考
+- 流光着色器设计参考 mesh_gradient（MIT，Ben Fornefeld），未复制代码；需在 NOTICE 加一行。
+- 决策记录：docs/devlog.md 末尾 2026-10-15 23:15 之后几节。
+
 ## 一、项目是什么
 - 用户是预算有限的学生，自建个人 AI 助手 **Toyuis**（产品名，记住），目标：对齐 Hark / Muse / Dots / Cue 这类消费级助手的**公开**功能与体验。
 - 架构：FastAPI 后端 + 自写 agent 循环 + LiteLLM + Postgres/pgvector + Playwright 浏览器/沙盒 worker；Flutter App（Android 优先，主客户端）；React Web（电脑端）。
@@ -37,6 +71,11 @@
    - **绝不能删**（删了要重装、会坏、或丢数据）：安卓 SDK、Flutter、JDK（`/opt/apkbuild/sdk|flutter|jdk`）；正在运行或 compose 引用的镜像（含 `assistant-sandbox`，即使当前没容器在跑）；数据库和数据卷（`/opt/assistant/data`、Docker volumes）；`/root/backups`；最近一版代码包（如 `v293.tgz`、`app-v2911-backup.tgz` 这类最近备份）和最近两份 `.env` 备份；部署脚本本身；`/swap.img`（常驻 swap）。
    - **拿不准就不删**，先查它被谁用（grep compose/脚本/代码），还拿不准就问用户；删前删后都 `df -h`，删后确认容器全部 Up、`/api/version` 正常。
    - **能自动的写进脚本**：`deploy/build-apk.sh` 结尾清上面“必须删”里的 APK 缓存；更新脚本结尾 `docker image prune -f` + `docker builder prune -f`。**v3.0.1 已落地**（APK 产物改为 `/root/toyuis-<版本>-arm64.apk`，只留最新一份；测试 `deploy/tests/test_build_apk_cleanup.sh`；未在 VPS 实跑）。本地沙盒同理：测试日志、临时截图用完就删。
+
+18. **流畅丝滑是“顾全大局”的一部分**（用户 2026-10-15 23:05，原话大意：“做新功能、新动效或任何东西时，都要保证软件和网页的流畅性丝滑性，不能做一些东西就卡顿……叫你顾全大局，要思考就思考这些东西”；用户为此很伤心，不想每次提醒）：
+   - 每个改动（新功能、动效、换样式、优化）上线前都要证明 **App 和 Web 不因它变卡**：动手前估算成本（毛玻璃 / backdrop 层数、重建范围、会触发布局的动画、大字体 / 大图、逐帧计算），做完后验证（Flutter 帧耗时测试 / profile 光栅 < 16ms；Web Chrome 性能录制 4× CPU 降速）。
+   - **优化卡顿不准删功能、不准删效果**（用户 23:03：“保证功能完好、效果完好的同时去优化卡顿”）。
+   - 照 Hark 截图做的界面要**忠实还原版式**（23:02 项目列表：项目名占满整行、状态胶囊另起一行），不能“学一半”。
 
 ## 三、工程规矩（看代码 / 改代码时）
 - **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**

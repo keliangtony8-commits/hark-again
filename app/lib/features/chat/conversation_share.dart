@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../core/resource.dart';
+import '../../core/swr.dart';
 import '../../core/share.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
@@ -20,26 +21,24 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 
-class ConversationShareNotifier extends AsyncNotifier<ConversationShare> {
+class ConversationShareNotifier extends SwrNotifier<ConversationShare> {
   ConversationShareNotifier(this.id);
   final String id;
 
-  String get _path => '/api/conversations/$id/share';
+  @override
+  String get path => '/api/conversations/$id/share';
 
   @override
-  Future<ConversationShare> build() async => _parse(await ref.read(apiProvider).get(_path));
-
-  ConversationShare _parse(dynamic j) => ConversationShare.fromJson((j as Map).cast<String, dynamic>());
+  ConversationShare parse(Object? j) => ConversationShare.fromJson(jsonMap(j));
 
   /// 生成 / 更新快照并公开（停止过的也恢复，原链接不变）。
-  Future<void> share() => _run(() => ref.read(apiProvider).post(_path));
+  Future<void> share() => _run(() => ref.read(apiProvider).post(path));
 
   /// 停止分享 = 下线：链接打不开，但保留，再分享原链接恢复。
-  Future<void> unshare() => _run(() => ref.read(apiProvider).delete(_path));
+  Future<void> unshare() => _run(() => ref.read(apiProvider).delete(path));
 
   Future<void> _run(Future<dynamic> Function() call) async {
-    final next = _parse(await call()); // 出错直接抛给调用方提示，旧状态不动
-    state = AsyncData(next);
+    emit(await call()); // 出错直接抛给调用方提示，旧状态不动
     ref.invalidate(pagesProvider);
   }
 }
@@ -111,10 +110,9 @@ class _ConversationShareSheetState extends ConsumerState<ConversationShareSheet>
               style: context.text.bodySmall?.copyWith(color: p.text2)),
           const SizedBox(height: Sp.x4),
           SwapSwitcher(
-            child: value.when(
-              skipLoadingOnReload: true,
+            child: value.swr(
               loading: () => const Shimmer(key: ValueKey('loading'), height: 104),
-              error: (e, _) => Column(key: const ValueKey('error'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              error: (e) => Column(key: const ValueKey('error'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Text(e is ApiError ? e.message : '加载失败', style: context.text.bodySmall),
                 const SizedBox(height: Sp.x3),
                 PillButton(label: '重试', onTap: () => ref.invalidate(conversationShareProvider(widget.id))),

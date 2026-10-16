@@ -2,8 +2,10 @@
 // 无障碍：系统开了“移除动画”（MediaQuery.disableAnimations）时，这里的每个组件都直接给出终态、
 // 循环动画停住；页面里需要时长的地方用 context.motion(Motion.x)，同样会被归零。
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -871,4 +873,63 @@ class DropIn extends StatelessWidget {
           ),
         ),
       );
+}
+
+
+/// v3.3 流光壁纸的唯一时钟（ui/sky.dart 的壁纸与 ShellPage 顶部渐隐条共用，像素对齐）。
+/// 只有一个 Timer（Sky.frame ≈ 30 帧/秒，不用 Ticker：Ticker 每个 vsync 都出一帧，起不到节流作用）；
+/// 没有订阅者 / App 不在前台 / 测试环境时不跑；天色按钟点每分钟重算一次（hour）。
+class SkyClock with WidgetsBindingObserver {
+  SkyClock._();
+  static final SkyClock instance = SkyClock._();
+
+  /// flutter test 下完全静止：大量测试用 pumpAndSettle，常驻计时器会让它永远等不完。
+  static final bool frozen = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+
+  final ValueNotifier<double> time = ValueNotifier(0);
+  final ValueNotifier<double> hour = ValueNotifier(_nowHour());
+  final Stopwatch _watch = Stopwatch();
+  Timer? _frame, _recolor;
+  int _users = 0;
+  bool _observing = false, _resumed = true;
+
+  static double _nowHour() {
+    final n = DateTime.now();
+    return n.hour + n.minute / 60 + n.second / 3600;
+  }
+
+  void acquire() {
+    _users++;
+    if (!_observing) {
+      WidgetsBinding.instance.addObserver(this);
+      _observing = true;
+    }
+    _sync();
+  }
+
+  void release() {
+    _users = math.max(0, _users - 1);
+    _sync();
+  }
+
+  void _sync() {
+    final run = !frozen && _users > 0 && _resumed;
+    if (run && _frame == null) {
+      _watch.start();
+      hour.value = _nowHour();
+      _frame = Timer.periodic(Sky.frame, (_) => time.value = _watch.elapsedMilliseconds / 1000);
+      _recolor = Timer.periodic(Sky.recolor, (_) => hour.value = _nowHour());
+    } else if (!run && _frame != null) {
+      _watch.stop();
+      _frame?.cancel();
+      _recolor?.cancel();
+      _frame = _recolor = null;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _resumed = state == AppLifecycleState.resumed;
+    _sync();
+  }
 }

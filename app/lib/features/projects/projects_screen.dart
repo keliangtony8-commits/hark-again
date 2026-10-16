@@ -1,6 +1,6 @@
 // 项目：长期的事各有自己的一段对话、文件和规则。列表 → 点开就是那段对话（v2.95 项目 = 一段对话；都在一级外壳下）。
-// 版式（v2.93 §Q，按 Hark）：顶上一行小标签（几个项目 · 最近活动），下面一行一个大字项目名（displaySmall），
-// 行尾是项目状态胶囊（= 那段对话的状态，服务器 status，规则在后端 conversation_status）和 ⋯；长按 = 同一份菜单。
+// 版式（v3.2.2 按 Hark 真机截图）：一项 = 占满整行的大字项目名（displaySmall，可折行）+ 下一行状态胶囊
+// （= 那段对话的状态，服务器 status，规则在后端 conversation_status）；没有页头小标签、emoji、⋯，长按 = 项目菜单。
 // “当前”的项目正文色，其余变灰（projectIsCurrent）。没有卡片网格、没有输入框：这一页只负责“选一件事”。
 // 加载 / 空 / 出错 / 列表四态在同一个 FadeSwitcher 里交叉淡化，加载态是同高骨架，内容到了不跳版。
 // 左上 + = 新建项目；它和项目页的 ≡（项目切换）是同一颗钮（MenuPlusHero，tag = projectLeadTag），进出项目时原地 morph。
@@ -13,7 +13,6 @@ import '../../core/resource.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
-import '../../ui/format.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
@@ -147,8 +146,7 @@ class ProjectsScreen extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(Layout.gutter, 0, Layout.gutter, Sp.x5) + EdgeInsets.only(top: safe.top, bottom: safe.bottom),
             children: [
-              _Header(projects: list),
-              const SizedBox(height: Sp.x3),
+              const SizedBox(height: Layout.headTop - Sp.x3), // 内容让位线已含顶栏下 12
               FadeSwitcher(child: content),
             ],
           ),
@@ -158,39 +156,16 @@ class ProjectsScreen extends ConsumerWidget {
   }
 }
 
-/// 页头：一行小标签（顶栏“项目”已是页名，不再画大标题）。标签内容变化时换一下，不跳高度。
-class _Header extends StatelessWidget {
-  const _Header({required this.projects});
-  final List<Project>? projects;
-
-  /// “3 个项目 · 最近 今天 09:12”；还在加载时是空串（行高照占）。
-  static String summary(List<Project>? list) {
-    if (list == null) return '';
-    if (list.isEmpty) return '长期的事放这里';
-    final latest = byActivity(list).first.activeAt;
-    final when = latest == null ? '' : formatAgo(latest);
-    return ['${list.length} 个项目', if (when.isNotEmpty) '最近 $when'].join(' · ');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final line = summary(projects);
-    return Padding(
-      padding: const EdgeInsets.only(top: Layout.headTop - Sp.x3), // 内容让位线已含顶栏下 12
-      child: Align(alignment: Alignment.centerLeft, child: SwapSwitcher(child: Text(line, key: ValueKey(line), style: context.text.labelSmall))),
-    );
-  }
-}
-
-/// 一行一个项目：小 emoji + 大字名字（放不下省略）+ 状态胶囊 + ⋯。不是当前的项目名字用三级色、emoji 半透明（静态，不做颜色动画）。
+/// 一行一个项目（v3.2.2 按 Hark 真机截图）：大字项目名占满整行、放不下就折行（最多 3 行），状态胶囊在名字下面另起一行。
+/// 不画 emoji、不画 ⋯：emoji 留在项目内的项目名药丸上，菜单 = 长按（同项目内药丸那一份）。不是当前的项目名字用三级色。
 class _ProjectRow extends StatelessWidget {
   const _ProjectRow({required this.project, required this.current, required this.onTap, required this.onMenu});
   final Project project;
   final bool current;
   final VoidCallback onTap, onMenu;
 
-  /// 固定行高：大字一行 + 上下留白；骨架同高，字体放大时也不跳版。
-  static const height = 64.0;
+  /// 骨架行高（一行名字 + 胶囊）；真实行按内容自适应。
+  static const height = 104.0;
 
   @override
   Widget build(BuildContext context) {
@@ -200,19 +175,14 @@ class _ProjectRow extends StatelessWidget {
       onTap: onTap,
       onLongPress: onMenu,
       semanticLabel: [project.name, if (status != null) status.label].join('，'),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: height),
-        child: Row(children: [
-          Opacity(opacity: current ? 1 : Op.dimmed, child: Text(project.emoji, style: context.text.titleLarge)),
-          const SizedBox(width: Sp.x3),
-          Expanded(
-            child: Text(project.name,
-                style: context.text.displaySmall?.copyWith(color: current ? p.text : p.text3),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-          ),
-          if (status != null) ...[const SizedBox(width: Sp.x2), StatusCapsule(status)],
-          QuietAction(icon: const Icon(Icons.more_horiz_rounded), tooltip: '更多', onPressed: onMenu),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Sp.x3),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(project.name,
+              style: context.text.displaySmall?.copyWith(color: current ? p.text : p.text3),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis),
+          if (status != null) ...[const SizedBox(height: Sp.x2), StatusCapsule(status)],
         ]),
       ),
     );

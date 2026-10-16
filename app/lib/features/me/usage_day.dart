@@ -1,14 +1,14 @@
 // 用量图上选中某一天 → 那天的明细（挂在 DailyUsageChart 的 detail 位置，同一张卡里）：
 //   1. 按模型拆分；2. 那天最花钱的几个对话（点一行 → openConversation 跳进去，已删的不可点）。
 // 数据流：一律取 GET /api/usage/days/{date}（今天也取——报表里没有“今天的对话”）；provider 以日期为键，
-// autoDispose——离开用量页就丢；下拉刷新用量页时一起作废（usage_screen 里 invalidate）。
+// SWR（core/swr.dart）：看过的那天再选 / 再进用量页首帧就是明细，后台重取；下拉刷新用量页时一起重取（usage_screen 里 invalidate）。
 // 今天在请求途中/失败时先用报表里的 today 画模型行，不闪骨架。
 // 图表只在“选定”（点下、拖完、读屏调节）时才换这里的日期，拖动途中不发请求。
 // 版面：模型行和对话行是同一种紧凑行（_ShareRow：名字 · 副文 · 钱，下面一条占当天比例的 MeterBar）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api.dart';
+import '../../core/swr.dart';
 import '../../models/usage.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -20,8 +20,7 @@ import '../chat/open_conversation.dart';
 String dayKey(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-final usageDayProvider = FutureProvider.autoDispose.family<UsageDayDetail, String>((ref, date) async =>
-    UsageDayDetail.fromJson((await ref.read(apiProvider).get('/api/usage/days/$date') as Map).cast<String, dynamic>()));
+final usageDayProvider = swrGetFamily<UsageDayDetail, String>((date) => '/api/usage/days/$date', (j) => UsageDayDetail.fromJson(jsonMap(j)));
 
 /// 某一天的明细。[today] 为真时，请求途中和失败时先用 report.today 画模型行。
 class DayBreakdown extends ConsumerWidget {
@@ -35,10 +34,9 @@ class DayBreakdown extends ConsumerWidget {
     if (day.calls == 0) return const SizedBox(width: double.infinity);
     final key = dayKey(day.date);
     final fallback = today ? DayModelRows(models: report.today.models, priced: report.priced, currency: report.currency) : null;
-    return ref.watch(usageDayProvider(key)).when(
-          skipLoadingOnReload: true,
+    return ref.watch(usageDayProvider(key)).swr(
           loading: () => fallback ?? const SkeletonList(rows: 1),
-          error: (_, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          error: (_) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             ?fallback,
             _Retry(onTap: () => ref.invalidate(usageDayProvider(key))),
           ]),

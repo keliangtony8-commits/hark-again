@@ -269,3 +269,22 @@
 - 历史搜索：原来面板 scope=None 只搜主聊天，项目那段根本搜不到（HANDOFF 写的“无 project_id”实为搜不到）。对标 Hark 顶部搜索“搜全部”：面板改 scope=ALL（= search_history 工具同一范围，不新增分支），项目那段的结果带 project_id/project_name；任务运行对话不带（照旧按 id 打开，v2.75 规则不变）。客户端：结果行加项目名（.conv-where / 摘录前缀），点开走唯一跳转入口（App openConversation、Web openElsewhere）+ focus 定位；项目行不给菜单（项目对话 DELETE 409，改名归项目）。openProjectChat 接受 focus。
 - 占位符截断：Web 输入框档位钮在 ≤480px 只留图标（.chip-text 隐藏，aria-label 不变）；App 本来就窄，不动。
 - shots.py 补 /api/connectors/mcp、/api/memory-notes、/api/version 假数据（跑完不再列缺失清单）。
+
+## 2026-10-15 23:15 v3.3 项目列表 + “我的”搜索胶囊按 Hark 真机截图重做（用户 23:02/23:09 截图 1000035503、1000035505）
+- 用户原话：“人家是全屏显示那个项目名称的…你搞个半个”；“搜索框你做那么长干嘛…人家小而美，没有占满屏宽”。
+- 根因：项目行把 emoji + 名字 + 状态胶囊 + ⋯ 塞在一行，名字被挤成半截省略；页头还有一行“N 个项目 · 最近 …”。Hark：名字占满整行（可折行），状态胶囊另起一行，没有页头、emoji、⋯。
+- 改法（两端同一版式，替换而非叠加）：App `_ProjectRow` = Column(名字 displaySmall 最多 3 行, 胶囊)；删 `_Header` 及摘要逻辑；菜单 = 长按（同项目内药丸那份 showProjectMenu）。Web 同：删 page-hero-label 摘要与 emoji，名字可折行（line-clamp 3），胶囊一行；⋯ 留在胶囊那一行右端（电脑没有长按），不占名字宽度。
+- “我的”底部搜索胶囊：两侧在页面留白 24 之外再内收 Sp.x3（= 36，≈ Hark 屏宽 1/12）；App me_screen `_SearchBar`、Web `.me-search` 同值；me_search_test 断言左右内收。
+- 删除/合并：项目列表页头摘要、列表 emoji、列表行 ⋯（App）。
+
+## 2026-10-15 v3.3 页面不再每次骨架屏：统一 SWR（stale-while-revalidate）
+- 用户原话（截图“用量与花费”每次进都是灰骨架）：“每次切到另一个页面去，就要刷新好久…主流软件要这样刷新吗？不只是APP，网页版也一样…学人家的做法”。
+- 根因：App 里一批 `FutureProvider.autoDispose` / `AsyncNotifierProvider.autoDispose`（用量、某天明细、对话文件/上下文/用量、反馈、任务运行记录、两步验证、登录设备、偏好、电脑/主机/浏览器登录、分享状态、记忆摘要）离开页面就丢数据，回来从零取 → 骨架；首页 `cards.isLoading`、任务详情 `tasks.isLoading` 下拉刷新时也闪骨架。Web 每个页面各写 `useEffect + http.get`，路由切换卸载组件，回来又从 `loading=true` 开始。
+- 参考（只学公开做法）：Vercel SWR（MIT）“先给缓存、后台重验、有数据时错误不打扰”、TanStack Query `staleTime` / `keepPreviousData`、Riverpod 3 文档 `AsyncValue` 的 `skipError` / `copyWithPrevious`。没有移植代码。
+- 全局决定（替换，不叠加）：
+  - **App 一个机制**：`core/swr.dart` = `SwrCache`（进程内、有上限 LRU，按“服务器 + 登录态”换新，退出登录即清空）+ `SwrNotifier<T>`（build：缓存有就**同步**返回 AsyncData 并在后台重验，没有才请求；后台失败保留旧值不打扰；`reload()` 给下拉刷新，失败抛给调用方；`emit()` 给增删改；数据没变不发新状态，避免无谓重建）+ `swrGet` / `swrGetFamily` 一行声明只读资源 + `AsyncValue.swr(...)` 统一“有数据就显示数据，没数据才骨架/出错”。`ResourceNotifier` 改为继承 `SwrNotifier`（原 cacheKey 磁盘缓存保留为 `diskKey`），各页面自己的 FutureProvider / 自写 reload 全部删掉改用它。
+  - **磁盘缓存**：原有项目、首页卡片保留；用量报表、技能、任务、连接器、Pages、记忆、笔记加磁盘键（冷启动也秒开）；保险箱、钱包、两步验证、登录设备等安全相关**只放内存**。
+  - **Web 一个机制**：`lib/swr.ts`（模块级缓存 + 订阅，按 URL；有上限；登出清空）+ `hooks/useSwr.ts`（`data` 立即给缓存，后台重验；`loading` 只在没有缓存时为真；有数据时错误静默）；`useResource` 改为基于它；各页面 `useEffect + http.get` 换成 `useSwr`。
+  - 底部 Tab 本来就是 `StatefulShellRoute.indexedStack`（App 切 Tab 不重建，已核实）；子页面靠缓存秒开。
+- 成本：内存缓存上限 64 条（JSON 原样，几十 KB 级）；每次进页面一次后台 GET（原来也是一次），没有新增请求；同步返回缓存 → 首帧就是内容，无骨架闪、无 FadeSwitcher 过渡，减少了重建与动画（流畅性只增不减）。
+- 删除/合并：各页面自写的 FutureProvider / reload / 骨架判断（`isLoading`）、Web 各页面重复的 fetch + loading/error state。

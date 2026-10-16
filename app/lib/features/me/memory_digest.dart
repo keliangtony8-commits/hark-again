@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../core/resource.dart';
+import '../../core/swr.dart';
 import '../../models/memory.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -37,13 +38,16 @@ class MemoryDigestController extends Notifier<DigestState> {
       if (prev != null && prev.hasValue && next.hasValue && !identical(prev.value, next.value)) fetch();
     });
     Future.microtask(fetch);
-    return const DigestState();
+    // SWR（core/swr.dart 的同一份内存缓存）：看过一次，再进记忆页首帧就是摘要卡，不再从“隐藏”长出来跳版
+    final cached = ref.read(swrCacheProvider).read(path);
+    return cached is Map ? DigestState(digest: MemoryDigest.fromJson(cached.cast<String, dynamic>()), loading: false) : const DigestState();
   }
 
   Future<void> fetch() async {
     try {
       final j = (await ref.read(apiProvider).get(path) as Map).cast<String, dynamic>();
       if (!ref.mounted) return;
+      ref.read(swrCacheProvider).write(path, j);
       state = state.copy(digest: MemoryDigest.fromJson(j), loading: false, unavailable: false, error: state.error);
     } catch (_) {
       if (!ref.mounted) return;
@@ -57,6 +61,7 @@ class MemoryDigestController extends Notifier<DigestState> {
     try {
       final j = (await ref.read(apiProvider).post(path) as Map).cast<String, dynamic>();
       if (!ref.mounted) return;
+      ref.read(swrCacheProvider).write(path, j);
       state = state.copy(digest: MemoryDigest.fromJson(j), generating: false);
     } catch (_) {
       if (!ref.mounted) return;

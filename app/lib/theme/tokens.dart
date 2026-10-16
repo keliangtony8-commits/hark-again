@@ -3,6 +3,8 @@
 // 组件里禁止写死任何颜色或时长——要新值就先加到这里。
 // 对比度底线（test/a11y_test.dart 会查，网页 scripts/check-contrast.mjs 同一批配对）：
 // 正文 text/text2、气泡字 onUserBubble、按钮 onInk/onAccent、警示 warning 与 danger/success ≥ 4.5:1；text3 ≥ 3:1。
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 @immutable
@@ -22,7 +24,7 @@ class Palette {
     required this.warning,
     required this.success,
     required this.shadow,
-    required this.backdrop,
+    required this.sky,
     required this.glass,
     required this.glassBorder,
     required this.chromeEdge,
@@ -43,11 +45,11 @@ class Palette {
   /// 文件改动里“新增”的绿（v1.34 diff 的 + 行与 +N）；删除用 danger。只给 diff 用，不当第二个强调色。
   final Color success;
 
-  /// 设计 v2 的“壁纸 + 玻璃”：
-  /// backdrop = 底层渐变的三个色标（左上 → 中 → 右下），低饱和；
+  /// 设计 v2 的“壁纸 + 玻璃”（v3.3 壁纸换成随钟点流动的天色 sky，见下面 SkyTable）：
+  /// sky = 四个时段（夜 / 黎明 / 白天 / 黄昏）的底色与三团柔光；
   /// glass = 浮层玻璃的着色（带透明度，下面是模糊后的内容）；glassBorder = 玻璃的 1px 发丝边；
   /// glassHighlight = 玻璃卡片顶边 1px 的内高光（v2.1：卡片不要外投影，靠发丝边 + 这条高光分层）。
-  final List<Color> backdrop;
+  final SkyTable sky;
   final Color glass, glassBorder, glassHighlight;
 
   /// v3.1 浮层（顶栏胶囊、圆钮、输入胶囊、头像）的外圈：浅色要一圈发丝边才和暖白底分得开；
@@ -92,7 +94,7 @@ class Palette {
     warning: Color(0xFF9A5B00), // a11y：这个色到处当小字用（bodySmall/labelSmall），得够 AA——对浅底 4.93、白卡 5.43；原来 #B86E00 只有 3.62 / 3.99
     success: Color(0xFF2E7D4F),
     shadow: Color(0x141C1B1A),
-    backdrop: [Color(0xFFF3F1ED), Color(0xFFF7F6F3), Color(0xFFEFECE7)], // 三档暖白，几乎看不出渐变
+    sky: SkyTable.light, // v3.3 流光壁纸（原三档暖白渐变）
     glass: Color(0xD9FFFFFF),
     glassBorder: Color(0x121C1B1A), // = 分隔线
     chromeEdge: Color(0x121C1B1A),
@@ -125,7 +127,7 @@ class Palette {
       warning: l(a.warning, b.warning),
       success: l(a.success, b.success),
       shadow: l(a.shadow, b.shadow),
-      backdrop: [for (var i = 0; i < a.backdrop.length; i++) l(a.backdrop[i], b.backdrop[i])],
+      sky: SkyTable.lerp(a.sky, b.sky, t),
       glass: l(a.glass, b.glass),
       glassBorder: l(a.glassBorder, b.glassBorder),
       chromeEdge: l(a.chromeEdge, b.chromeEdge),
@@ -157,7 +159,7 @@ class Palette {
     warning: Color(0xFFE0A040),
     success: Color(0xFF62BD86),
     shadow: Color(0x80000000),
-    backdrop: [Color(0xFF0E1428), Color(0xFF121A33), Color(0xFF1B2342)], // 深海军蓝
+    sky: SkyTable.dark, // v3.3 流光壁纸（原深海军蓝渐变）
     glass: Color(0xE01B1D25), // v3.1 实测 Hark 输入胶囊 #1B1D25
     glassBorder: Color(0x14FFFFFF), // 8% 白 = 分隔线
     chromeEdge: Color(0x00FFFFFF), // Hark 深色浮层不描边
@@ -171,6 +173,112 @@ class Palette {
     tile: Color(0x0FFFFFFF),
     glassSheet: Color(0xF51E2029),
   );
+}
+
+/// v3.3「流光」壁纸的一个时段：竖向底色（top → bottom）+ 三团缓慢漂移的柔光（blobA 左上、blobB 右中、blobC 底部）。
+/// 画法在 shaders/sky.frag（App）与 styles/base.css .sky（网页）；颜色两端同值（frontend scripts/check-contrast.mjs 查）。
+@immutable
+class SkyPhase {
+  const SkyPhase(this.top, this.bottom, this.blobA, this.blobB, this.blobC);
+  final Color top, bottom, blobA, blobB, blobC;
+
+  List<Color> get colors => [top, bottom, blobA, blobB, blobC];
+
+  static SkyPhase lerp(SkyPhase a, SkyPhase b, double t) {
+    Color l(Color x, Color y) => Color.lerp(x, y, t)!;
+    return SkyPhase(l(a.top, b.top), l(a.bottom, b.bottom), l(a.blobA, b.blobA), l(a.blobB, b.blobB), l(a.blobC, b.blobC));
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is SkyPhase && other.top == top && other.bottom == bottom && other.blobA == blobA && other.blobB == blobB && other.blobC == blobC;
+
+  @override
+  int get hashCode => Object.hash(top, bottom, blobA, blobB, blobC);
+}
+
+/// 一套主题的四个时段；at(钟点) 在相邻两个关键帧之间线性插值（Sky.keyframes），黎明 / 黄昏平滑过渡。
+/// 浅色整天都够亮压得住深色正文（test/sky_test.dart：正文对壁纸任意一处 ≥ 4.5），深色整天都是暗的。
+@immutable
+class SkyTable {
+  const SkyTable({required this.night, required this.dawn, required this.day, required this.dusk});
+  final SkyPhase night, dawn, day, dusk;
+
+  SkyPhase phase(SkyName n) => switch (n) { SkyName.night => night, SkyName.dawn => dawn, SkyName.day => day, SkyName.dusk => dusk };
+
+  /// hour = 0…24（带小数，13.5 = 下午一点半）。
+  SkyPhase at(double hour) {
+    final h = hour % 24;
+    const k = Sky.keyframes;
+    for (var i = 0; i < k.length - 1; i++) {
+      final (h0, a) = k[i], (h1, b) = k[i + 1];
+      if (h <= h1) return a == b || h1 == h0 ? phase(a) : SkyPhase.lerp(phase(a), phase(b), (h - h0) / (h1 - h0));
+    }
+    return phase(k.last.$2);
+  }
+
+  static SkyTable lerp(SkyTable a, SkyTable b, double t) => SkyTable(
+        night: SkyPhase.lerp(a.night, b.night, t),
+        dawn: SkyPhase.lerp(a.dawn, b.dawn, t),
+        day: SkyPhase.lerp(a.day, b.day, t),
+        dusk: SkyPhase.lerp(a.dusk, b.dusk, t),
+      );
+
+  @override
+  bool operator ==(Object other) => other is SkyTable && other.night == night && other.dawn == dawn && other.day == day && other.dusk == dusk;
+
+  @override
+  int get hashCode => Object.hash(night, dawn, day, dusk);
+
+  /// 浅色：学 Hark 浅色（顶部偏深的天蓝 → 中段淡 → 底部暖米色），顶色比 Hark 提亮一点让深色正文 ≥ 4.5；夜里是偏紫的灰蓝，仍是“浅色”。
+  static const light = SkyTable(
+    night: SkyPhase(Color(0xFF7480A6), Color(0xFFC4C0D2), Color(0xFF8E98BD), Color(0xFFA9A1C6), Color(0xFFBDB9CF)),
+    dawn: SkyPhase(Color(0xFF7C8FC2), Color(0xFFF1D9C6), Color(0xFFB4C0E6), Color(0xFFF7D7BF), Color(0xFFCEC1DF)),
+    day: SkyPhase(Color(0xFF5B8BB9), Color(0xFFE6DCC2), Color(0xFF9CC0DE), Color(0xFFF4EEDF), Color(0xFFB8CCD9)),
+    dusk: SkyPhase(Color(0xFF7A86B4), Color(0xFFEBCDB6), Color(0xFFA9A2D2), Color(0xFFF3D2B4), Color(0xFFC9BCD8)),
+  );
+
+  /// 深色：夜里深灰蓝 / 深紫，白天稍微偏蓝一点，始终是暗底（白字 ≥ 7，次要字对底色 ≥ 4.5）。
+  static const dark = SkyTable(
+    night: SkyPhase(Color(0xFF0B1024), Color(0xFF1C1A33), Color(0xFF2A2F5C), Color(0xFF3A2C55), Color(0xFF1F3346)),
+    dawn: SkyPhase(Color(0xFF121A36), Color(0xFF2A2340), Color(0xFF3B3A6E), Color(0xFF5A3B5E), Color(0xFF2C3A5A)),
+    day: SkyPhase(Color(0xFF14213F), Color(0xFF23304A), Color(0xFF2A4270), Color(0xFF3A4E6E), Color(0xFF2F3D5C)),
+    dusk: SkyPhase(Color(0xFF141A38), Color(0xFF2B2244), Color(0xFF44386E), Color(0xFF5B3A5A), Color(0xFF2D3A60)),
+  );
+}
+
+enum SkyName { night, dawn, day, dusk }
+
+/// 流光壁纸的节奏（画法 ui/sky.dart + shaders/sky.frag；驱动 ui/motion.dart SkyClock）。
+abstract final class Sky {
+  /// 一天里的关键帧（钟点, 时段）：之间线性过渡（= 网页 lib/sky.ts KEYFRAMES）。
+  static const keyframes = [
+    (0.0, SkyName.night), (4.5, SkyName.night), (6.0, SkyName.dawn), (8.0, SkyName.day),
+    (16.5, SkyName.day), (18.5, SkyName.dusk), (20.5, SkyName.night), (24.0, SkyName.night),
+  ];
+
+  /// 柔光漂移每帧的间隔：最快的一团约 4 逻辑像素/秒，30 帧/秒每步 < 0.2px，看起来和 60/120 帧一样顺，GPU 空转只有一半或更少。
+  static const frame = Duration(milliseconds: 33);
+
+  /// 天色多久按钟点重算一次（不是每帧）。
+  static const recolor = Duration(minutes: 1);
+
+  /// 竖向底色的过渡曲线：t = smoothstep(0, 1, y^rampPow)（y = 0 顶 … 1 底），比线性更早变淡（= sky.frag、网页 base.css 的色标）。
+  static const rampPow = 0.75;
+  static double ramp(double y) {
+    final x = math.pow(y.clamp(0.0, 1.0), rampPow).toDouble();
+    return x * x * (3 - 2 * x);
+  }
+
+  /// ShellPage 上沿渐隐条在 clear → solid 之间的不透明度（1 → 0，smoothstep 缓入缓出；= sky.frag uFade）。
+  static double fadeAlpha(double y, double clear, double solid) {
+    if (solid <= clear) return y < solid ? 1 : 0;
+    final x = ((y - clear) / (solid - clear)).clamp(0.0, 1.0);
+    return 1 - x * x * (3 - 2 * x);
+  }
+
+  /// 三团柔光的强度（与 sky.frag 里 mix 的系数同值；网页 .sky-blob 的不透明度）。
+  static const blobMix = [0.75, 0.65, 0.70];
 }
 
 /// 间距：4 的倍数

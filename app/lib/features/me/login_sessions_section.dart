@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../core/session.dart';
+import '../../core/swr.dart';
 import '../../models/login_session.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -13,18 +14,22 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 
-class LoginSessionsNotifier extends AsyncNotifier<List<LoginSession>?> {
+/// 加载规则在 core/swr.dart（只在内存，不落盘）；这里只管退出设备。
+class LoginSessionsNotifier extends SwrNotifier<List<LoginSession>?> {
   @override
-  Future<List<LoginSession>?> build() async {
-    final s = await ref.watch(sessionProvider.future);
-    if (!s.signedIn) return null;
-    return parseLoginSessions(await ref.read(apiProvider).get('/api/auth/sessions'));
-  }
+  String get path => '/api/auth/sessions';
+  @override
+  bool get requiresSession => true;
+  @override
+  List<LoginSession>? get signedOutValue => null;
+  @override
+  List<LoginSession>? parse(Object? raw) => parseLoginSessions(raw);
 
   /// 退出另一台：成功后先从列表拿掉（不等刷新）。本机不在这里退（“我的 → 退出登录”）。
   Future<void> revoke(LoginSession s) async {
     await ref.read(apiProvider).delete('/api/auth/sessions/${s.id}');
     state = AsyncData([for (final x in state.value ?? const <LoginSession>[]) if (x.id != s.id) x]);
+    resync();
   }
 
   /// 退出其他所有设备：返回退了几台；本机是老 token 时服务器换发新 token，这里接上。
@@ -32,6 +37,7 @@ class LoginSessionsNotifier extends AsyncNotifier<List<LoginSession>?> {
     final j = await ref.read(apiProvider).post('/api/auth/sessions/revoke-others') as Map;
     await ref.read(sessionProvider.notifier).replaceToken('${j['token'] ?? ''}');
     state = AsyncData([for (final x in state.value ?? const <LoginSession>[]) if (x.current) x]);
+    resync();
     return (j['signed_out'] as num?)?.toInt() ?? 0;
   }
 }

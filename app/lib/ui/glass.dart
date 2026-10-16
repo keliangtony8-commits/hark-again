@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'glass_mode.dart';
+import 'sky.dart';
 import 'motion.dart';
 
 export 'glass_mode.dart';
@@ -79,12 +80,8 @@ class Backdrop extends StatelessWidget {
     final p = context.palette;
     final body = child ?? const SizedBox.expand();
     if (GlassMode.solidOf(context)) return ColoredBox(color: p.bg, child: body);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: p.backdrop),
-      ),
-      child: body, // v2.80：去掉强调色光晕——强调色是白，壁纸只留海军蓝渐变
-    );
+    // v3.3 流光壁纸（ui/sky.dart）：自身是重绘边界，只有这一层随 SkyClock 重画
+    return Stack(fit: StackFit.passthrough, children: [const Positioned.fill(child: RepaintBoundary(child: SkyLayer())), body]);
   }
 }
 
