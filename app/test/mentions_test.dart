@@ -1,5 +1,6 @@
 // 输入框 @文件（v1.79，features/chat/mentions.dart）：规则（何时算在打 @、排序、补全文字、带空格的路径加引号）
 // + 输入框里打 @ 出候选、边打边筛、点一下补成 `@路径 `、邮箱不弹、!命令 不弹；@子助手（v1.91）没有工作区也列。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/chat/composer.dart';
 import 'package:assistant/features/chat/mentions.dart';
@@ -49,7 +50,7 @@ Future<List<String>> _pump(WidgetTester tester, {String? workspace = 'p1'}) asyn
   addTearDown(tester.view.reset);
   final sent = <String>[];
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(_Api())],
+    overrides: [apiProvider.overrideWithValue(_Api()), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(
       theme: buildTheme(Brightness.light),
       home: Scaffold(

@@ -295,3 +295,32 @@
 - 未测：App SWR（core/swr.dart + 多页面）、流光壁纸（sky.frag / ui/sky.dart / SkyTable / SkyClock / glass.dart）。/tmp/flutter 被清，未跑 analyze，可能编译不过。
 - 未做：Web SWR + 流光；BackdropGroup、删 TopFade 整页遮罩、聊天流式只重建末条、Markdown 样式缓存、Web mask-image。
 - 详细步骤与文件清单：HANDOFF.md 第〇节。
+
+## 2026-10-16 v3.3 B1/B2 App 部分验证与收尾（SWR + 流光壁纸）
+- 范围：只动 app/。让 10-16 交接时“写了没测”的 SWR 与流光壁纸编译通过、补测试；卡顿那批（BackdropGroup / TopFade / chat_view）不在本节。
+- SkyClock（ui/motion.dart）收紧为**真正的单 Timer**：原来 30fps 帧计时器 + 每分钟重算天色两个 Timer.periodic → 合并为一个，帧回调里顺便按 Sky.recolor 检查钟点。
+- reduce-motion（MediaQuery.disableAnimations）原来是“不订阅时钟”，副作用是天色也冻在启动那一刻 → 改为两档订阅：动画订阅者（≈30fps 漂移）与静止订阅者（只每分钟换天色，柔光停在原位）。同一个 Timer 只按最高档跑；没有订阅者 / 不在前台 / 测试环境（FLUTTER_TEST）时一个 Timer 都不起。效果不删：减少动态时壁纸照样随钟点变色，只是不流动。
+- SkyLayer 自带 RepaintBoundary（原来靠 glass.dart 外面包一层，fade 顶条另用时容易漏）；删掉没人用的 child 参数（有 child 时它会跟着每帧重画）；删 isComplex（每帧都变的画面做光栅缓存无意义）；着色器异步加载完成后通知重画（原来静止时要等下一次变色才换成着色器）。
+- SwrGet(orNull) 取不到时 parse(null) 会抛类型错 → orNull 时 null 直接给 null。
+- 成本：Timer 数 2→1；减少动态时每分钟一次重画；无新依赖。
+- 已知、留给下一节：壁纸 30fps 变化会让上面每个 BackdropFilter 每 33ms 重新取样模糊，这正是 BackdropGroup 那一项要解决的，本节不动。
+- 结果（16:47）：flutter analyze 0；flutter test 719 过 / 8 跳过 / 0 失败（新增 swr_test 9 例、sky_test 13 例）。另修 SwrNotifier.emit 判“没变”的别名问题（改为比存入时的 JSON 签名）。测试侧：19 个文件补 MemoryCacheStore 覆盖（新磁盘键在 testWidgets 假时钟下等真实 IO 会挂死）。参考：Flutter 文档 FragmentProgram / RenderCustomPaint（非重绘边界，故 SkyLayer 自包 RepaintBoundary）、Riverpod 3 文档（invalidate 后 build 同步给缓存）。
+
+## 2026-10-16 v3.3 Web：SWR + 流光壁纸 + 去整区遮罩（HANDOFF 第〇节 B1/B2/B3 的 Web 部分；App 只读对照 core/swr.dart、ui/sky.dart、tokens.dart SkyTable、motion.dart SkyClock）
+**B1 SWR（替换，不叠加）**
+- 一个机制：`src/lib/swr.ts` = 模块级缓存（Map 当 LRU，最多 64 条 = App SwrCache.max；键 = 请求路径；值 = 服务器原样 JSON）+ 每键订阅 + 同键并发请求合并 + 代号（`swrClear()` 后上一代的在途请求回来也不写缓存）。纯逻辑、零依赖，node:test 直接测。
+- `src/hooks/useSwr.ts` = React 读法（useSyncExternalStore）：有缓存首帧就是旧数据，挂载时后台静默重取，变了才替换（JSON 相同不发新状态，= App SwrNotifier.emit）；`loading` 只在没缓存且没出错时为真；有数据时出错不打扰，没数据才给 `error`；`mutate()` 给增删改（写进缓存，所有用这把键的组件一起变）；`reload()` 永不抛（App reload 没数据时抛给调用方，Web 改为放进 `error`——调用方都是按钮/轮询，抛出去只会成未处理的 Promise）。
+- `useResource` 改成 useSwr 之上的列表增删改（接口不变）；顺带修掉旧版每次 reload 都把 loading 置真 → 首页 5 秒轮询会闪骨架。
+- 退出登录 / 登录过期（App.tsx onUnauthorized，MeScreen 退出也走它）→ `swrClear()`；Login 成功前也清一次（换服务器 / 换账号看不到上一个人的数据）。Web 无磁盘缓存（浏览器刷新即冷启动，和改前一样），安全相关数据本来就只在内存。
+- 替换 17 处 `useEffect + http.get`（HANDOFF 第〇节 B1 列表），各自的 loading/error/live 标志一起删。check-arch 加第 8 条：`http.get` 只许在登记文件里（未迁的只减不增），页面读数据走 useSwr。
+- 参考：Vercel SWR 文档（MIT）“stale-while-revalidate / dedupe / mutate”、React 文档 useSyncExternalStore；未移植代码。
+**B2 流光壁纸**
+- 色表唯一一份在 `tokens.css`：`--sky-<night|dawn|day|dusk>-<top|bottom|a|b|c>`，浅色在 :root、深色在 [data-theme=dark]，= App SkyTable.light/dark 逐值（check-contrast 查两端同值 + 正文对壁纸任意色 ≥4.5、深色次要字对底色 ≥4.5）。
+- `src/lib/sky.ts`：关键帧 = App Sky.keyframes；按本地钟点在相邻两帧之间线性插值（= Color.lerp 逐通道），写到 <html> 的 `--sky-top/bottom/a/b/c`；每分钟一次（= Sky.recolor），页面隐藏时停、回来立刻重算；切浅/深色、减少透明度时（MutationObserver 看 data-theme）重算。`--sky-*` 用 @property 注册成 <color>，切主题时跟着 .theme-switching 一起渐变（只在那 400ms 内）。
+- `base.css` `.sky`：固定全屏一层（z-index -1，不参与布局），底色 = 竖向渐变（色标按 Sky.ramp 取 5 个点），上面三团柔光 = 三个 radial-gradient 元素，高斯衰减用 9 个色标逼近 exp(-d²/r²)，不透明度 = Sky.blobMix；漂移 = 外层 translateX、内层 translateY 两条 alternate 动画（easeInOutSine ≈ 正弦，周期 = sky.frag 里的角频率），只动 transform；will-change 只给这 6 个漂移元素。减少动态：动画 none（静止，颜色仍按钟点变）；减少透明度：整层换实色 --bg、不画柔光（= App Backdrop solid）。
+- 删除：`--backdrop-1/2/3`（浅、深、solid 三处）与 body 的 160° 渐变背景。
+**B3 Web 卡顿：整区 mask-image → 顶部窄条**
+- 根因：`.shell.has-bar .page` 与 `.thread` 的 mask-image 让整个滚动区成为离屏遮罩层，滚动 / 流式输出每帧都要整块重新合成。
+- 改法（= App 把 TopFade 整页 ShaderMask 换成 SkyLayer(fade:)）：滚动区去掉遮罩，换成一条只有渐隐带高的 `.sky-fade`（ui/Sky.tsx `SkyFade`），里面是同一张壁纸的副本（按自身在视口里的位置反向偏移，与全屏壁纸逐像素对齐；漂移动画用 Web Animations 把 startTime 对齐到同一时间原点），用窄条自己的 mask 从“全是壁纸”渐变到“全透明”。壁纸以 α 盖在内容上 = 内容以 1-α 透到壁纸，视觉不变：`.page` 用原来的 6 个色标（反过来），`.thread` 用原来的两点。滚动区加 `isolation: isolate`，保持原来遮罩带来的层叠关系（内容里的浮层仍在渐隐条下面）。
+- 成本：遮罩面积从整屏滚动区降到约 100px 一条；每条多 3 个柔光副本（被窄条裁掉，只栅格化可见的那一小块）。
+**测试（2026-10-16）**：`npm run build` 过（架构守卫 222 文件、配色守门 14 对 × 2 套 + 壁纸 20 色 × 2 套且与 App 同值、tsc -b、vite build）；`npm test` 11/11（swr 7、sky 4）；系统 Chromium（apt）跑截图：用量页返回首帧 0 骨架、渐隐条与全屏壁纸逐像素差 ≤1/255、reduce-motion 下 0 个动画在跑、减少透明度下壁纸 = 实色 --bg、无页面报错。**发现**：浅色壁纸上次要字 --text-2 对比度 1.60–4.60（见 HANDOFF 第〇节 B2），两端同表，未改。

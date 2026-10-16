@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
 import { http } from "../../lib/api";
 import { BROWSER_SESSIONS_EMPTY, BROWSER_SESSIONS_EMPTY_LINE, BROWSER_SESSIONS_PATH, type BrowserSession, type BrowserSessionList,
   browserSessionDetail, browserSessionExpired, browserSessionHint, browserSessionSemantics, browserSignOutText, sortBrowserSessions } from "../../lib/browserSessions";
@@ -12,19 +13,17 @@ import "./computer.css";
  *  登录过期（v1.36）：行尾“已过期”警示色、图标换成断开的地球，说明行“登录过期了，用到时会请你重新登录”。
  *  只在“我的电脑”页（浏览器整个账号共用）。加载中 / 服务连不上 → 整节不画。 */
 export default function BrowserSessionsSection({ enter }: { enter?: number }) {
-  const [list, setList] = useState<BrowserSession[] | null>(null);
+  const { data, mutate } = useSwr<BrowserSessionList>(BROWSER_SESSIONS_PATH);
   const [busy, setBusy] = useState<Set<string>>(new Set());
-  const load = useCallback(() => http.get<BrowserSessionList>(BROWSER_SESSIONS_PATH)
-    .then((v) => setList(sortBrowserSessions(v.sessions))).catch(() => setList(null)), []);
-  useEffect(() => { void load(); }, [load]);
-  if (!list) return null;
+  if (!data) return null;
+  const list = sortBrowserSessions(data.sessions);
 
   const signOut = async (s: BrowserSession) => {
     if (!await confirmDialog({ title: `退出 ${s.label}？`, text: browserSignOutText(s), action: "退出" })) return;
     setBusy((b) => new Set(b).add(s.name));
     try {
       await http.del(`${BROWSER_SESSIONS_PATH}/${encodeURIComponent(s.name)}`);
-      setList((l) => (l ?? []).filter((x) => x.name !== s.name));
+      mutate((v) => { const cur = v ?? data; return { ...cur, sessions: cur.sessions.filter((x) => x.name !== s.name) }; });
     } catch (e) { void noticeDialog("退出失败", e instanceof Error ? e.message : undefined); }
     setBusy((b) => { const n = new Set(b); n.delete(s.name); return n; });
   };

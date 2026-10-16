@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useSwr } from "../../hooks/useSwr";
 import { http } from "../../lib/api";
+import { swrPatch, swrRemove } from "../../lib/swr";
 import { formatWhen } from "../../lib/format";
-import type { FeedbackItem } from "../../lib/feedback";
+import type { FeedbackItem, FeedbackList } from "../../lib/feedback";
 import { copyLink } from "../../lib/pages";
 import { confirmDialog } from "../../ui/dialog";
 import { IconChat, IconCheck, IconCloudOff, IconCopy, IconRefresh, IconTrash } from "../../ui/icons";
@@ -15,31 +17,38 @@ import { FEEDBACK_PATH } from "./FeedbackScreen";
 export default function FeedbackDetail() {
   const { id = "" } = useParams();
   const nav = useNavigate();
-  const [f, setF] = useState<FeedbackItem | null>(null);
+  const path = `${FEEDBACK_PATH}/${id}`;
+  const { data: f, error: loadError, reload, mutate } = useSwr<FeedbackItem>(path);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => http.get<FeedbackItem>(`${FEEDBACK_PATH}/${id}`).then(setF).catch((e) => setError(e instanceof Error ? e.message : "读不到")), [id]);
-  useEffect(() => { void load(); }, [load]);
+  // 改了 / 删了一条：列表的缓存跟着改（回列表时不闪回旧状态），没缓存就不管
+  const patchList = (fn: (items: FeedbackItem[]) => FeedbackItem[]) => swrPatch<FeedbackList>(FEEDBACK_PATH, (l) => ({ ...l, items: fn(l.items) }));
 
   const resolved = f?.status === "resolved";
   const toggle = async () => {
     if (!f) return;
     setBusy(true);
-    try { setF(await http.patch<FeedbackItem>(`${FEEDBACK_PATH}/${f.id}`, { status: resolved ? "open" : "resolved" })); }
+    try {
+      const x = await http.patch<FeedbackItem>(`${FEEDBACK_PATH}/${f.id}`, { status: resolved ? "open" : "resolved" });
+      mutate(x);
+      patchList((items) => items.map((i) => (i.id === x.id ? { ...i, status: x.status } : i)));
+    }
     catch (e) { setError(e instanceof Error ? e.message : "没改成"); }
     finally { setBusy(false); }
   };
   const remove = async () => {
     if (!f || !(await confirmDialog({ title: "删除这份反馈？", text: f.message_id ? "那条回复上的评价也会一起取消。" : undefined }))) return;
     await http.del(`${FEEDBACK_PATH}/${f.id}`).catch(() => {});
+    patchList((items) => items.filter((i) => i.id !== f.id));
+    swrRemove(path);
     nav("/me/feedback", { replace: true });
   };
   const open = () => f?.conversation_id && nav(f.project_id ? `/projects/${f.project_id}` : "/chat", { state: { open: f.conversation_id } });
 
   return (
     <Page header={<PageHeader title="反馈详情" back action={f && <button className="icon-btn" aria-label="删除" title="删除" onClick={() => void remove()}><IconTrash /></button>} />}>
-      {error && !f ? <Hint icon={<IconCloudOff />} title="读不到这份反馈" text="可能已经删了，或者网络断了" action={<button className="btn btn-ghost" onClick={() => { setError(null); void load(); }}>重试</button>} />
+      {loadError ? <Hint icon={<IconCloudOff />} title="读不到这份反馈" text="可能已经删了，或者网络断了" action={<button className="btn btn-ghost" onClick={() => void reload()}>重试</button>} />
         : !f ? <Skeleton /> : (<>
           <PageIntro summary={[f.kind_label, formatWhen(f.created_at)].filter(Boolean).join(" · ")} line={resolved ? "已解决" : "还没解决"} />
           {error && <p className="desc" role="alert">{error}</p>}

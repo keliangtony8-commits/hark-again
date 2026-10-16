@@ -1,32 +1,20 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { http } from "../../lib/api";
+import { useSwr } from "../../hooks/useSwr";
 import { dayShareOf, formatMoney, formatTokens, type ModelUsage, type UsageDay, type UsageDayDetail, type UsageReport } from "../../lib/usage";
 import { IconChevron } from "../../ui/icons";
 import { Skeleton } from "../../ui/kit";
 
 /** 用量图选定那天的明细（按模型 + 那天最花钱的对话），与 App usage_day.dart 同规则：
- *  没调用 → 不显示；一律取 GET /api/usage/days/{date}（今天也取，报表里没有“今天的对话”），以日期为 key 挂载，换天就重取；
+ *  没调用 → 不显示；一律取 GET /api/usage/days/{date}（今天也取，报表里没有“今天的对话”），按日期缓存（useSwr），换回看过的那天立刻显示、后台对齐；
  *  今天在请求途中/失败时先用报表的 today 画模型行。对话行点开跳进对话（/chat + state.open），已删的只展示。 */
 export default function DayBreakdown({ report: r, day, today }: { report: UsageReport; day: UsageDay; today: boolean }) {
   const active = day.calls > 0;
-  const [state, setState] = useState<{ data: UsageDayDetail | null; error: boolean }>({ data: null, error: false });
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!active) return;
-    let live = true;
-    http.get<UsageDayDetail>(`/api/usage/days/${day.date}`)
-      .then((data) => { if (live) setState({ data, error: false }); })
-      .catch(() => { if (live) setState({ data: null, error: true }); });
-    return () => { live = false; };
-  }, [active, day.date, tick]);
+  const { data: d, error, reload } = useSwr<UsageDayDetail>(active ? `/api/usage/days/${day.date}` : null);
 
   if (!active) return null;
   const fallback = today ? <DayModelRows models={r.today.models} priced={r.priced} currency={r.currency} /> : null;
-  if (state.error) return <>{fallback}<button className="day-retry" onClick={() => { setState({ data: null, error: false }); setTick((t) => t + 1); }}>明细加载失败，点这里重试</button></>;
-  if (!state.data) return fallback ?? <Skeleton rows={1} />;
-  const d = state.data;
+  if (error) return <>{fallback}<button className="day-retry" onClick={() => void reload()}>明细加载失败，点这里重试</button></>;
+  if (!d) return fallback ?? <Skeleton rows={1} />;
   return <>
     <DayModelRows models={d.total.models} priced={d.priced} currency={d.currency} />
     {d.conversations && d.conversations.length > 0 && <DayConversationRows detail={d} label={today ? "今天最花钱的对话" : "那天最花钱的对话"} />}

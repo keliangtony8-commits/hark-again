@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
 import { auth, http } from "../../lib/api";
 import { LOGIN_SESSIONS_PATH, type LoginSession, loginSessionLine, loginSessionsSummary, signedOutToast } from "../../lib/loginSessions";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
@@ -9,12 +10,14 @@ import { ListGroup, ListRow, Section } from "../../ui/kit";
  *  本机排第一、行尾“本机”；别的行尾“退出”（确认后立刻作废那台的登录）；别的设备 ≥1 台时组尾“退出其他所有设备”。
  *  服务器连不上 → 整节不画。规则在后端 app/login_sessions.py。 */
 export default function LoginSessions({ enter, reloadKey, onNote }: { enter?: number; reloadKey?: unknown; onNote: (text: string) => void }) {
-  const [list, setList] = useState<LoginSession[] | null>(null);
+  const { data, reload, mutate } = useSwr<{ sessions: LoginSession[] }>(LOGIN_SESSIONS_PATH);
   const [busy, setBusy] = useState<Set<string>>(new Set());
-  const load = useCallback(() => http.get<{ sessions: LoginSession[] }>(LOGIN_SESSIONS_PATH)
-    .then((v) => setList(v.sessions)).catch(() => setList(null)), []);
-  useEffect(() => { void load(); }, [load, reloadKey]);
-  if (!list) return null;
+  // reloadKey 变了（刚打开两步验证，服务器顺手退出了别的设备）再取一次；挂载时 useSwr 自己会取
+  const firstKey = useRef(reloadKey);
+  useEffect(() => { if (reloadKey !== firstKey.current) void reload(); }, [reloadKey, reload]);
+  if (!data) return null;
+  const list = data.sessions;
+  const setList = (fn: (l: LoginSession[]) => LoginSession[]) => mutate((v) => ({ ...v, sessions: fn(v?.sessions ?? list) }));
 
   const run = async (key: string, job: () => Promise<void>) => {
     setBusy((b) => new Set(b).add(key));
@@ -26,7 +29,7 @@ export default function LoginSessions({ enter, reloadKey, onNote }: { enter?: nu
     if (!await confirmDialog({ title: `退出 ${s.label}？`, text: "那台设备会立刻退出，要重新输入密码才能再用。", action: "退出" })) return;
     await run(s.id, async () => {
       await http.del(`${LOGIN_SESSIONS_PATH}/${encodeURIComponent(s.id)}`);
-      setList((l) => (l ?? []).filter((x) => x.id !== s.id));
+      setList((l) => l.filter((x) => x.id !== s.id));
       onNote(`已退出 ${s.label}`);
     });
   };
@@ -36,7 +39,7 @@ export default function LoginSessions({ enter, reloadKey, onNote }: { enter?: nu
     await run("*", async () => {
       const r = await http.post<{ signed_out: number; token?: string }>(`${LOGIN_SESSIONS_PATH}/revoke-others`, {});
       if (r.token) auth.set(r.token); // 本机是升级前的老登录：服务器换发了新 token
-      setList((l) => (l ?? []).filter((x) => x.current));
+      setList((l) => l.filter((x) => x.current));
       onNote(signedOutToast(r.signed_out));
     });
   };

@@ -2,6 +2,7 @@ import { appName } from "../../brand";
 import { useState } from "react";
 import BrandMark from "../../ui/BrandMark";
 import { ApiError, api, auth, server } from "../../lib/api";
+import { swrClear } from "../../lib/swr";
 import { cleanCode } from "../../lib/twoFactor";
 import "../../ui/ui.css";
 import "../../ui/glass.css";
@@ -24,7 +25,7 @@ export default function Login({ onDone }: { onDone: () => void }) {
     e.preventDefault();
     setBusy(true); setErr(null);
     server.set(srv.trim());
-    try { auth.set((await api.login(username, password, needCode ? cleanCode(code) : undefined)).token); onDone(); }
+    try { const r = await api.login(username, password, needCode ? cleanCode(code) : undefined); swrClear(); auth.set(r.token); onDone(); }
     catch (e) {
       if (e instanceof ApiError && e.status === 428) setNeedCode(true);
       else setErr(e instanceof Error ? e.message : "登录失败");

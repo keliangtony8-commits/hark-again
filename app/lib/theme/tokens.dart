@@ -211,7 +211,8 @@ class SkyTable {
     final h = hour % 24;
     const k = Sky.keyframes;
     for (var i = 0; i < k.length - 1; i++) {
-      final (h0, a) = k[i], (h1, b) = k[i + 1];
+      final (h0, a) = k[i];
+      final (h1, b) = k[i + 1];
       if (h <= h1) return a == b || h1 == h0 ? phase(a) : SkyPhase.lerp(phase(a), phase(b), (h - h0) / (h1 - h0));
     }
     return phase(k.last.$2);

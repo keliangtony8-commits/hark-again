@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -877,54 +877,89 @@ class DropIn extends StatelessWidget {
 
 
 /// v3.3 流光壁纸的唯一时钟（ui/sky.dart 的壁纸与 ShellPage 顶部渐隐条共用，像素对齐）。
-/// 只有一个 Timer（Sky.frame ≈ 30 帧/秒，不用 Ticker：Ticker 每个 vsync 都出一帧，起不到节流作用）；
-/// 没有订阅者 / App 不在前台 / 测试环境时不跑；天色按钟点每分钟重算一次（hour）。
+/// 只有一个 Timer（不用 Ticker：Ticker 每个 vsync 都出一帧，起不到节流作用）：
+/// - 有“动画”订阅者 → 每 Sky.frame（≈30 帧/秒）推进 time（柔光漂移），顺带每 Sky.recolor 重算钟点 hour（天色）；
+/// - 只有“静止”订阅者（减少动态）→ 每 Sky.recolor 一次，只换天色、柔光不动；
+/// - 没有订阅者 / App 不在前台 / 测试环境（FLUTTER_TEST）→ 一个 Timer 都没有。
 class SkyClock with WidgetsBindingObserver {
-  SkyClock._();
-  static final SkyClock instance = SkyClock._();
+  SkyClock._(this.frozen);
+  static final SkyClock instance = SkyClock._(inTest);
+
+  /// 测试用：不看环境变量的独立时钟（frozen = false 才会起 Timer）。
+  @visibleForTesting
+  factory SkyClock.forTest({bool frozen = false}) => SkyClock._(frozen);
 
   /// flutter test 下完全静止：大量测试用 pumpAndSettle，常驻计时器会让它永远等不完。
-  static final bool frozen = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+  static final bool inTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+  final bool frozen;
 
   final ValueNotifier<double> time = ValueNotifier(0);
   final ValueNotifier<double> hour = ValueNotifier(_nowHour());
   final Stopwatch _watch = Stopwatch();
-  Timer? _frame, _recolor;
-  int _users = 0;
+  Timer? _timer;
+  Duration? _period;
+  DateTime _recolored = DateTime.now();
+  int _animators = 0, _still = 0;
   bool _observing = false, _resumed = true;
+
+  /// 当前 Timer 的间隔（null = 没在跑）。
+  @visibleForTesting
+  Duration? get period => _period;
 
   static double _nowHour() {
     final n = DateTime.now();
     return n.hour + n.minute / 60 + n.second / 3600;
   }
 
-  void acquire() {
-    _users++;
-    if (!_observing) {
+  /// animate = false：减少动态，只要天色随钟点变、不要漂移。
+  void acquire({bool animate = true}) {
+    animate ? _animators++ : _still++;
+    if (!_observing && !frozen) {
       WidgetsBinding.instance.addObserver(this);
       _observing = true;
     }
     _sync();
   }
 
-  void release() {
-    _users = math.max(0, _users - 1);
+  void release({bool animate = true}) {
+    if (animate) {
+      _animators = math.max(0, _animators - 1);
+    } else {
+      _still = math.max(0, _still - 1);
+    }
     _sync();
   }
 
   void _sync() {
-    final run = !frozen && _users > 0 && _resumed;
-    if (run && _frame == null) {
+    final Duration? want = frozen || !_resumed
+        ? null
+        : _animators > 0
+            ? Sky.frame
+            : _still > 0
+                ? Sky.recolor
+                : null;
+    if (want == _period) return;
+    _timer?.cancel();
+    _timer = null;
+    _period = want;
+    if (want == Sky.frame) {
       _watch.start();
-      hour.value = _nowHour();
-      _frame = Timer.periodic(Sky.frame, (_) => time.value = _watch.elapsedMilliseconds / 1000);
-      _recolor = Timer.periodic(Sky.recolor, (_) => hour.value = _nowHour());
-    } else if (!run && _frame != null) {
+    } else {
       _watch.stop();
-      _frame?.cancel();
-      _recolor?.cancel();
-      _frame = _recolor = null;
     }
+    if (want == null) return;
+    _recolor(); // 回到前台 / 刚订阅：先对一次钟点
+    _timer = Timer.periodic(want, (_) => _tick());
+  }
+
+  void _tick() {
+    if (_period == Sky.frame) time.value = _watch.elapsedMilliseconds / 1000;
+    if (DateTime.now().difference(_recolored) >= Sky.recolor || _period == Sky.recolor) _recolor();
+  }
+
+  void _recolor() {
+    _recolored = DateTime.now();
+    hour.value = _nowHour();
   }
 
   @override

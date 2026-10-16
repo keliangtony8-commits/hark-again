@@ -1,6 +1,7 @@
 // 用量图选某天 → 那天明细（按模型 + 最花钱的对话）：今天也请求（途中先用报表的 today 画模型行）；点过去的某天请求那天；
 // 对话行点开跳进对话（openConversation），已删的不可点；
 // 拖动途中不请求、松手只请求最后那天；没调用的日子不显示也不请求；失败可点重试；下拉刷新作废缓存的明细。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/usage_day.dart';
 import 'package:assistant/features/me/usage_screen.dart';
@@ -60,7 +61,7 @@ Future<Rect> _pump(WidgetTester tester, _Api api) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(api)],
+    overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: const UsageScreen()),
   ));
   await tester.pumpAndSettle();

@@ -81,7 +81,7 @@ class Backdrop extends StatelessWidget {
     final body = child ?? const SizedBox.expand();
     if (GlassMode.solidOf(context)) return ColoredBox(color: p.bg, child: body);
     // v3.3 流光壁纸（ui/sky.dart）：自身是重绘边界，只有这一层随 SkyClock 重画
-    return Stack(fit: StackFit.passthrough, children: [const Positioned.fill(child: RepaintBoundary(child: SkyLayer())), body]);
+    return Stack(fit: StackFit.passthrough, children: [const Positioned.fill(child: SkyLayer()), body]);
   }
 }
 

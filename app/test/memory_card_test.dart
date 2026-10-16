@@ -1,6 +1,7 @@
 // 聊天里的记忆卡（v0.70）：解析、状态推算（saved/updated/forgotten × 生效/已撤销/对不上/未加载）、
 // 撤销真的走记忆资源（DELETE / PATCH 改回 / POST 重建）且卡片随列表变成“已撤销/已恢复”、复制回复不带记忆卡、
 // 聊天流里出现记忆卡时记忆列表被重拉。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/blocks/block_view.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/resource.dart';
@@ -60,7 +61,7 @@ Future<void> pump(WidgetTester tester, FakeApi api, MemoryBlock b) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(api)],
+    overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: Scaffold(body: BlockView(b))),
   ));
   await tester.pumpAndSettle();
@@ -132,15 +133,17 @@ void main() {
     expect(find.byTooltip('管理记忆'), findsOneWidget);
   });
 
-  test('invalidate 记忆列表会重拉（聊天流收到记忆卡时调用）', () async {
+  test('invalidate 记忆列表会重拉（聊天流收到记忆卡时调用）：SWR 先给旧列表不闪骨架，后台取回后换新', () async {
     final api = FakeApi([]);
-    final c = ProviderContainer(overrides: [apiProvider.overrideWithValue(api)]);
+    final c = ProviderContainer(overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())]);
     addTearDown(c.dispose);
     final sub = c.listen(memoriesProvider, (_, _) {});
     await c.read(memoriesProvider.future);
     api.memories = [{'id': 'a', 'content': '不吃香菜', 'category': 'food'}];
     c.invalidate(memoriesProvider);
-    expect((await c.read(memoriesProvider.future)).single.content, '不吃香菜');
+    expect(c.read(memoriesProvider).value, isEmpty, reason: '重建时同步给缓存里的旧列表');
+    await pumpEventQueue();
+    expect(c.read(memoriesProvider).value!.single.content, '不吃香菜');
     expect(api.gets, 2);
     sub.close();
   });

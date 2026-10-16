@@ -1,6 +1,7 @@
 // v0.71 用量页动效：骨架形状跟报表一致，加载完交叉淡化成报表；大数字从 0 滚到终值，结束时是原字符串；读屏只念终值。
 import 'dart:async';
 
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/usage_screen.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -32,7 +33,7 @@ void main() {
     addTearDown(tester.view.reset);
     final api = SlowApi();
     await tester.pumpWidget(ProviderScope(
-      overrides: [apiProvider.overrideWithValue(api)],
+      overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
       child: MaterialApp(theme: buildTheme(Brightness.light), home: const UsageScreen()),
     ));
     await tester.pump();

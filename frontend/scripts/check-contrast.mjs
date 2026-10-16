@@ -5,6 +5,8 @@
 //   2. 两端同源：上面这些关键色，浅/深两套都必须和 App lib/theme/tokens.dart 同值（改了颜色忘了改另一边 = 失败）。
 //      这条只读得到完整仓库时才查：网页镜像里只有 frontend/（构建上下文就是它），那时跳过并说一声——
 //      对比度那半永远查，因为只需要 tokens.css。
+//   3. v3.3 流光壁纸色表（--sky-<时段>-<部位>）：浅/深 × 4 时段 × 5 色都和 App SkyTable.light/dark 同值；
+//      正文（--text）对壁纸任意一个色都 ≥ 4.5（= App test/sky_test.dart）；深色次要字（--text-2）对底色 top/bottom ≥ 4.5。
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +33,19 @@ const dartTheme = (name) => {
   for (const [, k, hex] of m[1].matchAll(/(\w+): Color\(0x([0-9a-fA-F]{8})\)/g)) out[k] = `#${hex.slice(2).toLowerCase()}`;
   return out;
 };
+
+/** tokens.dart 里 static const light/dark = SkyTable(...) → { "night-top": "#rrggbb", … }（顺序 = SkyPhase(top, bottom, blobA, blobB, blobC)）。 */
+const SKY_PARTS = ["top", "bottom", "a", "b", "c"];
+const dartSky = (name) => {
+  const m = new RegExp(`static const ${name} = SkyTable\\(([\\s\\S]*?)\\n  \\);`).exec(dart);
+  if (!m) throw new Error(`tokens.dart 里找不到 SkyTable.${name}`);
+  const out = {};
+  for (const [, phase, body] of m[1].matchAll(/(\w+): SkyPhase\(([\s\S]*?)\)\),/g)) {
+    [...body.matchAll(/Color\(0x([0-9a-fA-F]{8})/g)].forEach(([, hex], i) => { out[`${phase}-${SKY_PARTS[i]}`] = `#${hex.slice(2).toLowerCase()}`; });
+  }
+  return out;
+};
+const SKY_PHASES = ["night", "dawn", "day", "dusk"];
 
 // 网页变量名 ↔ App 字段名（只列要守的这几对；别名 / 派生色不参与）
 const SAME = {
@@ -81,6 +96,21 @@ for (const [themeName, selector, dartName] of [["浅色", ":root", "light"], ["�
       else if (web[webName] !== app[appName]) bad.push(`${themeName}：--${webName} ${web[webName]} ≠ App ${appName} ${app[appName]}`);
     }
   }
+  const sky = Object.fromEntries(SKY_PHASES.flatMap((ph) => SKY_PARTS.map((p) => [`${ph}-${p}`, web[`sky-${ph}-${p}`]])));
+  if (app) {
+    const appSky = dartSky(dartName);
+    for (const [k, v] of Object.entries(sky)) {
+      if (!v || !appSky[k]) bad.push(`${themeName}：--sky-${k} / SkyTable.${dartName} 有一边没有`);
+      else if (v !== appSky[k]) bad.push(`${themeName}：--sky-${k} ${v} ≠ App SkyTable.${dartName} ${appSky[k]}`);
+    }
+  }
+  for (const [k, v] of Object.entries(sky)) {
+    if (!v) { bad.push(`${themeName}：tokens.css 缺 --sky-${k}`); continue; }
+    const r = ratio(web.text, v);
+    if (r < 4.5) bad.push(`${themeName} 正文/壁纸 --text on --sky-${k} = ${r.toFixed(2)}:1（要 ≥4.5）`);
+    if (dartName === "dark" && /-(top|bottom)$/.test(k) && ratio(web["text-2"], v) < 4.5)
+      bad.push(`深色 次要字/壁纸底色 --text-2 on --sky-${k} = ${ratio(web["text-2"], v).toFixed(2)}:1（要 ≥4.5）`);
+  }
   for (const [what, fg, bg, min] of PAIRS) {
     const r = ratio(web[fg], web[bg]);
     if (r < min) bad.push(`${themeName} ${what} --${fg} on --${bg} = ${r.toFixed(2)}:1（要 ≥${min}）`);
@@ -91,4 +121,4 @@ if (bad.length) {
   console.error("配色守门失败：\n" + bad.join("\n"));
   process.exit(1);
 }
-console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题${dart ? "，且与 App tokens.dart 同值" : ""}）`);
+console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题 + 壁纸 ${SKY_PHASES.length * SKY_PARTS.length} 色 × 2 套${dart ? "，且与 App tokens.dart 同值" : ""}）`);

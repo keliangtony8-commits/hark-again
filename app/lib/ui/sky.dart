@@ -14,25 +14,35 @@ class SkyShader {
   static ui.FragmentProgram? program;
   static Future<void>? _loading;
 
+  /// 着色器加载完成时 +1：静止（减少动态）的壁纸也会立刻从回退渐变换成着色器。
+  static final ValueNotifier<int> loaded = ValueNotifier(0);
+
   static void ensureLoaded() {
-    if (SkyClock.frozen || _loading != null) return;
-    _loading = ui.FragmentProgram.fromAsset('shaders/sky.frag').then((p) => program = p).catchError((_) => null);
+    if (SkyClock.inTest || _loading != null) return;
+    _loading = ui.FragmentProgram.fromAsset('shaders/sky.frag').then<void>((p) {
+      program = p;
+      loaded.value++;
+    }, onError: (Object _) {}); // 加载失败：一直用回退渐变
   }
 }
 
-/// 整屏壁纸。fade != null 时只画上沿渐隐条（clear 以上不透明，到 solid 透明）。
+/// 整屏壁纸（自身是重绘边界：每帧只有这一层重画）。fade != null 时只画上沿渐隐条（clear 以上不透明，到 solid 透明）。
 class SkyLayer extends StatefulWidget {
-  const SkyLayer({super.key, this.child, this.fade});
-  final Widget? child;
+  const SkyLayer({super.key, this.fade, this.clock});
   final (double clear, double solid)? fade;
+
+  /// 测试注入；默认全 App 共用的 SkyClock.instance。
+  final SkyClock? clock;
 
   @override
   State<SkyLayer> createState() => _SkyLayerState();
 }
 
+enum _Drive { none, still, animate }
+
 class _SkyLayerState extends State<SkyLayer> {
-  final _clock = SkyClock.instance;
-  bool _animate = false;
+  late final SkyClock _clock = widget.clock ?? SkyClock.instance;
+  _Drive _drive = _Drive.none;
 
   @override
   void initState() {
@@ -44,11 +54,21 @@ class _SkyLayerState extends State<SkyLayer> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final want = TickerMode.valuesOf(context).enabled && !MediaQuery.disableAnimationsOf(context);
-    if (want != _animate) {
-      _animate = want;
-      want ? _clock.acquire() : _clock.release();
-    }
+    // 不可见（被盖住的路由、后台 Tab）不订阅；减少动态只订阅“换天色”，不漂移
+    final want = !TickerMode.valuesOf(context).enabled
+        ? _Drive.none
+        : MediaQuery.disableAnimationsOf(context)
+            ? _Drive.still
+            : _Drive.animate;
+    if (want == _drive) return;
+    _setDrive(_Drive.none);
+    _setDrive(want);
+  }
+
+  void _setDrive(_Drive d) {
+    if (_drive != _Drive.none) _clock.release(animate: _drive == _Drive.animate);
+    _drive = d;
+    if (d != _Drive.none) _clock.acquire(animate: d == _Drive.animate);
   }
 
   void _rebuild() => setState(() {});
@@ -56,7 +76,7 @@ class _SkyLayerState extends State<SkyLayer> {
   @override
   void dispose() {
     _clock.hour.removeListener(_rebuild);
-    if (_animate) _clock.release();
+    _setDrive(_Drive.none);
     super.dispose();
   }
 
@@ -64,16 +84,17 @@ class _SkyLayerState extends State<SkyLayer> {
   Widget build(BuildContext context) {
     final p = context.palette;
     final phase = p.sky.at(_clock.hour.value);
-    return CustomPaint(
-      isComplex: true,
-      painter: _SkyPainter(phase: phase, time: _clock.time, screen: MediaQuery.sizeOf(context), fade: widget.fade, context: context),
-      child: widget.child ?? const SizedBox.expand(),
+    return RepaintBoundary(
+      child: CustomPaint(
+        painter: _SkyPainter(phase: phase, time: _clock.time, screen: MediaQuery.sizeOf(context), fade: widget.fade, context: context),
+        child: const SizedBox.expand(),
+      ),
     );
   }
 }
 
 class _SkyPainter extends CustomPainter {
-  _SkyPainter({required this.phase, required this.time, required this.screen, required this.fade, required this.context}) : super(repaint: time);
+  _SkyPainter({required this.phase, required this.time, required this.screen, required this.fade, required this.context}) : super(repaint: Listenable.merge([time, SkyShader.loaded]));
   final SkyPhase phase;
   final ValueNotifier<double> time;
   final Size screen;

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "node scripts/check-arch.mjs && node scripts/check-contrast.mjs && tsc -b && vite build",
     "preview": "vite preview",
+    "test": "node --test \"tests/*.test.ts\"",
     "android:init": "npx cap add android",
     "android:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android"

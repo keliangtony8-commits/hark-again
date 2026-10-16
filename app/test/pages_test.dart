@@ -1,5 +1,6 @@
 // Pages 页：老服务器没有 published = 已发布；已发布的菜单有打开/分享/复制/重命名/下线，下线要确认后 PATCH，
 // 行变“已下线”且菜单只剩重新发布/重命名；重新发布恢复；重命名 PATCH 标题；失败提示服务器的话、列表不变。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/ui/glass.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/page_library.dart';
@@ -46,7 +47,7 @@ Future<void> pump(WidgetTester tester, FakeApi api) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(api)],
+    overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: const PagesScreen()),
   ));
   await tester.pumpAndSettle();

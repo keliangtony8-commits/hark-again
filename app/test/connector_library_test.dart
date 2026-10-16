@@ -1,3 +1,4 @@
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/connector_library.dart';
 import 'package:assistant/features/me/connectors_screen.dart';
@@ -39,7 +40,7 @@ Future<void> pump(WidgetTester tester, String path, Widget screen, Map<String, O
     GoRoute(path: path, builder: (_, _) => screen),
   ]);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(FakeApi(data))],
+    overrides: [apiProvider.overrideWithValue(FakeApi(data)), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp.router(theme: buildTheme(Brightness.light), routerConfig: router),
   ));
   await tester.pumpAndSettle();

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
 import { http } from "../../lib/api";
 import { HOST_ENABLE_TEXT, HOST_INSTALL_HINT, HOST_PATH, HOST_RULES_EMPTY, HOST_RULES_EMPTY_LINE, HOST_SECTION_TITLE, type HostRule,
   type HostStatus, hostCanToggle, hostDetail, hostHint, hostRuleDeleteText, hostRuleDetail, hostToggleTitle } from "../../lib/host";
@@ -11,11 +12,9 @@ import "./computer.css";
  *  打开前确认一次；没装主机代理 → 开关灰掉 + 一句怎么装；装了连不上 → 行尾“连不上”。规则行：前缀 · 放行过 N 次，删除先确认。
  *  只在“我的电脑”页。加载失败（后端太旧没有这个接口）→ 整节不画。 */
 export default function HostSection({ enter }: { enter?: number }) {
-  const [s, setS] = useState<HostStatus | null>(null);
+  const { data: s, mutate: setS } = useSwr<HostStatus>(HOST_PATH);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
-  const load = useCallback(() => http.get<HostStatus>(HOST_PATH).then(setS).catch(() => setS(null)), []);
-  useEffect(() => { void load(); }, [load]);
   if (!s) return null;
 
   const toggle = async (on: boolean) => {

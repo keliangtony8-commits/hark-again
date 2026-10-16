@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
 import { http } from "../../lib/api";
 import { copyLink, shareLink } from "../../lib/pages";
 import type { ConversationShare } from "../../lib/types";
@@ -13,13 +14,9 @@ import { confirmDialog } from "../../ui/dialog";
  */
 export default function ShareSheet({ conversationId, onClose }: { conversationId: string; onClose: () => void }) {
   const path = `/api/conversations/${conversationId}/share`;
-  const [state, setState] = useState<ConversationShare | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: state, error, reload, mutate: setState } = useSwr<ConversationShare>(path);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-
-  const load = () => { setError(null); http.get<ConversationShare>(path).then(setState, (e: Error) => setError(e.message)); };
-  useEffect(load, [path]);
 
   const run = async (call: () => Promise<unknown>, done: string) => {
     if (busy) return;
@@ -41,7 +38,7 @@ export default function ShareSheet({ conversationId, onClose }: { conversationId
     <Sheet title="分享对话" onClose={onClose} actions={<button className="btn btn-ghost" onClick={onClose}>关闭</button>}>
       <p className="share-hint">生成一张只读网页快照，拿到链接的人都能看。审批卡和浏览器画面不会出现，附件只显示文件名。</p>
       {error ? (
-        <div className="share-body"><p className="share-hint">{error}</p><button className="btn btn-ghost" onClick={load}>重试</button></div>
+        <div className="share-body"><p className="share-hint">{error.message}</p><button className="btn btn-ghost" onClick={() => void reload()}>重试</button></div>
       ) : !state ? <Skeleton rows={2} /> : live ? (
         <div className="share-body" key="on">
           <button className="share-link" onClick={() => copy(state.url!)} aria-label="复制链接">

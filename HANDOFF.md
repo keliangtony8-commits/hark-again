@@ -18,18 +18,24 @@
 1. **SWR 统一缓存（用户要求：切页不要每次出骨架屏，先显示上次内容、后台静默刷新）**
    - 新 app/lib/core/swr.dart（SwrCache 64 条 LRU、SwrNotifier、swrGet/swrGetFamily、AsyncValue.swr）。
    - 已改：core/resource.dart、session.dart、usage_screen/usage_day、conversation_files/memory/usage/share、feedback/security/task_detail、login_sessions、reply_language、computer/host/browser_sessions、memory_digest、memory_notes、home_screen、kit.dart AsyncBody、test/design_p3_test.dart（已补 import）。
-   - 待做：flutter analyze 修到 0；修所有引用这些 provider 的测试；新增 test/swr_test.dart（二次进入不出骨架 / 后台刷新替换 / 有缓存出错仍显示 / 退出登录清空）；全量 flutter test。
-   - **Web 未开始**：要写 frontend/src/lib/swr.ts + hooks/useSwr.ts，useResource 基于它，替换 ConversationFilesSheet、ConversationMemory、ShareSheet、BrowserSessionsSection、HostSection、useComputer、DayBreakdown、FeedbackDetail、FeedbackScreen、LoginSessions、ReplyLanguageRow、SecurityScreen、UsageCard、useConversationUsage、useTaskRuns、useServerVersion、useMemoryDigest 里的 useEffect+http.get。
+   - **App 已完成（2026-10-16 16:47，未提交）**：flutter analyze 0；全量 flutter test **719 过 / 8 跳过 / 0 失败**。新增 `test/swr_test.dart`（9 例：二次进入首帧是旧数据不经加载态、后台重取后替换、数据没变不发新状态、有缓存时后台出错 / reload 失败仍显示旧数据、无缓存出错才报错、退出登录缓存换新且重新请求、orNull 取不到给 null、LRU、页面级“第一次骨架 / 离开再进首帧就是内容”）。
+     - 修的真问题：① `SwrNotifier.emit` 判“数据没变”原来拿新 JSON 和 `_raw` 比，`_raw` 被别处原地改过时会误判成没变、吞掉更新（技能开关测试暴露）→ 改为存入时记下 JSON 文本签名再比；② `SwrGet(orNull)` 取不到时 `parse(null)` 会抛 → 直接给 null。
+     - 测试改动：新加磁盘键（技能 / 任务 / 连接器 / Pages / 记忆 / 笔记 / 用量）后，没覆盖 `cacheStoreProvider` 的测试在 testWidgets 假时钟里等真实文件 IO 会挂死 → 按已有惯例在 19 个测试文件里补 `cacheStoreProvider.overrideWithValue(MemoryCacheStore())`（connect_block、connector_library、me_identity、memory_card、memory_note、memory_screen、mentions、pages、skill_toggle、skills、slash、task_library、usage_compare/csv/day/motion/router、usage、version）；memory_card “invalidate 会重拉”按 SWR 语义改为“先给旧列表、后台取回后换新”。
+   - **Web 已完成（2026-10-16，未提交）**：`frontend/src/lib/swr.ts`（64 条 LRU、按路径缓存、同键请求合并、`swrClear()` 退出 / 登录过期 / 重新登录时清空且作废在途请求）+ `hooks/useSwr.ts`（有缓存先显示、后台静默刷新、JSON 相同不重渲；有数据时出错静默；无缓存才 loading；`reload()` 不抛、失败进 error）；`useResource` 改为基于它（顺带修掉首页 5 秒轮询闪骨架）；列表里 17 个文件的 useEffect+http.get 全部换掉。check-arch 第 8 条：blocks/features/hooks 里 `http.get` 只许在 GET_RAW 登记文件里（只减不增）。单测 `frontend/tests/swr.test.ts`（node 22 原生跑 TS，`npm test`，无新依赖）。截图脚本实测：用量页离开再回来首帧 0 个骨架（浅/深 × 桌面/手机）。
 2. **流光壁纸（用户要求：随时间变化，夜里暗蓝紫灰、白天亮蓝→暖米，柔和流动，绝不能卡）**
    - 已写：app/shaders/sky.frag（pubspec 已注册）；tokens.dart 删 Palette.backdrop → `SkyTable sky`（浅/深 × 夜/黎明/白天/黄昏，Sky.keyframes 插值，Sky.frame=33ms）；motion.dart 末尾 `SkyClock`（单 Timer≈30fps、无订阅/后台/测试环境 FLUTTER_TEST 时停）；新 app/lib/ui/sky.dart（SkyLayer：着色器，加载失败回退竖向渐变）；glass.dart Backdrop 改用 SkyLayer。
-   - 待做：编译验证；grep 其他引用 `p.backdrop`/`backdrop:` 的地方（含测试、对比度测试）改掉；test/sky_test.dart（插值、正文对比度 ≥4.5、测试环境不起计时器）；截图看浅/深效果。
-   - Web 未开始：tokens.css 同一张色表、src/lib/sky.ts 每分钟设 --sky-* 变量、base.css 固定 .sky 层三团 radial-gradient 只动 transform、reduce-motion 不动。
+   - **App 已完成（2026-10-16，未提交）**：编译过（tokens.dart 关键帧循环的解构语法错、sky.dart catchError 类型）；全仓 grep 已无 `p.backdrop` / `backdrop:` / Palette.backdrop 旧引用（测试与对比度测试原本就不引用）。新增 `test/sky_test.dart`（13 例：关键帧插值 + 跨午夜、Palette.lerp 带 sky、ramp/fadeAlpha、浅 / 深正文对壁纸全天每 15 分钟 × 底色与三团柔光峰值 ≥4.5（实测浅 4.84 起、深 9.89 起）、SkyClock 测试环境冻结、单 Timer 选档、SkyLayer 按可见性 / 减少动态选档、回退渐变能画、着色器在测试引擎里**能**加载且 uniform 个数对得上）。
+     - SkyClock 成本收紧（决定见 devlog 2026-10-16 B1/B2 App 节）：原来是两个 Timer（30fps + 每分钟）→ **真正的单 Timer**；无订阅 / 后台 / 测试环境不起；减少动态原来是“不订阅”导致天色冻在启动时 → 改为“静止档”：只每分钟换天色、柔光不漂（效果保留）；被盖住的路由（TickerMode 关）不订阅。SkyLayer 自带 RepaintBoundary（删 glass.dart 外包的那层）、删没人用的 child 参数和 isComplex、着色器加载完通知重画。
+     - 仍未做：真机 / 截图看浅深效果；profile 帧耗时。⚠ 壁纸每 33ms 变一次，上面每个 BackdropFilter 都会跟着每 33ms 重新模糊——这是第 3 项 BackdropGroup 要解决的。
+     - ⚠ 同意上面 Web 的发现，App 实测（全天 × 底色与柔光）：浅色 text2 1.60–5.10、text3 1.02–3.23；深色 text2 3.97–7.56、text3 2.61–4.98。正文（text）两套都 ≥4.5。次要字怎么改需两端一起定，App 本轮未改色。
+   - **Web 已完成（2026-10-16，未提交）**：tokens.css `--sky-<时段>-<部位>`（浅 :root / 深 [data-theme=dark]，= SkyTable 逐值，check-contrast 查同值 + 正文对壁纸 40 色 ≥4.5 + 深色次要字对底色 ≥4.5，改一个值即红）；`src/lib/sky.ts`（关键帧插值，整分钟重算，页面隐藏停，切主题重算；单测 `tests/sky.test.ts`）；`ui/Sky.tsx` + base.css `.sky`（9 色标竖向底色 + 三团高斯柔光，外 translateX / 内 translateY 两条 alternate 动画，只动 transform，will-change 只在 3 个柔光上；reduce-motion 静止；减少透明度 = 实色 --bg）；`--sky-*` 用 @property 注册，切主题时随 .theme-switching 渐变。删 `--backdrop-1/2/3`（三处）与 body 旧渐变。
+   - **⚠ 发现（未改，需定）**：浅色壁纸上 `--text-2`（#64605a）只有 1.60–1.95:1（对顶色）/ 3.51–4.60:1（对底色），`--text-3` 更低；截图里“安全”页页头说明、分区标题直接压在壁纸上明显发灰看不清。App 同一张表同样如此（sky_test 只测正文）。两端要一起改：要么浅色 SkyTable 顶色提亮，要么壁纸上的次要字改用 --text。
 3. **卡顿根因（用户：16GB 手机也卡；不准删功能/效果）——还没改代码**
    - 约 9 处独立 BackdropFilter（top_bar、GlassIconButton、composer、project_switcher、chat_view JumpLatest/ErrorBar、inbox、me 搜索、browser_takeover、sub_page 标题）每帧各自模糊 → 用 BackdropGroup + BackdropFilter.grouped。注意：同组只在第一个滤镜处取一次背景，所以分组放三处：AppShell（横幅不进组）、ShellPage 内容、SubPage；ShellPage 绘制顺序 内容→顶部渐隐条→header→lead。
    - kit.dart TopFade = 整页 ShaderMask(dstIn) 离屏层 → 删掉，改为 ShellPage 顶部一条 SkyLayer(fade: (clear, solid))（sky.dart 已支持 fade 参数），改 test/shell_page_test.dart。
    - chat_view.dart 流式时整列重建 → 按 Message 实例 + 行状态缓存行 widget（ChatController 只替换最后一条，其余实例不变）。
    - Markdown：AppMarkdown 每次 build 新建 MarkdownStyleSheet → 缓存。
-   - Web：shell.css 6-15 `.page` 与 chat.css:90 `.thread` 的 mask-image 让整个滚动区离屏 → 改顶部窄条。
+   - Web：shell.css 6-15 `.page` 与 chat.css:90 `.thread` 的 mask-image 让整个滚动区离屏 → 改顶部窄条。**Web 已完成（2026-10-16，未提交）**：两处去掉整区 mask，换成 `ui/Sky.tsx SkyFade`（一条渐隐带高的壁纸副本，按视口位置反向偏移，漂移动画 startTime 对齐；窄条自己的 mask = 原遮罩反过来），滚动区加 isolation 保持层叠。实测：隐藏内容后有/无窄条逐像素最大差 1/255（浅/深 × 桌面/手机 × 页面/聊天）。4× CPU 无头 Chromium 下新旧都 60fps，软件渲染看不出差别；真 GPU 的 Chrome trace 未做。
    - 完成后：Flutter profile/frame timing，Web Chrome 4× CPU trace。
 
 ### C. 发布步骤（全部通过后）

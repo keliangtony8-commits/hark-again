@@ -1,0 +1,39 @@
+import { useLayoutEffect, useRef } from "react";
+import { syncSky } from "../lib/sky";
+
+/** v3.3「流光」壁纸（= App ui/sky.dart SkyLayer）：竖向底色 + 三团柔光慢速漂移；颜色来自 lib/sky.ts 写的 --sky-*，画法 styles/base.css .sky。
+ *  整个应用只有一层（main.tsx 挂在 #root 外）；顶部渐隐条里的是它的副本（SkyFade）。 */
+export function Sky() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (ref.current) syncSky(ref.current); }, []);
+  return (
+    <div ref={ref} className="sky" aria-hidden>
+      <span className="sky-blob sky-a"><i /></span>
+      <span className="sky-blob sky-b"><i /></span>
+      <span className="sky-blob sky-c"><i /></span>
+    </div>
+  );
+}
+
+/** 滚动区上沿的渐隐条（= App ShellPage 的 SkyLayer(fade:)，v3.3 B3 代替整区 mask-image）：
+ *  一条只有渐隐带那么高的壁纸副本，按自己在视口里的位置反向偏移，和全屏壁纸逐像素重合；自身的遮罩从“全是壁纸”渐变到“全透明”。
+ *  壁纸以 α 盖在内容上 = 内容以 1-α 透到壁纸，看上去和原来遮罩滚动区一样，但离屏合成的只有这一窄条。
+ *  kind：page = 一级页面（.page，渐隐带见 shell.css），thread = 聊天消息流（.thread，见 chat.css）。放在滚动区后面、同一个定位父元素里。 */
+export function SkyFade({ kind }: { kind: "page" | "thread" }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty("--sky-x", `${r.left}px`);
+      el.style.setProperty("--sky-y", `${r.top}px`);
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    if (el.parentElement) ro.observe(el.parentElement);
+    window.addEventListener("resize", place);
+    return () => { ro.disconnect(); window.removeEventListener("resize", place); };
+  }, []);
+  return <div ref={ref} className={`sky-fade sky-fade-${kind}`} aria-hidden><Sky /></div>;
+}

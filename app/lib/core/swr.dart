@@ -70,6 +70,7 @@ abstract class SwrNotifier<T> extends AsyncNotifier<T> {
   Future<Object?> fetch() => ref.read(apiProvider).get(path);
 
   Object? _raw;
+  String? _sig; // _raw 当时的 JSON 文本：判断“数据没变”用（不和 _raw 比，它可能被别处原地改过）
 
   /// 当前状态对应的原样 JSON（增删改在它上面算新列表，再 [emit]）。
   Object? get raw => _raw;
@@ -86,7 +87,7 @@ abstract class SwrNotifier<T> extends AsyncNotifier<T> {
     }
     final mem = _mem;
     if (mem.has(path)) {
-      _raw = mem.read(path);
+      _take(mem.read(path));
       _revalidateSoon();
       return parse(_raw); // 同步返回：首帧就是旧数据，不经过加载态
     }
@@ -99,7 +100,7 @@ abstract class SwrNotifier<T> extends AsyncNotifier<T> {
     if (dk != null) {
       final disk = await ref.read(cacheStoreProvider).read(dk);
       if (disk != null && r.mounted) {
-        _raw = disk;
+        _take(disk);
         _mem.write(path, disk);
         _revalidateSoon();
         return parse(disk);
@@ -120,8 +121,13 @@ abstract class SwrNotifier<T> extends AsyncNotifier<T> {
     });
   }
 
-  void _store(Object? raw) {
+  void _take(Object? raw, [String? sig]) {
     _raw = raw;
+    _sig = sig ?? _encode(raw);
+  }
+
+  void _store(Object? raw, [String? sig]) {
+    _take(raw, sig);
     _mem.write(path, raw);
     final dk = diskKey;
     if (dk != null) unawaited(ref.read(cacheStoreProvider).write(dk, raw));
@@ -129,17 +135,17 @@ abstract class SwrNotifier<T> extends AsyncNotifier<T> {
 
   /// 新的原样 JSON → 缓存 + 状态。和当前一样就不发新状态（不白白重建、不重播动画）。
   void emit(Object? raw) {
-    if (state.hasValue && _same(raw, _raw)) return;
-    _store(raw);
+    final sig = _encode(raw);
+    if (state.hasValue && sig != null && sig == _sig) return;
+    _store(raw, sig);
     state = AsyncData(parse(raw));
   }
 
-  static bool _same(Object? a, Object? b) {
-    if (identical(a, b)) return true;
+  static String? _encode(Object? raw) {
     try {
-      return jsonEncode(a) == jsonEncode(b);
+      return jsonEncode(raw);
     } catch (_) {
-      return false;
+      return null; // 编不了码 = 当作变了
     }
   }
 
@@ -186,7 +192,7 @@ class SwrGet<T> extends SwrNotifier<T> {
   }
 
   @override
-  T parse(Object? raw) => _parse(raw);
+  T parse(Object? raw) => orNull && raw == null ? null as T : _parse(raw);
 }
 
 typedef SwrProvider<T> = AsyncNotifierProvider<SwrGet<T>, T>;

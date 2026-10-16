@@ -1,6 +1,7 @@
 // 记忆笔记（v2.21）：纯逻辑（第一行、副标题、多词筛选、路径预览、读屏、页头计数）+ 页面：
 // 记忆页出现“主题笔记”一节且被同一个搜索框筛、只有笔记没有记忆时不显示起步卡；点开阅读（Markdown）→ 编辑 → 保存走 PATCH 只带改了的字段；
 // “+”选主题笔记 → 新建页实时预览路径 → POST；阅读页删除要确认；带着改动取消要确认。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/memory_notes.dart';
 import 'package:assistant/features/me/memory_screen.dart';
@@ -70,7 +71,7 @@ Future<void> pump(WidgetTester tester, FakeApi api) async {
     ]),
   ]);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(api)],
+    overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp.router(theme: buildTheme(Brightness.light), routerConfig: router),
   ));
   await tester.pumpAndSettle();

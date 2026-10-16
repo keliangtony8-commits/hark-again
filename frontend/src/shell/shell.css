@@ -1,18 +1,23 @@
 /* 外壳：页面铺满，顶栏浮在上面（设计 v2） */
 .shell { position: relative; height: 100dvh; display: flex; flex-direction: column; }
 .shell.has-bar { --inset-top: var(--shell-top); }
-/* 一级页面滚上去的内容在浮动顶栏下缓入淡出（App kit TopFade 同义，v1.06）：顶栏中线以上全透明，
-   到让位线 + sp-4 才全显；静止时第一行正好在全显处，不被遮。缓入曲线避免一条硬边。 */
-.shell.has-bar .page {
+/* 一级页面滚上去的内容在浮动顶栏下缓入淡出（App ShellPage 顶部渐隐条同义，v1.06）：顶栏中线以上全是壁纸，
+   到让位线 + sp-4 才全显内容；静止时第一行正好在全显处，不被遮。缓入曲线避免一条硬边。
+   v3.3 B3：不再给整个 .page 加 mask-image（整个滚动区离屏合成，滚动每帧重来），改成 .page 后面一条壁纸副本（ui/Sky.tsx SkyFade），
+   壁纸不透明度 = 1 - 原遮罩（同样 6 个色标），看上去一样；isolation 保留原遮罩带来的层叠（页里的浮层仍在渐隐条下）。 */
+.shell.has-bar {
   --fade-a: calc(var(--topbar-top) + var(--topbar-h) / 2 + env(safe-area-inset-top));
-  --fade-b: calc(var(--shell-top) + var(--sp-4));
-  --fade: linear-gradient(to bottom, transparent var(--fade-a),
-    rgba(0, 0, 0, .1) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .2),
-    rgba(0, 0, 0, .35) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .4),
-    rgba(0, 0, 0, .65) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .6),
-    rgba(0, 0, 0, .9) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .8),
-    #000 var(--fade-b));
+  --fade-b: calc(var(--shell-top) + var(--sp-4)); }
+.shell.has-bar .page { isolation: isolate; }
+.sky-fade-page { height: var(--fade-b);
+  --fade: linear-gradient(to bottom, #000 var(--fade-a),
+    rgba(0, 0, 0, .9) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .2),
+    rgba(0, 0, 0, .65) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .4),
+    rgba(0, 0, 0, .35) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .6),
+    rgba(0, 0, 0, .1) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .8),
+    transparent var(--fade-b));
   -webkit-mask-image: var(--fade); mask-image: var(--fade); }
+.shell:not(.has-bar) .sky-fade-page { display: none; } /* 子页面自带标题栏，不渐隐（= 原来只有 .shell.has-bar .page 有遮罩） */
 .shell-main { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; position: relative; }
 
 .topbar { position: fixed; z-index: 20; top: calc(var(--topbar-top) + env(safe-area-inset-top)); left: var(--gutter); right: var(--gutter);

@@ -1,4 +1,5 @@
 // 上月对比：解析 last_month、涨跌口径（有定价按钱，否则 token）、基数为 0 / 老服务器的退化、月卡上的标签与读屏文字。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/usage_screen.dart';
 import 'package:assistant/models/usage.dart';
@@ -33,7 +34,7 @@ class FakeApi implements Api {
 Future<void> pump(WidgetTester tester, Map<String, dynamic> body) async {
   await tester.pumpWidget(const SizedBox()); // 换一份数据：先卸掉旧的 ProviderScope
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(FakeApi(body))],
+    overrides: [apiProvider.overrideWithValue(FakeApi(body)), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: const UsageScreen()),
   ));
   await tester.pumpAndSettle();

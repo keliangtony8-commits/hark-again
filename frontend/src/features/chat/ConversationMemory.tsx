@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
 import { http } from "../../lib/api";
 import {
   compactToast, contextFill, contextLine, contextTight, RULES_HINT, ruleCut, rulesEnabled, ruleStatus, summaryLine,
@@ -9,18 +10,10 @@ import { IconRule } from "../../ui/icons";
 /** 对话记忆卡（本对话用量 Sheet 里）：原文占预算多少、较早多少条已压成摘要（可展开）、“整理上文”手动压缩。
  *  与 App 的 ConversationMemoryCard 同规则；正在回复时后端 409，原因原样显示在卡片下方。 */
 export default function ConversationMemory({ conversationId }: { conversationId: string }) {
-  const [ctx, setCtx] = useState<ConversationContext | null>(null);
+  const { data: ctx, mutate: setCtx } = useSwr<ConversationContext>(`/api/conversations/${conversationId}/context`);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    http.get<ConversationContext>(`/api/conversations/${conversationId}/context`)
-      .then((c) => { if (live) setCtx(c); })
-      .catch(() => { if (live) setCtx(null); });
-    return () => { live = false; };
-  }, [conversationId]);
 
   if (!ctx || ctx.messages === 0) return null;
   const fill = contextFill(ctx);

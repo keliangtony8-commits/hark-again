@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { IconBack, IconCheck, IconChevron, IconClose, IconSearch } from "./icons";
+import { SkyFade } from "./Sky";
 import "./ui.css";
 
 /** 子页面的浮动玻璃标题栏（返回 + 标题 + 右侧操作），和一级页面的顶栏同位置。 */
@@ -45,6 +46,7 @@ export function Page({ children, header, footer, className = "" }: { children: R
   return (
     <>
       <div ref={box} className={["page", className, footer ? "has-composer" : ""].filter(Boolean).join(" ")} style={style}>{header}<div className="page-inner">{children}</div></div>
+      <SkyFade kind="page" />
       {footer && <FloatingFooter onHeight={setH}>{footer}</FloatingFooter>}
     </>
   );
