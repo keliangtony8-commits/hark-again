@@ -2,10 +2,10 @@
 // 从上到下：页头一行（返回钮 + 名字大字 / 服务器域名小字）→ 用量卡（本月花费 + 查看用量）
 //   → 组 1：个人资料（记忆、技能）· 定时任务 · 连接的账号 · 钱包 · 我的电脑（状态、文件、Pages）
 //   → 组 2：安全（两步验证、登录设备）· 偏好设置（外观、透明度、头像颜色、回复语言）· 反馈 · 关于
-//   → 一颗“退出登录”胶囊。每行只有 图标 + 标题 + 箭头，说明都在子页顶部；路由在 app.dart，子页是 ui/sub_page.dart 的 SubPage。
+//   → 一条“退出登录”整行条（v3.5 照 Hark，原居中胶囊）。每行只有 图标 + 标题 + 箭头，说明都在子页顶部；路由在 app.dart，子页是 ui/sub_page.dart 的 SubPage。
 // v3.0：底部一颗玻璃搜索胶囊 = 全 App 唯一的设置搜索（索引 me_index.dart；对话在历史抽屉里搜）。输入即筛：页头保留，
 //   下面换成结果（分区图标 + 标亮标题 + 所在位置），点了直达，带定位 id 的进页后滚到那一项闪一下（ui/kit.dart Spotlight）。
-//   胶囊放在 FloatingFooter 里：它量出胶囊实高交给 PageBody 留白，滚到底“退出登录”不会被挡住。
+//   胶囊放在 FloatingFooter 里：它量出胶囊实高交给 PageBody 留白，滚到底“退出登录”条不会被挡住。
 // v3.3 视觉验收：顶部一条 BackdropFade（和一级页面 ShellPage 同一个组件）：状态栏以上全是壁纸，翻下去内容不进状态栏、不切硬边；
 //   再渐显 Layout.topFadeRamp（= 页头上留白），静止时页头正好在全显处。放在 FloatingFooter 的 behind 格 = 画在列表之后、搜索胶囊之前：
 //   “我的”不进 BlurGroup（返回钮在列表里，见 devlog「v3.3 B3」），胶囊和返回钮各自独立模糊；渐隐条只占顶部一截、不和胶囊重叠，胶囊取到的背景不变。
@@ -243,18 +243,44 @@ class _MeHome extends ConsumerWidget {
       const SizedBox(height: Sp.x4),
       FadeSlideIn(
         delay: Motion.stagger(4),
-        child: Center(
-          child: PillButton(
-            key: const Key('logout'),
-            label: '退出登录',
-            onTap: () async {
-              if (await confirmDanger(context, title: '退出登录？', action: '退出')) await ref.read(sessionProvider.notifier).logout();
-            },
-          ),
+        // v3.5 照 Hark：整行浅底圆角条、左侧图标 + 文字、无箭头，不进卡片组（= Web MeScreen .me-logout-bar），不再是居中胶囊。
+        child: _LogoutBar(
+          key: const Key('logout'),
+          onTap: () async {
+            if (await confirmDanger(context, title: '退出登录？', action: '退出')) await ref.read(sessionProvider.notifier).logout();
+          },
         ),
       ),
     ]);
   }
+}
+
+/// 退出登录条（v3.5 照 Hark）：整行浅底圆角条，左图标 + 文字，无箭头，不进卡片组。
+/// 高 = Layout.topBar（和顶栏 / 子页胶囊同高）；底 = tileFill（= Web --tile，和次要胶囊按钮同一层浅底）；图标落在上面列表行的图标线（Sp.x4）。
+class _LogoutBar extends StatelessWidget {
+  const _LogoutBar({super.key, required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+        onTap: onTap,
+        scale: 0.98, // = Web .me-logout-bar:active
+        semanticLabel: '退出登录',
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.full)),
+          child: SizedBox(
+            height: Layout.topBar,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Sp.x4),
+              child: Row(children: [
+                const IconBadge(Icons.logout_rounded),
+                const SizedBox(width: Sp.x4),
+                Text('退出登录', style: context.text.titleMedium),
+              ]),
+            ),
+          ),
+        ),
+      );
 }
 
 /// 搜索结果：一组行，行首 = 所在分区的图标，标题里命中的词标亮，副标题 = 在哪（像 iOS 设置搜索的路径）。

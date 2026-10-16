@@ -453,3 +453,10 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 2. 浅色 night：top #8ebbe3（钢蓝，Hark 色相）· a #86bcea（左上更深的蓝团）· b #c6dfe8（右中一团发亮的浅青白——Hark 中段那片亮光，也负责把蓝金之间的橄榄灰冲掉）· c #efe4c4（底部正中奶油光）· bottom #dcc58a（暖金，四角）。
 3. 流光（三团柔光漂移、按钟点插值）不动，只换常量。
 **过程**：第二版先试 b #92bdd0 / c #e3c88a，和 Hark 并排看中段发灰绿 → 改成上面这组，中段变成发亮的浅青白、底部奶油光 + 金边，与 Hark 23:02 走向一致（Hark 顶部还更深，那是守门线以下，不取）。
+
+## 2026-10-16 v3.5 “退出登录”整行条（两端）+ Web 项目列表去 ⋯（HANDOFF 第二节第 21 条②③）
+**退出登录**：原两端都是居中小胶囊；Hark = 整行浅底圆角条、左图标 + 文字、无箭头、不进卡片组。
+- 两端同一套：高 = 顶栏高（App Layout.topBar / Web --topbar-h，52）；底 = 次要胶囊按钮那层浅底（App tileFill / Web --tile）；圆角 full；左内边距 Sp.x4，图标落在上面列表行的图标线上；字 = 行标题字（App titleMedium / Web .row-title）。
+- 不用 ListGroup + ListRow：那是白卡片组（Hark 明确不放卡片组里），且行高 64 + 组内边距让“我的”在 412×915 上多出 28px，超过一屏线（design_p3_test 918 > 915）；52 高的独立条正好守住。App 是 me_screen.dart `_LogoutBar`，Web 是 `.me-logout-bar`；按压反馈两端同为缩到 0.98（App 用 motion.dart Pressable——架构守卫不许 features 里手写 InkWell 行；Web :active）。App 仍先 confirmDanger，Web 原来就直接退（两端这点原本就不一致，没在这次改）。
+- 顺手发现（没改）：App“我的”静止时，最底下的退出登录被底部“搜索设置”浮条盖住，要滚一下才露出来——design_p3_test 只量到屏幕底 915，没量到浮条上沿。旧胶囊同样如此，记进 HANDOFF 待办。
+**Web 项目列表**：去掉行上 ⋯（它让状态行留了 32px 最小高、行 min-height 56）；菜单 = 右键 / 长按，弹原地聚焦菜单（ui/FocusMenu，和消息菜单同一套，= App 长按）。安卓 Chrome 长按、桌面右键、键盘菜单键 / Shift+F10 都发 contextmenu；iOS Safari 长按不发，用 500ms 触摸计时补，触发后吞掉随后那次点按；链接关掉系统长按预览和选字。同样 5 项操作项目内的项目名药丸里也有，功能没少。
