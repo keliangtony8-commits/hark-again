@@ -90,14 +90,13 @@ export default function ChatScreen({ projectId, emptyGreeting, caption, switcher
       <div className={`chat floating ${projectId ? "project" : ""} ${drawer ? "drawer-open" : ""}`}>
         {switcher
           ? switcher.render(() => setDrawer(false))
-          : <ConversationList title="对话" list={chat.list} activeId={chat.activeId} onOpen={(id, focus, pid) => (pid ? openElsewhere(id ?? "", pid, focus) : open(id, focus))} onDelete={chat.remove} onClose={() => setDrawer(false)} />}
-        <div className="scrim" onClick={() => setDrawer(false)} />
+          : <ConversationList title="对话" list={chat.list} activeId={chat.activeId} onOpen={(id, focus, pid) => (pid ? openElsewhere(id ?? "", pid, focus) : open(id, focus))} onDelete={chat.remove} />}
         <section className="chat-main">
           <ShellLead>
             {projectId
               ? <MenuPlus mobileOnly plus={drawer} label={drawer ? "新建项目" : "切换项目"}
                   onClick={() => { if (!drawer) showList(); else { setDrawer(false); switcher?.onNew(); } }} />
-              : <button className="glass-btn glass mobile-only" onClick={() => setDrawer(true)} aria-label="历史"><IconHistory /></button>}
+              : <button className="glass-btn glass mobile-only" onClick={() => setDrawer((d) => !d)} aria-label={drawer ? "收起历史" : "历史"} aria-expanded={drawer}><IconHistory /></button>}
           </ShellLead>
           <header className="chat-top chat-caption">
             <ChatTitle title={title} head={caption} conversationId={chat.activeId} streaming={chat.streaming} statusAsk={statusAsk} />

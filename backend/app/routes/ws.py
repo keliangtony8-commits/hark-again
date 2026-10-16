@@ -19,6 +19,7 @@ from ..models import Conversation, Message, Project
 from ..storage import mime_of, project_file, project_file_root, upload_path
 
 router = APIRouter()
+log = logging.getLogger("uvicorn.error").getChild("ws")  # 跟 uvicorn 的 INFO 日志走同一个出口（后端没配根 logger）
 
 
 @router.websocket("/ws")
@@ -35,6 +36,7 @@ async def ws_endpoint(ws: WebSocket):
             await ws.close(code=1013)
 
     conn = live_turns.Conn(ws.send_json, overflow)
+    opened, why = asyncio.get_running_loop().time(), "server"
     try:
         while True:
             event = await ws.receive_json()
@@ -56,9 +58,15 @@ async def ws_endpoint(ws: WebSocket):
                     approvals.resolve(str(event.get("id")), bool(event.get("approved")), event.get("option"))
                 case "form.reply":
                     approvals.resolve_form(str(event.get("id")), event.get("values"), event.get("remember"))
-    except (WebSocketDisconnect, RuntimeError):
-        pass
+    except WebSocketDisconnect as e:
+        why = f"client code={e.code}"
+    except RuntimeError as e:
+        why = f"runtime {e}"
     finally:
+        # v3.5.1 查“老是显示连接已断开”（用户真机 22:28：几秒到十几秒就断一次，服务器本机 / 经 Caddy 的探针 170 秒不断）：
+        # 记下是谁断的、断开码、活了多久、哪种客户端，不记 token
+        log.info("ws closed by %s after %.1fs overflow=%s ua=%s", why, asyncio.get_running_loop().time() - opened,
+                  conn.closed, (ws.headers.get("user-agent") or "")[:120])
         conn.close()  # 退订；回答在服务器上接着跑（live_turns：没人看着最多再跑 turn_offline_minutes）
 
 

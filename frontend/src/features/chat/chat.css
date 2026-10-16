@@ -51,7 +51,6 @@
 .conv-item:hover { background: var(--tile); color: var(--text); }
 .conv-item.active { background: var(--tile); color: var(--text); }
 .conv-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.scrim { display: none; }
 
 /* v2.91 §N 状态胶囊（项目列表、项目切换栏；= App StatusCapsule）：进行中 = 安静底 + 呼吸点；等你回复 = 墨色实心；已完成 = 安静底三级字 */
 .status-capsule { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 var(--sp-2); border-radius: var(--r-full);
@@ -71,19 +70,20 @@
 .morph-icon.plus i:nth-child(2) { transform: scaleX(.9); }
 .morph-icon.plus i:nth-child(3) { transform: rotate(-90deg) scaleX(.9); }
 
-@media (min-width: 861px) { .convs.glass-drawer { background: transparent; border-color: transparent; box-shadow: none; } }
 @media (max-width: 860px) {
-  .convs { position: fixed; inset: var(--sp-2) auto var(--sp-2) var(--sp-2); margin: 0; z-index: 30; width: min(84vw, 320px); transform: translateX(calc(-100% - var(--sp-3)));
-    transition: transform 240ms var(--ease); animation: none; } /* 材质（投影 + 模糊）由 .glass-drawer 管 */
-  .chat.drawer-open .convs { transform: none; }
-  .chat.drawer-open .scrim { display: block; position: fixed; inset: 0; z-index: 25; background: var(--glass-scrim); animation: fade var(--dur) var(--ease); }
+  /* v3.5.1（用户 22:39“别留那个半屏的”“丑爆了”）：窄屏历史 / 项目切换不再是从左滑出的半屏玻璃卡 + 遮罩，
+     而是铺满整屏、直接落在壁纸上的一页（= 项目列表页的样子）：顶栏留在上面（左上钮开 / 关），聊天区淡出让位。
+     只动 opacity / transform，不加任何离屏层或 backdrop-filter。 */
+  .convs { position: fixed; inset: 0; z-index: 19; width: auto; margin: 0; padding: var(--shell-top) calc(var(--gutter) - var(--sp-2)) 0;
+    opacity: 0; visibility: hidden; transform: translateY(8px); animation: none;
+    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), visibility 0s linear var(--dur); }
+  .chat.drawer-open .convs { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+  .chat-main { transition: opacity var(--dur) var(--ease); }
+  .chat.drawer-open .chat-main { opacity: 0; pointer-events: none; }
   .conv-item .menu-trigger { opacity: 1; }
-  /* v2.95 项目切换抽屉：抽屉和遮罩都从标题行下面开始（顶栏、左上 ≡/+、药丸都不被盖住，≡ 变 + 才看得见、点得到）；
-     新建项目 = 那颗 +，关闭 = 遮罩 / 选一个项目，抽屉标题旁的 + 不重复。主聊天抽屉仍盖全屏。 */
-  .chat.project .convs { top: var(--caption-bottom); }
-  .chat.project.drawer-open .scrim { top: var(--caption-bottom); }
-  .chat.project .convs-head .icon-btn { visibility: hidden; } /* 占位不收：标题不跳 */
+  .chat.project .convs-head .icon-btn { visibility: hidden; } /* 新建项目 = 左上那颗 +，不重复；占位不收：标题不跳 */
 }
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) { .convs { transform: none; } }
 
 /* 消息流：铺满，上面让出标题，下面让出输入胶囊（--footer-h 由 FloatingFooter 量出）；内容在标题下方淡出。
    v3.3 B3：淡出不再给整个 .thread 加 mask-image（流式输出 / 滚动每帧整区离屏合成），改成 .thread 后面一条壁纸副本（ui/Sky.tsx SkyFade）：
@@ -280,6 +280,10 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
    否则带“快速”芯片时“给 Toyuis 发消息”被截成“给 Toyuis 发消”。 */
 @media (max-width: 480px) { .composer-row .chip-text { display: none; } .composer-row .model-chip { padding: 0 var(--sp-2); } }
 .model-chip.strong, .model-chip.menu-trigger[aria-expanded="true"] { color: var(--text); } /* v2.86.2：非默认档只把字提亮，不加白底、不加描边圈 */
+/* v3.5.1 计划模式开着（= App PlanModeChip：“计划”字 + 一圈细边）：手机宽度下档位钮只留图标的规则不管它，
+   否则点了只是字色深一点，看起来“点了没反应”（用户真机 22:28） */
+.model-chip.plan-chip.is-on { box-shadow: inset 0 0 0 1px var(--text-3); }
+@media (max-width: 480px) { .composer-row .plan-chip.is-on { padding: 0 var(--sp-3); } .composer-row .plan-chip.is-on .chip-text { display: inline; } }
 .model-chip-label { display: inline-flex; align-items: center; gap: var(--sp-1); animation: rise var(--dur) var(--ease); }
 .effort-chip { animation: rise var(--dur) var(--ease); } /* 换到能调的模型时浮入 */
 

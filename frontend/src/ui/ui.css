@@ -7,8 +7,8 @@
    左边一颗独立的圆玻璃返回钮，标题居中裸字，右侧操作收进一颗玻璃胶囊；和一级页顶栏同一行位置、同高。
    三栏 1fr auto 1fr：标题按整行居中，两侧再宽也不会压到它。滚上去的内容由 .sky-fade-page 渐隐（shell.css）。 */
 .page-head { display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; align-items: center; gap: var(--sp-3); height: var(--topbar-h);
-  position: sticky; top: calc(var(--topbar-top) + env(safe-area-inset-top)); z-index: 4;
-  width: min(calc(100% - 2 * var(--gutter)), calc(var(--content-w) - 2 * var(--gutter))); margin: calc(var(--topbar-top) + env(safe-area-inset-top)) auto 0;
+  position: sticky; top: calc(var(--topbar-top) + var(--sat)); z-index: 4;
+  width: min(calc(100% - 2 * var(--gutter)), calc(var(--content-w) - 2 * var(--gutter))); margin: calc(var(--topbar-top) + var(--sat)) auto 0;
   animation: float-in var(--dur) var(--ease) both; }
 .page-head > .glass-btn { grid-column: 1; justify-self: start; width: var(--topbar-h); height: var(--topbar-h); }
 .page-head-actions { grid-column: 3; justify-self: end; display: flex; align-items: center; height: var(--topbar-h); padding: 0 var(--sp-1);
@@ -89,7 +89,7 @@ a.row:hover, button.row:hover { background: var(--tile); }
    遮罩贴住 visualViewport 给的可见区域（--vv-top / --vv-h，由 ui/kit.tsx 写；没有时 = 100dvh），浏览器工具栏 / 软键盘出来时弹层底边跟着走；
    按钮行 .sheet-actions 在弹层里 sticky 贴底，内容再长取消 / 创建也看得见 */
 .sheet-scrim { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100dvh); z-index: 50; background: var(--glass-scrim); -webkit-backdrop-filter: blur(var(--blur-scrim)); backdrop-filter: blur(var(--blur-scrim)); display: flex; align-items: flex-end; justify-content: center; animation: fade var(--dur) var(--ease); }
-.sheet { width: 100%; max-width: 560px; max-height: calc(var(--vv-h, 100dvh) - var(--sp-5) - env(safe-area-inset-top)); overflow-y: auto; overscroll-behavior: contain; background: var(--glass-sheet); border: 1px solid var(--glass-border); border-bottom: 0;
+.sheet { width: 100%; max-width: 560px; max-height: calc(var(--vv-h, 100dvh) - var(--sp-5) - var(--sat)); overflow-y: auto; overscroll-behavior: contain; background: var(--glass-sheet); border: 1px solid var(--glass-border); border-bottom: 0;
   border-radius: var(--r-card) var(--r-card) 0 0; padding: var(--sp-2) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom)); box-shadow: var(--elev-raised);
   -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); animation: slideup calc(var(--dur) * 1.5) var(--ease); }
 .sheet:focus { outline: none; } /* 打开时程序把焦点放进来，不画焦点框 */
@@ -405,7 +405,7 @@ button.run-row:hover { background: var(--tile); }
 /* v2.99 图片全屏查看器（blocks/ImageStack.tsx 的 ImageViewer）：和弹层 / 对话框同属盖在内容上的层，样式放这里。 */
 /* 页面底色实底盖满、淡入；横向 scroll-snap 一页一张，整图按比例放进页面（竖图横图都不裁） */
 .image-viewer { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; background: var(--bg); animation: fade var(--dur) var(--ease);
-  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); outline: none; }
+  padding: var(--sat) 0 env(safe-area-inset-bottom); outline: none; }
 .image-viewer-head, .image-viewer-foot { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--gutter); }
 .image-viewer-page { flex: 1; color: var(--text-2); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .image-viewer-track { flex: 1; min-height: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior: contain; scrollbar-width: none; }

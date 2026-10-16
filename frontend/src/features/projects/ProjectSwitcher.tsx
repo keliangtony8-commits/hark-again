@@ -22,7 +22,7 @@ type SwitcherProps = {
 export default function ProjectSwitcher({ projects, loading, currentId, onPick, onNew }: SwitcherProps) {
   const list = byActivity(projects);
   return (
-    <aside className="convs glass-drawer project-switcher" aria-label="项目">
+    <aside className="convs project-switcher" aria-label="项目">
       <div className="convs-head">
         <span className="convs-title">项目</span>
         {/* 窄屏抽屉里新建 = 左上那颗转成 + 的钮，这里隐藏（chat.css）；宽屏常驻栏靠它 */}

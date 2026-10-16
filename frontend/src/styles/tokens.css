@@ -98,7 +98,10 @@
   --sidebar-w: 280px;
   --topbar-h: 52px;      /* 浮动顶栏（分段导航）高度，App Layout.topBar */
   --topbar-top: 10px;    /* 顶栏离窗口上沿 */
-  --shell-top: calc(var(--topbar-top) + var(--topbar-h) + 12px + env(safe-area-inset-top)); /* 内容让出顶栏 */
+  /* v3.5.1 顶部安全区唯一来源：全屏装成 App（standalone）时让出状态栏；在浏览器标签页里浏览器自己画了地址栏，
+     有的手机浏览器（用户真机 22:28）仍报约 44px 的 safe-area-inset-top，整页凭空下沉一截 → 浏览器里一律按 0。 */
+  --sat: env(safe-area-inset-top, 0px);
+  --shell-top: calc(var(--topbar-top) + var(--topbar-h) + 12px + var(--sat)); /* 内容让出顶栏 */
   --gutter: 24px;        /* 页面左右边距（App Layout.gutter） */
   --card-gap: 16px;      /* 卡片之间（App Layout.cardGap） */
   --segments-w: 300px;   /* 分段导航最宽 */
@@ -138,6 +141,8 @@
 }
 
 /* 深色：只认 <html data-theme="dark">（由 lib/theme.ts 和 index.html 首帧脚本按偏好/系统写入） */
+@media (display-mode: browser) { :root { --sat: 0px; } }
+
 :root[data-theme="dark"] {
   /* v2.80 Hark 式（home-redesign.md F）：海军蓝渐变底 → 近黑不透明卡无描边 → 白字；唯一强调色 = 白（= App Palette.dark） */
   --bg: #0d1226;

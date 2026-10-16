@@ -31,7 +31,7 @@ class HistoryPanel extends ConsumerStatefulWidget {
   final bool docked;
 
   /// 手机：同一份内容装进抽屉
-  static Widget drawer(BuildContext context) => Drawer(backgroundColor: context.palette.bg, child: const HistoryPanel());
+  static Widget drawer(BuildContext context) => const FullDrawer(child: HistoryPanel());
 
   @override
   ConsumerState<HistoryPanel> createState() => _HistoryPanelState();
@@ -152,7 +152,7 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel> {
     final searching = _results != null || (_q.isNotEmpty && _loading);
     // 自带 Material：常驻时它在聊天区 Scaffold 之外，搜索框和水波纹需要一张“纸”
     return Material(
-      color: p.bg,
+      color: widget.docked ? p.bg : Colors.transparent, // 手机：落在 FullDrawer 的壁纸上
       child: SafeArea(
         right: false,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

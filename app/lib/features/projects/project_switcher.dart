@@ -25,7 +25,7 @@ class ProjectSwitcher extends ConsumerWidget {
   final bool docked;
 
   static Widget drawer(BuildContext context, String currentId) =>
-      Drawer(backgroundColor: context.palette.bg, child: ProjectSwitcher(currentId: currentId));
+      FullDrawer(child: ProjectSwitcher(currentId: currentId));
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,7 +37,7 @@ class ProjectSwitcher extends ConsumerWidget {
     }
 
     return Material(
-      color: p.bg,
+      color: docked ? p.bg : Colors.transparent, // 手机：落在 FullDrawer 的壁纸上
       child: SafeArea(
         right: false,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

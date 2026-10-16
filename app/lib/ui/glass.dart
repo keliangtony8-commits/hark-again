@@ -95,6 +95,22 @@ class Backdrop extends StatelessWidget {
   }
 }
 
+/// v3.5.1 手机上的历史 / 项目切换（用户 2026-10-16 22:39“别留那个半屏的”“丑爆了”）：不再是 304 宽的半屏卡，
+/// 而是铺满整屏、直接落在同一张壁纸上的一页（= Web 窄屏 .convs）。壁纸用 Backdrop，减少透明度时同样回落成实色。
+class FullDrawer extends StatelessWidget {
+  const FullDrawer({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Drawer(
+        width: MediaQuery.sizeOf(context).width,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(),
+        child: Backdrop(child: child),
+      );
+}
+
 /// 一个毛玻璃组（规则见文件头）：BackdropGroup + 自己持有的 BackdropKey。
 /// 不直接写 BackdropGroup(child: …)：它不给 key 时每次 build 都新建一个，组里所有滤镜跟着重建。
 class BlurGroup extends StatefulWidget {
