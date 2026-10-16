@@ -288,3 +288,10 @@
   - 底部 Tab 本来就是 `StatefulShellRoute.indexedStack`（App 切 Tab 不重建，已核实）；子页面靠缓存秒开。
 - 成本：内存缓存上限 64 条（JSON 原样，几十 KB 级）；每次进页面一次后台 GET（原来也是一次），没有新增请求；同步返回缓存 → 首帧就是内容，无骨架闪、无 FadeSwitcher 过渡，减少了重建与动画（流畅性只增不减）。
 - 删除/合并：各页面自写的 FutureProvider / reload / 骨架判断（`isLoading`）、Web 各页面重复的 fetch + loading/error state。
+
+## 2026-10-16 16:05 交接（额度用尽前）
+- 分支 wip/v3.3（未合 main、未改 VERSION、未部署，线上仍 v3.2.1）。
+- 已测：项目列表 Hark 式两行、“我的”搜索胶囊内收（27 项定向测试过，web tsc+check-arch 过）。
+- 未测：App SWR（core/swr.dart + 多页面）、流光壁纸（sky.frag / ui/sky.dart / SkyTable / SkyClock / glass.dart）。/tmp/flutter 被清，未跑 analyze，可能编译不过。
+- 未做：Web SWR + 流光；BackdropGroup、删 TopFade 整页遮罩、聊天流式只重建末条、Markdown 样式缓存、Web mask-image。
+- 详细步骤与文件清单：HANDOFF.md 第〇节。
