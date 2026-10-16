@@ -5,10 +5,30 @@
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
-## 〇、最新交接（2026-10-16 17:50，接手先读这一节）
+## 〇、最新交接（2026-10-16 18:25，接手先读这一节）
 **v3.3.0 已发版：合并进 main、tag v3.3、已 push（下面 A/B 全部完成，全量校验见 B 末尾）。服务器仍是 v3.2.1，未部署（用户明确说“更新服务器”才部署）。**
 - 未验证：真机 profile 光栅耗时、真机/浏览器上看新浅色壁纸与返回/浮层关闭那一帧；这些等用户真机验收时一起看。
-- 下一步：按第五节继续下一项。
+- **v3.4 半成品在分支 `wip/v3.4`（2026-10-16 18:25 额度用完中断，main 仍 = v3.3.0，不要把 wip 直接当成已测）**。接手：`git fetch && git checkout wip/v3.4`，先跑 flutter analyze / 全量 flutter test / npm run build && npm test / 后端全量 smoke。
+  1. [x] v3.3 视觉验收（两端浅深 × 夜/黎明/白天/黄昏截图，脚本：App `SHOTS=1 SHOTS_SKY=1 SHOTS_OUT=<目录> flutter test test/screens/shots_test.dart`，Web `SHOTS_CHROMIUM=/usr/bin/chromium python3 frontend/scripts/shots.py`）。修 1 处：浅色白天底部柔光 #C0D4E2→#EBDBBF（两端，修下半屏发灰）。改后测试全过（flutter 732 过 / 9 跳过，web 14/14）。
+  2. [ ] “我的”页补顶部渐隐（两端都没有，App 内容压到状态栏下）：改了一半（me_screen.dart、me.css、shell.css），**未验证**。要求：复用 BackdropFade/SkyFade，不新增整页离屏层，不破坏底部搜索胶囊毛玻璃（它不在 BlurGroup 的原因见 devlog「v3.3 B3」）；截图确认。
+  3. [ ] 后端偶发失败根因（第六节第 2 条：smoke_jobs §13、sqlite locked、smoke_preview_ws、smoke_stop）：改了 jobs.py 和 4 个 smoke，**未验证**。要求：找根因，不准靠加大超时/重试掩盖；各连续 20 次 + 4 份并行 10 次全过。先 `git diff main -- backend/` 审一遍改动是否合理。
+  4. 待用户定（视觉验收发现，未改）：①子页标题栏 App 是贴边整条玻璃栏、Web 是悬浮胶囊，要不要统一；②浅色夜间层次偏平；③“退出登录”App 整行按钮 vs Web 居中小胶囊；④Web 项目列表行距比 App 松约 10%。
+  5. 发版：上面 2、3 测完 → VERSION 3.4.0、brand/sync.py、CHANGELOG（含删除/合并行）、check_version v3.4、合 main、tag、push。不部署、不出 APK。
+- 再往后（第五节剩余里沙盒能做的）：Web check-arch RAW_ROWS 12 文件 23 处要先给 ListRow 定“分体主体 / 正文附加槽”版式再收；第五节其余多数需 VPS / 真机 / 用户。
+
+### v3.3 视觉验收（2026-10-16，在 main 上改，**未提交**；决定见 devlog「v3.3 视觉验收」）
+- **已完成**：两端拍了 明 / 暗 × 夜 2:00 / 黎明 6:00 / 白天 12:00 / 黄昏 18:30 × 主页、聊天、聊天流式中、项目列表、“我的”首屏 + 翻到底（设置搜索）、安全子页；App 56 张（1080×2340 = 411×891 逻辑像素 @2.625，真着色器），Web 112 张（手机 400 宽 @2x + 桌面 1280）。图在 /workspace/work/shots-3.3/{app,web}/，按页拼的四时段对照在 sheets/，修前在 before/。
+  - 出图：App `SHOTS=1 SHOTS_SKY=1 SHOTS_OUT=<目录> flutter test test/screens/shots_test.dart`（字体 /tmp/shots/fonts 见 app/README；可加 SHOTS_SKY_TIMES=day）；Web `npm run build && SHOTS_CHROMIUM=/usr/bin/chromium python scripts/shots.py <目录> sky`（arm64 沙盒 playwright 自带浏览器下载 403，用 apt 的 chromium）。
+  - **修了 1 处（两端同值）**：浅色白天壁纸下半屏发灰（底部实测 #d0d9d8，灰绿）：白天第三团柔光 #C0D4E2 冷蓝灰压在暖米底上 → 改暖沙 #EBDBBF（tokens.dart SkyTable.light.day blobC、tokens.css --sky-day-c）；改后底部 #e9ddc3，“亮蓝 → 暖米”回来了。对比度守门不变。
+  - 截图脚本：App 新增「v3.3 壁纸 × 时段截图」测试（默认跳过）+ 假接口 2fa / sessions；Web shots.py 新 `sky` 段 + 项目假数据补 status（和 App 同）。
+  - 查过没问题：顶部渐隐条与壁纸逐像素相邻差 ≤1/255，无接缝；毛玻璃组无断层 / 错位；深色四时段都是暗蓝紫、夜里最暗；正文 / 次要字清楚；流式两端正常。
+  - 校验：flutter analyze 0；全量 flutter test **732 过 / 9 跳过 / 0 失败**（多跳的 1 个是新截图测试）；npm run build 过（配色守门 浅 12.37 / 4.63 / 3.03，深 11.83 / 4.74 / 3.13）；npm test **14/14**。
+- **拿不准、未改（等用户定）**：
+  1. 子页标题栏两端不一样：App 是贴边整条玻璃栏 + 底部发丝线（浅色时像一条白带），Web 是悬浮玻璃胶囊。要统一得改其中一端的外框（SubPage / .page-head），属设计决定。
+  2. 浅色夜间（2:00）整屏淡灰紫，几个色值很接近，层次偏平；要更有层次就得拉开柔光色差，会影响次要字对比度余量。
+  3. “我的”页（两端）没有顶部渐隐条，翻下去内容直接切在顶边；App 上会压到状态栏下。原来就是这样（只有带顶栏的一级页有渐隐）。
+  4. “退出登录”：App 是整行按钮，Web 是居中小胶囊；Web 项目行的胶囊行为放 ⋯ 留了 32px 最小高，行距比 App 松约 10%。
+- 未做：真机 / 真浏览器 GPU 下看流动效果和帧耗时（仍按上面“未验证”）。
 
 ### A. 已完成且测试通过（可直接保留）
 1. 项目列表按 Hark：名字占满整行最多 3 行、状态胶囊另起一行；删页头摘要 / 列表 emoji / App 行尾 ⋯（改长按菜单）；Web ⋯ 在胶囊行右端。文件：app/lib/features/projects/projects_screen.dart、test/projects_screen_test.dart、frontend/src/features/projects/ProjectsScreen.tsx、projects.css。
