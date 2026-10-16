@@ -9,7 +9,7 @@ import { JobLog } from "../../blocks/JobBlock";
 import type { JobInfo } from "../../lib/types";
 import { formatSize } from "../../lib/files";
 import { confirmDialog, noticeDialog } from "../../ui/dialog";
-import { IconGlobe, IconExternal, IconCopy, IconChevron, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt, IconDisk, IconChip, IconServer, IconTerminal, IconMore } from "../../ui/icons";
+import { IconGlobe, IconExternal, IconCopy, IconDoc, IconDownload, IconFolder, IconReceipt, IconRefresh, IconSettings, IconBolt, IconDisk, IconChip, IconServer, IconTerminal, IconMore } from "../../ui/icons";
 import { ListGroup, ListRow, Section, Sheet } from "../../ui/kit";
 import type { ComputerCtl } from "./useComputer";
 import { type PreviewLink, portLine, portTitle } from "../../lib/preview";
@@ -49,14 +49,12 @@ export function MemorySection({ ctl, enter }: { ctl: ComputerCtl; enter?: number
   return (
     <Section title="内存" enter={enter}>
       <ListGroup>
-        <div className={`row computer-quota${tight ? " is-tight" : ""}`} role="group" aria-label={[memoryViewLine(v), note].filter(Boolean).join("，")}>
-          <span className="row-icon"><IconChip /></span>
-          <div className="row-body" aria-hidden>
-            <div key={memoryViewLine(v)} className="row-title computer-state">{memoryViewLine(v)}</div>
+        <ListRow className={`computer-quota${tight ? " is-tight" : ""}`} role="group" label={[memoryViewLine(v), note].filter(Boolean).join("，")}
+          icon={<IconChip />} title={<span key={memoryViewLine(v)} className="computer-state">{memoryViewLine(v)}</span>}
+          extra={<>
             {ratio != null && <div className={`meter computer-meter${tight ? " meter-near" : ""}`}><span style={{ transform: `scaleX(${ratio})` }} /></div>}
             {note && <div className="computer-oom">{note}</div>}
-          </div>
-        </div>
+          </>} />
         {v.rows.map((r, i) => {
           const job = jobOf(r);
           const warn = i === 0 && tight;
@@ -167,16 +165,14 @@ function QuotaRow({ s }: { s: ComputerStatus }) {
   const note = computerDiskNote(s);
   const line = computerDiskLine(s);
   return (
-    <div className={`row computer-quota${diskTight(s) ? " is-tight" : ""}`} role="group" aria-label={[line, note].filter(Boolean).join("，")}>
-      <span className="row-icon"><IconDisk /></span>
-      <div className="row-body" aria-hidden>
-        <div key={line} className="row-title computer-state">{line}</div>
+    <ListRow className={`computer-quota${diskTight(s) ? " is-tight" : ""}`} role="group" label={[line, note].filter(Boolean).join("，")}
+      icon={<IconDisk />} title={<span key={line} className="computer-state">{line}</span>}
+      extra={<>
         <div className={`meter computer-meter${diskTight(s) ? " meter-near" : ""}`}>
           <span style={{ transform: `scaleX(${computerDiskRatio(s) ?? 0})` }} />
         </div>
         {note && <div key={s.disk_level} className="computer-oom">{note}</div>}
-      </div>
-    </div>
+      </>} />
   );
 }
 
@@ -205,8 +201,8 @@ export function StorageSection({ ws, ctl, enter, onFiles }: { ws: string; ctl: C
       <ListGroup>
         {s.disk_limit != null && <QuotaRow s={s} />}
         {storageRows(st).map(([k, name, line, bytes]) => (
-          <ListRow key={k} onClick={k === "files" && onFiles ? onFiles : undefined} trail={null} icon={ICONS[k]()} title={name} sub={line}
-            control={<span key={bytes} className="row-hint computer-hint">{formatSize(bytes)}</span>} />
+          <ListRow key={k} onClick={k === "files" && onFiles ? onFiles : undefined} icon={ICONS[k]()} title={name} sub={line}
+            trail={<span key={bytes} className="row-hint computer-hint">{formatSize(bytes)}</span>} />
         ))}
         <ListRow onClick={all.length ? () => setTools(all) : undefined} icon={<IconSettings />} title="装过的工具" sub={toolsSummary(all)} />
       </ListGroup>

@@ -31,24 +31,13 @@ class ShellPage extends StatelessWidget {
   static double insetOf(BuildContext context, {double header = 0}) =>
       MediaQuery.paddingOf(context).top + Layout.shellTop + (header > 0 ? header + Sp.x2 : 0);
 
-  /// header 那一行的顶边：紧贴顶栏下面（比内容让位线更靠上，它本身也是浮层）。
-  static const _headerTop = Layout.topBarTop + Layout.topBar + Sp.x2;
-
-  /// 内容完全被壁纸盖住到哪一行（不含状态栏的部分 + 状态栏 [top]）：没有 header 时到顶栏中线（胶囊两侧露一点点渐隐），
-  /// 有 header 时到 header 底边（标题下面绝不叠字）。
-  static double fadeClearOf(double top, double headerHeight) =>
-      top + (headerHeight > 0 ? _headerTop + headerHeight : Layout.topBarTop + Layout.topBar / 2);
-
-  /// 内容从哪一行起完全显出来：让位线 [inset] 再往下 [Layout.topFadeRamp]（缓入渐显，不切硬边）。
-  static double fadeSolidOf(double inset) => inset + Layout.topFadeRamp;
-
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final top = mq.padding.top;
     final headerSpace = header == null ? 0.0 : headerHeight + Sp.x2;
     final inset = top + Layout.shellTop + headerSpace;
-    final solid = fadeSolidOf(inset);
+    final solid = BackdropFade.solidOf(inset);
     return Stack(children: [
       // 内容自成一组（输入胶囊 / 回到最新 / 错误条）：它们只模糊内容本身
       BlurGroup(
@@ -57,7 +46,7 @@ class ShellPage extends StatelessWidget {
           child: child,
         ),
       ),
-      Positioned(top: 0, left: 0, right: 0, height: solid, child: BackdropFade(clear: fadeClearOf(top, header == null ? 0 : headerHeight), solid: solid)),
+      Positioned(top: 0, left: 0, right: 0, height: solid, child: BackdropFade(clear: BackdropFade.clearOf(top, header == null ? 0 : headerHeight), solid: solid)),
       Positioned.fill(
         child: _ChromeGroup(
           covered: covered,
@@ -65,7 +54,7 @@ class ShellPage extends StatelessWidget {
             if (lead != null) Positioned(top: top + Layout.topBarTop, left: mq.padding.left + Layout.gutter, child: lead!),
             if (header != null)
               Positioned(
-                top: top + _headerTop,
+                top: top + Layout.shellHeaderTop,
                 left: mq.padding.left + Layout.gutter,
                 right: mq.padding.right + Layout.gutter,
                 height: headerHeight,

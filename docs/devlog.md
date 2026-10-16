@@ -416,3 +416,70 @@
 - 真模型 E2E：VPS 上用 app-backend 镜像临时容器跑本分支 `tests/live_stepfun.py`（密钥从服务器 .env 直接传进容器）：工具调用、带结果作答、记账、朗读→识别 4 项全过。
 - 最终全量：flutter analyze 0；flutter test 735 过 / 9 跳过；npm run build、npm test 14/14；后端 smoke 203/203。
 - 未做：真机 profile 光栅、真 GPU Chrome trace（沙盒与 VPS 都没有 GPU / 真机）。
+
+## 2026-10-16 v3.5 Web ListRow 定“分体主体 / 正文附加槽”，收 RAW_ROWS（HANDOFF 第〇节“再往后”、第五节第 6 项 E1 剩余；先写决定再改）
+**现状（动手前查的）**：check-arch RAW_ROWS 登记 12 个文件。其中分体行 6 处（技能、定时任务、MCP 服务器、收件箱、电脑页服务 / 后台任务）是同一个版式写了 4 遍：`div.row` 里一个整块按钮（`.skill-row` / `.task-row` / `.report-open` / `.computer-job-open`，四套几乎一样的 CSS）+ 行尾独立控件；其中前两个没有悬停底色、后两个有，自己就不一致。电脑页状态行 / 内存配额 / 磁盘配额 4 处是“标准行 + 正文下一条细条 + 一句警示”。App 早就是一套：kit.dart `ListRow(onTap:, trailing:)`，行尾开关 / 按钮在 InkWell 里但手势竞技场让控件自己赢，技能 / 任务 / 收件箱都用它。
+**决定（替换不叠加，不新增组件）**
+1. Web `ListRow`：可点的行（to / onClick）又给了 `control` 时，自动渲染成分体行 = `div.row.row-split` > 可点主体（`.row-main`：图标 + 正文 + 值 + trail/箭头）+ 行尾控件（主体之外，按钮不套按钮）。**不加新参数**：语义和 App `ListRow(onTap + trailing)` 一致。原来“可点行 + control”会把控件嵌进 button 里（非法嵌套），现在这条路径本身就修正了。aria-label 落在主体上。
+2. Web `ListRow` 加 `extra`（正文附加槽）：放在副标题下面、仍在 `.row-body` 里（细条、警示句）。只这一个新参数。
+3. CSS：`.skill-row` / `.task-row` / `.report-open` / `.computer-job-open` / `.computer-job` 及 `.report-row` 的内边距 / 悬停全部删掉，换成 `.row-split` / `.row-main` 一套（取原收件箱 / 电脑页那种：整行悬停底色、主体铺满可点）。有意的变化：技能、定时任务行也有了悬停底色（和其他可点行一致）；技能“已自定义”、MCP“带令牌”小字进了行尾 trail（间距 12→8px）。
+4. 迁：技能、定时任务、MCP 服务器、收件箱、电脑页服务 / 后台任务（分体）；电脑页状态行 ×2、内存配额、磁盘配额（附加槽）。
+5. 仍登记、不迁（版式不是“标准行 + 附加”）：内存 / 磁盘写入明细行（标题和大小同一基线的头行）、运行记录 / 助手备忘（顶对齐 + 状态点 + 多行错误）、最花钱的对话（细条跨整行换行）、今天时间线（行首是时间文字）、回复语言（常驻 aria-live）、文件选择（role=checkbox）。
+6. App 不动：分体已经是 ListRow；App 6 个富内容行 v2.98 已逐个评估保留。
+**成本**：纯前端重构，无接口变化；DOM 层级不变（原来也是 div > button + 控件）。验证：npm run build（check-arch 数只减不增）、npm test、截图对比（技能 / 定时任务 / 连接的账号 / 主页收件箱 / 电脑页，明暗 × 手机 / 桌面）、4× CPU 滚动帧。
+**结果（实测）**：截图脚本加了电脑页（/#/projects/pr1/computer），main 基线与本分支各 138 张逐像素比。第一轮抓出回归：分体行默认右内边距沿用了收件箱的 sp-2，定时任务 / 技能 / 连接的账号行尾开关比原来往右贴了 8px → `.row-split` 默认改 sp-4（= App ListRow 水平 Sp.x4），只收件箱（⋯ 按钮自带点按留白）在 home.css 保留 sp-2。第二轮：技能 / 定时任务 / 连接的账号与 main 逐像素一致；电脑页服务 / 后台任务行尾按钮内收 8px（原 .computer-job 是 sp-2，现与其他行和 App 一致，有意）；主页收件箱区灰色小字 1 设备像素栅格差——DOM 量过两版每个盒子 top/height 到 0.1px 全同，属子像素取整，不改。DOM：主页 / 定时任务 / 技能 / 连接的账号 / 电脑 / 项目页按钮嵌按钮 0、分体主体都有可读名。4× CPU 无头 Chromium 手机视口来回滚动 240 帧：主页、定时任务、技能、电脑页新旧都 median 16.7ms、p95 16.8ms、>20ms 帧 0。tsc 0 错、架构守卫 222 文件、配色守门、npm test 14/14。
+
+## 2026-10-16 v3.5 浅色夜间壁纸照 Hark 改“蓝 → 金”（HANDOFF 第二节第 21 条⑤，用户 19:41 补发 Hark 浅色截图；先写决定再改）
+**现状**：浅色 night 时段 = 淡灰紫（top #c7d1f0 → bottom #d3d0dd，三团柔光也是灰紫），所以浅色晚上整屏发平。Hark 浅色 22:20 / 23:02 截图采样：顶 #3a6d99（钢蓝）→ #6093b6 → #9dbfce（浅青灰）→ #cad7cd → 底 #d8d4b3 / #e5c988（暖金米），晚上也不变暗、不变灰。
+**约束**：配色守门要求壁纸任何一处 次要字 --text-2（#5c5852）≥ 4.5、--text-3 ≥ 3，等于壁纸每个采样点相对亮度 ≥ ≈0.62。Hark 顶部 #3a6d99 亮度 0.14（我们的次要字放上去只有 1.3:1，正文也只有 3.1），照搬会让区块标题 / 副标题在壁纸上看不清。
+**决定**：取 Hark 的色相走向，亮度守在守门线以上（≈0.655），饱和度拉到这个亮度下能给的上限——只改浅色 night 一行 5 色，App SkyTable.light.night 同值：
+top #b6d8f5（钢蓝，Hark 顶部色相）· bottom #e7d19f（暖金，Hark 22:20 底部色相）· a #bdd7ee（左上蓝）· b #c1d8e1（右中浅青灰，Hark 中段）· c #e3d3ac（底部米金）。
+dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 过渡自然从蓝金过到现有黎明色）。
+**成本**：只换常量，零运行时成本。验证：配色守门（全天采样）、App sky_test、截图浅色夜间（App + Web）。
+**结果**：配色守门全天采样通过（浅色次要字最差仍 4.63、最次要字 3.03，最差点不在夜间）；npm test 14/14；App sky_test 19/19（沙盒跑 flutter test 要 NO_PROXY=127.0.0.1,localhost，否则测试监听的 websocket 走代理 404）。截图：Web `shots.py … sky` 浅色夜间 手机 / 桌面 × 主页 / 项目 / 聊天 / 我的；App app_shots_test 以 TZ=Etc/GMT-14（本地 02:00）出图，两端都是上钢蓝 → 中浅青灰 → 下暖金，和 Hark 22:20 / 23:02 走向一致，只是顶部浅（守门线）。
+
+## 2026-10-16 v3.5 App 子页标题栏 → 悬浮玻璃胶囊（HANDOFF 第二节第 21 条①，照 Hark；先写决定再改）
+**现状**：Web 子页 `.page-head` 早就是悬浮胶囊（离窗口上沿 topbar-top、左右 gutter、高 topbar-h、圆角 full、glass + chrome-edge 发丝边 + elev-float 投影 + 毛玻璃，sticky），滚上去的内容由 v3.4 的 SkyFade 渐隐带盖住。App `ui/sub_page.dart GlassAppBar` 还是贴边整条栏（状态栏 + 56 高、整宽毛玻璃、底部发丝线）。Hark 项目页标题也是导航下方一颗悬浮小胶囊，内容从胶囊四周露出来的地方被壁纸渐隐。
+**决定（替换不叠加，只改 sub_page.dart，20 个 SubPage 调用方不动）**
+1. `GlassAppBar` = 一颗悬浮胶囊：位置 / 尺寸照一级页顶栏（状态栏下 Layout.topBarTop、左右 Layout.gutter + 安全区、高 Layout.topBar），面 = 顶栏同一个 `GlassSurface(blur: true, radius: full)`（玻璃、chromeEdge、高光、floatShadow，减少透明度时实色）；里面还是 AppBar（primary: false、toolbarHeight = Layout.topBar，返回 / 标题 / actions 不变）。删掉整宽 BackdropFilter 和底部发丝线。
+2. 让位：preferredSize = Layout.shellTop（= 一级页 inset，内容让位线两种页面同一条）。
+3. 胶囊四周会露出滚上去的内容 → SubPage 在 body 上叠一条 `BackdropFade`（ShellPage 同参数：clear = 状态栏 + 胶囊中线，solid = 让位线 + topFadeRamp），不新建组件。
+**成本**：毛玻璃面积从整宽 (状态栏+56)×屏宽 变成 52×(屏宽−48) 的胶囊，取背景仍是 BlurGroup 一次；新增一条和一级页同样的 SkyLayer 渐隐带（一级页已在用，帧测里 backdropLayers 不变）。验证：sub_page_test 改断言、全量 flutter test、App 截图（我的子页 / 项目聊天）、perf_frame_test。
+
+## 2026-10-16 v3.5 浅色夜间第二版：调浓 + 次要字压深一档（用户 20:05“还行吧”、20:06“你想想吧，反正就是要有美感！”= 交给我定，以美感优先；HANDOFF 第二节第 22 条）
+**问题**：第一版（fb3f9a6）色相对了但整体太淡：亮度被次要字 #5c5852 的 4.5 线卡在 ≥0.62，比 Hark（顶 0.14）淡得多；直接调浓的中段蓝 + 金在 sRGB 插值里混成橄榄灰，发脏。
+**决定（两全，不放松守门）**
+1. 浅色 --text-2 #5c5852 → #4a4640、--text-3 #7a746c → #605b54（两端同值）：壁纸可用亮度下限从 0.62 降到 ≈0.45。和正文 #111 的层级差从 2.66 变 2.02，截图看次要字仍明显次一级；在卡片上更清楚。
+2. 浅色 night：top #8ebbe3（钢蓝，Hark 色相）· a #86bcea（左上更深的蓝团）· b #c6dfe8（右中一团发亮的浅青白——Hark 中段那片亮光，也负责把蓝金之间的橄榄灰冲掉）· c #efe4c4（底部正中奶油光）· bottom #dcc58a（暖金，四角）。
+3. 流光（三团柔光漂移、按钟点插值）不动，只换常量。
+**过程**：第二版先试 b #92bdd0 / c #e3c88a，和 Hark 并排看中段发灰绿 → 改成上面这组，中段变成发亮的浅青白、底部奶油光 + 金边，与 Hark 23:02 走向一致（Hark 顶部还更深，那是守门线以下，不取）。
+
+## 2026-10-16 v3.5 “退出登录”整行条（两端）+ Web 项目列表去 ⋯（HANDOFF 第二节第 21 条②③）
+**退出登录**：原两端都是居中小胶囊；Hark = 整行浅底圆角条、左图标 + 文字、无箭头、不进卡片组。
+- 两端同一套：高 = 顶栏高（App Layout.topBar / Web --topbar-h，52）；底 = 次要胶囊按钮那层浅底（App tileFill / Web --tile）；圆角 full；左内边距 Sp.x4，图标落在上面列表行的图标线上；字 = 行标题字（App titleMedium / Web .row-title）。
+- 不用 ListGroup + ListRow：那是白卡片组（Hark 明确不放卡片组里），且行高 64 + 组内边距让“我的”在 412×915 上多出 28px，超过一屏线（design_p3_test 918 > 915）；52 高的独立条正好守住。App 是 me_screen.dart `_LogoutBar`，Web 是 `.me-logout-bar`；按压反馈两端同为缩到 0.98（App 用 motion.dart Pressable——架构守卫不许 features 里手写 InkWell 行；Web :active）。App 仍先 confirmDanger，Web 原来就直接退（两端这点原本就不一致，没在这次改）。
+- 顺手发现（没改）：App“我的”静止时，最底下的退出登录被底部“搜索设置”浮条盖住，要滚一下才露出来——design_p3_test 只量到屏幕底 915，没量到浮条上沿。旧胶囊同样如此，记进 HANDOFF 待办。
+**Web 项目列表**：去掉行上 ⋯（它让状态行留了 32px 最小高、行 min-height 56）；菜单 = 右键 / 长按，弹原地聚焦菜单（ui/FocusMenu，和消息菜单同一套，= App 长按）。安卓 Chrome 长按、桌面右键、键盘菜单键 / Shift+F10 都发 contextmenu；iOS Safari 长按不发，用 500ms 触摸计时补，触发后吞掉随后那次点按；链接关掉系统长按预览和选字。同样 5 项操作项目内的项目名药丸里也有，功能没少。
+
+## 2026-10-16 v3.5 子页标题照 Hark 子页（两端）
+
+**依据**：用户 20:49 发 Hark 钱包 / 安全 / 系统偏好设置截图——子页没有标题栏、也没有胶囊：左边一颗独立圆玻璃返回钮（‹），标题居中裸字，说明文字和卡片直接接在下面。上一版（ef2bc21 前）照 Web 做成“整宽玻璃胶囊里放 返回 + 标题 + 动作”，不对。
+
+**决定**
+1. **替换不叠加**：两端删掉整宽胶囊（App `GlassAppBar` 里的 GlassSurface + AppBar；Web `.page-head` 的玻璃底、`.spacer`）。
+2. 版式：[圆玻璃返回钮 = 一级页顶栏圆钮同尺寸] — 居中裸字标题（按整行居中，两侧再宽也不压字、放不下省略号）— [右侧动作收进一颗玻璃胶囊]（Hark 子页没有动作可参照，取顶栏同材质的胶囊，单个动作时接近圆钮）。位置 / 高度 = 一级页顶栏，让位线不变。
+   - App：`NavigationToolbar`（centerMiddle）；返回钮规则照 AppBar：给了 leading 用它，否则 `impliesAppBarDismissal` 才出，点了 maybePop；标题 Semantics header。
+   - Web：`grid 1fr auto 1fr`；返回钮 `.glass-btn.glass`；动作包 `.page-head-actions`。
+3. 标题没有底了，滚上去的内容靠渐隐：App 本来就有 BackdropFade；Web 子页打开 `.sky-fade-page`（中线以上全是壁纸，到内容静止顶边全显），标题行 sticky z4 盖在渐隐条 z1 上。
+4. 返回图标两端统一成 ‹（App `arrow_back_ios_new_rounded` = Web IconBack = Hark），“我的”页返回钮同换。
+5. 测试：sub_page_test 改量“标题无玻璃底、整屏居中、动作胶囊贴右边距同高”，新增“能退的子页出圆钮、位置 = 顶栏圆钮、点了退回”；shell_test 的 `pageBack()`（只认 Material BackButton）改点“返回”。
+
+**成本 / 帧**：App 每个子页取背景从 1 次（整宽胶囊）变成 ≤2 次（返回钮 + 动作胶囊，同一个 BackdropGroup 里合并取样）。Web 子页多一条渐隐条、玻璃面从 1 块变 ≤2 块小的；4× CPU 手机视口滚动（work/frames.py，每路由 400 帧，各跑 4 轮）：median 16ms、p95 18–20ms 新旧一样；>20ms 帧 子页（定时任务 + 记忆）合计 新 37 / 旧 15。拆因：关掉渐隐条 → 15（= 旧），关掉标题行毛玻璃 → 43（不是它）；isolation、will-change、把标题行挪出滚动区（= 顶栏结构）都不降。即多出来的就是渐隐条本身的成本，而同一轮里一级页主页 / 我的（本来就有这条，没改）>20ms 是每轮 4–11，子页现在每轮 2–12，落在同一水平。结论：标题没底就必须渐隐（否则滚上去的字和标题叠），这是全站已接受的同一种渐隐，保留；不另造一套。
+
+## 2026-10-16 v3.5 底部浮条渐隐（两端，用户 21:35“会更好看就改”）
+- 起因：App“我的”退出登录条静止时半截压在“搜索设置”浮条下，硬切。用户先同意不改，追问后说“会更好看就改”。只给“我的”页加会两端 / 各页不一致 → **统一做在 FloatingFooter 里**，所有底部浮条（主页 / 项目 LaunchComposer、聊天 Composer、“我的”搜索）一起有。
+- 做法（替换不叠加，复用顶部渐隐的同一套）：
+  - App：`Sky.fadeAlpha` / sky.frag 的 uFade 支持 solid < clear = 方向反过来（式子同一个，着色器改成显式 smoothstep 式，因为 GLSL smoothstep(edge0 > edge1) 无定义）；`SkyLayer(fadeLocal:)` 让条用本地 y（画时加条的屏幕位置）；`BackdropFade.bottom`；减少透明度时 `_SolidFadePainter` 色标按 y 升序排、两种方向通用。FloatingFooter 在内容和 behind（FrostScrim）之间放一条高 = 底条高 + `Layout.topFadeRamp`，solid = 条顶、clear = 底条上沿 + `Layout.bottomFadeClear`（= topBar / 2 ≈ 胶囊中线）。聊天列表底留白 `Sp.x2` → `Layout.topFadeRamp`（静止时最后一条不被淡，= 网页 .thread-inner 的 sp-4）。
+  - Web：FloatingFooter 自己量高、在底条前渲染 `SkyFade kind="footer" height={h + 16}`；`.sky-fade.sky-fade-footer` 贴底 + 反向 mask（同 6 个色标）。SkyFade 的 ResizeObserver 加观察自身（底条长高时条的视口位置会变）。坑：`.sky-fade-footer` 单类名被 base.css `.sky-fade { top: 0 }` 压住，条跑到顶上 → 用双类名。
+- 验证：flutter analyze 0、flutter test 736 过 / 9 跳过；Web tsc、npm test 14/14、架构守卫、build 过；截图 App（me / me-end / 聊天回到最新 / 主页暗色）+ Web 全套 phone/desktop × 明暗看过：卡片 / 退出登录 / 气泡滚到浮条处淡进壁纸，滑到底退出登录条完整露出。
+- 帧耗时：App perf_frame_test 新旧交替各 2 轮，backdropLayers / shaderMaskLayers / fadeRebuilds 不变，每帧元素 +3（多一条），CPU 中位在噪声内（shell-scroll 新 13.2/11.1 vs 旧 10.6/9.5ms，me-scroll 4.9/3.0 vs 2.9/2.5，chat-stream 34.5/36.4 vs 36.8/33.7）。Web 4×CPU 手机视口新旧交替各 4 轮：median 16ms、p95 19–20ms 不变；>20ms 帧主页 47 vs 19、“我的” 36 vs 27（4 轮合计）——多一条动态壁纸副本 + mask 的成本，和 v3.5 子页渐隐条同类同量级。**未验证**：真机 Flutter profile、真 GPU 浏览器。

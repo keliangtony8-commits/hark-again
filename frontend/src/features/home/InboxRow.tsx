@@ -5,7 +5,7 @@ import { onceShortcuts } from "../../lib/timeShortcuts";
 import { cardGlance } from "../../lib/reportGlance";
 import type { HomeCard } from "../../lib/types";
 import { IconCheck, IconClock, IconClose, IconInbox, IconMore } from "../../ui/icons";
-import { Menu, type MenuItem } from "../../ui/kit";
+import { ListRow, Menu, type MenuItem } from "../../ui/kit";
 import type { Snooze } from "./Snooze";
 
 export function reportMenu(r: HomeCard, on: { snooze: Snooze; read: (r: HomeCard) => void; dismiss: (r: HomeCard) => void }): MenuItem[] {
@@ -21,15 +21,7 @@ export function InboxRow({ card: r, time, onOpen, ...on }: {
   snooze: Snooze; read: (r: HomeCard) => void; dismiss: (r: HomeCard) => void;
 }) {
   return (
-    <div className={`row report-row ${r.unread ? "unread" : ""}`}>
-      <button className="report-open" onClick={() => onOpen(r)}>
-        <span className="row-icon"><IconInbox /></span>
-        <div className="row-body">
-          <div className="row-title">{r.title}</div>
-          <div className="row-sub">{cardGlance(r)}</div>
-        </div>
-      </button>
-      <span className="row-trail">{time}<Menu label="稍后再看或收起" trigger={<IconMore />} items={reportMenu(r, on)} /></span>
-    </div>
+    <ListRow className={`report-row${r.unread ? " unread" : ""}`} onClick={() => onOpen(r)} icon={<IconInbox />} title={r.title} sub={cardGlance(r)} trail={null}
+      control={<span className="row-trail">{time}<Menu label="稍后再看或收起" trigger={<IconMore />} items={reportMenu(r, on)} /></span>} />
   );
 }

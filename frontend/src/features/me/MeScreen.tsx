@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { auth, http, notifyUnauthorized, server } from "../../lib/api";
 import { outbox } from "../../lib/outbox";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, type UsageReport } from "../../lib/usage";
-import { IconBack, IconCard, IconClock, IconComputer, IconDoc, IconFeedback, IconGauge, IconPlug, IconSearch, IconSettings, IconShield, IconUser } from "../../ui/icons";
+import { IconBack, IconCard, IconClock, IconComputer, IconDoc, IconFeedback, IconGauge, IconLogout, IconPlug, IconSearch, IconSettings, IconShield, IconUser } from "../../ui/icons";
 import { Highlight, Hint, ListGroup, ListRow, Page, SearchField, Section, stagger } from "../../ui/kit";
 import { meLocation, meWhere, searchMe, type MeEntry, type MeSection } from "./meIndex";
 import CountUp from "../../ui/CountUp";
@@ -108,7 +108,7 @@ function MeResults({ q, hits }: { q: string; hits: MeEntry[] }) {
   );
 }
 
-/** “我的”（v2.81 一屏）：页头一行（返回 + 名字/域名）→ 用量卡 → 两组行 → 退出登录胶囊。外观、头像颜色、回复语言都在“偏好设置”。
+/** “我的”（v2.81 一屏）：页头一行（返回 + 名字/域名）→ 用量卡 → 两组行 → 退出登录整行条（v3.5 照 Hark，原居中胶囊）。外观、头像颜色、回复语言都在“偏好设置”。
  *  v3.0：底部设置搜索（全站唯一，索引 meIndex.ts）——输入即筛，页头保留，下面换成结果；Page 的 footer 量胶囊实高，滚到底不挡“退出登录”。 */
 export default function MeScreen() {
   const nav = useNavigate();
@@ -131,8 +131,12 @@ export default function MeScreen() {
           <UsageSummary />
           <ListGroup className="me-group" enter={2}>{rows(GROUP1)}</ListGroup>
           <ListGroup className="me-group" enter={3}>{rows(GROUP2.map((r) => (r.to === "/me/about" && outdated ? { ...r, value: "请更新" } : r)))}</ListGroup>
+          {/* v3.5 照 Hark：整行浅底圆角条、左侧图标 + 文字、无箭头，不进卡片组（= App me_screen.dart _LogoutBar） */}
           <div className="me-logout enter" style={stagger(4)}>
-            <button className="pill" onClick={() => void logout()}>退出登录</button>
+            <button className="me-logout-bar" onClick={() => void logout()}>
+              <span className="row-icon" aria-hidden><IconLogout /></span>
+              <span className="row-title">退出登录</span>
+            </button>
           </div>
         </div>
       )}

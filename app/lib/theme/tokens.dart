@@ -85,8 +85,8 @@ class Palette {
     surface2: Color(0xFFF1EFEC),
     border: Color(0xFFE8E5E0),
     text: Color(0xFF111111),
-    text2: Color(0xFF5C5852), // v3.3 原 #64605A：压在流光壁纸上也要 ≥ 4.5（test/sky_test.dart）
-    text3: Color(0xFF7A746C), // 次要信息（时间戳、图标）：对底色、对壁纸 ≥ 3:1（v3.3 原 #857F77）
+    text2: Color(0xFF4A4640), // v3.5 原 #5C5852（v3.3 原 #64605A）：浅色夜间壁纸调浓后压在上面也要 ≥ 4.5（test/sky_test.dart）
+    text3: Color(0xFF605B54), // 次要信息（时间戳、图标）：对底色、对壁纸 ≥ 3:1（v3.5 原 #7A746C，v3.3 原 #857F77）
     accent: Color(0xFF111111), // 唯一强调色 = 墨色：未读点、进度、链接
     accentSoft: Color(0xFFEDEBE7),
     onAccent: Color(0xFFFFFFFF),
@@ -232,10 +232,10 @@ class SkyTable {
   @override
   int get hashCode => Object.hash(night, dawn, day, dusk);
 
-  /// 浅色：学 Hark 浅色（顶部天蓝 → 中段淡 → 底部暖米色），夜里是偏紫的灰蓝。v3.3 B2 整体提亮（只抬 OKLab 明度、保色相）：
+  /// 浅色：学 Hark 浅色（顶部天蓝 → 中段淡 → 底部暖米色），夜里也是钢蓝 → 暖金（v3.5 照 Hark 浅色夜间截图，原偏紫灰蓝）。v3.3 B2 整体提亮（只抬 OKLab 明度、保色相）：
   /// 次要字 text2 压在顶部 / 夜间最暗处也要 ≥ 4.5，所以顶色比 Hark 浅得多。
   static const light = SkyTable(
-    night: SkyPhase(Color(0xFFC7D1F0), Color(0xFFD3D0DD), Color(0xFFC8D1EE), Color(0xFFD4CEEB), Color(0xFFD2CFE0)),
+    night: SkyPhase(Color(0xFF8EBBE3), Color(0xFFDCC58A), Color(0xFF86BCEA), Color(0xFFC6DFE8), Color(0xFFEFE4C4)),
     dawn: SkyPhase(Color(0xFFC0D1FD), Color(0xFFF1D9C6), Color(0xFFC6D1F2), Color(0xFFF7D7BF), Color(0xFFD8CDE7)),
     day: SkyPhase(Color(0xFFADD6FE), Color(0xFFE6DCC2), Color(0xFFB1D6F5), Color(0xFFF4EEDF), Color(0xFFEBDBBF)), // v3.3 验收：底部柔光原 #C0D4E2（冷蓝灰）把暖米底盖成灰绿，改暖沙
     dusk: SkyPhase(Color(0xFFC5D0FB), Color(0xFFEBCDB6), Color(0xFFD2CDF7), Color(0xFFF3D2B4), Color(0xFFD8CDE5)),
@@ -274,8 +274,9 @@ abstract final class Sky {
   }
 
   /// ShellPage 上沿渐隐条在 clear → solid 之间的不透明度（1 → 0，smoothstep 缓入缓出；= sky.frag uFade）。
+  /// v3.5：solid < clear 是底部渐隐（底部浮条下：solid 以上内容全显，到 clear 全是壁纸），同一个式子，方向自然反过来。
   static double fadeAlpha(double y, double clear, double solid) {
-    if (solid <= clear) return y < solid ? 1 : 0;
+    if (solid == clear) return y < solid ? 1 : 0;
     final x = ((y - clear) / (solid - clear)).clamp(0.0, 1.0);
     return 1 - x * x * (3 - 2 * x);
   }
@@ -440,8 +441,10 @@ abstract final class Layout {
   static const rowValueMax = 180.0; // 行尾当前值最宽多少（ListRow.value），再长就省略
   static const rowMin = 64.0, rowMinTwoLine = 72.0; // 列表行高：单行 / 带副标题
   static const topBarTop = Sp.x2; // 顶栏离状态栏的距离
-  static const shellTop = topBarTop + topBar + Sp.x3; // 一级页面内容要让出的顶部高度（不含状态栏）= 顶栏 + 12
+  static const shellTop = topBarTop + topBar + Sp.x3; // 一级页面内容要让出的顶部高度（不含状态栏）= 顶栏 + 12（子页标题胶囊同一条，v3.5）
+  static const shellHeaderTop = topBarTop + topBar + Sp.x2; // 一级页 header 行（主聊天标题）的顶边：紧贴顶栏下面
   static const topFadeRamp = Sp.x4; // 让位线下面再渐显这么高（缓入），滚上去的深色气泡不再在标题下切出硬边；≤ 聊天列表顶部留白
+  static const bottomFadeClear = topBar / 2; // v3.5 底部浮条下的渐隐：从底条上沿往下这么高处起全是壁纸（往上 topFadeRamp 起开始淡）（≈ 胶囊中线，= 顶栏下 clear 在顶栏中线）
   static const avatarLarge = 72.0; // “我的”页头的大头像
   static const wheel = 200.0; // 头像色轮直径
   static const segmentsMax = 320.0; // 分段导航最宽多宽（平板上不拉满）

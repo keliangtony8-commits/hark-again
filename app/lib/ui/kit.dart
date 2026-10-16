@@ -615,6 +615,9 @@ void showToast(BuildContext context, String text, {String? action, VoidCallback?
 /// 它量出底条的实际高度（多行、附件托盘、编辑条都会变高）加进 MediaQuery.padding.bottom，
 /// 所以里面的列表 / PageBody 照常读安全区就会让位——和 ShellPage 让出顶栏是同一个做法。
 /// behind：画在内容和底条之间的一层（输入框聚焦时的 FrostScrim）。
+/// v3.5 底部渐隐（用户 10-16 21:35“会更好看就改”）：底条上沿再往上 [Layout.topFadeRamp] 以上内容全显，到底条里第一行胶囊的中线全是壁纸
+/// （= 顶栏下的渐隐反过来，同一个 BackdropFade），滚过底条的内容慢慢淡进壁纸，不在胶囊边上被硬切一半。
+/// 所以列表底部留白要 ≥ 底条高 + topFadeRamp（静止时最后一行不被淡掉）。条画在内容和 behind 之间。
 class FloatingFooter extends StatefulWidget {
   const FloatingFooter({super.key, required this.footer, required this.child, this.behind});
   final Widget footer;
@@ -640,6 +643,14 @@ class _FloatingFooterState extends State<FloatingFooter> {
         data: mq.copyWith(padding: mq.padding.copyWith(bottom: _height > mq.padding.bottom ? _height : mq.padding.bottom)),
         child: widget.child,
       ),
+      if (_height > 0)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: _height + Layout.topFadeRamp,
+          child: BackdropFade.bottom(solid: 0, clear: Layout.topFadeRamp + (_height < Layout.bottomFadeClear ? _height : Layout.bottomFadeClear)),
+        ),
       if (widget.behind != null) Positioned.fill(child: widget.behind!),
       Positioned(left: 0, right: 0, bottom: 0, child: _SizeReporter(onSize: _onSize, child: widget.footer)),
     ]);

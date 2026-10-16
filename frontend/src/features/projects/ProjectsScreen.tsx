@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useResource } from "../../hooks/useResource";
 import type { Project } from "../../lib/types";
 import { ShellLead } from "../../shell/ShellLead";
 import { confirmDialog } from "../../ui/dialog";
-import { IconComputer, IconDoc, IconEdit, IconFile, IconFolder, IconMore, IconPlus, IconTrash } from "../../ui/icons";
-import { Hint, Menu, Page, Sheet, stagger } from "../../ui/kit";
+import { IconComputer, IconDoc, IconEdit, IconFile, IconFolder, IconPlus, IconTrash } from "../../ui/icons";
+import { Hint, Page, Sheet, stagger, type MenuItem } from "../../ui/kit";
+import { useFocusMenu } from "../../ui/FocusMenu";
 import MenuPlus from "../chat/MenuPlus";
 import StatusCapsule from "../chat/StatusCapsule";
 import ProjectFiles from "./ProjectFiles";
@@ -17,8 +18,9 @@ import "./projects.css";
 
 /**
  * 项目列表（v3.2.2 按 Hark 真机截图，= App projects_screen）：一项 = 占满整行的大字项目名（可折行，按最近活动排序）
- * + 下一行状态胶囊（= 那段对话的状态，服务器 status）；没有页头小标签、没有 emoji。⋯ 菜单在胶囊那一行的右端（电脑没有长按），
- * 不占名字的宽度。不是“当前”的项目变灰（projectIsCurrent）。没有卡片网格、没有输入框。
+ * + 下一行状态胶囊（= 那段对话的状态，服务器 status）；没有页头小标签、没有 emoji。
+ * v3.5 照 Hark / App：行上不画 ⋯（原来胶囊行右端的 ⋯ 撑出 32px 行高），菜单 = 右键 / 长按（含键盘菜单键、Shift+F10）弹原地聚焦菜单（ui/FocusMenu，
+ * 和消息菜单同一套）；同样的操作项目内的项目名药丸里也有。不是“当前”的项目变灰（projectIsCurrent）。没有卡片网格、没有输入框。
  * 点一行 = 进那个项目的那段对话（v2.95 项目 = 一段对话）。
  * 顶栏左侧 + = 新建；它和项目页的 ≡（项目切换）是同一颗钮（MenuPlus 记着上一颗的形状，进出项目时原地 morph）。
  */
@@ -52,19 +54,13 @@ export default function ProjectsScreen() {
       ) : (
         <div className="project-list">
           {list.map((p, i) => (
-            <div key={p.id} className={`project-row enter ${projectIsCurrent(i, p) ? "" : "is-quiet"}`} style={stagger(i)}>
-              <Link to={`/projects/${p.id}`} className="project-row-link">
-                <span className="project-row-name">{p.name}</span>
-                <span className="project-row-status">{p.status && <StatusCapsule status={p.status} />}</span>
-              </Link>
-              <Menu label={`${p.name}的菜单`} trigger={<IconMore />} items={[
-                { label: "项目文件", icon: <IconFile />, onSelect: () => setFilesOf(p) },
-                { label: "电脑", icon: <IconComputer size={16} />, onSelect: () => nav(`/projects/${p.id}/computer`) },
-                { label: "规则与档案", icon: <IconDoc size={16} />, onSelect: () => setBriefOf(p) },
-                { label: "编辑项目", icon: <IconEdit />, onSelect: () => setEditing(p) },
-                { label: "删除项目", icon: <IconTrash />, danger: true, onSelect: () => { void remove(p); } },
-              ]} />
-            </div>
+            <ProjectRow key={p.id} project={p} index={i} quiet={!projectIsCurrent(i, p)} items={() => [
+              { label: "项目文件", icon: <IconFile />, onSelect: () => setFilesOf(p) },
+              { label: "电脑", icon: <IconComputer size={16} />, onSelect: () => nav(`/projects/${p.id}/computer`) },
+              { label: "规则与档案", icon: <IconDoc size={16} />, onSelect: () => setBriefOf(p) },
+              { label: "编辑项目", icon: <IconEdit />, onSelect: () => setEditing(p) },
+              { label: "删除项目", icon: <IconTrash />, danger: true, onSelect: () => { void remove(p); } },
+            ]} />
           ))}
         </div>
       )}
@@ -84,5 +80,30 @@ export default function ProjectsScreen() {
       {briefOf && <ProjectBrief project={briefOf} onSaved={() => { void projects.reload(); }} onClose={() => setBriefOf(null)} />}
       {filesOf && <ProjectFiles projectId={filesOf.id} onClose={() => setFilesOf(null)} />}
     </Page>
+  );
+}
+
+const LONG_PRESS_MS = 500; // = Flutter 长按时长（App _ProjectRow 的 onLongPress）
+
+/** 一行（= App _ProjectRow）：点 = 进项目；右键 / 长按 = 原地聚焦菜单。
+ *  安卓 Chrome 长按、桌面右键、键盘菜单键都会发 contextmenu；iOS Safari 长按不发，用触摸计时补上，触发后吞掉随之而来的那次点按。 */
+function ProjectRow({ project: p, index, quiet, items }: { project: Project; index: number; quiet: boolean; items: () => MenuItem[] }) {
+  const link = useRef<HTMLAnchorElement>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const fired = useRef(false);
+  const menu = useFocusMenu(items, { label: `${p.name}的菜单` });
+  const cancel = () => { window.clearTimeout(timer.current); timer.current = undefined; };
+  return (
+    <div className={`project-row enter ${quiet ? "is-quiet" : ""}`} style={stagger(index)}>
+      <Link to={`/projects/${p.id}`} ref={link} className="project-row-link" aria-haspopup="menu"
+        onContextMenu={(e) => { e.preventDefault(); cancel(); fired.current = true; menu.open(link.current); }}
+        onTouchStart={() => { fired.current = false; cancel(); timer.current = window.setTimeout(() => { timer.current = undefined; fired.current = true; menu.open(link.current); }, LONG_PRESS_MS); }}
+        onTouchMove={cancel} onTouchEnd={cancel} onTouchCancel={cancel}
+        onClick={(e) => { if (fired.current) { e.preventDefault(); fired.current = false; } }}>
+        <span className="project-row-name">{p.name}</span>
+        {p.status && <span className="project-row-status"><StatusCapsule status={p.status} /></span>}
+      </Link>
+      {menu.node}
+    </div>
   );
 }

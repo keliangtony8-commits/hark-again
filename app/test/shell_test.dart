@@ -129,7 +129,7 @@ void main() {
     final router = await _pump(tester);
     router.go('/me/usage');
     await _settle(tester);
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('返回')); // v3.5 子页返回是圆玻璃钮（不是 AppBar 的 BackButton，pageBack 找不到）
     await _settle(tester);
     expect(router.state.uri.path, '/me');
     await tester.tap(find.byTooltip('回到主页'));

@@ -31,19 +31,14 @@ const ACCENT = {
   "features/home/home.css": 1, // 收件箱未读点
   "shell/shell.css": 1, // 导航未读点
 };
-// v2.98 E1 Web 收尾后仍手写的行（都不适合 ListRow，原因见 docs/devlog.md「v2.98 E1 Web 收尾」）：分体行（主体可点 + 行尾独立按钮 / 开关）、
-// 正文带细条或多行说明的富内容行、行首是时间文字的时间线行、常驻 aria-live 副标题行、role=checkbox 选择行。数只许变小；容器一律 ListGroup。
+// v2.98 E1 Web 收尾后仍手写的行（都不适合 ListRow，原因见 docs/devlog.md「v2.98 E1 Web 收尾」「v3.5 Web ListRow」）。v3.5 起分体行（可点 + control）
+// 和“标准行 + 正文下细条”（extra）都由 ListRow 出；剩下：标题与大小同一基线的明细行、行首是时间文字的时间线行、常驻 aria-live 副标题行、role=checkbox 选择行。数只许变小；容器一律 ListGroup。
 const RAW_ROWS = {
-  "features/computer/ComputerDetails.tsx": 6, // 内存 / 磁盘写入 / 配额行：正文里带细条
-  "features/computer/ComputerSection.tsx": 4, // 状态行（内存细条）×2 + 服务 / 后台任务分体行
+  "features/computer/ComputerDetails.tsx": 4, // 内存 / 磁盘写入明细行：标题与大小同一基线的头行 + 细条（配额行 v3.5 已收进 ListRow extra）
   "features/home/HomeScreen.tsx": 1, // 今天时间线：行首是时间文字
-  "features/home/InboxRow.tsx": 1, // 分体行：主体 + 时间 + 菜单
-  "features/me/ConnectorsScreen.tsx": 1, // MCP 服务器分体行：主体 + 移除
   "features/me/ReplyLanguageRow.tsx": 1, // 副标题位是常驻 aria-live 容器
-  "features/me/SkillsScreen.tsx": 1, // 分体行：主体 + 开关
   "features/me/TaskDetailScreen.tsx": 4, // 运行记录：顶对齐、状态点、多行错误说明
   "features/me/TaskMemory.tsx": 1, // 助手备忘：同运行记录版式，两行预览
-  "features/me/TasksScreen.tsx": 1, // 分体行：主体 + 开关
   "features/me/TopConversations.tsx": 2, // 行下一条占比细条
   "features/projects/ProjectFilePicker.tsx": 1, // role=checkbox + 勾选框
 };

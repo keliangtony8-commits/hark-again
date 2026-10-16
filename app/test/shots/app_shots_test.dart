@@ -2,7 +2,7 @@
 // 中英数字 = 打包的 MiSans（assets/fonts，三种字重，和真机一致），子集外的字落到 Noto Sans CJK，
 // MaterialIcons 来自 Flutter SDK。默认跳过；要出图（先按 app/README.md「截图」下 NotoSansSC.ttf）：
 //   SHOTS_DIR=/tmp/shots/app flutter test test/shots/app_shots_test.dart
-// 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-dark / me-preferences-dark / chat-times-dark / chat-menu-dark（手机 412×915 逻辑像素，2.625 倍）。
+// 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-end-light / me-dark / me-preferences-dark / chat-times-dark / chat-menu-dark（手机 412×915 逻辑像素，2.625 倍）。
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -219,6 +219,9 @@ void main() {
     router.push('/me');
     await _settle(tester);
     await _shot(tester, 'me-light');
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -600)); // v3.5：滚到底看“退出登录”整行条
+    await _settle(tester);
+    await _shot(tester, 'me-end-light');
   }, skip: _out == null);
 
   testWidgets('me page dark + preferences', (tester) async {

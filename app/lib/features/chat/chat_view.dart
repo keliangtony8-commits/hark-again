@@ -219,7 +219,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                         child: ListView.separated(
                           controller: _scroll,
                           reverse: true,
-                          padding: EdgeInsets.fromLTRB(Sp.x4, Layout.topFadeRamp + inset, Sp.x4, Sp.x2 + bottom),
+                          padding: EdgeInsets.fromLTRB(Sp.x4, Layout.topFadeRamp + inset, Sp.x4, Layout.topFadeRamp + bottom), // 底部同顶部：留出底部渐隐带（FloatingFooter），= 网页 .thread-inner sp-4
                           itemCount: chat.messages.length,
                           separatorBuilder: (_, _) => const SizedBox(height: Sp.x4),
                           itemBuilder: (_, i) {

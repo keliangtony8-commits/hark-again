@@ -3,7 +3,7 @@ import { useResource } from "../../hooks/useResource";
 import { http } from "../../lib/api";
 import type { Skill } from "../../lib/types";
 import { IconChevron, IconPlus, IconSearch, IconSpark } from "../../ui/icons";
-import { Hint, ListGroup, Page, PageHeader, PageIntro, SearchField, Section, Segmented, Sheet, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
+import { Hint, ListGroup, ListRow, Page, PageHeader, PageIntro, SearchField, Section, Segmented, Sheet, Skeleton, StarterCard, Toggle } from "../../ui/kit";
 import { confirmDialog } from "../../ui/dialog";
 import Markdown from "../../ui/Markdown";
 import { SKILL_SEARCH_FROM, SKILL_STARTERS, filterSkills, fromBuiltin, isOn, skillSummary } from "./skillLibrary";
@@ -74,15 +74,9 @@ export default function SkillsScreen() {
   const rows = (items: Skill[]) => (
     <ListGroup>
       {items.map((s) => (
-        <div key={s.id} className={`row enter ${onOf(s) ? "" : "row-off"}`} style={stagger(++n)}>
-          <button className="skill-row" onClick={() => show(s)}>
-            <span className="row-icon"><IconSpark /></span>
-            <span className="row-body"><span className="row-title">{s.name}</span><span className="row-sub">{s.description}</span></span>
-            {s.customized && <span className="row-hint">已自定义</span>}
-            <span className="row-trail"><IconChevron /></span>
-          </button>
-          <Toggle on={onOf(s)} label={`启用「${s.name}」`} onChange={(v) => { if (!(s.id in pending)) toggle(s, v); }} />
-        </div>
+        <ListRow key={s.id} enter={++n} off={!onOf(s)} onClick={() => show(s)} icon={<IconSpark />} title={s.name} sub={s.description}
+          trail={<>{s.customized && <span className="row-hint">已自定义</span>}<IconChevron /></>}
+          control={<Toggle on={onOf(s)} label={`启用「${s.name}」`} onChange={(v) => { if (!(s.id in pending)) toggle(s, v); }} />} />
       ))}
     </ListGroup>
   );
