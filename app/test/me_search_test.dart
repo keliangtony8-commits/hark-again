@@ -9,8 +9,10 @@ import 'package:assistant/features/me/me_index.dart';
 import 'package:assistant/features/me/me_screen.dart';
 import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/tokens.dart';
+import 'package:assistant/ui/glass.dart';
 import 'package:assistant/ui/kit.dart';
 import 'package:assistant/ui/motion.dart';
+import 'package:assistant/ui/sky.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -202,6 +204,57 @@ void main() {
         expect(412 - bar.right, closeTo(Layout.gutter + Sp.x3, 0.5));
       });
     }
+  });
+
+  group('顶部渐隐（v3.4）', () {
+    testWidgets('状态栏以上全是壁纸、再渐显 topFadeRamp；静止时返回钮正好在全显处；画在列表之后、搜索胶囊之前', (tester) async {
+      await _phone(tester); // 状态栏 24（逻辑像素）
+      await tester.pumpWidget(_app(home: const MeScreen()));
+      await tester.pump();
+      await tester.pumpAndSettle();
+      const top = 24.0;
+      final fade = find.byKey(const Key('me-fade'));
+      expect(fade, findsOneWidget);
+      final f = tester.widget<BackdropFade>(find.descendant(of: fade, matching: find.byType(BackdropFade)));
+      expect(f.clear, top);
+      expect(f.solid, top + Layout.topFadeRamp);
+      expect(tester.getRect(fade), Rect.fromLTWH(0, 0, 412, top + Layout.topFadeRamp)); // 从屏幕顶开始（实色模式的画笔按本地 y = 屏幕 y 取色）
+      expect(find.descendant(of: fade, matching: find.byType(SkyLayer)), findsOneWidget); // 和一级页面同一个组件，不另写渐隐
+      // 静止时页头一点不被盖：页头那一行（返回钮 + 头像名字，按行高居中）顶边 = 全显线
+      final head = tester.getRect(find.ancestor(of: find.byType(GlassIconButton).first, matching: find.byType(Row)).first);
+      expect(head.top, closeTo(f.solid, 0.5));
+      expect(tester.getRect(find.byType(GlassIconButton).first).top, greaterThanOrEqualTo(f.solid));
+      // 绘制顺序：列表（返回钮）→ 渐隐条 → 搜索胶囊（胶囊取到的背景不含渐隐条，且两者不重叠）
+      final order = <String>[];
+      void visit(Element e) {
+        final w = e.widget;
+        if (w is GlassIconButton && !order.contains('list')) order.add('list');
+        if (w.key == const Key('me-fade')) order.add('fade');
+        if (w.key == const Key('me-search')) order.add('search');
+        e.visitChildren(visit);
+      }
+      tester.binding.rootElement!.visitChildren(visit);
+      expect(order, ['list', 'fade', 'search']);
+      expect(tester.getRect(fade).overlaps(tester.getRect(find.byKey(const Key('me-search')))), isFalse);
+      // 翻下去：返回钮进到渐隐带 / 状态栏底下（被壁纸盖住），渐隐条不跟着滚
+      await tester.drag(find.byType(ListView), const Offset(0, -60)); // 拖动起手有 touch slop，实际滚 ~40
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byType(GlassIconButton).first).top, lessThan(f.clear));
+      expect(tester.getRect(fade).top, 0);
+    });
+
+    testWidgets('减少透明度：渐隐条是实色底，不画壁纸', (tester) async {
+      await _phone(tester);
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(ProviderScope(
+        overrides: [sessionProvider.overrideWith(_SignedIn.new), apiProvider.overrideWithValue(_Api())],
+        child: MaterialApp(theme: buildTheme(Brightness.light), home: const GlassMode(solid: true, child: MeScreen())),
+      ));
+      await tester.pump();
+      final fade = find.byKey(const Key('me-fade'));
+      expect(find.descendant(of: fade, matching: find.byType(SkyLayer)), findsNothing);
+      expect(find.descendant(of: fade, matching: find.byType(CustomPaint)), findsOneWidget);
+    });
   });
 
   group('Spotlight 定位', () {

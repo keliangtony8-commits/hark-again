@@ -408,3 +408,11 @@
   - Web：MeScreen 本来就用 `Page`，它已经挂了 `<SkyFade kind="page" />`，只是 `.shell:not(.has-bar) .sky-fade-page { display: none }` 把它藏了 → shell.css 给 `.page.me + .sky-fade-page` 放开并给“我的”的渐隐带：`--fade-a = env(safe-area-inset-top)`（刘海以上全是壁纸）、`--fade-b` = 页头返回钮静止时的顶边（.me .page-inner 上留白 + .me-head 上留白）。同一条遮罩曲线、同一个壁纸副本组件，没写新实现。
 - 成本：App 多一个只有 ~70px 高的 SkyLayer 条（每 33ms 随壁纸重录这一条，和一级页面一样）；Web 多一条 SkyFade 副本合成（原来就在 DOM 里，只是 display:none）。
 - 参考：同仓 v3.3 B3（BackdropFade / SkyFade 的语义与 BackdropGroup 规则）；Flutter `Stack` 绘制顺序 = children 顺序；MDN env(safe-area-inset-top)。
+
+## 2026-10-16 v3.4 验证（发版前；HANDOFF 第二节第 10、18、20 条）
+- 后端四个偶发：smoke_jobs / smoke_preview_ws / smoke_reply_quote / smoke_stop 各串行 20 次全过；四份并行各 10 次全过。
+- run.sh 竞态在**真沙盒镜像**上复现与验证（用户 19:01 授权连 VPS）：assistant-sandbox:latest 临时容器，照 sandbox/runner.py 的启动（`setsid -f bash run.sh`）与取消（写 cancelled 标记 → 按 pid 整组 TERM）。三种时序各 15 次：①启动后立刻取消（pid 还没写）旧 0/15、新 15/15；②标记早于启动 旧 0/15、新 15/15；③启动 0.3 秒后取消 旧 15/15、新 15/15；新版无残留进程；正常任务退出码 3、日志正确。结论：旧版①②会让取消落空、任务跑到底，修复确为根因。
+- smoke_stepfun：多个版本一直按“需真密钥”跳过，其实全是模拟（只设假 key）；跑起来发现断言过时（WS 事件自续传起多带 turn_id / seq，原来按整个 dict 比）。改为只比 type / text，纳入全量。教训：跳过的测试会悄悄烂掉，能跑的都要跑。
+- 真模型 E2E：VPS 上用 app-backend 镜像临时容器跑本分支 `tests/live_stepfun.py`（密钥从服务器 .env 直接传进容器）：工具调用、带结果作答、记账、朗读→识别 4 项全过。
+- 最终全量：flutter analyze 0；flutter test 735 过 / 9 跳过；npm run build、npm test 14/14；后端 smoke 203/203。
+- 未做：真机 profile 光栅、真 GPU Chrome trace（沙盒与 VPS 都没有 GPU / 真机）。
