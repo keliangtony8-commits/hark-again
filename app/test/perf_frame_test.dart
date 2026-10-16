@@ -4,6 +4,7 @@
 //   - 毛玻璃：场景里 BackdropFilterLayer 有几层、要“取背景”几次（无 key 的每层一次 + 每个共享 key 一次）；
 //   - 离屏遮罩：ShaderMaskLayer 层数（原 TopFade 整页 dstIn）；
 //   - 一级页面滚动：每帧重建元素数；
+//   - “我的”页滚动（v3.4 顶部渐隐）：每帧重建元素数、渐隐条不跟着滚动重建、毛玻璃取背景次数、无 ShaderMask；
 //   - CPU 侧 build + layout + paint + 合成的耗时中位数（测试引擎，只作相对比较）。
 // 数字打印出来（flutter test test/perf_frame_test.dart -r expanded 可见），断言只卡住“不能退回去”的那几条。
 import 'dart:math' as math;
@@ -15,6 +16,7 @@ import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/message_view.dart';
+import 'package:assistant/features/me/me_screen.dart';
 import 'package:assistant/theme/tokens.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -55,6 +57,9 @@ class _Api implements Api {
   Future<dynamic> get(String path) async {
     if (path == '/api/inbox') return {'unread': 0, 'latest': null};
     if (path.startsWith('/api/conversations/c1')) return {'id': 'c1', 'messages': messages};
+    if (path == '/api/profile') {
+      return {'username': 'keliang', 'display_name': null, 'assistant_name': null, 'assistant_default': 'Toyuis', 'avatar': null, 'greet': false};
+    }
     return <dynamic>[];
   }
 
@@ -231,6 +236,50 @@ void main() {
       'backdropFlips': layers.flips,
       'shaderMaskLayers': layers.shaderMasks,
     });
+    expect(layers.shaderMasks, 0);
+  });
+
+  testWidgets('“我的”页滚动：顶部渐隐条不随滚动重建、不加离屏层', (tester) async {
+    final app = await _pump(tester);
+    app.router.go('/me');
+    await _settle(tester);
+
+    final layers = _layers(tester);
+    final r = _Rebuilds()..start();
+    var fadeRebuilds = 0;
+    final hook = debugOnRebuildDirtyWidget!;
+    debugOnRebuildDirtyWidget = (e, b) {
+      hook(e, b);
+      if (e.widget.key == const Key('me-fade')) fadeRebuilds++;
+    };
+    final times = <int>[];
+    final perFrame = <int>[];
+    final list = find.descendant(of: find.byType(MeScreen), matching: find.byType(Scrollable)).first;
+    final pos = tester.state<ScrollableState>(list).position;
+    final gesture = await tester.startGesture(tester.getCenter(list));
+    for (var i = 0; i < 30; i++) {
+      final before = r.total;
+      await gesture.moveBy(Offset(0, -12.0 * math.sin((i + 1) / 31 * math.pi))); // 一路往下翻（缓起缓停），假接口下内容不长，会翻到底
+      final sw = Stopwatch()..start();
+      await tester.pump(const Duration(milliseconds: 16));
+      times.add(sw.elapsedMicroseconds);
+      perFrame.add(r.total - before);
+    }
+    await gesture.up();
+    r.stop();
+    await _settle(tester);
+    _report('me-scroll', {
+      'frames': 30,
+      'elementsPerFrame(median)': (perFrame..sort())[15],
+      'cpuMsPerFrame(median)': _median(times).toStringAsFixed(2),
+      'backdropLayers': layers.backdrops,
+      'backdropFlips': layers.flips,
+      'shaderMaskLayers': layers.shaderMasks,
+      'fadeRebuilds': fadeRebuilds,
+    });
+    expect(pos.pixels, greaterThan(50), reason: '确实翻下去了');
+    expect(find.byKey(const Key('me-fade')), findsOneWidget);
+    expect(fadeRebuilds, 0, reason: '渐隐条在列表外，滚动不应重建它');
     expect(layers.shaderMasks, 0);
   });
 

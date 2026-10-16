@@ -109,11 +109,11 @@ FIXTURES = {
         {"code": "zh-Hant", "label": "繁體中文"}, {"code": "en", "label": "English"}]},
     "/api/projects": [
         {"id": "pr1", "name": "考研数学", "emoji": "📐", "rules": "每天一章，错题进错题本", "updated_at": NOW,
-         "conversation_id": "c1", "last_active_at": NOW},
+         "conversation_id": "c1", "last_active_at": NOW, "status": "running"},
         {"id": "pr2", "name": "毕业设计", "emoji": "🎓", "rules": "", "updated_at": "2026-10-09T20:00:00+08:00",
-         "conversation_id": "c9", "last_active_at": "2026-10-09T20:00:00+08:00"},
+         "conversation_id": "c9", "last_active_at": "2026-10-09T20:00:00+08:00", "status": "waiting"},
         {"id": "pr3", "name": "日本旅行", "emoji": "✈️", "rules": "预算 8000 以内\n优先公共交通", "updated_at": "2026-10-01T10:00:00+08:00",
-         "conversation_count": 0, "last_active_at": None},
+         "conversation_count": 0, "last_active_at": None, "status": "done"},
     ],
     "/api/conversations": [
         {"id": "c1", "title": "DeepSeek 和 GPT 的价格对比", "pinned": True, "updated_at": NOW},
@@ -530,8 +530,90 @@ def section_n():
     print("wrote", OUT)
 
 
+def section_sky():
+    """v3.3 壁纸验收：明 / 暗 × 夜 / 黎明 / 白天 / 黄昏 × 手机 / 桌面，主页、聊天（含流式中）、项目列表、我的（含底部搜索）、安全。
+    只跑这一段：shots.py <目录> sky（钟点用 page.clock 固定；流式 = WebSocket 收到 user.message 后只回开头几段、不回 message.done）"""
+    from datetime import datetime, timedelta, timezone
+    OUT.mkdir(parents=True, exist_ok=True)
+    base = serve()
+    cst = timezone(timedelta(hours=8))
+    times = {"night": 2, "dawn": 6, "day": 12, "dusk": 18.5}
+    only = os.environ.get("SHOTS_SKY_TIMES")
+    events = [
+        {"type": "message.start", "conversation_id": "c1", "user_message_id": "u9", "title": "DeepSeek 和 GPT 的价格对比"},
+        {"type": "tool.status", "id": "t1", "name": "web_search", "label": "正在搜索", "state": "running"},
+        {"type": "block.start", "index": 0, "block": {"type": "text", "text": ""}},
+        {"type": "block.delta", "index": 0, "text": "按这周的用量算，DeepSeek 一共约 ¥3.2：\n\n- **对话** ¥2.1\n- **长文总结** ¥0.9\n- 其余"},
+    ]
+
+    def ws_handler(ws):
+        def on(msg):
+            try:
+                m = json.loads(msg)
+            except Exception:
+                return
+            if m.get("type") == "user.message":
+                for e in events:
+                    ws.send(json.dumps(e))
+        ws.on_message(on)
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(channel=os.environ.get("SHOTS_CHANNEL") or None,
+                                    executable_path=os.environ.get("SHOTS_CHROMIUM") or None)
+        for theme in ("light", "dark"):
+            for when, hour in times.items():
+                if only and when not in only.split(","):
+                    continue
+                at = datetime(2026, 10, 11, int(hour), int(hour % 1 * 60), tzinfo=cst)
+                for name, size in (("phone", (400, 860)), ("desktop", (1280, 820))):
+                    ctx = browser.new_context(viewport={"width": size[0], "height": size[1]}, device_scale_factor=2 if name == "phone" else 1,
+                                              timezone_id="Asia/Shanghai", locale="zh-CN", color_scheme=theme)
+                    ctx.add_init_script(f"localStorage.setItem('assistant.token','shot');localStorage.setItem('assistant.server','{base}');")
+                    page = ctx.new_page()
+                    page.on("pageerror", lambda e: print("PAGE ERROR:", e))
+                    page.clock.set_fixed_time(at)
+                    page.route("**/api/**", api)
+                    page.route("https://img.example.com/**", image)
+                    page.route_web_socket("**/ws**", ws_handler)
+                    tag = f"{name}-{theme}-{when}"
+                    page.goto(base + "/#/")
+                    page.wait_for_selector(".page-inner >> text=本月花费已到预算的 82%")
+                    page.wait_for_timeout(1500)  # 等卡片错峰入场走完
+                    page.screenshot(path=str(OUT / f"{tag}-home.png"))
+                    page.goto(base + "/#/chat")
+                    page.wait_for_timeout(500)
+                    if name == "phone":
+                        page.get_by_role("button", name="历史", exact=True).click()
+                        page.wait_for_timeout(400)
+                    page.get_by_text("DeepSeek 和 GPT 的价格对比").first.click()
+                    page.wait_for_timeout(800)
+                    page.screenshot(path=str(OUT / f"{tag}-chat.png"))
+                    box = page.get_by_placeholder("给 Toyuis 发消息")
+                    box.fill("这周 DeepSeek 一共花了多少？")
+                    box.press("Enter")
+                    page.wait_for_timeout(900)
+                    page.screenshot(path=str(OUT / f"{tag}-chat-streaming.png"))
+                    for shot, url in (("projects", "/#/projects"), ("me", "/#/me"), ("security", "/#/me/security")):
+                        page.goto(base + url)
+                        page.wait_for_timeout(700)
+                        page.screenshot(path=str(OUT / f"{tag}-{shot}.png"))
+                        if shot == "me":  # 翻到中间：页头滚进顶边那一截，看顶部渐隐条
+                            page.evaluate("document.querySelectorAll('.page.me').forEach(e => e.scrollTo(0, (e.scrollHeight - e.clientHeight) / 2))")
+                            page.wait_for_timeout(500)
+                            page.screenshot(path=str(OUT / f"{tag}-me-mid.png"))
+                        if shot == "me":  # 翻到底：底部设置搜索胶囊
+                            page.evaluate("document.querySelectorAll('.page').forEach(e => e.scrollTo(0, 1e6)); window.scrollTo(0, 1e6)")
+                            page.wait_for_timeout(500)
+                            page.screenshot(path=str(OUT / f"{tag}-me-end.png"))
+                    ctx.close()
+        browser.close()
+    print("wrote", OUT)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[2] == "n":
         section_n()
+    elif len(sys.argv) > 2 and sys.argv[2] == "sky":
+        section_sky()
     else:
         main()

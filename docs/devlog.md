@@ -383,3 +383,36 @@
 - Web：只有一层全局 `.sky`（main.tsx），子页面是透明的、透出的就是这层，**子页不会盖住壁纸，不存在这份浪费**。真正整屏不透明盖住壁纸的是“云浏览器接管页”（.takeover，--card 实色）和“看大图”（.image-viewer，--bg 实色）：进场动画结束后根上挂 `data-sky-covered`，`.sky`（含顶部渐隐条里的副本）`content-visibility: hidden` 跳过柔光渲染；关掉时在同一次提交里撤掉。选 content-visibility 而不是 animation-play-state：paused 会冻住动画本地时间并在恢复时改写 startTime，顶部渐隐条副本靠 startTime=0 与全屏层逐像素对齐（syncSky），会错位；content-visibility 跳过期间不推进本地时间但 startTime 不动，恢复时按文档时间线算出“此刻”的位置，和 App 的“恢复取当前时刻”一致。
 - 参考：Flutter API `TransitionRoute.opaque`（“When an opaque route's entrance transition is complete, the routes behind the opaque route will not be built”）、`ModalRoute.of`、`TickerMode.valuesOf`、Overlay 对 offstage 条目包 `TickerMode(enabled: false)`（packages/flutter/lib/src/widgets/overlay.dart）；go_router 18.1 StatefulNavigationShell 非当前分支 `Offstage + TickerMode(enabled: isActive)`（lib/src/route.dart）；CSSWG #5611 决议 + MDN content-visibility（跳过的子树里 CSS 动画不推进、可见后恢复），WPT content-visibility-animation-becomes-visible.html。
 - 结果（2026-10-16）：flutter analyze 0；全量 flutter test **732 过 / 8 跳过 / 0 失败**（新增 sky_test 2 例、shell_test 1 例）；web `npm run build` 过、`npm test` 14/14（新增 coverSky 计数 1 例）；后端 smoke **202/202**（不含 smoke_stepfun）。未做：浏览器实看浮层关闭那一帧（沙盒无 Chromium）、真机看返回无闪。
+
+## 2026-10-16 v3.3 视觉验收（HANDOFF 第六节“每次 UI 交付都要附截图自评”；main 上改，未提交）
+- 做法：两端截图脚本各加一段“明 / 暗 × 夜 2:00 / 黎明 6:00 / 白天 12:00 / 黄昏 18:30”，页面 = 主页、聊天、聊天流式中、项目列表、“我的”首屏 + 翻到底（设置搜索胶囊）、安全子页。
+  - App：`test/screens/shots_test.dart` 新 testWidgets「v3.3 壁纸 × 时段截图」（`SHOTS=1 SHOTS_SKY=1 SHOTS_OUT=… [SHOTS_SKY_TIMES=day,…]`；测试里 SkyClock 冻结，直接设 `SkyClock.instance.hour`，`SkyShader.program` 手动加载真着色器，柔光也画）；原「设计 v2 截图」在 SHOTS_SKY=1 时跳过。假接口补 `/api/auth/2fa`、`/api/auth/sessions`。
+  - Web：`scripts/shots.py <目录> sky`（`page.clock.set_fixed_time` 定钟点；WebSocket 收到 user.message 只回开头几段、不回 message.done = 流式中；`SHOTS_CHROMIUM=/usr/bin/chromium` 用系统浏览器，arm64 上 playwright 自带浏览器下载 403）。假数据项目补 status（与 App 截图同：进行中 / 等你回复 / 已完成）。
+- 发现并修：**浅色白天壁纸下半屏发灰**（实测底部 #d0d9d8 / 网页 #d3d9d3，饱和度 0.11，灰绿）。原因：白天第三团柔光 blobC = #C0D4E2（冷蓝灰）落在底部（中心 y≈0.86、半径 0.46、混合 0.70），把暖米底色 #E6DCC2 盖掉；冷暖互补色相混 = 灰。决定：只改这一个色值为暖沙 #EBDBBF（两端同表：tokens.dart SkyTable.light.day.blobC、tokens.css --sky-day-c），不动画法、不删柔光；白天恢复“亮蓝 → 暖米”。改后底部 #e9ddc3 / 网页 #e6dcc3。对比度守门不变（浅色正文 12.37、次要字 4.63、最次要字 3.03）。
+- 查过无问题：顶部渐隐条与整屏壁纸逐列逐像素相邻差 ≤1/255（无接缝）；毛玻璃（顶栏 / 输入胶囊 / 子页标题栏）无断层、错位；深色四个时段都是暗蓝紫，夜里最暗；正文 / 次要字两端都清楚；流式中两端都正常出字。
+- 拿不准、没改（列给用户定）：见 HANDOFF 第〇节「v3.3 视觉验收」。
+
+## 2026-10-16 后端偶发测试失败查根因（HANDOFF 第六节第 2 条；main 上改，未提交；只动 backend/）
+- 决定（写代码前）：四个偶发都先复现、抓现场再改；不加大超时、不加重试。找到的根因三处在测试替身 / 测试等法，一处是产品代码（run.sh）真竞态，按根因修：
+  1. **smoke_jobs §13（取消竞态，产品 bug）**：`start_job` 只是“叫沙盒脱离启动 run.sh”，返回时 run.sh 往往还没写出 pid；同一轮里马上 `cancel_job` → 沙盒 `_KILL` 读不到 pid 直接 `exit 0`（什么都没杀），任务照跑到底，卡片停在“运行中”。另一种：pid 写出了，但 `timeout` 还没来得及 `setpgid`，`kill -- -pid` 扑空。抓现场：失败那次 `CANCEL pidfile None`，替身 `wait(10)` 超时。修在 run.sh（backend/app/jobs.py `script()`）：`set -m` 让 bash 在 fork 后父子两边都 setpgid（`$!` 拿到时进程组就已存在）；pid 先写 pid.tmp 再 mv（读的一方不会读到半个）；写完 pid 再看一眼 `cancelled` 标记，有就自己整组杀。和 stop()“先写标记、再叫沙盒杀”构成两边各自“先写后读”：标记早于 pid → run.sh 自己杀；晚于 → 沙盒读得到 pid。替换：run.sh 原来的 `echo $! > pid`。成本：run.sh 多两行，零运行开销。
+  2. **smoke_jobs 其他 pid/zombie 时序（测试等法）**：§5/§7 用 `sleep 0.3` 等 pid 文件、`sleep 0.2` 后 `killpg(pg, 0)` 判整组死没死；替身 job_alive 用 `kill(p, 0)`，对僵尸（已死、等父进程收尸）也返回“活着”。改为等条件：等 pid 文件出现；“组里没有非僵尸进程”才算死（读 /proc/<pid>/stat 的状态与 pgrp）。替身语义从“pid 还在进程表里”改为“进程还在跑”。
+  3. **smoke_stop 5 秒等待超时 / smoke_reply_quote sqlite locked（测试替身没换全）**：这两个用 TestClient 的 WebSocket 跑轮次，每轮结束 ws.py 在后台起标题（conversation_title.schedule，create_task）；测试只换了 `loop.stream_turn`，起标题走真 `llm.complete` → 真去连 `http://x`（经沙盒代理，耗时不定）。ws 会话一退出，TestClient 的 portal 事件循环直接停掉，起标题任务正停在 SQLite 语句中间（抓现场：`maybe → db.get → _execute`），那条连接的读锁再也不放，下一段测试写库提交时要等 EXCLUSIVE，等满 SQLite 的 5 秒 busy timeout → smoke_stop 的 `wait_for(…, 5)` 先超时；smoke_reply_quote 用 `time.sleep(1.5)` 等标题写完，慢的时候没等到就去删消息 / alembic downgrade → locked。修：两个测试把 `llm.complete` 也换成假的（不出网），退出 ws 之前在同一个 portal 里 `conversation_title.drain()` 等后台标题收尾（删 `time.sleep(1.5)`）。产品代码没问题（服务端事件循环不会这样被掐掉；关机路径已有 drain）。
+  4. **smoke_preview_ws 偶发（测试端口竞态）**：`free_port()` 绑 0 号端口拿到号就 close，再交给 uvicorn / websockets 去绑——并行跑时别的进程可能在中间抢走（之前记录过“端口占用失败”）；“端口上没人”那一项用的也是这种号，被别人占了就不再是“没人”。修：自己 bind 好 socket 直接交给服务（uvicorn `Server.run(sockets=[…])`、websockets `serve(sock=…)`），“没人”的端口用一个只 bind 不 listen 的 socket 占着（连上必被拒）。
+- 参考：bash 手册 JOB CONTROL / `set -m`（异步命令各自成进程组；bash 源码 jobs.c make_child 在父子两边都 setpgid 以避免竞态）；GNU coreutils timeout.c（非 --foreground 时 setpgid(0,0)，信号转发给整组）；SQLite 文档 “File Locking And Concurrency In SQLite Version 3”（未结束的语句持有 SHARED，写方提交要等所有 SHARED 释放）与 busy_timeout；Starlette TestClient（websocket_connect 结束时 portal 退出、未等的后台任务被丢弃）；uvicorn `Server.run(sockets=)`、websockets `serve(sock=)` 文档。
+
+## 2026-10-16 v3.3 视觉验收补：“我的”页顶部渐隐（App + Web；main 上改，未提交；只动 app/ frontend/）
+- 问题（视觉验收第〇节“拿不准”第 3 条）：“我的”两端都没有顶部渐隐条，往下翻时内容直接切在屏幕顶边；App 上返回钮 / 名字会滚进状态栏底下和时间、电量叠在一起。原因：渐隐只挂在一级页面外框上（App ShellPage 的 BackdropFade、Web `.shell.has-bar` 的 SkyFade），“我的”没有顶栏，两边都没走到。
+- 决定（替换不叠加，复用现有组件，不写新渐隐）：
+  - App：me_screen.dart 用 `FloatingFooter(behind:)` 那一格放 ShellPage 同一个 `BackdropFade`（玻璃模式 = `SkyLayer(fade:)` 按屏幕坐标与整屏壁纸逐像素对齐；减少透明度 = 实色 bg 渐隐）。绘制顺序 = 壁纸 → 列表（含返回钮）→ 渐隐条 → 底部搜索胶囊：渐隐条只占屏幕顶部一截、和胶囊不重叠，胶囊仍是独立 BackdropFilter（“我的”不进 BlurGroup，原因见「v3.3 B3」规则②），取到的背景照旧是 壁纸 + 列表；返回钮也是独立模糊，先模糊自己身后、再被渐隐条盖，不受影响。没有新增离屏层（SkyLayer 自带 RepaintBoundary，是一层普通图层，不是 saveLayer / ShaderMask）。
+  - 渐隐带：状态栏（MediaQuery.padding.top）以上全是壁纸 = 内容绝不进状态栏；再往下渐显 `Layout.topFadeRamp`（16，一级页面同一个 token），到页面静止时第一行（返回钮顶边）恰好全显，静止时页头一点不被盖（和一级页面“静止时第一行正好在全显处”同一规则）。为此“我的”PageBody 上留白 Sp.x2 → Layout.topFadeRamp（页头下移 8，返回钮顶边 = 状态栏 + 16，和 Web 的 状态栏 + 18 更接近）。先试过不动页头、渐隐带只有 8：截图上几乎还是一刀切，弃用。
+  - Web：MeScreen 本来就用 `Page`，它已经挂了 `<SkyFade kind="page" />`，只是 `.shell:not(.has-bar) .sky-fade-page { display: none }` 把它藏了 → shell.css 给 `.page.me + .sky-fade-page` 放开并给“我的”的渐隐带：`--fade-a = env(safe-area-inset-top)`（刘海以上全是壁纸）、`--fade-b` = 页头返回钮静止时的顶边（.me .page-inner 上留白 + .me-head 上留白）。同一条遮罩曲线、同一个壁纸副本组件，没写新实现。
+- 成本：App 多一个只有 ~70px 高的 SkyLayer 条（每 33ms 随壁纸重录这一条，和一级页面一样）；Web 多一条 SkyFade 副本合成（原来就在 DOM 里，只是 display:none）。
+- 参考：同仓 v3.3 B3（BackdropFade / SkyFade 的语义与 BackdropGroup 规则）；Flutter `Stack` 绘制顺序 = children 顺序；MDN env(safe-area-inset-top)。
+
+## 2026-10-16 v3.4 验证（发版前；HANDOFF 第二节第 10、18、20 条）
+- 后端四个偶发：smoke_jobs / smoke_preview_ws / smoke_reply_quote / smoke_stop 各串行 20 次全过；四份并行各 10 次全过。
+- run.sh 竞态在**真沙盒镜像**上复现与验证（用户 19:01 授权连 VPS）：assistant-sandbox:latest 临时容器，照 sandbox/runner.py 的启动（`setsid -f bash run.sh`）与取消（写 cancelled 标记 → 按 pid 整组 TERM）。三种时序各 15 次：①启动后立刻取消（pid 还没写）旧 0/15、新 15/15；②标记早于启动 旧 0/15、新 15/15；③启动 0.3 秒后取消 旧 15/15、新 15/15；新版无残留进程；正常任务退出码 3、日志正确。结论：旧版①②会让取消落空、任务跑到底，修复确为根因。
+- smoke_stepfun：多个版本一直按“需真密钥”跳过，其实全是模拟（只设假 key）；跑起来发现断言过时（WS 事件自续传起多带 turn_id / seq，原来按整个 dict 比）。改为只比 type / text，纳入全量。教训：跳过的测试会悄悄烂掉，能跑的都要跑。
+- 真模型 E2E：VPS 上用 app-backend 镜像临时容器跑本分支 `tests/live_stepfun.py`（密钥从服务器 .env 直接传进容器）：工具调用、带结果作答、记账、朗读→识别 4 项全过。
+- 最终全量：flutter analyze 0；flutter test 735 过 / 9 跳过；npm run build、npm test 14/14；后端 smoke 203/203。
+- 未做：真机 profile 光栅、真 GPU Chrome trace（沙盒与 VPS 都没有 GPU / 真机）。

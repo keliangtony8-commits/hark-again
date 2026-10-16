@@ -1,6 +1,6 @@
 # 冒烟：v1.19 项目沙盒后台任务（app/jobs.py + run_command background=true + job_status/cancel_job + /api/jobs + worker 接着说）。
 # 沙盒服务用本机 bash 顶替：start_job 真的执行 jobs.script() 写出的 run.sh（setsid 新会话），cancel 整组杀，alive 查 pid，
-# 所以包装脚本本身（pid / log / exit / 取消标记 / 进度条 \r）是真跑的。模拟模型，迁移 0026。
+# 所以包装脚本本身（pid / log / exit / 取消标记 / 进度条 \r）是真跑的。查活 / 判整组死看 /proc（僵尸算死），等的地方一律等条件不睡固定时长。模拟模型，迁移 0026。
 # 覆盖：启动 → 卡片 → 完成后接口结掉、卡片改终态、followup pending → worker 在原对话接着说（通知不落库）；
 # 失败退出码；用户取消（整组进程死、照常通知）/ 模型取消（不通知）；进程消失没留退出码 → lost；同时运行上限；
 # .jobs 不出现在项目文件里；job_status 看过结论后不再通知；原对话一轮没答完先等、太久放弃；对话删了不接着说。
@@ -46,15 +46,20 @@ async def cancel_job(pid, jid):
         except ProcessLookupError:
             pass
     procs[jid].wait(10)  # run.sh 写完 exit 才算
+def _running(p: int, pgid: bool = False) -> bool:
+    """还在跑（僵尸 = 已经死了、只等父进程收尸，不算）。pgid=True：进程组 p 里还有没有在跑的。"""
+    for d in ([d for d in os.listdir("/proc") if d.isdigit()] if pgid else [str(p)]):
+        try:
+            stat = open(f"/proc/{d}/stat").read()
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        state, _ppid, pgrp = stat[stat.rindex(")") + 2:].split()[:3]
+        if state != "Z" and (not pgid or int(pgrp) == p):
+            return True
+    return False
 async def job_alive(pid, jid):
     p = _pid(pid, jid)
-    if p is None:
-        return False
-    try:
-        os.kill(p, 0)
-        return True
-    except ProcessLookupError:
-        return False
+    return p is not None and _running(p)
 sandbox_client.start_job, sandbox_client.cancel_job, sandbox_client.job_alive = start_job, cancel_job, job_alive
 jobs.LOST_GRACE = 0
 
@@ -106,13 +111,18 @@ async def job(jid):
     async with SessionLocal() as db:
         return await db.get(Job, jid)
 
-def wait_exit(jid, secs=10):
+def until(cond, what, secs=10):
+    """等条件成立（不是固定睡多久）；secs 只是“永远不成立”时的兜底。"""
     end = time.time() + secs
     while time.time() < end:
-        if (storage.project_dir(pid) / ".jobs" / jid / "exit").exists():
-            return
-        time.sleep(0.1)
-    raise AssertionError("job never exited")
+        if (v := cond()):
+            return v
+        time.sleep(0.02)
+    raise AssertionError(what)
+def wait_exit(jid):
+    until(lambda: (storage.project_dir(pid) / ".jobs" / jid / "exit").exists(), "job never exited")
+def wait_pid(jid):
+    return until(lambda: _pid(pid, jid), "run.sh never wrote pid")
 
 # ---- 纯规则 ----
 assert "timeout -k 5 30 bash -l" in jobs.script("jabc123", 30)
@@ -186,17 +196,11 @@ try:
     raise AssertionError("limit not enforced")
 except jobs.JobError as e:
     assert "上限 2" in str(e), e
-time.sleep(0.3)
-pg = _pid(pid, j3)
+pg = wait_pid(j3)
 r = c.post(f"/api/jobs/{j3}/cancel").json()
 assert r["state"] == "cancelled" and r["followup"] == "held" and r["stopped_by"] == "user", r
 assert jobs.USER_STOP in jobs.describe(run(job(j3)))
-time.sleep(0.2)
-try:
-    os.killpg(pg, 0)
-    raise AssertionError("process group survived cancel")
-except ProcessLookupError:
-    pass
+until(lambda: not _running(pg, pgid=True), "process group survived cancel")
 assert c.post(f"/api/jobs/{j3}/cancel").json()["state"] == "cancelled"  # 再点一次：无事发生
 
 # ---- 6. 模型自己取消：不通知 ----
@@ -211,8 +215,7 @@ assert "只能取消本工作区" in run(tool("cancel_job", job_id="jnope"))
 
 # ---- 7. 进程消失没留退出码 → worker 判 lost ----
 j5 = run(start("sleep 30"))
-time.sleep(0.3)
-os.killpg(_pid(pid, j5), signal.SIGKILL); procs[j5].kill(); procs[j5].wait(5)  # 连 run.sh 一起没了（像容器重启）
+os.killpg(wait_pid(j5), signal.SIGKILL); procs[j5].kill(); procs[j5].wait(5)  # 连 run.sh 一起没了（像容器重启）
 async def tick():
     async with SessionLocal() as db:
         return await jobs.tick(db)

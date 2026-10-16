@@ -18,6 +18,11 @@
     transparent var(--fade-b));
   -webkit-mask-image: var(--fade); mask-image: var(--fade); }
 .shell:not(.has-bar) .sky-fade-page { display: none; } /* 子页面自带标题栏，不渐隐（= 原来只有 .shell.has-bar .page 有遮罩） */
+/* “我的”没有顶栏也没有标题栏（返回钮在滚动内容里）：同一条渐隐（= App me_screen.dart 的 BackdropFade）。刘海 / 状态栏以上全是壁纸，
+   到页头静止时的顶边（.me .page-inner 上留白 + .me-head 上留白）恰好全显：翻下去内容不切在顶边、不进状态栏，静止时页头不被盖。 */
+.shell .page.me + .sky-fade-page { display: block;
+  --fade-a: env(safe-area-inset-top);
+  --fade-b: calc(var(--topbar-top) + var(--sp-2) + env(safe-area-inset-top)); }
 .shell-main { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; position: relative; }
 
 .topbar { position: fixed; z-index: 20; top: calc(var(--topbar-top) + env(safe-area-inset-top)); left: var(--gutter); right: var(--gutter);

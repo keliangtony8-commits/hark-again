@@ -14,7 +14,7 @@ alembic("upgrade", "head")
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app import reply_quote
+from app import conversation_title, live_turns, llm, reply_quote
 from app.agent import loop
 from app.auth import issue_token
 from app.db import SessionLocal
@@ -31,6 +31,15 @@ async def fake_stream_turn(messages, tools=None, model=None, effort=None):
     yield text
     yield Turn(text=text)
 loop.stream_turn = fake_stream_turn
+async def offline_complete(messages, **kw):  # 后台起标题也走假的：不出网（真连 http://x 经代理，快慢不定）
+    raise RuntimeError("offline")
+llm.complete = offline_complete
+
+async def settle():
+    """在 ws 会话自己的事件循环里等这几轮的收尾和后台起标题做完：会话一退出 TestClient 就掐掉这个循环，
+    停在 SQLite 语句中间的后台任务会把读锁一直占着（下一段写库要等满 5 秒 busy timeout）。"""
+    await live_turns.drain()
+    await conversation_title.drain()
 
 app = FastAPI(); app.include_router(rws.router); app.include_router(rconv.router)
 c = TestClient(app)
@@ -62,8 +71,8 @@ with c.websocket_connect(f"/ws?token={token}") as ws:
     # 别的对话里的 id：忽略
     ws.send_json({"type": "user.message", "text": "另一件事", "reply_to": a1})
     ev = until(ws, "message.done", "error"); cid2 = ev[0]["conversation_id"]; assert cid2 != cid
+    ws.portal.call(settle)
 
-import time; time.sleep(1.5)  # 后台起标题的写入先落完（SQLite 单写）
 # 第一轮：没有引用前缀
 assert "回复" not in text(last_user(seen[0])), last_user(seen[0])
 # 第二轮：当前这一问带被引原文，截断到 PREFIX

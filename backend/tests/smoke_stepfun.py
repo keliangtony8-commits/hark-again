@@ -102,7 +102,7 @@ with c.websocket_connect(f"/ws?token={issue_token()}") as ws:
         if e["type"] in ("message.done", "error"):
             break
 kinds = [e["type"] for e in evs]
-assert {"type": "thinking.delta", "text": "让我想想"} in evs, evs
+assert {"type": "thinking.delta", "text": "让我想想"} in [{k: e[k] for k in ("type", "text") if k in e} for e in evs], evs  # 事件另带 turn_id / seq（续传用），只比内容
 assert kinds.index("thinking.delta") < kinds.index("block.delta")
 assert evs[-1]["message"]["blocks"] == [{"type": "text", "text": "答案"}]
 async def stored():

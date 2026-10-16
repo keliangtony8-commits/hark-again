@@ -14,9 +14,12 @@ import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/home/inbox.dart';
+import 'package:assistant/features/me/me_screen.dart';
 import 'package:assistant/features/projects/save_reply.dart';
 import 'package:assistant/theme/tokens.dart';
+import 'package:assistant/ui/motion.dart';
 import 'package:assistant/ui/sheets.dart';
+import 'package:assistant/ui/sky.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +32,8 @@ import '../chat_controller_test.dart' show FakeSocket;
 final _on = Platform.environment['SHOTS'] == '1';
 final _fonts = Platform.environment['SHOTS_FONTS'] ?? '/tmp/shots/fonts';
 final _out = Platform.environment['SHOTS_OUT'] ?? '/tmp/shots/out';
+// v3.3 壁纸验收：SHOTS_SKY=1 时只拍“明 / 暗 × 夜 / 黎明 / 白天 / 黄昏 × 六个页面”（注入 SkyClock 钟点 + 真着色器），不拍上面那套
+final _sky = Platform.environment['SHOTS_SKY'] == '1';
 
 class _SignedIn extends SessionNotifier {
   @override
@@ -417,6 +422,13 @@ class _Api implements Api {
         {'id': 'v3', 'kind': 'api_key', 'name': '和风天气', 'hosts': ['devapi.qweather.com'], 'preview': '7c21'},
       ];
     }
+    if (path == '/api/auth/2fa') return {'enabled': false, 'recovery_left': 0};
+    if (path == '/api/auth/sessions') {
+      return {'sessions': [
+        {'id': 's1', 'label': 'Android · Toyuis App', 'kind': 'app', 'created_at': _ago(const Duration(days: 3)), 'last_seen_at': _ago(Duration.zero), 'current': true},
+        {'id': 's2', 'label': 'Chrome · Windows', 'kind': 'web', 'created_at': _ago(const Duration(days: 9)), 'last_seen_at': _ago(const Duration(hours: 5))},
+      ]};
+    }
     if (path == '/api/conversations/c2') return _shopChat;
     if (path == '/api/conversations/c3') return _signInChat;
     if (path == '/api/conversations/c4') return _askChat;
@@ -529,7 +541,7 @@ Future<void> _shot(WidgetTester tester, String name) async {
 }
 
 void main() {
-  testWidgets('设计 v2 截图', skip: !_on, (tester) async {
+  testWidgets('设计 v2 截图', skip: !_on || _sky, (tester) async {
     await tester.runAsync(_loadFonts);
     await tester.runAsync(() => _seedImage(_offerImage));
     tester.view.physicalSize = const Size(1080, 2340);
@@ -673,6 +685,73 @@ void main() {
       await _shot(tester, '$mode-login');
       await tester.pumpWidget(const SizedBox());
       container.dispose();
+    }
+  });
+
+  // v3.3 视觉验收：同一套页面在一天四个时段 × 明暗下的样子（测试引擎里 SkyClock 冻结，直接设钟点；着色器真加载，柔光也画）。
+  testWidgets('v3.3 壁纸 × 时段截图', skip: !_on || !_sky, (tester) async {
+    await tester.runAsync(_loadFonts);
+    await tester.runAsync(() => _seedImage(_offerImage));
+    SkyShader.program = await tester.runAsync(() => ui.FragmentProgram.fromAsset('shaders/sky.frag'));
+    addTearDown(() => SkyShader.program = null);
+    tester.view.physicalSize = const Size(1080, 2340);
+    tester.view.devicePixelRatio = 2.625;
+    tester.view.padding = const FakeViewPadding(top: 63, bottom: 42);
+    tester.view.viewPadding = const FakeViewPadding(top: 63, bottom: 42);
+    addTearDown(tester.view.reset);
+    const times = {'night': 2.0, 'dawn': 6.0, 'day': 12.0, 'dusk': 18.5};
+    final only = Platform.environment['SHOTS_SKY_TIMES']?.split(',');
+    for (final mode in ['light', 'dark']) {
+      for (final MapEntry(key: slot, value: hour) in times.entries) {
+        if (only != null && !only.contains(slot)) continue;
+        SkyClock.instance.hour.value = hour;
+        SkyClock.instance.time.value = 40; // 柔光离开初始位，像跑了一会儿
+        SharedPreferences.setMockInitialValues({'appearance': mode});
+        final socket = FakeSocket();
+        final container = ProviderContainer(overrides: [
+          sessionProvider.overrideWith(_SignedIn.new),
+          apiProvider.overrideWithValue(_Api()),
+          chatSocketProvider.overrideWithValue(socket),
+          cacheStoreProvider.overrideWithValue(MemoryCacheStore()),
+        ]);
+        await tester.pumpWidget(RepaintBoundary(
+          key: const ValueKey('shot'),
+          child: UncontrolledProviderScope(container: container, child: const AssistantApp()),
+        ));
+        await tester.pump();
+        final router = container.read(routerProvider);
+        final tag = '$mode-$slot';
+        await _shot(tester, '$tag-home');
+        router.go('/chat');
+        await tester.runAsync(() => container.read(chatProvider('').notifier).open('c1'));
+        await _shot(tester, '$tag-chat');
+        container.read(chatProvider('').notifier).send('帮我把这周的花销按类别汇总一下');
+        for (final e in [
+          {'type': 'message.start', 'conversation_id': 'c1', 'user_message_id': 'u9', 'title': '额度'},
+          {'type': 'tool.status', 'id': 't1', 'name': 'run_command', 'label': '正在汇总账单', 'state': 'running'},
+          {'type': 'block.start', 'index': 0, 'block': {'type': 'text', 'text': ''}},
+          {'type': 'block.delta', 'index': 0, 'text': '这周一共花了 ¥412，餐饮占一半以上：\n\n- **餐饮** ¥236\n- **交通** ¥58\n- 学习用品'},
+        ]) {
+          socket.ctl.add(e);
+        }
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await _shot(tester, '$tag-chat-streaming');
+        router.go('/projects');
+        await _shot(tester, '$tag-projects');
+        router.push('/me');
+        await _shot(tester, '$tag-me');
+        // 翻到中间：页头滚进状态栏那一截，看顶部渐隐条（状态栏以上全是壁纸，不切硬边）
+        final meScroll = tester.state<ScrollableState>(find.descendant(of: find.byType(MeScreen), matching: find.byType(Scrollable)).first).position;
+        meScroll.jumpTo(meScroll.maxScrollExtent / 2);
+        await _shot(tester, '$tag-me-mid');
+        await tester.dragFrom(const Offset(200, 600), const Offset(0, -4000)); // 翻到底：底部设置搜索胶囊
+        await _shot(tester, '$tag-me-end');
+        router.push('/me/security');
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+        await _shot(tester, '$tag-security');
+        await tester.pumpWidget(const SizedBox());
+        container.dispose();
+      }
     }
   });
 }
