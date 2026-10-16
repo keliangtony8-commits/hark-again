@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
-import { http } from "../../lib/api";
+import { useSwr } from "../../hooks/useSwr";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, hasUnpriced, isIdle, type UsageReport } from "../../lib/usage";
 import { downloadText } from "../../lib/export";
 import { usageCsv, usageCsvFileName } from "../../lib/usageCsv";
@@ -15,15 +14,9 @@ import TopConversations from "./TopConversations";
 
 /** 设置页“用量与花费”：本月（对比预算、对比上月同期 MonthCompare）、今天、本月每天（DailyChart，选一天看按模型拆分 DayBreakdown）、最花钱的对话（TopConversations，点开跳进去）、按模型拆分、自动选模型的账（RouterUsageCard，没用过“自动”不显示）；右上角下载本月 CSV（lib/usageCsv.ts）。只读；记账在后端 app/usage.py。 */
 export default function UsageCard() {
-  const [r, setR] = useState<UsageReport | null>(null);
-  const [error, setError] = useState("");
-  const load = useCallback(async () => {
-    setError("");
-    try { setR(await http.get<UsageReport>("/api/usage")); } catch (e) { setError((e as Error).message); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
+  const { data: r, error, reload } = useSwr<UsageReport>("/api/usage");
 
-  if (error) return <ListGroup><ListRow onClick={load} trail={null} title="用量加载失败" sub={`${error} · 点这里重试`} /></ListGroup>;
+  if (error) return <ListGroup><ListRow onClick={() => void reload()} trail={null} title="用量加载失败" sub={`${error.message} · 点这里重试`} /></ListGroup>;
   // 骨架形状跟报表一致（月卡 / 两格 / 每日图，= App _ReportSkeleton），换成内容时整块淡入不跳版
   if (!r) return <div className="usage usage-skeleton" aria-busy="true"><div className="skeleton sk-hero" /><div className="sk-stats"><div className="skeleton sk-stat" /><div className="skeleton sk-stat" /></div><div className="skeleton sk-chart" /></div>;
 

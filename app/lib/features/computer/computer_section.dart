@@ -20,6 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../blocks/job_block.dart';
 import '../../core/api.dart';
+import '../../core/swr.dart';
 import '../../models/computer.dart';
 import '../../models/job.dart';
 import '../../theme/app_theme.dart';
@@ -28,34 +29,26 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 
-class ComputerNotifier extends AsyncNotifier<ComputerStatus> {
+/// 加载 / 静默刷新（轮询偶尔没连上不把整块换成错误）规则在 core/swr.dart；这里只管操作。
+class ComputerNotifier extends SwrNotifier<ComputerStatus> {
   ComputerNotifier(this.ws);
   final String ws;
 
-  String get _path => '/api/projects/$ws/computer';
+  @override
+  String get path => '/api/projects/$ws/computer';
+  String get _path => path;
   Api get _api => ref.read(apiProvider);
 
   @override
-  Future<ComputerStatus> build() async => _parse(await _api.get(_path));
-
-  ComputerStatus _parse(dynamic j) => ComputerStatus.fromJson((j as Map).cast<String, dynamic>());
-
-  /// 静默刷新：失败保留旧数据（轮询偶尔没连上不该把整块换成错误）。
-  Future<void> reload() async {
-    try {
-      state = AsyncData(_parse(await _api.get(_path)));
-    } on ApiError {
-      if (!state.hasValue) rethrow;
-    }
-  }
+  ComputerStatus parse(Object? j) => ComputerStatus.fromJson(jsonMap(j));
 
   /// 重启：出错抛给调用方提示，旧状态不动。
-  Future<void> restart() async => state = AsyncData(_parse(await _api.post('$_path/restart')));
+  Future<void> restart() async => emit(await _api.post('$_path/restart'));
 
   /// 一键清理：返回腾出的字节，状态换成清理后的。
   Future<int> cleanup() async {
     final j = (await _api.post('$_path/cleanup') as Map).cast<String, dynamic>();
-    state = AsyncData(_parse(j['status']));
+    emit(j['status']);
     return (j['freed'] as num?)?.toInt() ?? 0;
   }
 

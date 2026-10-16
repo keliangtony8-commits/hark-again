@@ -12,6 +12,7 @@ import '../theme/tokens.dart';
 import 'glass.dart';
 import 'motion.dart';
 import 'haptics.dart';
+import '../core/swr.dart';
 
 /// 页面骨架：统一的左右留白 + 平板上限制最大宽度。
 class PageBody extends StatelessWidget {
@@ -427,10 +428,9 @@ class AsyncBody<T> extends StatelessWidget {
   /// 四态各有自己的 key：骨架 → 内容（或空 / 出错）交叉淡化；同一态内的数据更新不触发过渡。
   @override
   Widget build(BuildContext context) => FadeSwitcher(
-        child: value.when(
-          skipLoadingOnReload: true,
+        child: value.swr( // 有数据就显示数据（core/swr.dart）：后台刷新、刷新失败都不换成骨架 / 错误
           loading: () => const PageBody(key: ValueKey('loading'), children: [SkeletonList(rows: 4)]),
-          error: (e, _) => PageBody(key: const ValueKey('error'), children: [
+          error: (e) => PageBody(key: const ValueKey('error'), children: [
             EmptyHint(
               icon: Icons.cloud_off_rounded,
               title: '加载失败',
@@ -715,40 +715,6 @@ class FoldedBox extends StatelessWidget {
         blendMode: BlendMode.dstIn,
         child: SingleChildScrollView(physics: const NeverScrollableScrollPhysics(), child: child),
       ),
-    );
-  }
-}
-
-/// 内容从浮动顶栏下面滚过时的上沿渐隐：[clear] 以上完全透明（露出壁纸，不和顶栏/标题叠字），
-/// 到 [solid] 按缓入曲线渐变成全显（线性渐变在深色墨气泡上会显出一道硬边，v0.92 修）。
-/// 只改透明度、不画颜色，所以和任何壁纸/深浅色都对得上。一级页面外框（ShellPage）用它。
-class TopFade extends StatelessWidget {
-  const TopFade({super.key, required this.clear, required this.solid, required this.child});
-  final double clear;
-  final double solid;
-  final Widget child;
-
-  /// 渐变的采样点（0..1 在 clear→solid 之间）和对应透明度：easeInOut 采样，头尾都柔。
-  static const ramp = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0];
-  static double alphaAt(double x) => Curves.easeInOut.transform(x.clamp(0.0, 1.0));
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = context.palette.text;
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (r) {
-        final h = r.height <= 0 ? 1.0 : r.height;
-        final a = (clear / h).clamp(0.0, 1.0);
-        final b = (solid / h).clamp(a, 1.0);
-        return LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [ink.withValues(alpha: 0), for (final x in ramp) ink.withValues(alpha: alphaAt(x)), ink],
-          stops: [0, for (final x in ramp) a + (b - a) * x, 1],
-        ).createShader(r);
-      },
-      child: child,
     );
   }
 }

@@ -2,8 +2,10 @@
 // 无障碍：系统开了“移除动画”（MediaQuery.disableAnimations）时，这里的每个组件都直接给出终态、
 // 循环动画停住；页面里需要时长的地方用 context.motion(Motion.x)，同样会被归零。
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -871,4 +873,102 @@ class DropIn extends StatelessWidget {
           ),
         ),
       );
+}
+
+
+/// v3.3 流光壁纸的唯一时钟（ui/sky.dart 的壁纸与 ShellPage 顶部渐隐条共用，像素对齐）。
+/// 只有一个 Timer（不用 Ticker：Ticker 每个 vsync 都出一帧，起不到节流作用）：
+/// - 有“动画”订阅者 → 每 Sky.frame（≈30 帧/秒）推进 time（柔光漂移），顺带每 Sky.recolor 重算钟点 hour（天色）；
+/// - 只有“静止”订阅者（减少动态）→ 每 Sky.recolor 一次，只换天色、柔光不动；
+/// - 没有订阅者 / App 不在前台 / 测试环境（FLUTTER_TEST）→ 一个 Timer 都没有。
+class SkyClock with WidgetsBindingObserver {
+  SkyClock._(this.frozen);
+  static final SkyClock instance = SkyClock._(inTest);
+
+  /// 测试用：不看环境变量的独立时钟（frozen = false 才会起 Timer）。
+  @visibleForTesting
+  factory SkyClock.forTest({bool frozen = false}) => SkyClock._(frozen);
+
+  /// flutter test 下完全静止：大量测试用 pumpAndSettle，常驻计时器会让它永远等不完。
+  static final bool inTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+  final bool frozen;
+
+  final ValueNotifier<double> time = ValueNotifier(0);
+  final ValueNotifier<double> hour = ValueNotifier(_nowHour());
+  final Stopwatch _watch = Stopwatch();
+  Timer? _timer;
+  Duration? _period;
+  DateTime _recolored = DateTime.now();
+  int _animators = 0, _still = 0;
+  bool _observing = false, _resumed = true;
+
+  /// 当前 Timer 的间隔（null = 没在跑）。
+  @visibleForTesting
+  Duration? get period => _period;
+
+  /// 当前订阅者个数（动画 + 静止）。
+  @visibleForTesting
+  int get subscribers => _animators + _still;
+
+  static double _nowHour() {
+    final n = DateTime.now();
+    return n.hour + n.minute / 60 + n.second / 3600;
+  }
+
+  /// animate = false：减少动态，只要天色随钟点变、不要漂移。
+  void acquire({bool animate = true}) {
+    animate ? _animators++ : _still++;
+    if (!_observing && !frozen) {
+      WidgetsBinding.instance.addObserver(this);
+      _observing = true;
+    }
+    _sync();
+  }
+
+  void release({bool animate = true}) {
+    if (animate) {
+      _animators = math.max(0, _animators - 1);
+    } else {
+      _still = math.max(0, _still - 1);
+    }
+    _sync();
+  }
+
+  void _sync() {
+    final Duration? want = frozen || !_resumed
+        ? null
+        : _animators > 0
+            ? Sky.frame
+            : _still > 0
+                ? Sky.recolor
+                : null;
+    if (want == _period) return;
+    _timer?.cancel();
+    _timer = null;
+    _period = want;
+    if (want == Sky.frame) {
+      _watch.start();
+    } else {
+      _watch.stop();
+    }
+    if (want == null) return;
+    _recolor(); // 回到前台 / 刚订阅：先对一次钟点
+    _timer = Timer.periodic(want, (_) => _tick());
+  }
+
+  void _tick() {
+    if (_period == Sky.frame) time.value = _watch.elapsedMilliseconds / 1000;
+    if (DateTime.now().difference(_recolored) >= Sky.recolor || _period == Sky.recolor) _recolor();
+  }
+
+  void _recolor() {
+    _recolored = DateTime.now();
+    hour.value = _nowHour();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _resumed = state == AppLifecycleState.resumed;
+    _sync();
+  }
 }

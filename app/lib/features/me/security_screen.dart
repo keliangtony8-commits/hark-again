@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/links.dart';
 import '../../core/session.dart';
+import '../../core/swr.dart';
 import '../../models/login_session.dart';
 import '../../models/two_factor.dart';
 import '../../theme/app_theme.dart';
@@ -20,13 +21,8 @@ import '../../ui/sheets.dart';
 import '../../ui/sub_page.dart';
 import 'login_sessions_section.dart';
 
-/// 没登录（或测试里没有会话）不发请求、给 null：和 profileProvider 一样先看会话（抛错会被 Riverpod 自动重试）。
-final twoFactorProvider = FutureProvider.autoDispose<TwoFactorStatus?>((ref) async {
-  final s = await ref.watch(sessionProvider.future);
-  if (!s.signedIn) return null;
-  final j = await ref.read(apiProvider).get('/api/auth/2fa');
-  return TwoFactorStatus.fromJson(Map<String, dynamic>.from(j as Map));
-});
+/// 没登录（或测试里没有会话）不发请求、给 null。SWR（core/swr.dart），只在内存不落盘。
+final twoFactorProvider = swrGet<TwoFactorStatus?>('/api/auth/2fa', (j) => TwoFactorStatus.fromJson(jsonMap(j)), requiresSession: true);
 
 class SecurityScreen extends ConsumerWidget {
   const SecurityScreen({super.key});
@@ -38,17 +34,19 @@ class SecurityScreen extends ConsumerWidget {
       title: const Text('安全'),
       body: PageBody(children: [
         FadeSwitcher(
-          child: switch (state) {
-            AsyncData(:final value?) => _Body(key: ValueKey('on-${value.enabled}'), status: value),
-            AsyncData() || AsyncError() => EmptyHint(key: const ValueKey('err'), icon: Icons.cloud_off_rounded, title: '读不到安全设置', text: '检查网络后重试',
-                action: TextButton(onPressed: () => ref.invalidate(twoFactorProvider), child: const Text('重试'))),
-            _ => const SkeletonList(key: ValueKey('loading'), rows: 2),
-          },
+          child: state.swr(
+            data: (value) => value != null ? _Body(key: ValueKey('on-${value.enabled}'), status: value) : _error(ref),
+            error: (_) => _error(ref),
+            loading: () => const SkeletonList(key: ValueKey('loading'), rows: 2),
+          ),
         ),
         Spotlight(id: 'sessions', child: LoginSessionsSection(delay: Motion.stagger(2))),
       ]),
     );
   }
+
+  Widget _error(WidgetRef ref) => EmptyHint(key: const ValueKey('err'), icon: Icons.cloud_off_rounded, title: '读不到安全设置', text: '检查网络后重试',
+      action: TextButton(onPressed: () => ref.invalidate(twoFactorProvider), child: const Text('重试')));
 }
 
 class _Body extends ConsumerWidget {

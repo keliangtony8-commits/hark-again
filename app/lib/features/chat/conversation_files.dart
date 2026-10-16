@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
 import '../../core/links.dart';
+import '../../core/swr.dart';
 import '../../models/conversation_files.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -15,10 +16,9 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../projects/project_files_sheet.dart' show projectFileIcon;
 
-final conversationFilesProvider = FutureProvider.autoDispose.family<ConversationFiles, String>(
-  (ref, id) async =>
-      ConversationFiles.fromJson((await ref.read(apiProvider).get(conversationFilesPath(id)) as Map).cast<String, dynamic>()),
-);
+/// SWR（core/swr.dart）：再打开同一对话的文件页，首帧就是上次的列表，后台重取。
+final conversationFilesProvider =
+    swrGetFamily<ConversationFiles, String>(conversationFilesPath, (j) => ConversationFiles.fromJson(jsonMap(j)));
 
 Future<void> showConversationFiles(BuildContext context, String id) =>
     showAppScrollSheet<void>(context, builder: (_) => ConversationFilesSheet(id: id));
@@ -65,29 +65,28 @@ class _ConversationFilesSheetState extends ConsumerState<ConversationFilesSheet>
           ),
         ),
         // 不套切换动画：数据态是 Flexible（SheetList 要直接挂在 Column 下）；行自己 FadeSlideIn 交错进场
-        switch (value) {
-          AsyncData(:final value) when value.files.isEmpty => const EmptyHint(
+        value.swr(
+          data: (value) => value.files.isEmpty ? const EmptyHint(
             key: ValueKey('empty'),
             icon: Icons.folder_open_rounded,
             title: '这个对话还没有文件',
             text: '你发的附件、我交给你的成果、浏览器下载的文件和我写出来的文件，都会收在这里。',
-          ),
-          AsyncData(:final value) => _Body(
+          ) : _Body(
             key: const ValueKey('data'),
             data: value,
             origin: _origin,
             onOrigin: (o) => setState(() => _origin = o),
             onOpen: _open,
           ),
-          AsyncError(:final error) => EmptyHint(
+          error: (error) => EmptyHint(
             key: const ValueKey('error'),
             icon: Icons.cloud_off_rounded,
             title: '加载失败',
             text: '$error',
             action: OutlinedButton(onPressed: () => ref.invalidate(conversationFilesProvider(widget.id)), child: const Text('重试')),
           ),
-          _ => const Padding(key: ValueKey('loading'), padding: EdgeInsets.all(Sp.x4), child: SkeletonList()),
-        },
+          loading: () => const Padding(key: ValueKey('loading'), padding: EdgeInsets.all(Sp.x4), child: SkeletonList()),
+        ),
       ],
     );
   }

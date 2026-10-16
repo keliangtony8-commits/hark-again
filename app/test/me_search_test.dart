@@ -8,6 +8,7 @@ import 'package:assistant/core/session.dart';
 import 'package:assistant/features/me/me_index.dart';
 import 'package:assistant/features/me/me_screen.dart';
 import 'package:assistant/theme/app_theme.dart';
+import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/ui/kit.dart';
 import 'package:assistant/ui/motion.dart';
 import 'package:flutter/material.dart';
@@ -196,6 +197,9 @@ void main() {
         final last = tester.getRect(find.byKey(const Key('logout')));
         final bar = tester.getRect(find.byKey(const Key('me-search')));
         expect(last.bottom, lessThanOrEqualTo(bar.top), reason: '“退出登录”底边 ${last.bottom} 被搜索胶囊（顶边 ${bar.top}）盖住');
+        // v3.3 按 Hark：胶囊两侧比页面留白再内收，不贴满屏宽
+        expect(bar.left, closeTo(Layout.gutter + Sp.x3, 0.5));
+        expect(412 - bar.right, closeTo(Layout.gutter + Sp.x3, 0.5));
       });
     }
   });

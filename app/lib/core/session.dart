@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'cache.dart';
+import 'swr.dart';
 import '../models/version.dart';
 
 class Session {
@@ -59,12 +60,6 @@ class SessionNotifier extends AsyncNotifier<Session> {
 final sessionProvider = AsyncNotifierProvider<SessionNotifier, Session>(SessionNotifier.new);
 
 /// 服务器版本（GET /api/version，公开接口）：关于页显示两端版本、低于 min_client 时提示更新。取不到 = null。
-final serverVersionProvider = FutureProvider.autoDispose<ServerVersion?>((ref) async {
-  final s = await ref.watch(sessionProvider.future);
-  if (!s.signedIn) return null;
-  try {
-    return ServerVersion.fromJson(await ref.read(apiProvider).get('/api/version'));
-  } catch (_) {
-    return null;
-  }
-});
+/// SWR（core/swr.dart）：再进关于页首帧就有版本，后台重取。
+final serverVersionProvider =
+    swrGet<ServerVersion?>('/api/version', ServerVersion.fromJson, requiresSession: true, orNull: true);

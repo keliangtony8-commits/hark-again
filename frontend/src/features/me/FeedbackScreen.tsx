@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
 import { http } from "../../lib/api";
 import { formatWhen } from "../../lib/format";
 import { FEEDBACK_GOOD, groupFeedback, type FeedbackItem, type FeedbackList } from "../../lib/feedback";
@@ -14,17 +15,16 @@ export const feedbackIcon = (f: FeedbackItem) =>
  *  “报告问题” + 回看在回复下点过 👍 / 👎 的报告。版式同 Pages：页头摘要 → 空时起步卡 → 待处理 / 有用的回复 / 已解决（带数量）。
  *  点一行进详情（FeedbackDetail，删除在那里）。报告里存什么只在后端 app/feedback.py。 */
 export default function FeedbackScreen() {
-  const [list, setList] = useState<FeedbackList | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: list, error: loadError, reload } = useSwr<FeedbackList>(FEEDBACK_PATH);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [writing, setWriting] = useState<string | null>(null);
-  const load = useCallback(() => http.get<FeedbackList>(FEEDBACK_PATH).then(setList).catch((e) => setError(e instanceof Error ? e.message : "加载失败")), []);
-  useEffect(() => { void load(); }, [load]);
+  const error = submitError ?? loadError?.message ?? null;
 
   const submit = async () => {
     const note = writing?.trim();
     if (!note) return;
-    try { await http.post(FEEDBACK_PATH, { note }); setWriting(null); setError(null); await load(); }
-    catch (e) { setError(e instanceof Error ? e.message : "提交失败"); }
+    try { await http.post(FEEDBACK_PATH, { note }); setWriting(null); setSubmitError(null); await reload(); }
+    catch (e) { setSubmitError(e instanceof Error ? e.message : "提交失败"); }
   };
   const items = list?.items ?? [];
   const g = groupFeedback(items);

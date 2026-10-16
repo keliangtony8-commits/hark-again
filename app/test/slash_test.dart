@@ -1,5 +1,6 @@
 // 输入框 /命令（v1.85，models/slash.dart；服务器 app/init_command.py）：规则（何时弹、候选、补全、/init 认法和服务器一致）
 // + 输入框开头打 / 出候选、点一下补成 `/init `、顶部提示条（带补充要求）、句中 / 不弹、生成中不能途中发。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/chat/composer.dart';
 import 'package:assistant/features/chat/mentions.dart';
@@ -33,7 +34,7 @@ Future<List<String>> _pump(WidgetTester tester, {bool busy = false, List<SlashCa
   addTearDown(tester.view.reset);
   final sent = <String>[];
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(_Api())],
+    overrides: [apiProvider.overrideWithValue(_Api()), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(
       theme: buildTheme(Brightness.light),
       home: Scaffold(

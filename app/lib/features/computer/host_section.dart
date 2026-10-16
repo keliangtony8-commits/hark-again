@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
+import '../../core/swr.dart';
 import '../../models/host.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -18,31 +19,19 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 
-class HostNotifier extends AsyncNotifier<HostStatus> {
-  static const _path = '/api/host';
+/// 加载 / 静默刷新规则在 core/swr.dart；这里只管开关和规则。
+class HostNotifier extends SwrNotifier<HostStatus> {
+  @override
+  String get path => '/api/host';
   Api get _api => ref.read(apiProvider);
 
   @override
-  Future<HostStatus> build() async => _parse(await _api.get(_path));
-
-  HostStatus _parse(dynamic j) => HostStatus.fromJson((j as Map).cast<String, dynamic>());
-
-  Future<void> reload() async {
-    try {
-      state = AsyncData(_parse(await _api.get(_path)));
-    } on ApiError {
-      if (!state.hasValue) rethrow;
-    }
-  }
+  HostStatus parse(Object? j) => HostStatus.fromJson(jsonMap(j));
 
   /// 开 / 关。出错（没装 409、断网）抛给调用方提示，状态不变。
-  Future<void> setEnabled(bool on) async {
-    state = AsyncData(_parse(await _api.put(_path, {'enabled': on})));
-  }
+  Future<void> setEnabled(bool on) async => emit(await _api.put(path, {'enabled': on}));
 
-  Future<void> deleteRule(String id) async {
-    state = AsyncData(_parse(await _api.delete('$_path/rules/${Uri.encodeComponent(id)}')));
-  }
+  Future<void> deleteRule(String id) async => emit(await _api.delete('$path/rules/${Uri.encodeComponent(id)}'));
 }
 
 final hostProvider = AsyncNotifierProvider.autoDispose<HostNotifier, HostStatus>(HostNotifier.new);

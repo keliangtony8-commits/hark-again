@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api.dart';
+import '../../core/swr.dart';
 import '../../models/usage.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -19,8 +19,9 @@ import 'conversation_files.dart';
 import 'conversation_memory.dart';
 import 'conversation_share.dart';
 
-final conversationUsageProvider = FutureProvider.autoDispose.family<UsageTotal, String>((ref, id) async =>
-    UsageTotal.fromJson((await ref.read(apiProvider).get('/api/conversations/$id/usage') as Map).cast<String, dynamic>()));
+/// SWR（core/swr.dart）：切回看过的对话，顶栏用量那行首帧就在，后台重取；一轮回复结束 invalidate = 后台重取。
+final conversationUsageProvider =
+    swrGetFamily<UsageTotal, String>((id) => '/api/conversations/$id/usage', (j) => UsageTotal.fromJson(jsonMap(j)));
 
 /// 标题下那一行；还没调用过模型 → null（不显示）。
 String? usageLine(UsageTotal u) {
@@ -116,10 +117,9 @@ class ConversationUsageSheet extends ConsumerWidget {
             ),
             const SizedBox(height: Sp.x3),
             SwapSwitcher(
-              child: value.when(
-                skipLoadingOnReload: true,
+              child: value.swr(
                 loading: () => const Shimmer(key: ValueKey('loading'), height: 96),
-                error: (e, _) => Column(key: const ValueKey('error'), children: [
+                error: (e) => Column(key: const ValueKey('error'), children: [
                   Text('加载失败：$e', style: context.text.bodySmall),
                   const SizedBox(height: Sp.x2),
                   OutlinedButton(onPressed: () => ref.invalidate(conversationUsageProvider(id)), child: const Text('重试')),

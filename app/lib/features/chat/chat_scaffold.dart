@@ -62,9 +62,17 @@ class _ChatScaffoldState extends ConsumerState<ChatScaffold> {
   final _listOpen = ValueNotifier(false);
   final _inner = GlobalKey<ScaffoldState>();
 
+  /// 主聊天的历史抽屉此刻画在屏幕上（拖出一点也算）：ShellPage 据此让左侧按钮另成一组毛玻璃（见 shell_page.dart 文件头）。
+  /// 和 _cover（顶栏让位，按“开 / 关”意图）分开：这里只管画没画出来，不改让位的时机。
+  final _drawerShown = ValueNotifier(false);
+  void _onDrawerShown(bool v) {
+    if (mounted) _drawerShown.value = v;
+  }
+
   @override
   void dispose() {
     _listOpen.dispose();
+    _drawerShown.dispose();
     final cover = _cover;
     if (cover != null && _drawerOpen) Future.microtask(() => cover.set(false)); // 抽屉开着离开才复位；不在拆树途中改状态
     super.dispose();
@@ -169,7 +177,7 @@ class _ChatScaffoldState extends ConsumerState<ChatScaffold> {
     // 主聊天：抽屉在外层 Scaffold（盖全屏，顶栏让位）；项目：抽屉在 ShellPage 里层（header 行下面，左上钮和 header 在它之上）
     return Scaffold(
       backgroundColor: Colors.transparent, // 透出外壳的壁纸
-      drawer: _isProject ? null : drawer,
+      drawer: _isProject || drawer == null ? null : _Shown(onShown: _onDrawerShown, child: drawer),
       onDrawerChanged: _isProject
           ? null
           : (open) {
@@ -177,6 +185,7 @@ class _ChatScaffoldState extends ConsumerState<ChatScaffold> {
               _cover?.set(open);
             },
       body: ShellPage(
+        covered: _drawerShown,
         lead: lead,
         headerHeight: Layout.chatTitle,
         header: header,
@@ -186,4 +195,34 @@ class _ChatScaffoldState extends ConsumerState<ChatScaffold> {
       ),
     );
   }
+}
+
+/// 抽屉内容的挂载 = 抽屉露出（DrawerController 只在没完全收起时才建抽屉内容），卸载 = 完全收起。
+/// 在帧后上报：挂载 / 卸载发生在别人的构建与拆树途中，那时不能让听的人 setState。
+class _Shown extends StatefulWidget {
+  const _Shown({required this.onShown, required this.child});
+  final ValueChanged<bool> onShown;
+  final Widget child;
+
+  @override
+  State<_Shown> createState() => _ShownState();
+}
+
+class _ShownState extends State<_Shown> {
+  late final ValueChanged<bool> _onShown = widget.onShown;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onShown(mounted));
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onShown(false));
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

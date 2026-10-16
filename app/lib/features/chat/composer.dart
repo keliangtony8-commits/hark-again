@@ -360,14 +360,17 @@ class _ComposerState extends ConsumerState<Composer> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: Layout.contentMax),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            // 左边的钮（主页的“收起”）在左、胶囊在右；但胶囊要**先画**：它是这一组毛玻璃里稳定的那一个，由它取背景，
+            // 淡入中的钮只读结果（规则见 ui/glass.dart 文件头）。rtl 排版 = 子项倒序摆放，布局和原来一样、只换绘制先后；
+            // 读屏 / 焦点顺序按几何位置排，不受影响。
+            child: Row(textDirection: TextDirection.rtl, crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Expanded(child: _capsule(p)),
               RiseSwitcher(
                 axis: Axis.horizontal,
                 child: widget.leading == null
                     ? null
                     : Padding(key: const ValueKey('leading'), padding: const EdgeInsets.only(right: Sp.x2), child: widget.leading),
               ),
-              Expanded(child: _capsule(p)),
             ]),
           ),
         ),

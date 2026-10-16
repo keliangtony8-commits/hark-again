@@ -13,6 +13,13 @@
 //   GlassDialog   居中对话框的玻璃框（同 glassSheet 着色 + 真模糊 + 四角 Radii.card）：只由 ui/sheets.dart 用
 //   GlassMode / GlassFills 在 glass_mode.dart（最底层，motion.dart 也用；本文件 re-export）
 //   FrostScrim    整页的“磨砂遮罩”：输入胶囊聚焦时盖住页面，模糊和颜色一起渐入，点一下收起
+//   BackdropFade  壁纸的上沿渐隐条（ShellPage 顶部：盖在内容上，代替整页 ShaderMask 离屏层）
+//
+// 毛玻璃分组（v3.3 卡顿根因，Flutter BackdropGroup / BackdropFilter.grouped）：GlassSurface(blur) 和子页标题栏用 grouped，
+//   找最近的 BackdropGroup 共享一次“取背景 + 模糊”。组只开在三处：AppShell（顶栏 + 一级页面左侧按钮 / header）、
+//   ShellPage 内容（输入胶囊等）、SubPage。引擎语义：组里第一个画到的滤镜取背景，后面的成员只从那张结果里取自己那块——
+//   所以成员不能重叠、第一个成员之后不能再在其他成员底下画东西、第一个成员不能在淡入淡出里（绘制顺序见 shell_page.dart / composer.dart）。
+//   没有组的地方 grouped = 普通 BackdropFilter。弹层 / 对话框 / 磨砂遮罩永远独立（它们要模糊的正是组里的成员）。
 // 颜色只来自 Palette，模糊强度来自 tokens 的 Glass，投影来自 Elevation。
 import 'dart:ui' show ImageFilter;
 
@@ -21,6 +28,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'glass_mode.dart';
+import 'sky.dart';
 import 'motion.dart';
 
 export 'glass_mode.dart';
@@ -71,21 +79,78 @@ List<BoxShadow> floatShadow(Palette p) =>
     [BoxShadow(color: p.shadow.withValues(alpha: p.shadow.a * Elevation.floatAlpha), blurRadius: Elevation.floatBlur, offset: const Offset(0, Elevation.floatY))];
 
 class Backdrop extends StatelessWidget {
-  const Backdrop({super.key, this.child});
+  const Backdrop({super.key, this.child, this.coverable = false});
   final Widget? child;
+
+  /// 外壳那层（app_shell.dart）：被外壳分支里的不透明子页完全盖住时暂停（ui/sky.dart SkyCoverScope / SkyCover）。
+  final bool coverable;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final body = child ?? const SizedBox.expand();
     if (GlassMode.solidOf(context)) return ColoredBox(color: p.bg, child: body);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: p.backdrop),
-      ),
-      child: body, // v2.80：去掉强调色光晕——强调色是白，壁纸只留海军蓝渐变
-    );
+    // v3.3 流光壁纸（ui/sky.dart）：自身是重绘边界，只有这一层随 SkyClock 重画
+    return Stack(fit: StackFit.passthrough, children: [Positioned.fill(child: SkyLayer(coverable: coverable)), body]);
   }
+}
+
+/// 一个毛玻璃组（规则见文件头）：BackdropGroup + 自己持有的 BackdropKey。
+/// 不直接写 BackdropGroup(child: …)：它不给 key 时每次 build 都新建一个，组里所有滤镜跟着重建。
+class BlurGroup extends StatefulWidget {
+  const BlurGroup({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<BlurGroup> createState() => _BlurGroupState();
+}
+
+class _BlurGroupState extends State<BlurGroup> {
+  final _key = BackdropKey();
+
+  @override
+  Widget build(BuildContext context) => BackdropGroup(backdropKey: _key, child: widget.child);
+}
+
+/// 壁纸的上沿渐隐条：[clear]（屏幕坐标）以上是不透明的壁纸，到 [solid] 渐成透明（Sky.fadeAlpha 缓入缓出）。
+/// 盖在内容上 = 内容在这一截以 1−α 透出壁纸，和原来整页 ShaderMask(dstIn) 看起来一样，但只画这一条、没有离屏层。
+/// 和 Backdrop 同一处判断：玻璃模式 = 同一张流光壁纸（SkyLayer 按屏幕坐标逐像素对齐、共用 SkyClock）；减少透明度 = 实色 bg。
+/// 不挡点击、不进读屏（和原来被遮罩的内容一样仍可点）。
+class BackdropFade extends StatelessWidget {
+  const BackdropFade({super.key, required this.clear, required this.solid});
+  final double clear, solid;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget strip = GlassMode.solidOf(context)
+        ? RepaintBoundary(child: CustomPaint(painter: _SolidFadePainter(context.palette.bg, clear, solid), child: const SizedBox.expand()))
+        : SkyLayer(fade: (clear, solid));
+    return IgnorePointer(child: ExcludeSemantics(child: strip));
+  }
+}
+
+class _SolidFadePainter extends CustomPainter {
+  _SolidFadePainter(this.color, this.clear, this.solid);
+  final Color color;
+  final double clear, solid;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    // 条从屏幕顶开始（ShellPage 把它放在 top: 0），所以本地 y = 屏幕 y；色标按 Sky.fadeAlpha 取，和着色器同一条曲线
+    const n = 6;
+    final stops = <double>[], colors = <Color>[];
+    for (var k = 0; k <= n; k++) {
+      final y = clear + (solid - clear) * k / n;
+      stops.add((y / size.height).clamp(0.0, 1.0));
+      colors.add(color.withValues(alpha: Sky.fadeAlpha(y, clear, solid)));
+    }
+    final rect = Offset.zero & size;
+    canvas.drawRect(rect, Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [color, ...colors], stops: [0, ...stops]).createShader(rect));
+  }
+
+  @override
+  bool shouldRepaint(_SolidFadePainter old) => old.color != color || old.clear != clear || old.solid != solid;
 }
 
 class GlassSurface extends StatelessWidget {
@@ -121,7 +186,7 @@ class GlassSurface extends StatelessWidget {
     if (blur && !solid) {
       body = ClipRRect(
         borderRadius: shape,
-        child: BackdropFilter(filter: ImageFilter.blur(sigmaX: Glass.blur, sigmaY: Glass.blur), child: body),
+        child: BackdropFilter.grouped(filter: ImageFilter.blur(sigmaX: Glass.blur, sigmaY: Glass.blur), child: body),
       );
     }
     if (!shadow) return body;

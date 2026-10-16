@@ -6,8 +6,8 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
-  /* 设计 v2：整个应用底下一张低饱和渐变“壁纸”，所有卡片/栏都是压在上面的玻璃 */
-  background: var(--backdrop-2) linear-gradient(160deg, var(--backdrop-1), var(--backdrop-2) 52%, var(--backdrop-3)) fixed;
+  /* 整个应用底下是一层“流光”壁纸（.sky，见下），所有卡片/栏都压在上面；body 自身只给越界回弹时露出的底色 */
+  background: var(--sky-bottom, var(--bg));
   color: var(--text);
   font-family: var(--font-sans);
   font-size: var(--fs-md);
@@ -61,10 +61,60 @@ a { color: var(--accent); text-decoration: none; }
 .send-btn.ghost { background: var(--tile); color: var(--text-2); }
 .icon-btn.sm { width: 30px; height: 30px; }
 
+/* ---- v3.3「流光」壁纸（= App ui/sky.dart + shaders/sky.frag；颜色 lib/sky.ts 按钟点写 --sky-*，色表 tokens.css） ----
+   一层固定在最底下（z-index -1，不占布局）：竖向底色 top→bottom（色标按 App Sky.ramp = smoothstep(y^0.75) 取 9 个点）
+   + 三团柔光：高斯 exp(-d²/r²) 用 9 个色标逼近，不透明度 = Sky.blobMix，半径 r = 0.42 / 0.38 / 0.46 屏高（元素边长 4r，边缘 < 2%）。
+   漂移：外层 translateX、内层 translateY，两条 alternate 动画（easeInOutSine ≈ 正弦，周期 = sky.frag 角频率 π/ω），只动 transform。
+   尺寸一律 vw / vh，顶部渐隐条里的副本（ui/Sky.tsx SkyFade）与这层逐像素重合。 */
+@property --sky-top { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --sky-bottom { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --sky-a { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --sky-b { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --sky-c { syntax: "<color>"; inherits: true; initial-value: transparent; }
+.sky { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: -1; overflow: hidden; pointer-events: none;
+  background: linear-gradient(to bottom,
+    var(--sky-top) 0%,
+    color-mix(in srgb, var(--sky-top), var(--sky-bottom) 11.4%) 12.5%,
+    color-mix(in srgb, var(--sky-top), var(--sky-bottom) 28.7%) 25%,
+    color-mix(in srgb, var(--sky-top), var(--sky-bottom) 46.9%) 37.5%,
+    color-mix(in srgb, var(--sky-top), var(--sky-bottom) 64.0%) 50%,
+    color-mix(in srgb, var(--sky-top), var(--sky-bottom) 78.8%) 62.5%,
+    color-mix(in srgb, var(--sky-top), var(--sky-bottom) 90.2%) 75%,
+    color-mix(in srgb, var(--sky-top), var(--sky-bottom) 97.4%) 87.5%,
+    var(--sky-bottom) 100%); }
+.sky-blob { position: absolute; width: calc(var(--r) * 400vh); height: calc(var(--r) * 400vh);
+  left: calc(var(--cx) * 100vw - var(--r) * 200vh); top: calc(var(--cy) * 100vh - var(--r) * 200vh); opacity: var(--mix);
+  animation: sky-x var(--tx) cubic-bezier(0.37, 0, 0.63, 1) var(--dx) infinite alternate; }
+.sky-blob > i { position: absolute; inset: 0; border-radius: 50%; will-change: transform;
+  animation: sky-y var(--ty) cubic-bezier(0.37, 0, 0.63, 1) var(--dy) infinite alternate; }
+/* 中心 cx/cy、振幅 ax/ay（屏宽 / 屏高）、半程 tx/ty（秒）、起始相位 dx/dy：= sky.frag 里 ca / cb / cc 三行 */
+.sky-a { --cx: .25; --cy: .28; --r: .42; --mix: .75; --ax: 18vw; --ay: 10vh; --tx: 62.83s; --ty: 76.62s; --dx: -31.4s; --dy: -76.62s; }
+.sky-b { --cx: .78; --cy: .52; --r: .38; --mix: .65; --ax: 16vw; --ay: 14vh; --tx: 84.91s; --ty: 68.30s; --dx: -84.91s; --dy: -34.15s; }
+.sky-c { --cx: .45; --cy: .86; --r: .46; --mix: .70; --ax: 22vw; --ay: 8vh; --tx: 108.33s; --ty: 92.40s; --dx: -112.8s; --dy: -92.40s; }
+.sky-a > i { background: radial-gradient(closest-side, var(--sky-a) 0%, color-mix(in srgb, var(--sky-a) 93.9%, transparent) 12.5%, color-mix(in srgb, var(--sky-a) 77.9%, transparent) 25%, color-mix(in srgb, var(--sky-a) 57.0%, transparent) 37.5%, color-mix(in srgb, var(--sky-a) 36.8%, transparent) 50%, color-mix(in srgb, var(--sky-a) 21.0%, transparent) 62.5%, color-mix(in srgb, var(--sky-a) 10.5%, transparent) 75%, color-mix(in srgb, var(--sky-a) 4.7%, transparent) 87.5%, transparent 100%); }
+.sky-b > i { background: radial-gradient(closest-side, var(--sky-b) 0%, color-mix(in srgb, var(--sky-b) 93.9%, transparent) 12.5%, color-mix(in srgb, var(--sky-b) 77.9%, transparent) 25%, color-mix(in srgb, var(--sky-b) 57.0%, transparent) 37.5%, color-mix(in srgb, var(--sky-b) 36.8%, transparent) 50%, color-mix(in srgb, var(--sky-b) 21.0%, transparent) 62.5%, color-mix(in srgb, var(--sky-b) 10.5%, transparent) 75%, color-mix(in srgb, var(--sky-b) 4.7%, transparent) 87.5%, transparent 100%); }
+.sky-c > i { background: radial-gradient(closest-side, var(--sky-c) 0%, color-mix(in srgb, var(--sky-c) 93.9%, transparent) 12.5%, color-mix(in srgb, var(--sky-c) 77.9%, transparent) 25%, color-mix(in srgb, var(--sky-c) 57.0%, transparent) 37.5%, color-mix(in srgb, var(--sky-c) 36.8%, transparent) 50%, color-mix(in srgb, var(--sky-c) 21.0%, transparent) 62.5%, color-mix(in srgb, var(--sky-c) 10.5%, transparent) 75%, color-mix(in srgb, var(--sky-c) 4.7%, transparent) 87.5%, transparent 100%); }
+@keyframes sky-x { from { transform: translateX(calc(-1 * var(--ax))); } to { transform: translateX(var(--ax)); } }
+@keyframes sky-y { from { transform: translateY(calc(-1 * var(--ay))); } to { transform: translateY(var(--ay)); } }
+/* 顶部渐隐条（ui/Sky.tsx SkyFade）：壁纸副本反向偏移到视口原点；渐隐带由 .sky-fade-page / .sky-fade-thread 给（shell.css / chat.css） */
+.sky-fade { position: absolute; left: 0; right: 0; top: 0; z-index: 1; overflow: hidden; pointer-events: none; contain: paint; }
+.sky-fade > .sky { position: absolute; z-index: auto; left: calc(-1 * var(--sky-x, 0px)); top: calc(-1 * var(--sky-y, 0px)); }
+/* 减少透明度：壁纸换成实色、不画柔光（= App Backdrop solid → ColoredBox(p.bg)） */
+:root[data-solid] .sky { background: var(--bg); }
+:root[data-solid] .sky-blob { display: none; }
+/* 整屏不透明浮层盖住时（lib/sky.ts coverSky → <html data-sky-covered>）：跳过壁纸内容渲染，柔光不再合成；撤销后按文档时间线回到此刻，无跳变 */
+:root[data-sky-covered] .sky { content-visibility: hidden; }
+/* 减少动态：柔光静止在原位（颜色仍按钟点变，一分钟一次，看不出动） */
+@media (prefers-reduced-motion: reduce) { .sky-blob, .sky-blob > i { animation: none !important; } }
+
 /* 浅/深色切换：lib/theme.ts 只在切换的 400ms 内挂这个类，颜色整体渐变，平时不影响其它动效 */
 html.theme-switching, html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
   transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease),
     fill var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease) !important;
+}
+:root.theme-switching { /* 壁纸色（@property 注册的 <color>）只在根上过渡，子孙继承过渡中的值：切主题时天色跟着渐变 */
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), --sky-top var(--dur) var(--ease), --sky-bottom var(--dur) var(--ease),
+    --sky-a var(--dur) var(--ease), --sky-b var(--dur) var(--ease), --sky-c var(--dur) var(--ease) !important;
 }
 
 /* ---- 无障碍底线（与 App 的 test/a11y_test.dart 同一套要求） ---- */

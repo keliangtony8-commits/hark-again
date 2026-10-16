@@ -1,6 +1,7 @@
 // v0.88 “我的”页页头身份行 + 用量页空月份：
 // 取到用户名 → “用户名 · 域名”；取不到资料（GET /api/profile 失败）→ 只显示域名；本月零调用 → 说明卡、不画每日图。
 // v2.92 §P：有称呼用称呼、头像首字母；点名字打开个人资料弹层，只送改了的字段。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/profile.dart';
 import 'package:assistant/core/session.dart';
@@ -64,7 +65,7 @@ Future<void> _pump(WidgetTester tester, Widget home, _Api api) async {
   addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(ProviderScope(
-    overrides: [sessionProvider.overrideWith(_SignedIn.new), apiProvider.overrideWithValue(api)],
+    overrides: [sessionProvider.overrideWith(_SignedIn.new), apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: home),
   ));
   await tester.pumpAndSettle();

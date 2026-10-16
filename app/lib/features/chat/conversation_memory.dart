@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
+import '../../core/swr.dart';
 import '../../models/conversation_context.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -14,8 +15,8 @@ import '../../ui/glass_mode.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 
-final conversationContextProvider = FutureProvider.autoDispose.family<ConversationContext, String>((ref, id) async =>
-    ConversationContext.fromJson((await ref.read(apiProvider).get('/api/conversations/$id/context') as Map).cast<String, dynamic>()));
+final conversationContextProvider = swrGetFamily<ConversationContext, String>(
+    (id) => '/api/conversations/$id/context', (j) => ConversationContext.fromJson(jsonMap(j)));
 
 /// 卡片第二行：原文条数 / 字数 / 上限。
 String contextLine(ConversationContext c) =>

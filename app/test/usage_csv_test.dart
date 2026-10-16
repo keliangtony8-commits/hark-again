@@ -2,6 +2,7 @@
 // 引号/逗号转义、防公式注入、BOM；文件名按报表月份；用量页右上角导出按钮加载完才可点。
 import 'dart:async';
 
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/usage_screen.dart';
 import 'package:assistant/models/usage.dart';
@@ -101,7 +102,7 @@ void main() {
   testWidgets('导出按钮：加载完才可点', (tester) async {
     final done = Completer<dynamic>();
     await tester.pumpWidget(ProviderScope(
-      overrides: [apiProvider.overrideWithValue(_Api(done.future))],
+      overrides: [apiProvider.overrideWithValue(_Api(done.future)), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
       child: MaterialApp(theme: buildTheme(Brightness.light), home: const UsageScreen()),
     ));
     IconButton btn() => tester.widget<IconButton>(find.byKey(const Key('usage-export')));

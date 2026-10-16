@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api.dart';
 import '../../core/resource.dart';
+import '../../core/swr.dart';
 import '../../models/resources.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
@@ -38,9 +39,9 @@ import 'task_wall.dart';
 import 'task_model_picker.dart';
 import '../chat/model_choice.dart' show modelCatalogProvider;
 
-final taskRunsProvider = FutureProvider.autoDispose.family<List<TaskRun>, String>((ref, id) async => [
-      for (final j in (await ref.read(apiProvider).get('/api/tasks/$id/runs') as List)) TaskRun.fromJson((j as Map).cast<String, dynamic>()),
-    ]);
+/// SWR（core/swr.dart）：再进任务详情首帧就是上次的运行记录，后台重取。
+final taskRunsProvider = swrGetFamily<List<TaskRun>, String>(
+    (id) => '/api/tasks/$id/runs', (j) => [for (final x in (j as List)) TaskRun.fromJson(jsonMap(x))]);
 
 /// 任务在忙：已点“立即运行”还没被领走，或有一条记录还在跑。
 bool taskBusy(ScheduledTask task, List<TaskRun>? runs) => task.runRequested || (runs?.any((r) => r.running) ?? false);
@@ -56,11 +57,11 @@ class TaskDetailScreen extends ConsumerStatefulWidget {
 class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   Timer? _poll;
 
+  /// 下拉刷新 / 轮询：两份一起后台重取；断网时保留旧值，下次再问。
   Future<void> _refresh() async {
-    ref.invalidate(taskRunsProvider(widget.id));
     try {
-      await ref.read(tasksProvider.notifier).reload();
-    } catch (_) {} // 断网时保留旧值，下次再问
+      await Future.wait<void>([ref.read(taskRunsProvider(widget.id).notifier).reload(), ref.read(tasksProvider.notifier).reload()]);
+    } catch (_) {}
   }
 
   void _syncPoll(bool busy) {
@@ -86,7 +87,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       _syncPoll(false);
       return SubPage(
         title: const Text('定时任务'),
-        body: tasks.isLoading
+        body: !tasks.hasValue
             ? const PageBody(children: [SkeletonList(rows: 3)])
             : const PageBody(children: [EmptyHint(icon: Icons.event_busy_rounded, title: '该任务已删除', text: '可能已在别的设备上删除。')]),
       );
@@ -107,10 +108,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           ),
           TaskMemorySection(task: task),
           const SectionTitle('运行记录'),
-          runs.when(
-            skipLoadingOnReload: true,
+          runs.swr(
             loading: () => const SkeletonList(rows: 3),
-            error: (e, _) => EmptyHint(
+            error: (e) => EmptyHint(
               icon: Icons.cloud_off_rounded,
               title: '运行记录加载失败',
               text: '$e',

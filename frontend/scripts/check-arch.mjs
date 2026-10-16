@@ -12,6 +12,8 @@
 //   7. 列表行 / 分组 / 子页说明只走 ui/kit.tsx 的 ListRow / ListGroup / PageIntro（= App ListRow / ListGroup / PageIntro，v2.97 E1）：
 //      页面里手写 className="row …" / "list …" 只许出现在 RAW_ROWS 登记的旧文件里、且不超过登记次数（只减不增，迁完删登记）；
 //      .sub-line 段落只由 PageIntro 输出。
+//   8. 页面读服务器数据只走 hooks/useSwr.ts（v3.3 SWR，= App core/swr.dart）：blocks/ features/ hooks/ 里直接写 http.get 只许在 GET_RAW
+//      登记的文件里、且不超过登记次数（只减不增）。新页面要读数据 → useSwr / useResource，不要再写 useEffect + http.get + loading 三件套。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +47,24 @@ const RAW_ROWS = {
   "features/me/TopConversations.tsx": 2, // 行下一条占比细条
   "features/projects/ProjectFilePicker.tsx": 1, // role=checkbox + 勾选框
 };
+// v3.3 之后仍直接 http.get 的（还没迁 / 点了才取的一次性读取 / 有自己订阅的仓库）。数只许变小，迁完删登记。
+const GET_RAW = {
+  "hooks/useSwr.ts": 1, // 唯一的默认取法
+  "blocks/JobBlock.tsx": 2, // 点开日志 / 轮询任务
+  "features/chat/Composer.tsx": 2, // 提示词联想、附件预检（随输入取）
+  "features/chat/slashActions.ts": 1, // 斜杠命令执行时取
+  "features/me/ConnectorsScreen.tsx": 1, // 点开 MCP 工具列表（= 一次体检）
+  "features/me/MeScreen.tsx": 1,
+  "features/me/TaskDetailScreen.tsx": 1,
+  "features/projects/ProjectBrief.tsx": 1,
+  "features/projects/ProjectFilePicker.tsx": 1,
+  "features/projects/ProjectFiles.tsx": 1,
+  "features/projects/ProjectScreen.tsx": 1,
+  "features/projects/useSaveReply.tsx": 2,
+  "hooks/useChat.ts": 2, // 聊天消息流（自带 WS 增量）
+  "hooks/useConversations.ts": 2,
+  "hooks/useInbox.tsx": 1,
+};
 const RAW_ROW = /className=\{?[`"](row|list)[ `"]/g;
 const bad = [];
 for (const f of files) {
@@ -58,6 +78,10 @@ for (const f of files) {
     const n = (src.match(RAW_ROW) || []).length;
     if (n > (RAW_ROWS[rel] ?? 0)) bad.push(`${rel} 手写了 ${n} 处 className="row/list"（登记 ${RAW_ROWS[rel] ?? 0}）→ 用 ui/kit.tsx 的 ListRow / ListGroup`);
     if (/sub-line/.test(src)) bad.push(`${rel} 手写 .sub-line 说明 → 用 PageIntro（不给 summary）`);
+  }
+  if (/^(blocks|features|hooks)\//.test(rel) && /\.tsx?$/.test(rel)) {
+    const n = (src.match(/http\.get\b/g) || []).length;
+    if (n > (GET_RAW[rel] ?? 0)) bad.push(`${rel} 直接 http.get ${n} 处（登记 ${GET_RAW[rel] ?? 0}）→ 读数据用 hooks/useSwr.ts（useSwr / useResource），先显示缓存、后台刷新`);
   }
   src.split("\n").forEach((line, i) => {
     if (/\.(tsx?|jsx?)$/.test(f) && rel !== "ui/dialog.tsx" && /(^|[^\w.])(window\.)?(confirm|alert|prompt)\(/.test(line))

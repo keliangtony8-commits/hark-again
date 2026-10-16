@@ -6,8 +6,8 @@
   --surface-2: #f1efec;
   --border: #e8e5e0;
   --text: #111111;
-  --text-2: #64605a;
-  --text-3: #857f77;  /* 次要信息 ≥ 3:1 */
+  --text-2: #5c5852; /* v3.3 原 #64605a：压在流光壁纸上也 ≥ 4.5 */
+  --text-3: #7a746c;  /* 次要信息：对底色、对壁纸 ≥ 3:1（v3.3 原 #857f77） */
   --accent: #111111;  /* 白字压上去 ≥ 4.5:1 */
   --accent-soft: #edebe7;
   --on-accent: #ffffff;
@@ -20,10 +20,14 @@
   --scrim: rgba(0, 0, 0, 0.32); /* 弹层/抽屉背后的遮罩 */
   color-scheme: light;
 
-  /* 设计 v2「浮层 + 毛玻璃」：与 App theme/tokens.dart 的 Palette.backdrop/glass/... 同值 */
-  --backdrop-1: #f3f1ed;   /* 雾蓝 → 灰白 → 带一点赤陶色的暖灰 */
-  --backdrop-2: #f7f6f3;
-  --backdrop-3: #efece7;
+  /* v3.3「流光」壁纸色表（= App theme/tokens.dart SkyTable.light，scripts/check-contrast.mjs 查两端同值 + 全天每 15 分钟 × 底色与三团柔光：--text / --text-2 ≥ 4.5、--text-3 ≥ 3）：
+     四个时段 × 竖向底色 top→bottom + 三团柔光 a（左上）b（右中）c（底部）。lib/sky.ts 按钟点在相邻时段间插值，写到 --sky-top/bottom/a/b/c，
+     画法在 styles/base.css .sky。浅色 = 学 Hark 浅色：顶部天蓝 → 中段淡 → 底部暖米色；夜里是偏紫的灰蓝（v3.3 B2 整体提亮，次要字压在最暗处也看得清）。 */
+  --sky-night-top: #c7d1f0; --sky-night-bottom: #d3d0dd; --sky-night-a: #c8d1ee; --sky-night-b: #d4ceeb; --sky-night-c: #d2cfe0;
+  --sky-dawn-top: #c0d1fd; --sky-dawn-bottom: #f1d9c6; --sky-dawn-a: #c6d1f2; --sky-dawn-b: #f7d7bf; --sky-dawn-c: #d8cde7;
+  --sky-day-top: #add6fe; --sky-day-bottom: #e6dcc2; --sky-day-a: #b1d6f5; --sky-day-b: #f4eedf; --sky-day-c: #c0d4e2;
+  --sky-dusk-top: #c5d0fb; --sky-dusk-bottom: #ebcdb6; --sky-dusk-a: #d2cdf7; --sky-dusk-b: #f3d2b4; --sky-dusk-c: #d8cde5;
+  /* 设计 v2「浮层 + 毛玻璃」：与 App theme/tokens.dart 的 Palette.glass/... 同值 */
   --glass: rgba(255, 255, 255, 0.85);        /* 玻璃着色（下面是模糊后的内容） */
   --glass-border: rgba(28, 27, 26, 0.07);    /* 玻璃的 1px 发丝边 */
   --chrome-edge: var(--glass-border); /* v3.1 浮层外圈（顶栏 / 圆钮 / 输入胶囊 / 头像）：浅色要发丝边，深色 Hark 不描边（= App Palette.chromeEdge） */
@@ -154,9 +158,11 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.45);
   --shadow-float: 0 1px 12px rgba(0, 0, 0, 0.2);
-  --backdrop-1: #0e1428;   /* 蓝灰炭 → 近黑 → 灰紫 */
-  --backdrop-2: #121a33;
-  --backdrop-3: #1b2342;
+  /* v3.3 流光壁纸（= App SkyTable.dark）：夜里深灰蓝 / 深紫，白天稍偏蓝，始终是暗底 */
+  --sky-night-top: #0b1024; --sky-night-bottom: #1c1a33; --sky-night-a: #2a2f5c; --sky-night-b: #3a2c55; --sky-night-c: #1f3346;
+  --sky-dawn-top: #121a36; --sky-dawn-bottom: #2a2340; --sky-dawn-a: #363468; --sky-dawn-b: #4e2f51; --sky-dawn-c: #2c3a5a;
+  --sky-day-top: #14213f; --sky-day-bottom: #23304a; --sky-day-a: #223966; --sky-day-b: #283b59; --sky-day-c: #2c3a59;
+  --sky-dusk-top: #141a38; --sky-dusk-bottom: #2b2244; --sky-dusk-a: #3e3267; --sky-dusk-b: #4f2f4e; --sky-dusk-c: #2c395f;
   --glass: rgba(27, 29, 37, 0.88); /* 实测 Hark 输入胶囊 #1B1D25 */
   --glass-border: rgba(255, 255, 255, 0.08);
   --chrome-edge: transparent;
@@ -172,7 +178,7 @@
   color-scheme: dark;
 }
 
-/* 减少透明度（lib/look.ts 写 <html data-solid>）：玻璃全部变实色、不模糊，底图变纯色。和 App GlassMode 同义 */
+/* 减少透明度（lib/look.ts 写 <html data-solid>）：玻璃全部变实色、不模糊，壁纸变纯色 --bg（base.css .sky）。和 App GlassMode 同义 */
 :root[data-solid] {
   --glass: var(--surface);
   --glass-border: var(--border);
@@ -181,9 +187,6 @@
   --glass-scrim: var(--scrim);
   --glass-sheet: var(--surface);
   --glass-highlight: transparent;
-  --backdrop-1: var(--bg);
-  --backdrop-2: var(--bg);
-  --backdrop-3: var(--bg);
   --blur: 0px;
   --blur-scrim: 0px;
   --blur-focus: 0px;

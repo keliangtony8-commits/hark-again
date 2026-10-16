@@ -1,5 +1,6 @@
 // 设计 v2 P3：个性化偏好落盘、减少透明度、头像字色、关键数字块、项目活动字段、建议卡等宽胶囊、“我的”改头像色。
 import 'package:assistant/blocks/block_view.dart';
+import 'package:assistant/core/swr.dart';
 import 'package:assistant/features/home/action_card.dart';
 import 'package:assistant/features/me/avatar_color_sheet.dart';
 import 'package:assistant/features/me/me_screen.dart';
@@ -130,7 +131,7 @@ void main() {
     tester.view.devicePixelRatio = 1.5;
     addTearDown(tester.view.reset);
     final c = ProviderContainer(overrides: [
-      usageProvider.overrideWith((ref) async => UsageReport.fromJson({'currency': 'CNY', 'budget': 50, 'priced': ['fast'], 'today': {}, 'month': {'cost': 12.3, 'tokens': 1000}})),
+      usageProvider.overrideWith(() => _FixedUsage(UsageReport.fromJson({'currency': 'CNY', 'budget': 50, 'priced': ['fast'], 'today': {}, 'month': {'cost': 12.3, 'tokens': 1000}}))),
     ]);
     addTearDown(c.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: c, child: _wrap(const MeScreen())));
@@ -173,7 +174,7 @@ void main() {
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     final c = ProviderContainer(overrides: [
-      usageProvider.overrideWith((ref) async => UsageReport.fromJson({'currency': 'CNY', 'priced': [], 'today': {}, 'month': {'tokens': 3100000}})),
+      usageProvider.overrideWith(() => _FixedUsage(UsageReport.fromJson({'currency': 'CNY', 'priced': [], 'today': {}, 'month': {'tokens': 3100000}}))),
     ]);
     addTearDown(c.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: c, child: _wrap(const MeScreen())));
@@ -181,4 +182,11 @@ void main() {
     final bottom = tester.getBottomLeft(find.byKey(const Key('logout'))).dy;
     expect(bottom, lessThanOrEqualTo(915));
   });
+}
+
+/// 固定报表（不发请求）：usageProvider 是 SwrGet（core/swr.dart）。
+class _FixedUsage extends SwrGet<UsageReport> {
+  _FixedUsage(UsageReport r) : super('/api/usage', (_) => r);
+  @override
+  Future<Object?> fetch() async => const {};
 }

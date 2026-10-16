@@ -1,4 +1,5 @@
 // 用量与花费：解析与预算档位、格式化、我的页副标题、用量页三种状态（有预算/超预算/未定价）。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/usage_screen.dart';
 import 'package:assistant/models/usage.dart';
@@ -43,7 +44,7 @@ class FakeApi implements Api {
 
 Future<void> pump(WidgetTester tester, FakeApi api) async {
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(api)],
+    overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: const UsageScreen()),
   ));
   await tester.pumpAndSettle();

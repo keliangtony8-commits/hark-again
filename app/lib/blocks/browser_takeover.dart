@@ -189,8 +189,10 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
     return Scaffold(
       backgroundColor: p.bg,
       resizeToAvoidBottomInset: true,
+      // 关闭钮和底部操作条共享一次取背景（两者不重叠、底下只有页底色；关闭钮先画、它不淡入，规则见 ui/glass.dart 文件头）
       body: SafeArea(
-        child: ValueListenableBuilder<BrowserBlock>(
+        child: BlurGroup(
+          child: ValueListenableBuilder<BrowserBlock>(
           valueListenable: widget.block,
           builder: (context, b, _) {
             final h = b.handoff;
@@ -231,6 +233,7 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
               _bottomBar(context),
             ]);
           },
+          ),
         ),
       ),
     );

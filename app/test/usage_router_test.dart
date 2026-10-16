@@ -1,5 +1,6 @@
 // 用量页“自动选模型”：解析（老服务器 / 没用过 → null）、文案（约省 / 多花 / 没定价给轮数）、分类器一行、说明；
 // 界面：报表有 router 才出这一节，大数字、两档占比、亏了换成提醒色说明。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/usage_screen.dart';
 import 'package:assistant/models/usage.dart';
@@ -34,7 +35,7 @@ class _Api implements Api {
 
 Future<void> _pump(WidgetTester tester, Map<String, dynamic> body) async {
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(_Api(body))],
+    overrides: [apiProvider.overrideWithValue(_Api(body)), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: const UsageScreen()),
   ));
   await tester.pumpAndSettle();

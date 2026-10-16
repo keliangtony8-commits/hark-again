@@ -1,5 +1,6 @@
 // v2.36 连接卡（后端 ConnectBlock / app/connector_accounts.py）：解析；卡上那一行和按钮按连接器列表实时状态定
 // （快照 / 可以连 / 已连接 / 换号 / 授权失效 / 没配）；点按钮问服务器要授权地址（?client=app）；连接器 status 老服务器缺省时按账户推。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/blocks/block_view.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/models/block.dart';
@@ -31,7 +32,7 @@ Map<String, dynamic> conn(String status, {String? account}) =>
 const block = {'type': 'connect', 'provider': 'google', 'name': 'Google', 'desc': 'Gmail、日历、云端硬盘', 'reason': '读你的日历排明天的事'};
 
 Widget host(FakeApi api, Map<String, dynamic> j) => ProviderScope(
-      overrides: [apiProvider.overrideWithValue(api)],
+      overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
       child: MaterialApp(
         theme: buildTheme(Brightness.light),
         home: Scaffold(body: Padding(padding: const EdgeInsets.all(16), child: BlockView(Block.fromJson(j)))),

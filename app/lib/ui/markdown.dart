@@ -12,43 +12,59 @@ class AppMarkdown extends StatelessWidget {
   final String data;
   final bool selectable;
 
-  @override
-  Widget build(BuildContext context) {
+  /// 样式表缓存（v3.3 卡顿根因）：只取决于主题（浅 / 深、字体、字号档都在 ThemeData 里）和减少透明度。
+  /// 挂在 ThemeData 实例上（Theme.of 对同一主题给同一个实例），主题一换旧的跟着回收；不再每次 build 新建 + 深比较。
+  static final _sheets = Expando<Map<bool, MarkdownStyleSheet>>('AppMarkdown.styleSheet');
+
+  static MarkdownStyleSheet styleOf(BuildContext context) {
+    final theme = Theme.of(context);
+    final solid = GlassMode.solidOf(context);
+    return (_sheets[theme] ??= {})[solid] ??= _build(context);
+  }
+
+  static MarkdownStyleSheet _build(BuildContext context) {
     final p = context.palette;
     final base = context.text.bodyLarge!.copyWith(height: Fs.prose); // 要读的正文才用宽行高（v2.83 §G）
-    return MarkdownBody(
-      data: data,
-      // 聊天回复里不原地可选（长按归动作菜单，选字走菜单里的“选择文字”），由外层 ProseScope 关掉
-      selectable: selectable && ProseScope.selectable(context),
-      onTapLink: (_, href, _) => href != null ? openUrl(href) : null,
-      styleSheet: MarkdownStyleSheet(
-        p: base,
-        a: base.copyWith(color: p.accent, decoration: TextDecoration.underline, decorationColor: p.accent.withValues(alpha: 0.4)),
-        // 标题层级（v1.04）：h1 = 文档标题，h2 = 段落小标题（正文同号、加一档字重），h3 = 二级色小字。
-        // 原先 h2 18/600 与卡片标题 20/600 挤成一档，段与段之间也没有呼吸。小标题上方留 Sp.x3，和正文段距分开。
-        h1: context.text.titleLarge,
-        h1Padding: const EdgeInsets.only(top: Sp.x3),
-        h2: context.text.titleMedium,
-        h2Padding: const EdgeInsets.only(top: Sp.x3),
-        h3: context.text.titleSmall?.copyWith(color: p.text2),
-        h3Padding: const EdgeInsets.only(top: Sp.x2),
-        strong: base.copyWith(fontWeight: Weights.strong),
-        listBullet: base.copyWith(color: p.text2),
-        blockquote: base.copyWith(color: p.text2),
-        blockquoteDecoration: BoxDecoration(
-          border: Border(left: BorderSide(color: context.hairline, width: 3)),
-        ),
-        code: TextStyle(fontFamily: 'monospace', fontSize: Fs.sm, backgroundColor: context.tileFill, color: p.text),
-        codeblockDecoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
-        tableBorder: TableBorder.all(color: context.hairline),
-        tableHead: base.copyWith(fontWeight: Weights.strong),
-        tableBody: context.text.bodyMedium,
-        horizontalRuleDecoration: BoxDecoration(
-          border: Border(top: BorderSide(color: p.border)),
-        ),
+    return MarkdownStyleSheet(
+      p: base,
+      a: base.copyWith(color: p.accent, decoration: TextDecoration.underline, decorationColor: p.accent.withValues(alpha: 0.4)),
+      // 标题层级（v1.04）：h1 = 文档标题，h2 = 段落小标题（正文同号、加一档字重），h3 = 二级色小字。
+      // 原先 h2 18/600 与卡片标题 20/600 挤成一档，段与段之间也没有呼吸。小标题上方留 Sp.x3，和正文段距分开。
+      h1: context.text.titleLarge,
+      h1Padding: const EdgeInsets.only(top: Sp.x3),
+      h2: context.text.titleMedium,
+      h2Padding: const EdgeInsets.only(top: Sp.x3),
+      h3: context.text.titleSmall?.copyWith(color: p.text2),
+      h3Padding: const EdgeInsets.only(top: Sp.x2),
+      strong: base.copyWith(fontWeight: Weights.strong),
+      listBullet: base.copyWith(color: p.text2),
+      blockquote: base.copyWith(color: p.text2),
+      blockquoteDecoration: BoxDecoration(
+        border: Border(left: BorderSide(color: context.hairline, width: 3)),
+      ),
+      code: TextStyle(fontFamily: 'monospace', fontSize: Fs.sm, backgroundColor: context.tileFill, color: p.text),
+      codeblockDecoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.inner)),
+      tableBorder: TableBorder.all(color: context.hairline),
+      tableHead: base.copyWith(fontWeight: Weights.strong),
+      tableBody: context.text.bodyMedium,
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(top: BorderSide(color: p.border)),
       ),
     );
   }
+
+  static void _tap(String text, String? href, String title) {
+    if (href != null) openUrl(href);
+  }
+
+  @override
+  Widget build(BuildContext context) => MarkdownBody(
+        data: data,
+        // 聊天回复里不原地可选（长按归动作菜单，选字走菜单里的“选择文字”），由外层 ProseScope 关掉
+        selectable: selectable && ProseScope.selectable(context),
+        onTapLink: _tap,
+        styleSheet: styleOf(context),
+      );
 }
 
 /// 子树里的 AppMarkdown 能不能原地选字（§I）：聊天回复卡挂 ProseScope(selectable: false)——

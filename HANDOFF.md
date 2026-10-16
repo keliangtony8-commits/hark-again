@@ -1,9 +1,60 @@
-# Toyuis 交接文档（2026-10-15，v3.0.2）
+# Toyuis 交接文档（2026-10-16，v3.3.0）
 
 > **给每个接手的 agent**：先读第二节宗旨（1–17 条）。用户在对话里说出的任何纲领性要求，当轮用明确、不会被误解的话（不必照抄原话）带日期补进第二节，这是硬规矩（见第 16 条）。
 
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
+
+## 〇、最新交接（2026-10-16 17:50，接手先读这一节）
+**v3.3.0 已发版：合并进 main、tag v3.3、已 push（下面 A/B 全部完成，全量校验见 B 末尾）。服务器仍是 v3.2.1，未部署（用户明确说“更新服务器”才部署）。**
+- 未验证：真机 profile 光栅耗时、真机/浏览器上看新浅色壁纸与返回/浮层关闭那一帧；这些等用户真机验收时一起看。
+- 下一步：按第五节继续下一项。
+
+### A. 已完成且测试通过（可直接保留）
+1. 项目列表按 Hark：名字占满整行最多 3 行、状态胶囊另起一行；删页头摘要 / 列表 emoji / App 行尾 ⋯（改长按菜单）；Web ⋯ 在胶囊行右端。文件：app/lib/features/projects/projects_screen.dart、test/projects_screen_test.dart、frontend/src/features/projects/ProjectsScreen.tsx、projects.css。
+2. “我的”底部搜索胶囊两侧内收到 Layout.gutter + Sp.x3（=36），Web .me-search 同值；me_search_test 有断言。
+   - 已跑：`flutter test test/projects_screen_test.dart test/me_search_test.dart` 27 项全过；web `tsc -b` + check-arch 通过。
+
+### B. 写了但没验证（接手第一步：让 App 编译通过）
+环境：/tmp 被清过，先 `git clone --depth 1 -b stable https://github.com/flutter/flutter.git /tmp/flutter`，`cd app && flutter pub get`。
+1. **SWR 统一缓存（用户要求：切页不要每次出骨架屏，先显示上次内容、后台静默刷新）**
+   - 新 app/lib/core/swr.dart（SwrCache 64 条 LRU、SwrNotifier、swrGet/swrGetFamily、AsyncValue.swr）。
+   - 已改：core/resource.dart、session.dart、usage_screen/usage_day、conversation_files/memory/usage/share、feedback/security/task_detail、login_sessions、reply_language、computer/host/browser_sessions、memory_digest、memory_notes、home_screen、kit.dart AsyncBody、test/design_p3_test.dart（已补 import）。
+   - **App 已完成（2026-10-16 16:47，未提交）**：flutter analyze 0；全量 flutter test **719 过 / 8 跳过 / 0 失败**。新增 `test/swr_test.dart`（9 例：二次进入首帧是旧数据不经加载态、后台重取后替换、数据没变不发新状态、有缓存时后台出错 / reload 失败仍显示旧数据、无缓存出错才报错、退出登录缓存换新且重新请求、orNull 取不到给 null、LRU、页面级“第一次骨架 / 离开再进首帧就是内容”）。
+     - 修的真问题：① `SwrNotifier.emit` 判“数据没变”原来拿新 JSON 和 `_raw` 比，`_raw` 被别处原地改过时会误判成没变、吞掉更新（技能开关测试暴露）→ 改为存入时记下 JSON 文本签名再比；② `SwrGet(orNull)` 取不到时 `parse(null)` 会抛 → 直接给 null。
+     - 测试改动：新加磁盘键（技能 / 任务 / 连接器 / Pages / 记忆 / 笔记 / 用量）后，没覆盖 `cacheStoreProvider` 的测试在 testWidgets 假时钟里等真实文件 IO 会挂死 → 按已有惯例在 19 个测试文件里补 `cacheStoreProvider.overrideWithValue(MemoryCacheStore())`（connect_block、connector_library、me_identity、memory_card、memory_note、memory_screen、mentions、pages、skill_toggle、skills、slash、task_library、usage_compare/csv/day/motion/router、usage、version）；memory_card “invalidate 会重拉”按 SWR 语义改为“先给旧列表、后台取回后换新”。
+   - **Web 已完成（2026-10-16，未提交）**：`frontend/src/lib/swr.ts`（64 条 LRU、按路径缓存、同键请求合并、`swrClear()` 退出 / 登录过期 / 重新登录时清空且作废在途请求）+ `hooks/useSwr.ts`（有缓存先显示、后台静默刷新、JSON 相同不重渲；有数据时出错静默；无缓存才 loading；`reload()` 不抛、失败进 error）；`useResource` 改为基于它（顺带修掉首页 5 秒轮询闪骨架）；列表里 17 个文件的 useEffect+http.get 全部换掉。check-arch 第 8 条：blocks/features/hooks 里 `http.get` 只许在 GET_RAW 登记文件里（只减不增）。单测 `frontend/tests/swr.test.ts`（node 22 原生跑 TS，`npm test`，无新依赖）。截图脚本实测：用量页离开再回来首帧 0 个骨架（浅/深 × 桌面/手机）。
+2. **流光壁纸（用户要求：随时间变化，夜里暗蓝紫灰、白天亮蓝→暖米，柔和流动，绝不能卡）**
+   - 已写：app/shaders/sky.frag（pubspec 已注册）；tokens.dart 删 Palette.backdrop → `SkyTable sky`（浅/深 × 夜/黎明/白天/黄昏，Sky.keyframes 插值，Sky.frame=33ms）；motion.dart 末尾 `SkyClock`（单 Timer≈30fps、无订阅/后台/测试环境 FLUTTER_TEST 时停）；新 app/lib/ui/sky.dart（SkyLayer：着色器，加载失败回退竖向渐变）；glass.dart Backdrop 改用 SkyLayer。
+   - **App 已完成（2026-10-16，未提交）**：编译过（tokens.dart 关键帧循环的解构语法错、sky.dart catchError 类型）；全仓 grep 已无 `p.backdrop` / `backdrop:` / Palette.backdrop 旧引用（测试与对比度测试原本就不引用）。新增 `test/sky_test.dart`（13 例：关键帧插值 + 跨午夜、Palette.lerp 带 sky、ramp/fadeAlpha、浅 / 深正文对壁纸全天每 15 分钟 × 底色与三团柔光峰值 ≥4.5（实测浅 4.84 起、深 9.89 起）、SkyClock 测试环境冻结、单 Timer 选档、SkyLayer 按可见性 / 减少动态选档、回退渐变能画、着色器在测试引擎里**能**加载且 uniform 个数对得上）。
+     - SkyClock 成本收紧（决定见 devlog 2026-10-16 B1/B2 App 节）：原来是两个 Timer（30fps + 每分钟）→ **真正的单 Timer**；无订阅 / 后台 / 测试环境不起；减少动态原来是“不订阅”导致天色冻在启动时 → 改为“静止档”：只每分钟换天色、柔光不漂（效果保留）；被盖住的路由（TickerMode 关）不订阅。SkyLayer 自带 RepaintBoundary（删 glass.dart 外包的那层）、删没人用的 child 参数和 isComplex、着色器加载完通知重画。
+     - 仍未做：真机 / 截图看浅深效果；profile 帧耗时。⚠ 壁纸每 33ms 变一次，上面每个 BackdropFilter 都会跟着每 33ms 重新模糊——这是第 3 项 BackdropGroup 要解决的。
+     - ⚠ 同意上面 Web 的发现，App 实测（全天 × 底色与柔光）：浅色 text2 1.60–5.10、text3 1.02–3.23；深色 text2 3.97–7.56、text3 2.61–4.98。正文（text）两套都 ≥4.5。次要字怎么改需两端一起定，App 本轮未改色。
+   - **Web 已完成（2026-10-16，未提交）**：tokens.css `--sky-<时段>-<部位>`（浅 :root / 深 [data-theme=dark]，= SkyTable 逐值，check-contrast 查同值 + 正文对壁纸 40 色 ≥4.5 + 深色次要字对底色 ≥4.5，改一个值即红）；`src/lib/sky.ts`（关键帧插值，整分钟重算，页面隐藏停，切主题重算；单测 `tests/sky.test.ts`）；`ui/Sky.tsx` + base.css `.sky`（9 色标竖向底色 + 三团高斯柔光，外 translateX / 内 translateY 两条 alternate 动画，只动 transform，will-change 只在 3 个柔光上；reduce-motion 静止；减少透明度 = 实色 --bg）；`--sky-*` 用 @property 注册，切主题时随 .theme-switching 渐变。删 `--backdrop-1/2/3`（三处）与 body 旧渐变。
+   - **次要字对比度：已完成（2026-10-16，未提交）**：两端同一张色表——浅色天色整体提亮（只抬 OKLab 明度、保色相；夜间更亮的灰蓝紫，白天顶色 #5b8bb9→#add6fe），深色黎明/白天/黄昏柔光略压暗；浅色 text2 #64605a→#5c5852、text3 #857f77→#7a746c（两端同步，深色 token 不动）。对壁纸全天最低：浅 text2 4.63 / text3 3.03，深 4.74 / 3.13（原 1.60/1.02、3.97/2.61）。阈值进了 app/test/sky_test.dart、frontend check-contrast.mjs（改为全天采样）、tests/sky.test.ts。sky_test 17/17、a11y 12/12、web build 过、npm test 13/13。未做：截图肉眼看。下面这条“发现”即此项。
+   - **⚠ 发现（未改，需定）**：浅色壁纸上 `--text-2`（#64605a）只有 1.60–1.95:1（对顶色）/ 3.51–4.60:1（对底色），`--text-3` 更低；截图里“安全”页页头说明、分区标题直接压在壁纸上明显发灰看不清。App 同一张表同样如此（sky_test 只测正文）。两端要一起改：要么浅色 SkyTable 顶色提亮，要么壁纸上的次要字改用 --text。
+3. **卡顿根因（用户：16GB 手机也卡；不准删功能/效果）**
+   - **App 已完成（2026-10-16，未提交；决定 + 测量见 devlog「v3.3 B3 App」）**：①毛玻璃分组 `BlurGroup`（glass.dart；BackdropGroup + 固定 key）开在 AppShell（顶栏 + 一级页面左侧按钮 / header，横幅在组外）、ShellPage 内容、SubPage、云浏览器接管页；GlassSurface / 子页标题栏改 `BackdropFilter.grouped`；弹层 / 对话框 / 磨砂遮罩仍独立；“我的”页不分组（返回钮在滚动列表里，规则见 glass.dart 文件头）。读引擎源码确认语义：组里第一个画到的取背景，所以排了绘制顺序（ShellPage 内容→渐隐条→左侧按钮→header；输入胶囊永远先画：底条 Column verticalDirection.up、输入行 rtl，布局不变），转场中 / 上面压着路由 / 主聊天抽屉露出时 ShellPage 的按钮另成一组。②kit.dart TopFade 删除 → ShellPage 顶部 `BackdropFade`（玻璃 = SkyLayer(fade)，减少透明度 = 实色 bg），shell_page_test 重写 7 例。③ChatView 行缓存（同一 Message 实例 + 同一组行状态 → 同一个 widget 实例）。④AppMarkdown 样式表按 ThemeData + 减少透明度缓存。⑤新 test/perf_frame_test.dart：改前→改后 聊天流式其他行重建 305→0、每帧重建元素 695→362、CPU 每帧 ~32→~22ms；一级页滚动 每帧元素 440→100、CPU 15.5→6.5ms；取背景次数 聊天 / 主页 3→2、项目列表 2→1；整页 ShaderMask 1→0。flutter analyze 0，全量 729 过 / 8 跳过 / 0 失败。
+   - App 未做：真机 profile 光栅耗时（沙盒无设备）。
+   - **B4 外壳壁纸被子页盖住时暂停：已完成（2026-10-16，未提交；决定见 devlog「v3.3 B4」）**。App：SkyLayer 不驱动时画笔不再听共享时钟（原来只退订 Timer、画笔仍挂在 time 上，被盖住照样每 33ms 重画）；ui/sky.dart 新 `SkyCoverScope`（AppShell 最外层）+ `SkyCover`（SubPage 包一层）：本页路由 opaque && 进场 completed && 在台上 → 外壳那层（`Backdrop(coverable: true)`）暂停；转场中 / pop 一开始 / 切 Tab 立刻恢复，恢复那一帧直接取时钟此刻（暂停期间子页那层在驱动时钟，不跳色）。顶栏 FloatAway 判定没动。测试：sky_test +2（转场中照常、完成后外壳订阅数 1→0 且时钟走也不重绘、pop 第一帧恢复并重画、叠两层子页 / 半透明路由 / 无 Scope）、shell_test +1（真路由 /projects/p1/brief：暂停、切到主页恢复、回来再暂停、pop 第一帧恢复）。Web：只有一层全局 .sky，子页透明、不盖壁纸（无此浪费）；真正整屏实色盖住的是云浏览器接管页和看大图 → 进场动画结束后 `<html data-sky-covered>`，`.sky { content-visibility: hidden }`（不用 animation-play-state：会改写 startTime 让渐隐条副本错位），卸载同一次提交撤销；`lib/sky.ts coverSky` + `ui/Sky.tsx useSkyCover`，tests/sky.test.ts +1。未做：没有浏览器（沙盒无 Chromium/Playwright）实看撤销那一帧；真机看返回无闪。
+   - 约 9 处独立 BackdropFilter（top_bar、GlassIconButton、composer、project_switcher、chat_view JumpLatest/ErrorBar、inbox、me 搜索、browser_takeover、sub_page 标题）每帧各自模糊 → 用 BackdropGroup + BackdropFilter.grouped。注意：同组只在第一个滤镜处取一次背景，所以分组放三处：AppShell（横幅不进组）、ShellPage 内容、SubPage；ShellPage 绘制顺序 内容→顶部渐隐条→header→lead。
+   - kit.dart TopFade = 整页 ShaderMask(dstIn) 离屏层 → 删掉，改为 ShellPage 顶部一条 SkyLayer(fade: (clear, solid))（sky.dart 已支持 fade 参数），改 test/shell_page_test.dart。
+   - chat_view.dart 流式时整列重建 → 按 Message 实例 + 行状态缓存行 widget（ChatController 只替换最后一条，其余实例不变）。
+   - Markdown：AppMarkdown 每次 build 新建 MarkdownStyleSheet → 缓存。
+   - Web：shell.css 6-15 `.page` 与 chat.css:90 `.thread` 的 mask-image 让整个滚动区离屏 → 改顶部窄条。**Web 已完成（2026-10-16，未提交）**：两处去掉整区 mask，换成 `ui/Sky.tsx SkyFade`（一条渐隐带高的壁纸副本，按视口位置反向偏移，漂移动画 startTime 对齐；窄条自己的 mask = 原遮罩反过来），滚动区加 isolation 保持层叠。实测：隐藏内容后有/无窄条逐像素最大差 1/255（浅/深 × 桌面/手机 × 页面/聊天）。4× CPU 无头 Chromium 下新旧都 60fps，软件渲染看不出差别；真 GPU 的 Chrome trace 未做。
+   - 完成后：Flutter profile/frame timing，Web Chrome 4× CPU trace。
+
+### B'. 全量校验（2026-10-16 B4 之后，工作区含 B1–B4 全部改动，未提交）
+- app：`flutter analyze` 0 问题；全量 `flutter test` **732 过 / 8 跳过 / 0 失败**。
+- frontend：`npm run build`（check-arch + check-contrast + tsc -b + vite）通过；`npm test` **14/14**。
+- 后端：backend/.venv 逐个跑 tests/smoke_*.py：**202/202 过**（共 203 个，跳过需真密钥的 smoke_stepfun；smoke_preview_ws 本次一次过）。
+
+### C. 发布步骤（全部通过后）
+VERSION → 3.3.0，`python3 brand/sync.py`，CHANGELOG 加一节（含“删除/合并”行），合并到 main，tag v3.3，GitHub Actions 出 APK。服务器只有用户明确说“更新服务器”才部署；部署前删除服务器上 tag 里不存在的旧源码文件（见第二节第 17 条 / work/vps/README.md）。
+
+### D. 参考
+- 流光着色器设计参考 mesh_gradient（MIT，Ben Fornefeld），未复制代码；需在 NOTICE 加一行。
+- 决策记录：docs/devlog.md 末尾 2026-10-15 23:15 之后几节。
 
 ## 一、项目是什么
 - 用户是预算有限的学生，自建个人 AI 助手 **Toyuis**（产品名，记住），目标：对齐 Hark / Muse / Dots / Cue 这类消费级助手的**公开**功能与体验。
@@ -37,6 +88,11 @@
    - **绝不能删**（删了要重装、会坏、或丢数据）：安卓 SDK、Flutter、JDK（`/opt/apkbuild/sdk|flutter|jdk`）；正在运行或 compose 引用的镜像（含 `assistant-sandbox`，即使当前没容器在跑）；数据库和数据卷（`/opt/assistant/data`、Docker volumes）；`/root/backups`；最近一版代码包（如 `v293.tgz`、`app-v2911-backup.tgz` 这类最近备份）和最近两份 `.env` 备份；部署脚本本身；`/swap.img`（常驻 swap）。
    - **拿不准就不删**，先查它被谁用（grep compose/脚本/代码），还拿不准就问用户；删前删后都 `df -h`，删后确认容器全部 Up、`/api/version` 正常。
    - **能自动的写进脚本**：`deploy/build-apk.sh` 结尾清上面“必须删”里的 APK 缓存；更新脚本结尾 `docker image prune -f` + `docker builder prune -f`。**v3.0.1 已落地**（APK 产物改为 `/root/toyuis-<版本>-arm64.apk`，只留最新一份；测试 `deploy/tests/test_build_apk_cleanup.sh`；未在 VPS 实跑）。本地沙盒同理：测试日志、临时截图用完就删。
+
+18. **流畅丝滑是“顾全大局”的一部分**（用户 2026-10-15 23:05，原话大意：“做新功能、新动效或任何东西时，都要保证软件和网页的流畅性丝滑性，不能做一些东西就卡顿……叫你顾全大局，要思考就思考这些东西”；用户为此很伤心，不想每次提醒）：
+   - 每个改动（新功能、动效、换样式、优化）上线前都要证明 **App 和 Web 不因它变卡**：动手前估算成本（毛玻璃 / backdrop 层数、重建范围、会触发布局的动画、大字体 / 大图、逐帧计算），做完后验证（Flutter 帧耗时测试 / profile 光栅 < 16ms；Web Chrome 性能录制 4× CPU 降速）。
+   - **优化卡顿不准删功能、不准删效果**（用户 23:03：“保证功能完好、效果完好的同时去优化卡顿”）。
+   - 照 Hark 截图做的界面要**忠实还原版式**（23:02 项目列表：项目名占满整行、状态胶囊另起一行），不能“学一半”。
 
 ## 三、工程规矩（看代码 / 改代码时）
 - **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**

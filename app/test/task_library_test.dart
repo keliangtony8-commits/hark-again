@@ -1,4 +1,5 @@
 // 定时任务页（v0.77）：分组 / 摘要 / 下一个 的纯逻辑；页面分组标题、页头、空态起步模板预填新建表单。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/task_library.dart';
 import 'package:assistant/features/me/tasks_screen.dart';
@@ -46,7 +47,7 @@ Future<void> pump(WidgetTester tester, List<Map<String, dynamic>> tasks) async {
     GoRoute(path: '/me/tasks', builder: (_, _) => const TasksScreen()),
   ]);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(FakeApi(tasks))],
+    overrides: [apiProvider.overrideWithValue(FakeApi(tasks)), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp.router(theme: buildTheme(Brightness.light), routerConfig: router),
   ));
   await tester.pumpAndSettle();

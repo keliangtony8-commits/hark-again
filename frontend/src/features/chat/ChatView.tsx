@@ -5,6 +5,7 @@ import { formatDay, startsNewDay } from "../../lib/format";
 import type { Message, MessageQuote, OutgoingFile } from "../../lib/types";
 import { quotable, quoteOf, showsQuote } from "../../lib/quote";
 import { FloatingFooter, flashOnce } from "../../ui/kit";
+import { SkyFade } from "../../ui/Sky";
 import { IconArrowDown } from "../../ui/icons";
 import { useStickToBottom } from "./useStickToBottom";
 import Composer, { type EditDraft } from "./Composer";
@@ -127,6 +128,7 @@ export default function ChatView({ messages, busy, error, link, canRegenerate, o
           </div>
         )}
       </div>
+      <SkyFade kind="thread" />
       <FloatingFooter onHeight={setFooterH}>
         {stick.away && !empty && (
           <button className="jump-latest glass raised" onClick={stick.jump}><IconArrowDown size={14} />回到最新</button>

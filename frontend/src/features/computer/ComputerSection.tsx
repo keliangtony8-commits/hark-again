@@ -38,12 +38,12 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
   };
   const cancel = async (j: JobInfo) => {
     setCancelling((c) => new Set(c).add(j.id));
-    try { await http.post(`/api/jobs/${j.id}/cancel`, {}); await load(true); } catch { /* 下一次刷新会告诉真实状态 */ }
+    try { await http.post(`/api/jobs/${j.id}/cancel`, {}); await load(); } catch { /* 下一次刷新会告诉真实状态 */ }
     setCancelling((c) => { const n = new Set(c); n.delete(j.id); return n; });
   };
   const bounce = async (v: ServiceInfo) => {
     setBouncing((b) => new Set(b).add(v.id));
-    try { await http.post(`/api/jobs/${v.id}/restart`, {}); await load(true); }
+    try { await http.post(`/api/jobs/${v.id}/restart`, {}); await load(); }
     catch (e) { void noticeDialog("重启失败", e instanceof Error ? e.message : undefined); }
     setBouncing((b) => { const n = new Set(b); n.delete(v.id); return n; });
   };

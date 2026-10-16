@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useResource } from "../../hooks/useResource";
-import { formatWhen } from "../../lib/format";
 import type { Project } from "../../lib/types";
 import { ShellLead } from "../../shell/ShellLead";
 import { confirmDialog } from "../../ui/dialog";
@@ -10,19 +9,16 @@ import { Hint, Menu, Page, Sheet, stagger } from "../../ui/kit";
 import MenuPlus from "../chat/MenuPlus";
 import StatusCapsule from "../chat/StatusCapsule";
 import ProjectFiles from "./ProjectFiles";
-import { activeAt, byActivity, projectIsCurrent } from "./projectHomeRules";
+import { byActivity, projectIsCurrent } from "./projectHomeRules";
 import ProjectBrief from "./ProjectBrief";
 import ProjectForm from "./ProjectForm";
 import "./projects.css";
 
 
-/** 页头小标签：“3 个项目 · 最近 今天 09:12”；加载中为空（行高照占）。 */
-const summary = (loading: boolean, list: Project[]) =>
-  loading ? "" : list.length === 0 ? "长期的事放这里" : `${list.length} 个项目 · 最近 ${formatWhen(activeAt(list[0]))}`;
-
 /**
- * 项目列表（v2.93 §Q 按 Hark，= App projects_screen）：页头一行小标签，下面一行一个大字项目名（按最近活动排序），
- * 行尾是项目状态胶囊（= 那段对话的状态，服务器 status）和 ⋯；不是“当前”的项目变灰（projectIsCurrent）。没有卡片网格、没有输入框。
+ * 项目列表（v3.2.2 按 Hark 真机截图，= App projects_screen）：一项 = 占满整行的大字项目名（可折行，按最近活动排序）
+ * + 下一行状态胶囊（= 那段对话的状态，服务器 status）；没有页头小标签、没有 emoji。⋯ 菜单在胶囊那一行的右端（电脑没有长按），
+ * 不占名字的宽度。不是“当前”的项目变灰（projectIsCurrent）。没有卡片网格、没有输入框。
  * 点一行 = 进那个项目的那段对话（v2.95 项目 = 一段对话）。
  * 顶栏左侧 + = 新建；它和项目页的 ≡（项目切换）是同一颗钮（MenuPlus 记着上一颗的形状，进出项目时原地 morph）。
  */
@@ -34,7 +30,6 @@ export default function ProjectsScreen() {
   const [briefOf, setBriefOf] = useState<Project | null>(null);
   const [filesOf, setFilesOf] = useState<Project | null>(null);
   const list = byActivity(projects.items);
-  const label = summary(projects.loading, list);
 
   const remove = async (p: Project) => {
     if (!(await confirmDialog({ title: `删除“${p.name}”？`, text: "项目里的对话、文件和档案会一起删除，不能恢复。" }))) return false;
@@ -45,9 +40,7 @@ export default function ProjectsScreen() {
   return (
     <Page>
       <ShellLead><MenuPlus plus label="新建项目" onClick={() => setCreating(true)} /></ShellLead>
-      <div className="page-hero project-hero">
-        <span key={label} className="page-hero-label enter">{label}</span>
-      </div>
+      <div className="project-hero" aria-hidden />
       {projects.loading ? (
         <div className="project-list" aria-busy>{[0, 1, 2].map((i) => <div key={i} className="skeleton project-skel" />)}</div>
       ) : list.length === 0 ? (
@@ -61,9 +54,8 @@ export default function ProjectsScreen() {
           {list.map((p, i) => (
             <div key={p.id} className={`project-row enter ${projectIsCurrent(i, p) ? "" : "is-quiet"}`} style={stagger(i)}>
               <Link to={`/projects/${p.id}`} className="project-row-link">
-                <span className="project-row-emoji" aria-hidden>{p.emoji}</span>
                 <span className="project-row-name">{p.name}</span>
-                {p.status && <StatusCapsule status={p.status} />}
+                <span className="project-row-status">{p.status && <StatusCapsule status={p.status} />}</span>
               </Link>
               <Menu label={`${p.name}的菜单`} trigger={<IconMore />} items={[
                 { label: "项目文件", icon: <IconFile />, onSelect: () => setFilesOf(p) },

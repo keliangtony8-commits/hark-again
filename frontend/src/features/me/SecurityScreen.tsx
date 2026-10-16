@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
 import { auth, http } from "../../lib/api";
 import { enabledSignedOutToast } from "../../lib/loginSessions";
 import {
@@ -17,19 +18,14 @@ import LoginSessions from "./LoginSessions";
 type Ask = { kind: "disable" | "recovery" } | null;
 
 export default function SecurityScreen() {
-  const [s, setS] = useState<TwoFactorStatus | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const { data: s, error, reload, mutate: setS } = useSwr<TwoFactorStatus>("/api/auth/2fa");
+  const err = error ? error.message || "读不到安全设置" : null;
+  const load = () => void reload();
   const [setup, setSetup] = useState<TwoFactorSetup | null>(null);
   const [codes, setCodes] = useState<{ list: string[]; title: string; account: string; note?: string | null } | null>(null);
   const [devicesKey, setDevicesKey] = useState(0);
   const [ask, setAsk] = useState<Ask>(null);
   const [note, setNote] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    setErr(null);
-    http.get<TwoFactorStatus>("/api/auth/2fa").then(setS).catch((e) => setErr(e instanceof Error ? e.message : "读不到安全设置"));
-  }, []);
-  useEffect(load, [load]);
 
   const start = async () => {
     setNote(null);
@@ -72,9 +68,10 @@ export default function SecurityScreen() {
         }} />}
       {codes && <CodesSheet {...codes} onClose={() => setCodes(null)} />}
       {ask && <ConfirmSheet kind={ask.kind} onClose={() => setAsk(null)} onDone={(r) => {
-        setAsk(null); setS(r);
+        const { recovery_codes, ...status } = r; // 恢复码只进弹层，不进缓存
+        setAsk(null); setS(status);
         if (ask.kind === "disable") setNote("两步验证已关闭");
-        else if (r.recovery_codes) setCodes({ list: r.recovery_codes, title: "新的恢复码", account: "" });
+        else if (recovery_codes) setCodes({ list: recovery_codes, title: "新的恢复码", account: "" });
       }} />}
     </Page>
   );

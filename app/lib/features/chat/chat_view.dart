@@ -56,6 +56,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   int _flash = 0;
   bool _seeking = false;
+
+  /// 行缓存（v3.3 卡顿根因）：消息 id → 上次建的行。ChatController 每个 delta 只换最后一条 Message，其余实例不变，
+  /// 所以流式时只有最后一条重建；其他行的状态（时间开关、引用、可编辑、定位闪烁……）都在 look 里，变了才重建。
+  final _rows = <String, ({Message message, _RowLook look, Widget widget})>{};
   late final SpeechController _speech = ref.read(speechProvider.notifier); // dispose 里不能再用 ref
 
   /// 在 build 里发现有待定位的消息：下一帧取走并开始找（不在 build 里改状态）。
@@ -110,6 +114,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   @override
+  void didUpdateWidget(ChatView old) {
+    super.didUpdateWidget(old);
+    if (old.projectId != widget.projectId) _rows.clear(); // 行里的回调带着 projectId
+  }
+
+  @override
   void initState() {
     super.initState();
     _speech; // 先取好，卸载时用
@@ -140,6 +150,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
         if (mounted && _scroll.hasClients && _scroll.offset != 0) _scroll.jumpTo(0);
       });
     });
+    if (_rows.length > chat.messages.length) {
+      final ids = {for (final m in chat.messages) m.id};
+      _rows.removeWhere((id, _) => !ids.contains(id)); // 换对话 / 删消息：不留旧行
+    }
     final editing = _editing?.id == chat.editableId ? _editing : null;
     final inset = MediaQuery.paddingOf(context).top; // 有 AppBar 时为 0；主聊天里 = 状态栏 + 浮动顶栏
     _maybeSeek(chat);
@@ -185,10 +199,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
       // 设计 v2：列表铺满整个聊天区，上面从浮动顶栏下滚过、下面从输入胶囊下滚过；
       // 让位都读 MediaQuery.padding（顶 = ShellPage，底 = FloatingFooter 量出的胶囊高度）。离线条浮在让位线下方，不推动列表。
       child: FloatingFooter(
-        footer: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          RiseSwitcher(child: _away && chat.messages.isNotEmpty ? JumpLatest(key: const ValueKey('latest'), onTap: _toLatest) : null),
-          RiseSwitcher(child: chat.error == null ? null : _ErrorBar(key: ValueKey(chat.error), text: chat.error!, onRetry: chat.canRegenerate && chat.messages.last.isUser ? ctl.regenerate : null)),
+        // 从下往上摆：输入胶囊在最下、错误条、回到最新在最上（和原来一样）；verticalDirection.up 让输入胶囊**先画**——
+        // 它是这一组毛玻璃里稳定的那一个，由它取背景，淡入淡出的两条只读结果（规则见 ui/glass.dart 文件头）。读屏 / 焦点按几何排序。
+        footer: Column(mainAxisSize: MainAxisSize.min, verticalDirection: VerticalDirection.up, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           composer,
+          RiseSwitcher(child: chat.error == null ? null : _ErrorBar(key: ValueKey(chat.error), text: chat.error!, onRetry: chat.canRegenerate && chat.messages.last.isUser ? ctl.regenerate : null)),
+          RiseSwitcher(child: _away && chat.messages.isNotEmpty ? JumpLatest(key: const ValueKey('latest'), onTap: _toLatest) : null),
         ]),
         child: Builder(builder: (context) {
           final bottom = MediaQuery.paddingOf(context).bottom;
@@ -211,6 +227,23 @@ class _ChatViewState extends ConsumerState<ChatView> {
                             final m = chat.messages[idx];
                             final regen = i == 0 && !m.isUser && chat.canRegenerate; // 只有最后一条回复能重新生成
                             final target = m.isId(_target);
+                            // §O 本机刚发出的那条（local id、1 秒内首次画出）往上弹一下；历史、同步、别的设备发来的不弹
+                            final fresh = m.isUser && m.id.startsWith(ChatController.localPrefix) && m.createdAt != null &&
+                                DateTime.now().difference(m.createdAt!) < Motion.sendFresh;
+                            final newDay = startsNewDay(chat.messages, idx);
+                            final look = (
+                              regen: regen,
+                              target: target,
+                              flash: target ? _flash : 0,
+                              time: _timesShown.contains(m.id),
+                              quote: showsQuote(chat.messages, idx),
+                              edit: m.id == chat.editableId,
+                              newDay: newDay,
+                              fresh: fresh,
+                            );
+                            // 同一个 Message 实例 + 同一组行状态 → 还给同一个 widget 实例，Flutter 跳过这一行（流式时只有最后一条在变）
+                            final hit = _rows[m.id];
+                            if (hit != null && identical(hit.message, m) && hit.look == look) return hit.widget;
                             // 点这条（气泡 / 回复正文 / 卡片空白处）= 这条的时间开关；卡片里的按钮 / 链接是更内层的手势，照旧先赢
                             final row = FlashHighlight(
                               key: target ? _anchor : ValueKey(m.id),
@@ -225,8 +258,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   onContinue: regen && m.end.continuable ? () => ctl.send(continueText) : null,
                                   onSave: m.isUser || m.pending ? null : () => saveReplyToProject(context, ref, messageId: m.id, projectId: widget.projectId),
                                   onRate: m.isUser || m.pending ? null : (kind, {note}) => ctl.rate(m.id, kind, note: note),
-                                  showTime: _timesShown.contains(m.id),
-                                  showQuote: showsQuote(chat.messages, idx),
+                                  showTime: look.time,
+                                  showQuote: look.quote,
                                   // 回复这条：已落库（有服务器 id）、生成完的消息才能引用
                                   onQuote: m.pending || m.unsent || m.id.startsWith(ChatController.localPrefix)
                                       ? null
@@ -235,7 +268,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                             _editing = null;
                                           }),
                                   onJumpQuote: _reveal,
-                                  onEdit: m.id == chat.editableId
+                                  onEdit: look.edit
                                       ? () => setState(() {
                                             _editing = EditDraft.of(m);
                                             _quoting = null;
@@ -244,12 +277,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
                               ),
                             );
                             // 跨天处在消息上方插一行日期（今天 / 昨天 / 10月9日 星期五）
-                            // §O 本机刚发出的那条（local id、1 秒内首次画出）往上弹一下；历史、同步、别的设备发来的不弹
-                            final fresh = m.isUser && m.id.startsWith(ChatController.localPrefix) && m.createdAt != null &&
-                                DateTime.now().difference(m.createdAt!) < Motion.sendFresh;
                             final shown = SendRise(play: fresh, child: row);
-                            if (!startsNewDay(chat.messages, idx)) return shown;
-                            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [DaySeparator(m.createdAt!), shown]);
+                            final Widget out = newDay ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [DaySeparator(m.createdAt!), shown]) : shown;
+                            _rows[m.id] = (message: m, look: look, widget: out);
+                            return out;
                           },
                         ),
                       ),
@@ -280,6 +311,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
     );
   }
 }
+
+/// 一条消息行除 Message 本身以外的全部输入（record 按值比较）。
+typedef _RowLook = ({bool regen, bool target, int flash, bool time, bool quote, bool edit, bool newDay, bool fresh});
 
 /// 输入胶囊上方的“↓ 回到最新”小玻璃胶囊（往上翻看前文时出现，点了平滑回到最新一条）。
 class JumpLatest extends StatelessWidget {

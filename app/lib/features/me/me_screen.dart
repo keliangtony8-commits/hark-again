@@ -106,7 +106,8 @@ class _SearchBar extends StatelessWidget {
   Widget build(BuildContext context) => SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(Sp.x3, Sp.x2, Sp.x3, Sp.x3),
+          // v3.3 按 Hark 真机截图：搜索胶囊两侧各比页面留白再内收 Sp.x3（≈ 屏宽 1/12），小而精，不贴满屏宽
+          padding: const EdgeInsets.fromLTRB(Layout.gutter + Sp.x3, Sp.x2, Layout.gutter + Sp.x3, Sp.x3),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: Layout.contentMax),

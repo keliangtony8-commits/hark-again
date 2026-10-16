@@ -1,6 +1,7 @@
 // 技能页：老服务器没有 customized = false；自定义版在“内置”分组带“已自定义”、不能左滑删；
 // 内置只读页“复制一份来改”→ POST customize、输入框可编辑、保存走 PUT；自定义版“恢复默认”确认后 POST reset、
 // 回到阅读态（步骤渲染成 Markdown）；只有改了才能存，带着改动离开先确认；起步模板与搜索；取消确认不发请求；失败提示服务器的话。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/resource.dart';
 import 'package:assistant/features/me/skill_library.dart';
@@ -58,7 +59,7 @@ Future<ProviderContainer> pump(WidgetTester tester, FakeApi api, Widget home) as
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final c = ProviderContainer(overrides: [apiProvider.overrideWithValue(api)]);
+  final c = ProviderContainer(overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())]);
   addTearDown(c.dispose);
   await c.read(skillsProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(

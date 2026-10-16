@@ -269,3 +269,117 @@
 - 历史搜索：原来面板 scope=None 只搜主聊天，项目那段根本搜不到（HANDOFF 写的“无 project_id”实为搜不到）。对标 Hark 顶部搜索“搜全部”：面板改 scope=ALL（= search_history 工具同一范围，不新增分支），项目那段的结果带 project_id/project_name；任务运行对话不带（照旧按 id 打开，v2.75 规则不变）。客户端：结果行加项目名（.conv-where / 摘录前缀），点开走唯一跳转入口（App openConversation、Web openElsewhere）+ focus 定位；项目行不给菜单（项目对话 DELETE 409，改名归项目）。openProjectChat 接受 focus。
 - 占位符截断：Web 输入框档位钮在 ≤480px 只留图标（.chip-text 隐藏，aria-label 不变）；App 本来就窄，不动。
 - shots.py 补 /api/connectors/mcp、/api/memory-notes、/api/version 假数据（跑完不再列缺失清单）。
+
+## 2026-10-15 23:15 v3.3 项目列表 + “我的”搜索胶囊按 Hark 真机截图重做（用户 23:02/23:09 截图 1000035503、1000035505）
+- 用户原话：“人家是全屏显示那个项目名称的…你搞个半个”；“搜索框你做那么长干嘛…人家小而美，没有占满屏宽”。
+- 根因：项目行把 emoji + 名字 + 状态胶囊 + ⋯ 塞在一行，名字被挤成半截省略；页头还有一行“N 个项目 · 最近 …”。Hark：名字占满整行（可折行），状态胶囊另起一行，没有页头、emoji、⋯。
+- 改法（两端同一版式，替换而非叠加）：App `_ProjectRow` = Column(名字 displaySmall 最多 3 行, 胶囊)；删 `_Header` 及摘要逻辑；菜单 = 长按（同项目内药丸那份 showProjectMenu）。Web 同：删 page-hero-label 摘要与 emoji，名字可折行（line-clamp 3），胶囊一行；⋯ 留在胶囊那一行右端（电脑没有长按），不占名字宽度。
+- “我的”底部搜索胶囊：两侧在页面留白 24 之外再内收 Sp.x3（= 36，≈ Hark 屏宽 1/12）；App me_screen `_SearchBar`、Web `.me-search` 同值；me_search_test 断言左右内收。
+- 删除/合并：项目列表页头摘要、列表 emoji、列表行 ⋯（App）。
+
+## 2026-10-15 v3.3 页面不再每次骨架屏：统一 SWR（stale-while-revalidate）
+- 用户原话（截图“用量与花费”每次进都是灰骨架）：“每次切到另一个页面去，就要刷新好久…主流软件要这样刷新吗？不只是APP，网页版也一样…学人家的做法”。
+- 根因：App 里一批 `FutureProvider.autoDispose` / `AsyncNotifierProvider.autoDispose`（用量、某天明细、对话文件/上下文/用量、反馈、任务运行记录、两步验证、登录设备、偏好、电脑/主机/浏览器登录、分享状态、记忆摘要）离开页面就丢数据，回来从零取 → 骨架；首页 `cards.isLoading`、任务详情 `tasks.isLoading` 下拉刷新时也闪骨架。Web 每个页面各写 `useEffect + http.get`，路由切换卸载组件，回来又从 `loading=true` 开始。
+- 参考（只学公开做法）：Vercel SWR（MIT）“先给缓存、后台重验、有数据时错误不打扰”、TanStack Query `staleTime` / `keepPreviousData`、Riverpod 3 文档 `AsyncValue` 的 `skipError` / `copyWithPrevious`。没有移植代码。
+- 全局决定（替换，不叠加）：
+  - **App 一个机制**：`core/swr.dart` = `SwrCache`（进程内、有上限 LRU，按“服务器 + 登录态”换新，退出登录即清空）+ `SwrNotifier<T>`（build：缓存有就**同步**返回 AsyncData 并在后台重验，没有才请求；后台失败保留旧值不打扰；`reload()` 给下拉刷新，失败抛给调用方；`emit()` 给增删改；数据没变不发新状态，避免无谓重建）+ `swrGet` / `swrGetFamily` 一行声明只读资源 + `AsyncValue.swr(...)` 统一“有数据就显示数据，没数据才骨架/出错”。`ResourceNotifier` 改为继承 `SwrNotifier`（原 cacheKey 磁盘缓存保留为 `diskKey`），各页面自己的 FutureProvider / 自写 reload 全部删掉改用它。
+  - **磁盘缓存**：原有项目、首页卡片保留；用量报表、技能、任务、连接器、Pages、记忆、笔记加磁盘键（冷启动也秒开）；保险箱、钱包、两步验证、登录设备等安全相关**只放内存**。
+  - **Web 一个机制**：`lib/swr.ts`（模块级缓存 + 订阅，按 URL；有上限；登出清空）+ `hooks/useSwr.ts`（`data` 立即给缓存，后台重验；`loading` 只在没有缓存时为真；有数据时错误静默）；`useResource` 改为基于它；各页面 `useEffect + http.get` 换成 `useSwr`。
+  - 底部 Tab 本来就是 `StatefulShellRoute.indexedStack`（App 切 Tab 不重建，已核实）；子页面靠缓存秒开。
+- 成本：内存缓存上限 64 条（JSON 原样，几十 KB 级）；每次进页面一次后台 GET（原来也是一次），没有新增请求；同步返回缓存 → 首帧就是内容，无骨架闪、无 FadeSwitcher 过渡，减少了重建与动画（流畅性只增不减）。
+- 删除/合并：各页面自写的 FutureProvider / reload / 骨架判断（`isLoading`）、Web 各页面重复的 fetch + loading/error state。
+
+## 2026-10-16 16:05 交接（额度用尽前）
+- 分支 wip/v3.3（未合 main、未改 VERSION、未部署，线上仍 v3.2.1）。
+- 已测：项目列表 Hark 式两行、“我的”搜索胶囊内收（27 项定向测试过，web tsc+check-arch 过）。
+- 未测：App SWR（core/swr.dart + 多页面）、流光壁纸（sky.frag / ui/sky.dart / SkyTable / SkyClock / glass.dart）。/tmp/flutter 被清，未跑 analyze，可能编译不过。
+- 未做：Web SWR + 流光；BackdropGroup、删 TopFade 整页遮罩、聊天流式只重建末条、Markdown 样式缓存、Web mask-image。
+- 详细步骤与文件清单：HANDOFF.md 第〇节。
+
+## 2026-10-16 v3.3 B1/B2 App 部分验证与收尾（SWR + 流光壁纸）
+- 范围：只动 app/。让 10-16 交接时“写了没测”的 SWR 与流光壁纸编译通过、补测试；卡顿那批（BackdropGroup / TopFade / chat_view）不在本节。
+- SkyClock（ui/motion.dart）收紧为**真正的单 Timer**：原来 30fps 帧计时器 + 每分钟重算天色两个 Timer.periodic → 合并为一个，帧回调里顺便按 Sky.recolor 检查钟点。
+- reduce-motion（MediaQuery.disableAnimations）原来是“不订阅时钟”，副作用是天色也冻在启动那一刻 → 改为两档订阅：动画订阅者（≈30fps 漂移）与静止订阅者（只每分钟换天色，柔光停在原位）。同一个 Timer 只按最高档跑；没有订阅者 / 不在前台 / 测试环境（FLUTTER_TEST）时一个 Timer 都不起。效果不删：减少动态时壁纸照样随钟点变色，只是不流动。
+- SkyLayer 自带 RepaintBoundary（原来靠 glass.dart 外面包一层，fade 顶条另用时容易漏）；删掉没人用的 child 参数（有 child 时它会跟着每帧重画）；删 isComplex（每帧都变的画面做光栅缓存无意义）；着色器异步加载完成后通知重画（原来静止时要等下一次变色才换成着色器）。
+- SwrGet(orNull) 取不到时 parse(null) 会抛类型错 → orNull 时 null 直接给 null。
+- 成本：Timer 数 2→1；减少动态时每分钟一次重画；无新依赖。
+- 已知、留给下一节：壁纸 30fps 变化会让上面每个 BackdropFilter 每 33ms 重新取样模糊，这正是 BackdropGroup 那一项要解决的，本节不动。
+- 结果（16:47）：flutter analyze 0；flutter test 719 过 / 8 跳过 / 0 失败（新增 swr_test 9 例、sky_test 13 例）。另修 SwrNotifier.emit 判“没变”的别名问题（改为比存入时的 JSON 签名）。测试侧：19 个文件补 MemoryCacheStore 覆盖（新磁盘键在 testWidgets 假时钟下等真实 IO 会挂死）。参考：Flutter 文档 FragmentProgram / RenderCustomPaint（非重绘边界，故 SkyLayer 自包 RepaintBoundary）、Riverpod 3 文档（invalidate 后 build 同步给缓存）。
+
+## 2026-10-16 v3.3 Web：SWR + 流光壁纸 + 去整区遮罩（HANDOFF 第〇节 B1/B2/B3 的 Web 部分；App 只读对照 core/swr.dart、ui/sky.dart、tokens.dart SkyTable、motion.dart SkyClock）
+**B1 SWR（替换，不叠加）**
+- 一个机制：`src/lib/swr.ts` = 模块级缓存（Map 当 LRU，最多 64 条 = App SwrCache.max；键 = 请求路径；值 = 服务器原样 JSON）+ 每键订阅 + 同键并发请求合并 + 代号（`swrClear()` 后上一代的在途请求回来也不写缓存）。纯逻辑、零依赖，node:test 直接测。
+- `src/hooks/useSwr.ts` = React 读法（useSyncExternalStore）：有缓存首帧就是旧数据，挂载时后台静默重取，变了才替换（JSON 相同不发新状态，= App SwrNotifier.emit）；`loading` 只在没缓存且没出错时为真；有数据时出错不打扰，没数据才给 `error`；`mutate()` 给增删改（写进缓存，所有用这把键的组件一起变）；`reload()` 永不抛（App reload 没数据时抛给调用方，Web 改为放进 `error`——调用方都是按钮/轮询，抛出去只会成未处理的 Promise）。
+- `useResource` 改成 useSwr 之上的列表增删改（接口不变）；顺带修掉旧版每次 reload 都把 loading 置真 → 首页 5 秒轮询会闪骨架。
+- 退出登录 / 登录过期（App.tsx onUnauthorized，MeScreen 退出也走它）→ `swrClear()`；Login 成功前也清一次（换服务器 / 换账号看不到上一个人的数据）。Web 无磁盘缓存（浏览器刷新即冷启动，和改前一样），安全相关数据本来就只在内存。
+- 替换 17 处 `useEffect + http.get`（HANDOFF 第〇节 B1 列表），各自的 loading/error/live 标志一起删。check-arch 加第 8 条：`http.get` 只许在登记文件里（未迁的只减不增），页面读数据走 useSwr。
+- 参考：Vercel SWR 文档（MIT）“stale-while-revalidate / dedupe / mutate”、React 文档 useSyncExternalStore；未移植代码。
+**B2 流光壁纸**
+- 色表唯一一份在 `tokens.css`：`--sky-<night|dawn|day|dusk>-<top|bottom|a|b|c>`，浅色在 :root、深色在 [data-theme=dark]，= App SkyTable.light/dark 逐值（check-contrast 查两端同值 + 正文对壁纸任意色 ≥4.5、深色次要字对底色 ≥4.5）。
+- `src/lib/sky.ts`：关键帧 = App Sky.keyframes；按本地钟点在相邻两帧之间线性插值（= Color.lerp 逐通道），写到 <html> 的 `--sky-top/bottom/a/b/c`；每分钟一次（= Sky.recolor），页面隐藏时停、回来立刻重算；切浅/深色、减少透明度时（MutationObserver 看 data-theme）重算。`--sky-*` 用 @property 注册成 <color>，切主题时跟着 .theme-switching 一起渐变（只在那 400ms 内）。
+- `base.css` `.sky`：固定全屏一层（z-index -1，不参与布局），底色 = 竖向渐变（色标按 Sky.ramp 取 5 个点），上面三团柔光 = 三个 radial-gradient 元素，高斯衰减用 9 个色标逼近 exp(-d²/r²)，不透明度 = Sky.blobMix；漂移 = 外层 translateX、内层 translateY 两条 alternate 动画（easeInOutSine ≈ 正弦，周期 = sky.frag 里的角频率），只动 transform；will-change 只给这 6 个漂移元素。减少动态：动画 none（静止，颜色仍按钟点变）；减少透明度：整层换实色 --bg、不画柔光（= App Backdrop solid）。
+- 删除：`--backdrop-1/2/3`（浅、深、solid 三处）与 body 的 160° 渐变背景。
+**B3 Web 卡顿：整区 mask-image → 顶部窄条**
+- 根因：`.shell.has-bar .page` 与 `.thread` 的 mask-image 让整个滚动区成为离屏遮罩层，滚动 / 流式输出每帧都要整块重新合成。
+- 改法（= App 把 TopFade 整页 ShaderMask 换成 SkyLayer(fade:)）：滚动区去掉遮罩，换成一条只有渐隐带高的 `.sky-fade`（ui/Sky.tsx `SkyFade`），里面是同一张壁纸的副本（按自身在视口里的位置反向偏移，与全屏壁纸逐像素对齐；漂移动画用 Web Animations 把 startTime 对齐到同一时间原点），用窄条自己的 mask 从“全是壁纸”渐变到“全透明”。壁纸以 α 盖在内容上 = 内容以 1-α 透到壁纸，视觉不变：`.page` 用原来的 6 个色标（反过来），`.thread` 用原来的两点。滚动区加 `isolation: isolate`，保持原来遮罩带来的层叠关系（内容里的浮层仍在渐隐条下面）。
+- 成本：遮罩面积从整屏滚动区降到约 100px 一条；每条多 3 个柔光副本（被窄条裁掉，只栅格化可见的那一小块）。
+**测试（2026-10-16）**：`npm run build` 过（架构守卫 222 文件、配色守门 14 对 × 2 套 + 壁纸 20 色 × 2 套且与 App 同值、tsc -b、vite build）；`npm test` 11/11（swr 7、sky 4）；系统 Chromium（apt）跑截图：用量页返回首帧 0 骨架、渐隐条与全屏壁纸逐像素差 ≤1/255、reduce-motion 下 0 个动画在跑、减少透明度下壁纸 = 实色 --bg、无页面报错。**发现**：浅色壁纸上次要字 --text-2 对比度 1.60–4.60（见 HANDOFF 第〇节 B2），两端同表，未改。
+
+## 2026-10-16 v3.3 B2 流光壁纸：次要字对比度（App + Web 同一张色表）
+- 问题：壁纸全天采样（每 15 分钟 × 底色 11 个高度 + 三团柔光峰值），浅色 text2 1.60–5.10、text3 1.02–3.23；深色 text2 3.97–7.56、text3 2.61–4.98。页头说明、分区标题直接压在壁纸上发灰。
+- 决定（主代理定）：不删效果、不改字的层级（次要字不换成正文色）。改天色关键帧：浅色顶部 / 夜间几帧提亮，深色柔光压暗；保留“夜里暗蓝紫灰、白天亮蓝→暖米、柔和流动”。
+- 做法：每个关键色在 OKLab 里只抬 / 压明度、尽量保留色相与彩度（超色域时按比例收彩度；浅色夜间彩度 ×0.75、黎明 / 黄昏 ×0.85，免得提亮后比白天还艳），二分到“该色亮度够”，再用与 sky_test 相同的采样（Sky.ramp + blobMix + 15 分钟插值）验证并留 ≥0.02 余量。脚本只在本地算，结果直接写进两端色表。
+- 浅色只调天色不够体面：要让 #64605a 达 4.5、#857f77 达 3，壁纸每一处相对亮度都得 ≥0.757（≈L* 90），整张图几乎褪成白，白天的亮蓝、上下渐变都没了。所以按授权**两端同步微调 token**：text2 #64605a → #5c5852、text3 #857f77 → #7a746c（都只深一点，text2 / text3 之间的亮度比 1.53 → 1.54，层级不变；对 bg / surface / surface2 分别 6.42 / 7.06 / 6.16 与 4.20 / 4.62 / 4.03，只升不降）。这样壁纸亮度门槛降到 0.64，白天顶色还是看得出的天蓝 #add6fe。
+- 深色只动天色：黎明 / 白天 / 黄昏的柔光略压暗（夜间不变），text2 / text3 token 不动。
+- 守门：App test/sky_test.dart 加“次要字对壁纸”一组（浅深 × text2 ≥4.5、text3 ≥3.0，同一采样）；Web check-contrast.mjs 改为同一采样（关键帧插值 + ramp + blobMix），正文 / text-2 / text-3 三条阈值全查（替换掉原来“只查 20 个关键色 + 深色 text-2 只查 top/bottom”那条）；tests/sky.test.ts 加浅深两套同阈值单测。
+- 成本：只改色值和测试，运行时零变化。
+- 参考：WCAG 2.x 相对亮度 / 对比度公式（W3C Understanding SC 1.4.3）；OKLab（Björn Ottosson, 2020）做“保色相只改明度”。
+- 结果（2026-10-16）：对壁纸最低对比度 浅色 text 12.37 / text2 4.63 / text3 3.03（原 4.84 / 1.60 / 1.02），深色 text 11.83 / text2 4.74 / text3 3.13（原 9.89 / 3.97 / 2.61）。`flutter test test/sky_test.dart` 17/17、`test/a11y_test.dart` 12/12；web `npm run build` 过（配色守门含壁纸全天采样）、`npm test` 13/13。改旧值必红（实测把 --text-2 改回 #64605a → 两端不同值 + 次要字/壁纸 4.09）。未做：真机 / 浏览器截图肉眼看新浅色壁纸。
+
+## 2026-10-16 v3.3 B3 App：卡顿根因（BackdropGroup / 去整页 ShaderMask / 流式只重建最后一条 / Markdown 样式缓存）
+- 范围：只动 app/（不碰 tokens.dart 色值、sky_test）。不删任何功能和效果。
+- **毛玻璃分组**（官方 API：Flutter 3.47 `BackdropGroup` + `BackdropFilter.grouped`，源码 widgets/basic.dart；引擎 impeller/display_list/canvas.cc `SaveLayer` 的 backdrop_id 分支）：
+  - 语义（读引擎源码确认）：同一个 BackdropKey 的滤镜，**第一个**画到时才“翻转”渲染目标取一次背景，滤镜全相同时整张背景只模糊一次，后面的成员直接从这张结果里取自己那块。所以：①成员彼此不能重叠；②第一个成员画下之后、后面成员底下又画的东西，后面成员看不到；③第一个成员若在淡入淡出（Opacity 离屏层）里，取到的是离屏层的背景，其他成员会跟着错。
+  - 分三组：AppShell（顶栏分段 + 一级页面的左侧按钮 / header 药丸；收件箱横幅在组外，它要模糊顶栏）、ShellPage 内容（输入胶囊、回到最新、错误条、主页输入框的“收起”钮）、SubPage（玻璃标题栏 + 子页里的浮层）。另把云浏览器接管页的两颗玻璃钮编一组。“我的”页不分组：返回钮在滚动列表里、搜索胶囊在列表之后，返回钮先画会让搜索胶囊看不到它后面画的列表（规则②）。弹层 / 对话框 / 磨砂遮罩各自独立（在根路由或要模糊成员本身）。
+  - 绘制顺序按规则②③排：ShellPage = 内容 → 顶部渐隐条 → 左侧按钮（稳定、不淡入，做“取背景”的那一个）→ header（药丸有进场淡入，排在后面只当读者）；输入胶囊永远第一个画（底条 Column 用 verticalDirection.up、输入行用 rtl 排版，布局不变、只换绘制先后；读屏 / 焦点顺序按几何排序不受影响）。
+  - 例外处理（规则②③）：ShellPage 所在路由在转场（项目页淡入上浮）或主聊天历史抽屉露出时，左侧按钮 / header 临时改用页内自己的一组，顶栏变成 AppShell 组里唯一成员 = 照常单独模糊；抽屉是否露出由抽屉内容自己挂载 / 卸载上报（DrawerController 只在露出时才建内容），不改顶栏让位的时机。
+  - 壁纸：SkyLayer 已自带 RepaintBoundary，SkyClock 每 33ms 只重录这一层；但它上面的毛玻璃每帧都必须重新模糊（背景在变），这是效果本身的成本，只能把“取背景”的次数降下来。分组后主聊天页每帧翻转 3 次 → 2 次（顶栏组 1 + 输入组 1），项目页 4 → 2，带回到最新 / 错误条时 5–6 → 2；代价是共享组按整张背景模糊一次（引擎自带降采样）而不是只模糊各自那一小块。
+- **TopFade 整页 ShaderMask(dstIn) 删除** → ShellPage 顶部一条 `BackdropFade`（glass.dart，和 Backdrop 同一处判断：玻璃模式 = SkyLayer(fade: (clear, solid))，与全屏壁纸逐像素对齐；减少透明度 = 实色 bg 渐隐）。壁纸以 α 盖在内容上 = 内容以 1−α 透出壁纸，视觉不变；离屏层从整页降为 0。顺带：原来输入胶囊等毛玻璃在 ShaderMask 离屏层里，只能模糊“内容 + 透明”，现在模糊的是“壁纸 + 内容”（壁纸本身是柔和渐变，模糊前后几乎一样）。
+- **聊天流式只重建最后一条**：ChatController 每个 delta 只换最后一条 Message（其余实例不变）。ChatView 按 消息 id 缓存行 widget，命中条件 = 同一个 Message 实例 + 同一组行状态（时间开关、重新生成 / 继续、引用行、可编辑、定位闪烁、跨天分隔、刚发出），命中就返回同一个 widget 实例，Flutter 直接跳过这一行的重建。
+- **AppMarkdown**：MarkdownStyleSheet 按 ThemeData 实例（含浅 / 深、字体）+ 减少透明度缓存（Expando 挂在 ThemeData 上，主题换了自动失效），不再每次 build 新建 + 深比较。
+- 删除：kit.dart `TopFade`（及 ramp / alphaAt）、shell_page_test 里对应断言；glass.dart / sub_page.dart 的独立 BackdropFilter 改 grouped。
+- 验证：新 test/perf_frame_test.dart（flutter test 里没有真 GPU 光栅，量的是 每帧重建的元素数 / 消息行重建数 / 毛玻璃层数与“取背景”次数 / 离屏遮罩层数 / CPU 侧 build+layout+paint 耗时），改前改后同一份测试各跑一次。
+- **实现补充**：组用 `BlurGroup`（glass.dart：BackdropGroup + 自己持有的 BackdropKey；不能直接写 `BackdropGroup(child:)`，它不给 key 时每次 build 新建一个，组里所有滤镜跟着重建；不叫 GlassGroup，那是 v2.97 删掉的旧名、架构测试禁用）。ShellPage 的“另成一组”还加了一条：本页路由上面压着别的路由（isCurrent = false，新页正推进来）时也另成一组。主聊天抽屉“露出”由 chat_scaffold 的 `_Shown` 在抽屉内容挂载 / 卸载后的下一帧上报给 `ShellPage(covered:)`。
+- **测量（2026-10-16，flutter test 引擎，412×915，同一份 test/perf_frame_test.dart 先在改前代码的 worktree 跑、再在改后跑；没有真 GPU，光栅只能看层数）**：
+  | 场景 | 指标 | 改前 | 改后 |
+  |---|---|---|---|
+  | 聊天流式（30 条历史，40 个 delta 帧） | 每帧重建元素数（中位） | 695 | 362 |
+  | | 最后一条以外的消息行重建（40 帧合计） | 305 | **0** |
+  | | CPU 侧 build+layout+paint 每帧（中位） | 31.5–33.9 ms | 21.0–23.0 ms |
+  | | 毛玻璃层 / 取背景次数 | 3 / 3 | 3 / **2** |
+  | | ShaderMask 离屏层 | 1（整页） | **0** |
+  | 一级页面滚动（60 条，30 帧） | 每帧重建元素数（中位） | 440 | 100 |
+  | | CPU 每帧（中位） | 15.5 ms | 6.5 ms |
+  | | 取背景次数 / ShaderMask | 3 / 1 | 2 / 0 |
+  | 主页 | 取背景次数 / ShaderMask | 3 / 1 | 2 / 0 |
+  | 项目列表 | 取背景次数 / ShaderMask | 2 / 1 | 1 / 0 |
+  - 剩下的 362：最后一条本身（Markdown 重新解析）+ 外层 ChatView / 底条的轻量包装（列表的 KeepAlive / KeyedSubtree 等），不再随对话长度增长。
+  - 没测到的：真机 profile 模式光栅耗时（沙盒没有设备 / GPU）；Impeller 共享背景的实际省时只能按引擎源码推断（每组一次 FlipBackdrop + 一次整张降采样模糊）。真机验证方法：`flutter run --profile` + DevTools Performance，看聊天流式和主页静止时 raster 线程（壁纸 30fps 时每帧都要合成）。
+  - 发现（未改，不在本块范围）：子页面（SubPage）自带一层 Backdrop，在外壳分支里打开时，外壳的那层壁纸仍在底下每 33ms 重画（被完全盖住）。可以让 SubPage 在外壳里不再画自己的壁纸、或外壳在子页时停掉壁纸，需要连同 FloatAway / 转场一起定。
+- 结果：flutter analyze 0；全量 flutter test **729 过 / 8 跳过 / 0 失败**（新增 perf_frame_test 3 例；shell_page_test 改为 7 例：渐隐条位置 / 绘制顺序 / 不挡点击 / 减少透明度实色 / 分组与盖层 / 转场另成一组）。
+- 参考：Flutter API 文档与源码 `BackdropGroup`、`BackdropFilter.grouped`（packages/flutter/lib/src/widgets/basic.dart，3.47.7）；Impeller `Canvas::SaveLayer` 的 backdrop_id / `FirstPassDispatcher::saveLayer`（engine/src/flutter/impeller/display_list/canvas.cc、dl_dispatcher.cc：同 id 计数、第一个取背景并缓存、滤镜全同则整张只模糊一次）；Flutter 官方视频 “BackdropFilter” 与 docs “Performance best practices”（saveLayer / ShaderMask 离屏代价）；flutter_markdown_plus 1.0.12 `MarkdownWidget.didUpdateWidget`（样式表 != 才重新解析）。
+
+## 2026-10-16 v3.3 B4：被不透明子页盖住时外壳壁纸暂停（App + Web）
+- 问题（B3 留下的发现）：App 外壳分支里打开 SubPage（项目档案 /projects/:id/brief、项目电脑 /projects/:id/computer）时，SubPage 自带一层 Backdrop 壁纸，把外壳底下那层 SkyLayer 完全盖住；但外壳那层的画笔 `repaint` 直接挂在共享的 `SkyClock.time` 上，只要还有任何一层在动（正是子页那层），它就每 33ms 重录一次。B1 的“TickerMode 关就不订阅”只管了 Timer 档位，没管画笔监听，所以被盖住的层照样重画。
+- 决定（语义照 Flutter 自己的 `TransitionRoute.opaque`：“不透明路由的进场转场完成后，下面的路由不再构建”）：
+  1. `SkyLayer` 不驱动（TickerMode 关）时**画笔不再监听 time / hour**（只留着色器加载完成那一下）；恢复驱动时强制重画一次，直接取共享时钟的当前 time / hour——暂停期间时钟照常走（子页那层在驱动它），所以恢复那一帧就是此刻的天色和柔光位置，和刚才子页上看到的完全一致，不跳色、不闪。
+  2. `Backdrop(coverable: true)`（只有 AppShell 用）向下提供一个“盖住计数”；`SubPage` 在自己的路由 `ModalRoute.of(context)` 满足 `opaque && animation.status == completed` 且自己在台上（TickerMode 开：不在后台分支、没被上面的页面盖成 offstage）时报“盖住”，否则撤销。外壳壁纸外包 `TickerMode(enabled: 计数 == 0)`。
+     - 转场中（push 进行中、pop / 返回手势一开始 status 就离开 completed）照常显示和动；pop 的第一帧之前就已恢复。
+     - 切到别的 Tab：那个分支整体 TickerMode 关 → 子页撤销，外壳壁纸立刻恢复（新 Tab 的一级页面要用它）。
+     - “我的”及其子页走根导航器，不是外壳的后代，找不到计数 → 不参与（外壳整条路由在 Overlay 里 offstage，本来就不画）。
+  3. 顶栏 FloatAway 的判定（shellBarShown）一字不改，淡出时机不变；不删任何效果。
+- 替换了什么：SkyLayer 画笔“永远挂 time”的写法删掉，改成按驱动档挂；没有新增第二套暂停机制（TickerMode 仍是唯一开关，计数只决定外壳那一个 TickerMode）。
+- 成本：子页静止时少一整屏着色器重录（每 33ms 一次）+ 外壳 BlurGroup 里顶栏那块的重新取背景；新增一个 InheritedWidget + 每个 SubPage 一个路由状态监听，可忽略。
+- Web：只有一层全局 `.sky`（main.tsx），子页面是透明的、透出的就是这层，**子页不会盖住壁纸，不存在这份浪费**。真正整屏不透明盖住壁纸的是“云浏览器接管页”（.takeover，--card 实色）和“看大图”（.image-viewer，--bg 实色）：进场动画结束后根上挂 `data-sky-covered`，`.sky`（含顶部渐隐条里的副本）`content-visibility: hidden` 跳过柔光渲染；关掉时在同一次提交里撤掉。选 content-visibility 而不是 animation-play-state：paused 会冻住动画本地时间并在恢复时改写 startTime，顶部渐隐条副本靠 startTime=0 与全屏层逐像素对齐（syncSky），会错位；content-visibility 跳过期间不推进本地时间但 startTime 不动，恢复时按文档时间线算出“此刻”的位置，和 App 的“恢复取当前时刻”一致。
+- 参考：Flutter API `TransitionRoute.opaque`（“When an opaque route's entrance transition is complete, the routes behind the opaque route will not be built”）、`ModalRoute.of`、`TickerMode.valuesOf`、Overlay 对 offstage 条目包 `TickerMode(enabled: false)`（packages/flutter/lib/src/widgets/overlay.dart）；go_router 18.1 StatefulNavigationShell 非当前分支 `Offstage + TickerMode(enabled: isActive)`（lib/src/route.dart）；CSSWG #5611 决议 + MDN content-visibility（跳过的子树里 CSS 动画不推进、可见后恢复），WPT content-visibility-animation-becomes-visible.html。
+- 结果（2026-10-16）：flutter analyze 0；全量 flutter test **732 过 / 8 跳过 / 0 失败**（新增 sky_test 2 例、shell_test 1 例）；web `npm run build` 过、`npm test` 14/14（新增 coverSky 计数 1 例）；后端 smoke **202/202**（不含 smoke_stepfun）。未做：浏览器实看浮层关闭那一帧（沙盒无 Chromium）、真机看返回无闪。

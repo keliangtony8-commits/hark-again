@@ -2,6 +2,7 @@
 // 失败时开关拨回并提示服务器的话；编辑页的“启用”开关同样走 act，且不动输入框里没保存的改动。
 import 'dart:async';
 
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/resource.dart';
 import 'package:assistant/features/me/skills_screen.dart';
@@ -47,7 +48,7 @@ Future<ProviderContainer> pump(WidgetTester tester, FakeApi api, Widget home) as
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final c = ProviderContainer(overrides: [apiProvider.overrideWithValue(api)]);
+  final c = ProviderContainer(overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())]);
   addTearDown(c.dispose);
   await c.read(skillsProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(

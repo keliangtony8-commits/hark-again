@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api.dart';
-import '../../core/session.dart';
+import '../../core/swr.dart';
 import '../../models/feedback.dart';
 import '../../theme/tokens.dart';
 import '../../ui/format.dart';
@@ -21,15 +21,16 @@ import '../../ui/sub_page.dart';
 import '../chat/open_conversation.dart';
 import '../../ui/haptics.dart';
 
-class FeedbackNotifier extends AsyncNotifier<FeedbackList?> {
+/// 加载规则在 core/swr.dart（再进页面先显示上次的列表，后台重取）；这里只管增删改。
+class FeedbackNotifier extends SwrNotifier<FeedbackList?> {
   @override
-  Future<FeedbackList?> build() async {
-    final s = await ref.watch(sessionProvider.future);
-    if (!s.signedIn) return null;
-    return FeedbackList.fromJson(await ref.read(apiProvider).get('/api/feedback'));
-  }
-
-  Future<void> reload() async => state = AsyncData(FeedbackList.fromJson(await ref.read(apiProvider).get('/api/feedback')));
+  String get path => '/api/feedback';
+  @override
+  bool get requiresSession => true;
+  @override
+  FeedbackList? get signedOutValue => null;
+  @override
+  FeedbackList? parse(Object? raw) => FeedbackList.fromJson(raw);
 
   Future<void> report(String note) async {
     await ref.read(apiProvider).post('/api/feedback', {'note': note});
@@ -58,10 +59,7 @@ class FeedbackNotifier extends AsyncNotifier<FeedbackList?> {
 
 final feedbackProvider = AsyncNotifierProvider.autoDispose<FeedbackNotifier, FeedbackList?>(FeedbackNotifier.new);
 
-final feedbackDetailProvider = FutureProvider.autoDispose.family<FeedbackItem, String>((ref, id) async {
-  final j = await ref.read(apiProvider).get('/api/feedback/$id');
-  return FeedbackItem.fromJson(Map<String, dynamic>.from(j as Map));
-});
+final feedbackDetailProvider = swrGetFamily<FeedbackItem, String>((id) => '/api/feedback/$id', (j) => FeedbackItem.fromJson(jsonMap(j)));
 
 /// “报告问题”：一段话就够，必填。成功后列表刷新、提示一句。
 Future<void> reportProblem(BuildContext context, WidgetRef ref) async {
@@ -197,12 +195,12 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
       ],
       body: PageBody(children: [
         FadeSwitcher(
-          child: switch (value) {
-            AsyncData(value: final f) => _Detail(key: ValueKey('d-${f.resolved}'), f: f, busy: _busy, onResolve: (v) => _run(() => ref.read(feedbackProvider.notifier).setResolved(f.id, v))),
-            AsyncError() => EmptyHint(key: const ValueKey('err'), icon: Icons.cloud_off_rounded, title: '读不到这份反馈', text: '可能已经删了，或者网络断了',
+          child: value.swr(
+            data: (f) => _Detail(key: ValueKey('d-${f.resolved}'), f: f, busy: _busy, onResolve: (v) => _run(() => ref.read(feedbackProvider.notifier).setResolved(f.id, v))),
+            error: (_) => EmptyHint(key: const ValueKey('err'), icon: Icons.cloud_off_rounded, title: '读不到这份反馈', text: '可能已经删了，或者网络断了',
                 action: TextButton(onPressed: () => ref.invalidate(feedbackDetailProvider(widget.id)), child: const Text('重试'))),
-            _ => const SkeletonList(key: ValueKey('loading'), rows: 3),
-          },
+            loading: () => const SkeletonList(key: ValueKey('loading'), rows: 3),
+          ),
         ),
       ]),
     );

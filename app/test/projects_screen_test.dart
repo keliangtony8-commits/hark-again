@@ -1,4 +1,4 @@
-// 项目页（v2.93 §Q 按 Hark）：列表 = 页头“N 个项目 · 最近 …” + 一行一个大字项目名，按最近活动排序，行尾项目状态胶囊，
+// 项目页（v3.2.2 按 Hark 真机截图）：列表 = 占满整行的大字项目名 + 下一行状态胶囊，按最近活动排序（没有页头摘要 / emoji / ⋯，菜单 = 长按），
 // 不是当前的项目变灰（projectIsCurrent）、没有输入框；⋯ 菜单：编辑（只 PATCH 改过的字段）、删除（先确认）、电脑；
 // v2.95 项目 = 一段对话：进项目直接是那段聊天（仍在一级外壳下，顶栏在），左上 + → ≡ 同一颗钮，≡ 打开项目切换抽屉、开着时变 +；
 // 顶栏下项目名药丸 = 项目菜单。
@@ -7,6 +7,7 @@ import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
+import 'package:assistant/features/chat/status_capsule.dart';
 import 'package:assistant/features/projects/project_files_sheet.dart' show projectFileLine;
 import 'package:assistant/features/projects/project_form.dart';
 import 'package:assistant/features/projects/project_switcher.dart';
@@ -109,10 +110,8 @@ Future<_Api> _pump(WidgetTester tester, {String at = '/projects'}) async {
   return api;
 }
 
-Finder _menuOf(String name) => find.descendant(
-      of: find.ancestor(of: find.text(name), matching: find.byType(Pressable)).first,
-      matching: find.byTooltip('更多'),
-    );
+/// v3.2.2 列表行不再画 ⋯：菜单 = 长按那一行。
+Future<void> _openMenu(WidgetTester tester, String name) => tester.longPress(find.text(name));
 
 Color? _colorOf(WidgetTester tester, String text) => tester.widget<Text>(find.text(text)).style?.color;
 
@@ -136,9 +135,15 @@ void main() {
     expect(p('weird').status, isNull);
   });
 
-  testWidgets('列表：页头摘要、大字名按最近活动排序、汇总状态胶囊、不是当前的变灰、没有输入框', (tester) async {
+  testWidgets('列表（v3.2.2 按 Hark）：没有页头摘要 / emoji / ⋯，大字名占满整行、胶囊在名字下一行，按最近活动排序、汇总状态胶囊、不是当前的变灰、没有输入框', (tester) async {
     await _pump(tester);
-    expect(find.text('2 个项目 · 最近 5 分钟前'), findsOneWidget);
+    expect(find.textContaining('个项目'), findsNothing, reason: 'Hark 列表没有页头小标签');
+    expect(find.text('📚'), findsNothing, reason: '列表不画 emoji');
+    expect(find.byTooltip('更多'), findsNothing, reason: '菜单 = 长按');
+    final name = tester.getRect(find.text('考研'));
+    final cap = tester.getRect(find.byType(StatusCapsule));
+    expect(cap.top, greaterThan(name.bottom - 1), reason: '状态胶囊在名字下一行');
+    expect(cap.left, closeTo(name.left, 1), reason: '与名字左对齐');
     expect(find.text('项目'), findsOneWidget); // 只有顶栏分段，不再画大标题
     final y1 = tester.getTopLeft(find.text('找实习')).dy;
     final y2 = tester.getTopLeft(find.text('考研')).dy;
@@ -218,7 +223,7 @@ void main() {
 
   testWidgets('⋯ 菜单编辑：只发改过的字段；什么都没改不发请求', (tester) async {
     final api = await _pump(tester);
-    await tester.tap(_menuOf('考研'));
+    await _openMenu(tester, '考研');
     await _settle(tester);
     await tester.tap(find.text('编辑名称和图标'));
     await _settle(tester);
@@ -227,7 +232,7 @@ void main() {
     await _settle(tester);
     expect(api.calls.where((c) => c.startsWith('PATCH')), isEmpty);
 
-    await tester.tap(_menuOf('考研'));
+    await _openMenu(tester, '考研');
     await _settle(tester);
     await tester.tap(find.text('编辑名称和图标'));
     await _settle(tester);
@@ -237,12 +242,12 @@ void main() {
     await _settle(tester);
     expect(api.calls.last, 'PATCH /api/projects/p1');
     expect(api.bodies.last, {'emoji': '🎯'});
-    expect(find.text('🎯'), findsOneWidget);
+    expect(find.text('🎯'), findsNothing, reason: 'v3.2.2 列表不画 emoji（emoji 在项目内药丸上）');
   });
 
   testWidgets('⋯ 菜单删除：取消不删，确认后 DELETE 并从列表消失', (tester) async {
     final api = await _pump(tester);
-    await tester.tap(_menuOf('找实习'));
+    await _openMenu(tester, '找实习');
     await _settle(tester);
     await tester.tap(find.text('删除项目'));
     await _settle(tester);
@@ -251,7 +256,7 @@ void main() {
     await _settle(tester);
     expect(api.calls, isEmpty);
 
-    await tester.tap(_menuOf('找实习'));
+    await _openMenu(tester, '找实习');
     await _settle(tester);
     await tester.tap(find.text('删除项目'));
     await _settle(tester);
@@ -259,7 +264,7 @@ void main() {
     await _settle(tester);
     expect(api.calls, ['DELETE /api/projects/p2']);
     expect(find.text('找实习'), findsNothing);
-    expect(find.text('1 个项目 · 最近 3 天前'), findsOneWidget);
+    expect(find.text('考研'), findsOneWidget, reason: '剩下的那个还在');
   });
 
   testWidgets('新建：选的图标带进 POST，然后进入项目', (tester) async {
@@ -300,6 +305,6 @@ void main() {
     await _settle(tester);
     expect(api.calls, ['DELETE /api/projects/p1']);
     expect(find.byType(ProjectPill), findsNothing);
-    expect(find.text('1 个项目 · 最近 5 分钟前'), findsOneWidget);
+    expect(find.text('找实习'), findsOneWidget, reason: '退回列表，剩下的那个还在');
   });
 }

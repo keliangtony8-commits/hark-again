@@ -1,30 +1,36 @@
 // 回复语言（v2.67）：“我的 → 偏好设置”里的一行 + 选择菜单（ui/sheets.dart 的 showActionSheet，选中项打勾）。
 // 选了立即生效：先改界面（乐观），PATCH 失败退回原值并提示。对话里说“以后用英文回我”时助手调 set_reply_language
-// 改的是同一个设置；provider 是 autoDispose，每次进“我的”页都重新取，所以那边改了这里也看得到。
+// 改的是同一个设置；SWR（core/swr.dart）：每次进“我的”页先显示上次的值，后台重取，所以那边改了这里也会跟上。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api.dart';
-import '../../core/session.dart';
+import '../../core/swr.dart';
 import '../../models/preferences.dart';
 import '../../ui/kit.dart';
 import '../../ui/sheets.dart';
 
-class PreferencesNotifier extends AsyncNotifier<Preferences?> {
-  static const _path = '/api/preferences';
+class PreferencesNotifier extends SwrNotifier<Preferences?> {
+  @override
+  String get path => '/api/preferences';
   Api get _api => ref.read(apiProvider);
 
   /// 没登录 / 老服务器（没有这个接口）→ null：那一行显示默认说明、点不开，也不触发自动重试。
   @override
-  Future<Preferences?> build() async {
-    final s = await ref.watch(sessionProvider.future);
-    if (!s.signedIn) return null;
+  bool get requiresSession => true;
+  @override
+  Preferences? get signedOutValue => null;
+  @override
+  Future<Object?> fetch() async {
     try {
-      return Preferences.fromJson(Map<String, dynamic>.from(await _api.get(_path) as Map));
+      return await super.fetch();
     } on ApiError {
       return null;
     }
   }
+
+  @override
+  Preferences? parse(Object? raw) => raw is Map ? Preferences.fromJson(Map<String, dynamic>.from(raw)) : null;
 
   /// 乐观更新；出错退回并抛给调用方提示。
   Future<void> setReplyLanguage(String code) async {
@@ -32,7 +38,7 @@ class PreferencesNotifier extends AsyncNotifier<Preferences?> {
     if (old == null || old.replyLanguage == code) return;
     state = AsyncData(old.copyWith(replyLanguage: code));
     try {
-      state = AsyncData(Preferences.fromJson(Map<String, dynamic>.from(await _api.patch(_path, {'reply_language': code}) as Map)));
+      emit(await _api.patch(path, {'reply_language': code}));
     } catch (_) {
       state = AsyncData(old);
       rethrow;

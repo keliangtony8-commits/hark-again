@@ -133,3 +133,4 @@
 - v2.82 浏览器全屏接管页：只参考了思路（无代码）——Skyvern PR #4904（AGPL-3.0，仅阅读设计）、vercel-labs/agent-browser streaming（Apache-2.0）、steel-dev/steel-browser（Apache-2.0）：接管/交还门控、鼠标 down/move/up 与滚轮转发。
 - v3.2 字体：MiSans（© Beijing Xiaomi Mobile Software Co., Ltd.，《MiSans 字体知识产权许可协议》：免费商用、可嵌入，须在软件中注明——见 App/网页「关于 → 字体」）。字形未改动，仅取常用字子集（GB2312 + 界面用字）打包为 app/assets/fonts/MiSans-{Regular,Medium,Semibold}.ttf 与 frontend/public/fonts/*.woff2；说明见 app/assets/fonts/MiSans-LICENSE.txt。v2.83 起用的 Inter 已删除。
 - v2.89 browser/live.py: ported from BetterWright src/live-view.ts (MIT License, Copyright (c) 2026 The BetterWright Project and contributors), modified — latest-frame-wins frame delivery, 160px viewport bucketing of the screencast maxWidth, quality/dimension constants, input clamping; translated to Python with our 0–1 input protocol.
+- app/shaders/sky.frag：流光着色器设计参考 mesh_gradient（Ben Fornefeld，MIT），未复制代码。

@@ -2,6 +2,7 @@
 // 版本比较、关于页两段版本、服务器要求更新时“版本”行写“请更新”且“我的 → 关于”行尾提示；老服务器没有 /api/version 照常显示本机版本。
 import 'dart:io';
 
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/brand.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/session.dart';
@@ -45,7 +46,7 @@ Future<void> _pump(WidgetTester tester, Widget home, _Api api) async {
   addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(ProviderScope(
-    overrides: [sessionProvider.overrideWith(_SignedIn.new), apiProvider.overrideWithValue(api)],
+    overrides: [sessionProvider.overrideWith(_SignedIn.new), apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: home),
   ));
   await tester.pumpAndSettle();

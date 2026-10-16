@@ -1,6 +1,7 @@
 // 记忆页：纯逻辑（分类顺序/计数、多词搜索含分类名、分类筛选）+ 页面：
 // 概括卡不自动生成、点生成才 POST、改记忆后静默重取变“记忆有更新”、生成失败提示且旧概括保留、
 // 老服务器没有接口 → 不显示卡；搜索框和分类条过滤列表、无结果可清除；编辑能改分类。
+import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/me/memory_screen.dart';
 import 'package:assistant/models/memory.dart';
@@ -67,7 +68,7 @@ Future<void> pump(WidgetTester tester, FakeApi api) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
-    overrides: [apiProvider.overrideWithValue(api)],
+    overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
     child: MaterialApp(theme: buildTheme(Brightness.light), home: const MemoryScreen()),
   ));
   await tester.pumpAndSettle();

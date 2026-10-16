@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { fileUrl, http } from "../../lib/api";
+import { useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
+import { fileUrl } from "../../lib/api";
 import { extOf } from "../../lib/files";
 import {
   canZip, conversationFileLine, conversationFilePath, conversationFilesPath, conversationZipPath, fileOriginCounts,
@@ -11,14 +12,8 @@ import { Hint, ListGroup, ListRow, Sheet, Skeleton } from "../../ui/kit";
 /** 本对话全部文件（v1.33，App features/chat/conversation_files.dart 同义）：交给你的、你发的、网页下载/上传的、助手写的，
  *  最新在前，按来源筛选，一键打包下载。入口：本对话用量弹层、历史每行菜单。 */
 export default function ConversationFilesSheet({ conversationId, onClose }: { conversationId: string; onClose: () => void }) {
-  const [data, setData] = useState<ConversationFiles | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, reload } = useSwr<ConversationFiles>(conversationFilesPath(conversationId));
   const [origin, setOrigin] = useState<string | null>(null);
-  const load = useCallback(() => {
-    setError(null);
-    http.get<ConversationFiles>(conversationFilesPath(conversationId)).then(setData, (e) => setError(String(e?.message ?? e)));
-  }, [conversationId]);
-  useEffect(() => { load(); }, [load]);
 
   const counts = data ? fileOriginCounts(data) : [];
   const shown = data ? data.files.filter((f) => !origin || f.origin === origin) : [];
@@ -30,8 +25,8 @@ export default function ConversationFilesSheet({ conversationId, onClose }: { co
         : <button className="btn btn-primary" disabled><IconDownload size={18} />打包下载</button>)}
       <button className="btn btn-ghost" onClick={onClose}>关闭</button></>}>
       {error ? (
-        <Hint icon={<IconFolder size={26} />} title="加载失败" text={error} action={<button className="btn btn-ghost" onClick={load}>重试</button>} />
-      ) : data === null ? <Skeleton /> : data.files.length === 0 ? (
+        <Hint icon={<IconFolder size={26} />} title="加载失败" text={error.message} action={<button className="btn btn-ghost" onClick={() => void reload()}>重试</button>} />
+      ) : !data ? <Skeleton /> : data.files.length === 0 ? (
         <Hint icon={<IconFolder size={26} />} title="这个对话还没有文件" text="你发的附件、我交给你的成果、浏览器下载的文件和我写出来的文件，都会收在这里。" />
       ) : (
         <>

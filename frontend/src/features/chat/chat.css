@@ -85,10 +85,13 @@
   .chat.project .convs-head .icon-btn { visibility: hidden; } /* 占位不收：标题不跳 */
 }
 
-/* 消息流：铺满，上面让出标题，下面让出输入胶囊（--footer-h 由 FloatingFooter 量出）；内容在标题下方淡出 */
-.thread { flex: 1; overflow-y: auto; scroll-behavior: smooth; display: flex; flex-direction: column;
-  -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--thread-top) - 12px), #000 calc(var(--thread-top) + 8px));
-  mask-image: linear-gradient(to bottom, transparent calc(var(--thread-top) - 12px), #000 calc(var(--thread-top) + 8px)); }
+/* 消息流：铺满，上面让出标题，下面让出输入胶囊（--footer-h 由 FloatingFooter 量出）；内容在标题下方淡出。
+   v3.3 B3：淡出不再给整个 .thread 加 mask-image（流式输出 / 滚动每帧整区离屏合成），改成 .thread 后面一条壁纸副本（ui/Sky.tsx SkyFade）：
+   thread-top - 12px 以上全是壁纸，到 thread-top + 8px 全透明 = 原遮罩反过来，看上去一样；isolation 保留原来的层叠。 */
+.thread { flex: 1; overflow-y: auto; scroll-behavior: smooth; display: flex; flex-direction: column; isolation: isolate; }
+.sky-fade-thread { height: calc(var(--thread-top) + 8px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(var(--thread-top) - 12px), transparent calc(var(--thread-top) + 8px));
+  mask-image: linear-gradient(to bottom, #000 calc(var(--thread-top) - 12px), transparent calc(var(--thread-top) + 8px)); }
 .thread-inner { width: 100%; max-width: var(--content-w); margin: 0 auto; padding: var(--thread-top) var(--gutter) calc(var(--footer-h) + var(--sp-4));
   display: flex; flex-direction: column; gap: var(--sp-4); }
 .msg-slot { display: flex; flex-direction: column; gap: var(--sp-3); }

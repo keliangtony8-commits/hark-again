@@ -1,18 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSwr } from "../../hooks/useSwr";
 import { http } from "../../lib/api";
 import type { Preferences } from "../../lib/preferences";
 import { Segmented } from "../../ui/kit";
 
 /** 回复语言（v2.67，= App ReplyLanguageTile）：“偏好设置”里的一行。选了立即生效（乐观），失败退回并在说明行提示。
- *  对话里说“以后用英文回我”时助手改的是同一个设置；每次进“我的”页都重新取。没取到（老服务器）不画这一行。 */
+ *  对话里说“以后用英文回我”时助手改的是同一个设置；每次进“我的”页先显示上次的、后台重新取（useSwr）。没取到（老服务器）不画这一行。 */
 export default function ReplyLanguageRow() {
-  const [p, setP] = useState<Preferences | null>(null);
+  const { data: p, mutate: setP } = useSwr<Preferences>("/api/preferences");
   const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let live = true;
-    http.get<Preferences>("/api/preferences").then((j) => { if (live) setP(j); }).catch(() => {});
-    return () => { live = false; };
-  }, []);
   // 老服务器 / 形状不对时 reply_languages 可能没有：这时不画这一行，别让整个页面白掉
   if (!p || !p.reply_languages?.length) return null;
   const pick = (code: string) => {
