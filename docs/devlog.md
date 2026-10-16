@@ -416,3 +416,15 @@
 - 真模型 E2E：VPS 上用 app-backend 镜像临时容器跑本分支 `tests/live_stepfun.py`（密钥从服务器 .env 直接传进容器）：工具调用、带结果作答、记账、朗读→识别 4 项全过。
 - 最终全量：flutter analyze 0；flutter test 735 过 / 9 跳过；npm run build、npm test 14/14；后端 smoke 203/203。
 - 未做：真机 profile 光栅、真 GPU Chrome trace（沙盒与 VPS 都没有 GPU / 真机）。
+
+## 2026-10-16 v3.5 Web ListRow 定“分体主体 / 正文附加槽”，收 RAW_ROWS（HANDOFF 第〇节“再往后”、第五节第 6 项 E1 剩余；先写决定再改）
+**现状（动手前查的）**：check-arch RAW_ROWS 登记 12 个文件。其中分体行 6 处（技能、定时任务、MCP 服务器、收件箱、电脑页服务 / 后台任务）是同一个版式写了 4 遍：`div.row` 里一个整块按钮（`.skill-row` / `.task-row` / `.report-open` / `.computer-job-open`，四套几乎一样的 CSS）+ 行尾独立控件；其中前两个没有悬停底色、后两个有，自己就不一致。电脑页状态行 / 内存配额 / 磁盘配额 4 处是“标准行 + 正文下一条细条 + 一句警示”。App 早就是一套：kit.dart `ListRow(onTap:, trailing:)`，行尾开关 / 按钮在 InkWell 里但手势竞技场让控件自己赢，技能 / 任务 / 收件箱都用它。
+**决定（替换不叠加，不新增组件）**
+1. Web `ListRow`：可点的行（to / onClick）又给了 `control` 时，自动渲染成分体行 = `div.row.row-split` > 可点主体（`.row-main`：图标 + 正文 + 值 + trail/箭头）+ 行尾控件（主体之外，按钮不套按钮）。**不加新参数**：语义和 App `ListRow(onTap + trailing)` 一致。原来“可点行 + control”会把控件嵌进 button 里（非法嵌套），现在这条路径本身就修正了。aria-label 落在主体上。
+2. Web `ListRow` 加 `extra`（正文附加槽）：放在副标题下面、仍在 `.row-body` 里（细条、警示句）。只这一个新参数。
+3. CSS：`.skill-row` / `.task-row` / `.report-open` / `.computer-job-open` / `.computer-job` 及 `.report-row` 的内边距 / 悬停全部删掉，换成 `.row-split` / `.row-main` 一套（取原收件箱 / 电脑页那种：整行悬停底色、主体铺满可点）。有意的变化：技能、定时任务行也有了悬停底色（和其他可点行一致）；技能“已自定义”、MCP“带令牌”小字进了行尾 trail（间距 12→8px）。
+4. 迁：技能、定时任务、MCP 服务器、收件箱、电脑页服务 / 后台任务（分体）；电脑页状态行 ×2、内存配额、磁盘配额（附加槽）。
+5. 仍登记、不迁（版式不是“标准行 + 附加”）：内存 / 磁盘写入明细行（标题和大小同一基线的头行）、运行记录 / 助手备忘（顶对齐 + 状态点 + 多行错误）、最花钱的对话（细条跨整行换行）、今天时间线（行首是时间文字）、回复语言（常驻 aria-live）、文件选择（role=checkbox）。
+6. App 不动：分体已经是 ListRow；App 6 个富内容行 v2.98 已逐个评估保留。
+**成本**：纯前端重构，无接口变化；DOM 层级不变（原来也是 div > button + 控件）。验证：npm run build（check-arch 数只减不增）、npm test、截图对比（技能 / 定时任务 / 连接的账号 / 主页收件箱 / 电脑页，明暗 × 手机 / 桌面）、4× CPU 滚动帧。
+**结果（实测）**：截图脚本加了电脑页（/#/projects/pr1/computer），main 基线与本分支各 138 张逐像素比。第一轮抓出回归：分体行默认右内边距沿用了收件箱的 sp-2，定时任务 / 技能 / 连接的账号行尾开关比原来往右贴了 8px → `.row-split` 默认改 sp-4（= App ListRow 水平 Sp.x4），只收件箱（⋯ 按钮自带点按留白）在 home.css 保留 sp-2。第二轮：技能 / 定时任务 / 连接的账号与 main 逐像素一致；电脑页服务 / 后台任务行尾按钮内收 8px（原 .computer-job 是 sp-2，现与其他行和 App 一致，有意）；主页收件箱区灰色小字 1 设备像素栅格差——DOM 量过两版每个盒子 top/height 到 0.1px 全同，属子像素取整，不改。DOM：主页 / 定时任务 / 技能 / 连接的账号 / 电脑 / 项目页按钮嵌按钮 0、分体主体都有可读名。4× CPU 无头 Chromium 手机视口来回滚动 240 帧：主页、定时任务、技能、电脑页新旧都 median 16.7ms、p95 16.8ms、>20ms 帧 0。tsc 0 错、架构守卫 222 文件、配色守门、npm test 14/14。

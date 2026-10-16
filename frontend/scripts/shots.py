@@ -335,7 +335,7 @@ def main():
     base = serve()
     with sync_playwright() as p:
         # 默认用 playwright 自带的 chromium；本机装不上（或只想用系统浏览器）时设 SHOTS_CHANNEL=chrome / msedge
-        browser = p.chromium.launch(channel=os.environ.get("SHOTS_CHANNEL") or None)
+        browser = p.chromium.launch(channel=os.environ.get("SHOTS_CHANNEL") or None, executable_path=os.environ.get("SHOTS_CHROMIUM") or None)
         for theme in ("light", "dark"):
             for name, size in (("desktop", (1280, 820)), ("phone", (400, 860))):
                 ctx = browser.new_context(viewport={"width": size[0], "height": size[1]}, device_scale_factor=2 if name == "phone" else 1,
@@ -434,7 +434,7 @@ def main():
                 page.wait_for_timeout(800)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-chat-day.png"))
                 subs = [("memory", "/#/me/memory"), ("tasks", "/#/me/tasks"), ("task", "/#/me/tasks/t2"), ("skills", "/#/me/skills"),
-                        ("connectors", "/#/me/connectors"), ("pages", "/#/me/pages")]  # v2.96 保险箱并进连接的账号
+                        ("connectors", "/#/me/connectors"), ("pages", "/#/me/pages"), ("computer", "/#/projects/pr1/computer")]  # v2.96 保险箱并进连接的账号
                 for shot, url in subs:
                     page.goto(base + url)
                     page.wait_for_timeout(600)
@@ -507,7 +507,7 @@ def section_n():
     OUT.mkdir(parents=True, exist_ok=True)
     base = serve()
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(executable_path=os.environ.get("SHOTS_CHROMIUM") or None)
         for theme in ("light", "dark"):
             for name, size in (("phone", (400, 860)), ("desktop", (1280, 820))):
                 ctx = browser.new_context(viewport={"width": size[0], "height": size[1]}, device_scale_factor=2 if name == "phone" else 1,

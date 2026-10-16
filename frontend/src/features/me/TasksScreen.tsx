@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useResource } from "../../hooks/useResource";
 import { autoPaused, scheduleLabel, taskStateLabel } from "../../lib/taskLabels";
 import type { ScheduledTask } from "../../lib/types";
-import { IconChevron, IconPlus, IconTerminal } from "../../ui/icons";
-import { ListGroup, Page, PageHeader, PageIntro, Section, Skeleton, StarterCard, Toggle, stagger } from "../../ui/kit";
+import { IconPlus, IconTerminal } from "../../ui/icons";
+import { ListGroup, ListRow, Page, PageHeader, PageIntro, Section, Skeleton, StarterCard, Toggle } from "../../ui/kit";
 import { TaskIcon } from "./SchedulePicker";
 import TaskSheet, { EMPTY_SCRIPT, EMPTY_TASK, type TaskDraft } from "./TaskSheet";
 import { TASK_STARTERS, groupTasks, nextUp, taskIdle, taskSummary } from "./taskLibrary";
@@ -30,22 +30,10 @@ export default function TasksScreen() {
         const problem = autoPaused(t) || (failed && !t.run_requested);
         const sub = [scheduleLabel(t), taskStateLabel(t) || null].filter(Boolean).join(" · ");
         return (
-          <div key={t.id} className={`row enter ${taskIdle(t) ? "row-off" : ""}`} style={stagger(++n)}>
-            <button className="task-row" onClick={() => nav(`/me/tasks/${t.id}`)}>
-              <span className={`row-icon dot-badge ${failed ? "on" : ""}`}>
-                <TaskIcon task={t} />
-                {failed && <span className="sr-only">上次运行失败</span>}
-              </span>
-              <span className="row-body">
-                <span className="row-title">{t.name}</span>
-                {problem
-                  ? <span className="row-sub"><span className="row-problem">{taskStateLabel(t)}</span> · {scheduleLabel(t)}</span>
-                  : <span className="row-sub">{sub}</span>}
-              </span>
-              <IconChevron />
-            </button>
-            <Toggle on={t.active} label={`启用「${t.name}」`} onChange={(v) => tasks.update(t.id, { active: v })} />
-          </div>
+          <ListRow key={t.id} enter={++n} off={taskIdle(t)} onClick={() => nav(`/me/tasks/${t.id}`)} iconClass={`dot-badge${failed ? " on" : ""}`}
+            icon={<><TaskIcon task={t} />{failed && <span className="sr-only">上次运行失败</span>}</>}
+            title={t.name} problem={problem ? taskStateLabel(t) : undefined} sub={problem ? scheduleLabel(t) : sub}
+            control={<Toggle on={t.active} label={`启用「${t.name}」`} onChange={(v) => tasks.update(t.id, { active: v })} />} />
         );
       })}
     </ListGroup>

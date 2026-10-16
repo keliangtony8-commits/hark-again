@@ -138,9 +138,12 @@ export function ListGroup({ children, enter, className = "", label, role }: { ch
  *  to = 站内链接；onClick = 整行是按钮；都没有 = 静态行。可点的行默认带箭头，trail 给了就用 trail（null = 什么都不放）。
  *  control = 行尾的控件（开关、分段按钮、头像），原样放、不套次要色的 .row-trail。
  *  v2.98：href = 站外链接（新标签页，默认不带箭头）；disabled = 整行按钮禁用；role="group" 时正文 aria-hidden（读屏只念 label）；
- *  iconClass = 行首图标位的额外类（file-ext 扩展名方块）。 */
-export function ListRow({ icon, iconClass, title, sub, problem, value, trail, control, to, href, onClick, disabled, off, className = "", enter, label, role, spot }: {
-  icon?: ReactNode; iconClass?: string; title: ReactNode; sub?: ReactNode; problem?: string; value?: string; trail?: ReactNode; control?: ReactNode;
+ *  iconClass = 行首图标位的额外类（file-ext 扩展名方块）。
+ *  v3.5：control 只放可交互的控件（不可点的小字放 trail）。行可点又给了 control = 分体行（= App ListRow onTap + trailing）：
+ *  div.row.row-split > 可点主体 .row-main（图标 + 正文 + 值 + trail/箭头，label 落在它上面）+ 控件（按钮不套按钮）。
+ *  extra = 正文附加槽：副标题下面、仍在正文里（细条、警示句）。 */
+export function ListRow({ icon, iconClass, title, sub, problem, extra, value, trail, control, to, href, onClick, disabled, off, className = "", enter, label, role, spot }: {
+  icon?: ReactNode; iconClass?: string; title: ReactNode; sub?: ReactNode; problem?: string; extra?: ReactNode; value?: string; trail?: ReactNode; control?: ReactNode;
   to?: string; href?: string; onClick?: () => void; disabled?: boolean; off?: boolean; className?: string; enter?: number; label?: string; role?: string;
   /** v3.0 设置搜索直达的定位 id（= meIndex.ts 的 focus）：Page 找到 data-spot 后滚到这一行闪一下。 */
   spot?: string;
@@ -148,22 +151,30 @@ export function ListRow({ icon, iconClass, title, sub, problem, value, trail, co
   const cls = ["row", className, off ? "row-off" : "", enter === undefined ? "" : "enter"].filter(Boolean).join(" ");
   const style = enter === undefined ? undefined : stagger(enter);
   const tail = trail !== undefined ? trail : (to || onClick) ? <IconChevron /> : null;
-  const inner = (
+  const split = Boolean(control) && Boolean(to || href || onClick);
+  const main = (
     <>
       {icon && <span className={iconClass ? `row-icon ${iconClass}` : "row-icon"}>{icon}</span>}
       <div className="row-body" aria-hidden={role === "group" || undefined}>
         <div className="row-title">{title}</div>
         {(sub || problem) && <div className="row-sub">{problem && <span className="row-problem">{problem}</span>}{problem && sub ? " · " : ""}{sub}</div>}
+        {extra}
       </div>
       {value && <span className="row-value">{value}</span>}
-      {control}
+      {!split && control}
       {tail && <span className="row-trail">{tail}</span>}
     </>
   );
-  if (to) return <Link to={to} className={cls} style={style} aria-label={label} data-spot={spot}>{inner}</Link>;
-  if (href) return <a href={href} target="_blank" rel="noreferrer" className={cls} style={style} aria-label={label} data-spot={spot}>{inner}</a>;
-  if (onClick) return <button type="button" className={cls} style={style} onClick={onClick} disabled={disabled} aria-label={label} data-spot={spot}>{inner}</button>;
-  return <div className={cls} style={style} aria-label={label} role={role} data-spot={spot}>{inner}</div>;
+  // 分体行：外层只是容器，链接 / 按钮是里面的主体
+  const own = split ? "row-main" : cls;
+  const ownStyle = split ? undefined : style;
+  const ownSpot = split ? undefined : spot;
+  const body = to ? <Link to={to} className={own} style={ownStyle} aria-label={label} data-spot={ownSpot}>{main}</Link>
+    : href ? <a href={href} target="_blank" rel="noreferrer" className={own} style={ownStyle} aria-label={label} data-spot={ownSpot}>{main}</a>
+    : onClick ? <button type="button" className={own} style={ownStyle} onClick={onClick} disabled={disabled} aria-label={label} data-spot={ownSpot}>{main}</button>
+    : null;
+  if (split) return <div className={`${cls} row-split`} style={style} data-spot={spot}>{body}{control}</div>;
+  return body ?? <div className={cls} style={style} aria-label={label} role={role} data-spot={spot}>{main}</div>;
 }
 
 /** 起步卡（= App StarterCard）：列表为空时代替空状态——标题 + 引导 + 一排起步按钮。 */

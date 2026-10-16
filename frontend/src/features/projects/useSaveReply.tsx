@@ -64,8 +64,8 @@ function ProjectPicker({ onPick, onClose }: { onPick: (pid: string) => void; onC
             {(list ?? []).map((p, i) => {
               const at = p.last_active_at ?? p.updated_at;
               return (
-                <ListRow key={p.id} enter={i + 1} onClick={() => onPick(p.id)} trail={null} icon={p.emoji} title={p.name}
-                  control={at && <span className="row-hint">{formatWhen(at)}</span>} />
+                <ListRow key={p.id} enter={i + 1} onClick={() => onPick(p.id)} icon={p.emoji} title={p.name}
+                  trail={at ? <span className="row-hint">{formatWhen(at)}</span> : null} />
               );
             })}
           </ListGroup>

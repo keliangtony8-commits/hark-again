@@ -5,7 +5,7 @@ import { http } from "../../lib/api";
 import type { Connector, McpServerInfo, VaultSecret } from "../../lib/types";
 import { withRetried } from "../../lib/taskLabels";
 import { IconAlert, IconPlus, IconSettings, IconSpark } from "../../ui/icons";
-import { ListGroup, ListRow, Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard, stagger } from "../../ui/kit";
+import { ListGroup, ListRow, Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard } from "../../ui/kit";
 import { ADD_KINDS, connectorSummary, groupSecrets, mcpProblemText, missingSetup, setupLine, sortAccounts, sortServers } from "./connectorLibrary";
 import SecretSheet, { SecretRows, secretKindIcon, type SecretDraftStart } from "./SecretSheet";
 import OAuthSetupSheet from "./OAuthSetupSheet";
@@ -121,17 +121,12 @@ export default function ConnectorsScreen() {
         <Section title={`MCP 服务器 · ${servers.items.length}`}>
           <ListGroup>
             {sortServers(servers.items).map((s) => (
-              <div key={s.id} className="row enter" style={stagger(++n)}>
-                <button className="task-row" onClick={() => void showTools(s)}>
-                  <span className="row-icon"><IconSpark /></span>
-                  <span className="row-body"><span className="row-title">{s.name}</span>
-                    <span className="row-sub">{mcpProblemText(s) && <><span className="row-problem">{mcpProblemText(s)}</span> · </>}{hostOf(s.url)}</span></span>
-                  {mcpProblemText(s)
-                    ? <span className="row-problem-icon icon-pop" role="img" aria-label={mcpProblemText(s)!}><IconAlert /></span>
-                    : s.has_token && <span className="row-hint">带令牌</span>}
-                </button>
-                <button className="btn btn-ghost btn-sm" onClick={async () => { if (await confirmDialog({ title: `移除 ${s.name}？`, action: "移除" })) void servers.remove(s.id); }}>移除</button>
-              </div>
+              <ListRow key={s.id} enter={++n} onClick={() => void showTools(s)} icon={<IconSpark />} title={s.name}
+                problem={mcpProblemText(s) ?? undefined} sub={hostOf(s.url)}
+                trail={mcpProblemText(s)
+                  ? <span className="row-problem-icon icon-pop" role="img" aria-label={mcpProblemText(s)!}><IconAlert /></span>
+                  : s.has_token ? <span className="row-hint">带令牌</span> : null}
+                control={<button className="btn btn-ghost btn-sm" onClick={async () => { if (await confirmDialog({ title: `移除 ${s.name}？`, action: "移除" })) void servers.remove(s.id); }}>移除</button>} />
             ))}
           </ListGroup>
         </Section>

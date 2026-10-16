@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { JobLog } from "../../blocks/JobBlock";
 import { http } from "../../lib/api";
 import { COMPUTER_MEMORY_TIGHT, type ComputerStatus, type ServiceInfo, computerDetail, computerHint, computerHintWarn, computerMemoryRatio,
@@ -51,56 +50,40 @@ export default function ComputerSection({ ws, title = "电脑", enter, ctl, to }
   const hint = computerHint(s);
   const down = s.sandbox.state === "unreachable";
   const oom = computerOomNote(s);
-  const status = (
-    <>
-      <span className="row-icon">{down ? <IconCloudOff /> : <IconComputer />}</span>
-      <div className="row-body" aria-hidden>
-        <div key={s.sandbox.state} className="row-title computer-state">{computerStateLabel(s.sandbox.state)}</div>
-        <div className="row-sub">{computerDetail(s)}</div>
-        {ratio != null && (
-          <div className={`meter computer-meter${ratio >= COMPUTER_MEMORY_TIGHT ? " meter-near" : ""}`}>
-            <span style={{ transform: `scaleX(${ratio})` }} />
-          </div>
-        )}
-        {oom && <div key={s.sandbox.oom_kills} className="computer-oom">{oom}</div>}
-      </div>
-      {hint && <span key={hint} className={`row-hint computer-hint${computerHintWarn(s) ? " is-warn" : ""}`} aria-hidden>{hint}</span>}
-      {to && <span className="row-trail" aria-hidden><IconChevron /></span>}
-    </>
-  );
   const label = [computerSemantics(s), oom].filter(Boolean).join("，");
+  const hintEl = hint && <span key={hint} className={`row-hint computer-hint${computerHintWarn(s) ? " is-warn" : ""}`} aria-hidden>{hint}</span>;
   const machine = s.machine ? machineLine(s.machine) : null;
   return (
     <Section title={title} enter={enter}
       action={s.sandbox.state === "running" && <button className="btn btn-ghost btn-sm" disabled={restarting} onClick={restart}>{restarting ? "正在重启" : "重启"}</button>}>
       <ListGroup>
-        {to
-          ? <Link to={to} className={`row computer-status${down ? " is-down" : ""}`} aria-label={label}>{status}</Link>
-          : <div className={`row computer-status${down ? " is-down" : ""}`} role="group" aria-label={label}>{status}</div>}
+        <ListRow className={`computer-status${down ? " is-down" : ""}`} to={to ?? undefined} role={to ? undefined : "group"} label={label}
+          icon={down ? <IconCloudOff /> : <IconComputer />}
+          title={<span key={s.sandbox.state} className="computer-state">{computerStateLabel(s.sandbox.state)}</span>} sub={computerDetail(s)}
+          extra={<>
+            {ratio != null && (
+              <div className={`meter computer-meter${ratio >= COMPUTER_MEMORY_TIGHT ? " meter-near" : ""}`}>
+                <span style={{ transform: `scaleX(${ratio})` }} />
+              </div>
+            )}
+            {oom && <div key={s.sandbox.oom_kills} className="computer-oom">{oom}</div>}
+          </>}
+          trail={to ? <>{hintEl}<IconChevron /></> : hintEl || null} />
         {machine && ( // v2.85 整台服务器（只有个人工作区给）
           <ListRow icon={<IconServer />} title="整台服务器" sub={machine} />
         )}
         {(s.services ?? []).map((v) => (
-          <div key={v.id} className={`row computer-job computer-svc is-${v.health}`}>
-            <button className="computer-job-open" onClick={() => setLog(v)} aria-label={`${serviceSemantics(v)}，看日志`}>
-              <span className="row-icon"><i key={v.health} className={`job-dot svc-dot is-${v.health}`} /></span>
-              <div className="row-body"><div className="row-title">{v.title}</div>
-                <div className="row-sub">{v.health === "gave_up" && <span className="svc-problem">已停止 · </span>}{serviceLine(v)}</div></div>
-            </button>
-            <button className="btn btn-ghost btn-sm" disabled={bouncing.has(v.id)} onClick={() => void bounce(v)}>
-              {bouncing.has(v.id) ? "正在重启" : serviceAction(v.health)}</button>
-          </div>
+          <ListRow key={v.id} className={`computer-svc is-${v.health}`} onClick={() => setLog(v)} label={`${serviceSemantics(v)}，看日志`} trail={null}
+            icon={<i key={v.health} className={`job-dot svc-dot is-${v.health}`} />} title={v.title}
+            sub={<>{v.health === "gave_up" && <span className="svc-problem">已停止 · </span>}{serviceLine(v)}</>}
+            control={<button className="btn btn-ghost btn-sm" disabled={bouncing.has(v.id)} onClick={() => void bounce(v)}>
+              {bouncing.has(v.id) ? "正在重启" : serviceAction(v.health)}</button>} />
         ))}
         {s.running_jobs.map((j) => (
-          <div key={j.id} className="row computer-job">
-            <button className="computer-job-open" onClick={() => setLog(j)} aria-label={`${j.title}，运行 ${jobDuration(j.elapsed)}，看日志`}>
-              <span className="row-icon"><i className="job-dot" /></span>
-              <div className="row-body"><div className="row-title">{j.title}</div>
-                <div className="row-sub">{jobRowSubtitle(j)}</div></div>
-            </button>
-            <button className="btn btn-ghost btn-sm" disabled={cancelling.has(j.id)} onClick={() => void cancel(j)}>
-              {cancelling.has(j.id) ? "正在取消" : "取消"}</button>
-          </div>
+          <ListRow key={j.id} onClick={() => setLog(j)} label={`${j.title}，运行 ${jobDuration(j.elapsed)}，看日志`} trail={null}
+            icon={<i className="job-dot" />} title={j.title} sub={jobRowSubtitle(j)}
+            control={<button className="btn btn-ghost btn-sm" disabled={cancelling.has(j.id)} onClick={() => void cancel(j)}>
+              {cancelling.has(j.id) ? "正在取消" : "取消"}</button>} />
         ))}
       </ListGroup>
       {log && <JobLog job={log} onClose={() => setLog(null)} />}
