@@ -48,7 +48,7 @@ class Palette {
 
   /// 设计 v2 的“壁纸 + 玻璃”（v3.3 壁纸换成随钟点流动的天色 sky，见下面 SkyTable）：
   /// sky = 四个时段（夜 / 黎明 / 白天 / 黄昏）的底色与三团柔光；
-  /// glass = 浮层玻璃的着色（带透明度，下面是模糊后的内容）；glassBorder = 玻璃的 1px 发丝边；
+  /// glass = 浮层玻璃的着色（带透明度，下面是模糊后的内容；v3.5.1 起和 Hark 一样明显透出壁纸，= 网页 --glass，两端同值）；glassBorder = 玻璃的 1px 发丝边；
   /// glassHighlight = 玻璃卡片顶边 1px 的内高光（v2.1：卡片不要外投影，靠发丝边 + 这条高光分层）。
   final SkyTable sky;
   final Color glass, glassBorder, glassHighlight;
@@ -102,7 +102,7 @@ class Palette {
     success: Color(0xFF2E7D4F),
     shadow: Color(0x141C1B1A),
     sky: SkyTable.light, // v3.3 流光壁纸（原三档暖白渐变）
-    glass: Color(0xD9FFFFFF),
+    glass: Color(0x80FFFFFF), // v3.5.1 原 85% 白：Hark 浮层实测 ≈ 白 47–58%（顶栏 / 输入胶囊 / 圆钮），透出壁纸 = --glass rgba(255, 255, 255, 0.5)
     glassBorder: Color(0x121C1B1A), // = 分隔线
     chromeEdge: Color(0x121C1B1A),
     glassHighlight: Color(0x00FFFFFF), // F.2：不要玻璃描边/高光
@@ -169,7 +169,7 @@ class Palette {
     success: Color(0xFF62BD86),
     shadow: Color(0x80000000),
     sky: SkyTable.dark, // v3.3 流光壁纸（原深海军蓝渐变）
-    glass: Color(0xE01B1D25), // v3.1 实测 Hark 输入胶囊 #1B1D25
+    glass: Color(0xC21B1C21), // v3.5.1 原 #1B1D25 88%：Hark 深色浮层拟合 ≈ (27,27,32) 69–78%，取 76% 守住“浮层叠内容”最差对比度 = --glass rgba(27, 28, 33, 0.76)
     glassBorder: Color(0x14FFFFFF), // 8% 白 = 分隔线
     chromeEdge: Color(0x00FFFFFF), // Hark 深色浮层不描边
     glassHighlight: Color(0x00FFFFFF),

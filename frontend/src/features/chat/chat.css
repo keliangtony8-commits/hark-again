@@ -115,7 +115,7 @@
 .ai-block { width: 100%; max-width: 560px; min-width: 0; }
 .ai-block > .card { max-width: none; box-shadow: var(--elev-card); }
 .ai-card .blk-text > :last-child { margin-bottom: 0; }
-.glass-chip { background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-full); }
+.glass-chip { background: var(--card); border: 1px solid var(--card-edge); border-radius: var(--r-full); } /* 不模糊 = 卡（= App 不模糊的 GlassSurface 读 Palette.card）；--glass 只给真模糊的浮层 */
 .caret { display: inline-block; width: 8px; height: 1.1em; vertical-align: -3px; margin-left: 2px; border-radius: 2px; background: var(--text-3); animation: blink 1s steps(2) infinite; }
 /* 推理模型的思考：胶囊长成小卡，固定两行高、底对齐露出最新内容，顶部渐隐（App 的 TailText） */
 .thought { gap: var(--sp-2); width: 86%; animation: rise var(--dur) var(--ease) both; }

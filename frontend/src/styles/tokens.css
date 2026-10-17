@@ -28,7 +28,7 @@
   --sky-day-top: #add6fe; --sky-day-bottom: #e6dcc2; --sky-day-a: #b1d6f5; --sky-day-b: #f4eedf; --sky-day-c: #ebdbbf;
   --sky-dusk-top: #c5d0fb; --sky-dusk-bottom: #ebcdb6; --sky-dusk-a: #d2cdf7; --sky-dusk-b: #f3d2b4; --sky-dusk-c: #d8cde5;
   /* 设计 v2「浮层 + 毛玻璃」：与 App theme/tokens.dart 的 Palette.glass/... 同值 */
-  --glass: rgba(255, 255, 255, 0.85);        /* 玻璃着色（下面是模糊后的内容） */
+  --glass: rgba(255, 255, 255, 0.5);         /* 浮层玻璃着色（下面是模糊后的内容）；v3.5.1 原 0.85：Hark 浮层实测 ≈ 白 47–58%，透出壁纸（= App Palette.glass） */
   --glass-border: rgba(28, 27, 26, 0.07);    /* 玻璃的 1px 发丝边 */
   --chrome-edge: var(--glass-border); /* v3.1 浮层外圈（顶栏 / 圆钮 / 输入胶囊 / 头像）：浅色要发丝边，深色 Hark 不描边（= App Palette.chromeEdge） */
   --glass-highlight: transparent; /* v2.1：卡片顶边 1px 内高光（卡片不要外投影，靠发丝边 + 高光分层） */
@@ -169,7 +169,7 @@
   --sky-dawn-top: #121a36; --sky-dawn-bottom: #2a2340; --sky-dawn-a: #363468; --sky-dawn-b: #4e2f51; --sky-dawn-c: #2c3a5a;
   --sky-day-top: #14213f; --sky-day-bottom: #23304a; --sky-day-a: #223966; --sky-day-b: #283b59; --sky-day-c: #2c3a59;
   --sky-dusk-top: #141a38; --sky-dusk-bottom: #2b2244; --sky-dusk-a: #3e3267; --sky-dusk-b: #4f2f4e; --sky-dusk-c: #2c395f;
-  --glass: rgba(27, 29, 37, 0.88); /* 实测 Hark 输入胶囊 #1B1D25 */
+  --glass: rgba(27, 28, 33, 0.76); /* v3.5.1 原 #1b1d25 88%：Hark 深色浮层拟合 ≈ (27,27,32) 69–78%，76% 守“浮层叠内容”最差对比度（= App Palette.glass） */
   --glass-border: rgba(255, 255, 255, 0.08);
   --chrome-edge: transparent;
   --glass-highlight: transparent;

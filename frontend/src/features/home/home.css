@@ -24,7 +24,7 @@
 
 /* 新面板弹层里的起点胶囊（假玻璃，和对话页建议同一材质）+ 最近移除的面板 */
 .panel-idea-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
-.panel-idea { min-height: 44px; padding: 0 var(--sp-4); border-radius: var(--r-full); background: var(--glass); border: 1px solid var(--glass-border);
+.panel-idea { min-height: 44px; padding: 0 var(--sp-4); border-radius: var(--r-full); background: var(--card); border: 1px solid var(--card-edge);
   box-shadow: var(--elev-card); font-size: var(--fs-sm); color: var(--text);
   transition: transform var(--dur-fast) var(--ease), border-color var(--dur) var(--ease); }
 .panel-idea:hover { border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }

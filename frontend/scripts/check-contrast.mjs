@@ -10,6 +10,9 @@
 //      = App test/sky_test.dart 同一采样）：正文 --text、次要字 --text-2 ≥ 4.5，最次要字 --text-3 ≥ 3。
 //   4. v3.5.1 卡片 --card 是半透明“假玻璃”（rgba，壁纸透色）：浅/深两套和 App Palette.card 同值（含透明度），
 //      卡上的字按“--card 叠在上面每一处壁纸”算：--text / --text-2 / --warning / --danger ≥ 4.5，--text-3 ≥ 3。
+//   5. v3.5.1 浮层玻璃 --glass（顶栏 / 输入胶囊 / 搜索框 / 圆钮）也是 rgba、明显透出壁纸（= Hark）：浅/深和 App Palette.glass 同值（含透明度），
+//      浮层上的字（导航字 --text-2、占位符 --text-3、图标 / 输入字 --text）按浮层下面最差的三种情况算：直接是壁纸、卡叠壁纸、
+//      卡叠壁纸再被墨色（--ink：主按钮 / 字，= 浅色黑、深色白）盖住一半（σ24 模糊后一颗 48px 高实心按钮中线 ≈ 一半）。--text / --text-2 ≥ 4.5，--text-3 ≥ 3。
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,10 +40,10 @@ const cssTheme = (selector) => {
   return out;
 };
 
-/** 取 tokens.css 某个选择器块里 --card 的 rgba(r, g, b, a) → { c: [r,g,b] 0…1, a, argb: "#aarrggbb" }。 */
-const cssCard = (selector) => {
+/** 取 tokens.css 某个选择器块里 --<name>（--card / --glass）的 rgba(r, g, b, a) → { c: [r,g,b] 0…1, a, argb: "#aarrggbb" }。 */
+const cssRgba = (selector, name) => {
   const m = new RegExp(`${selector.replace(/[[\]]/g, "\\$&")}\\s*\\{([\\s\\S]*?)\\}`).exec(css);
-  const v = m && /--card:\s*rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)/.exec(m[1]);
+  const v = m && new RegExp(`--${name}:\\s*rgba\\(\\s*(\\d+),\\s*(\\d+),\\s*(\\d+),\\s*([\\d.]+)\\s*\\)`).exec(m[1]);
   if (!v) return null;
   const [r, g, b, a] = v.slice(1).map(Number);
   const hex = (n) => n.toString(16).padStart(2, "0");
@@ -127,10 +130,11 @@ function* skySamples(sky) {
 }
 const SKY_TEXT = [["正文", "text", 4.5], ["次要字", "text-2", 4.5], ["最次要字", "text-3", 3]];
 const CARD_TEXT = [...SKY_TEXT, ["警示字", "warning", 4.5], ["出错字", "danger", 4.5]];
-/** App Palette.light/dark 的 card：Color(0xAARRGGBB) → "#aarrggbb"（带透明度，两端逐字节同值）。 */
-const dartCard = (name) => {
+const GLASS_TEXT = SKY_TEXT;
+/** App Palette.light/dark 的 card / glass：Color(0xAARRGGBB) → "#aarrggbb"（带透明度，两端逐字节同值）。 */
+const dartArgb = (name, field) => {
   const m = new RegExp(`static const ${name} = Palette\\(([\\s\\S]*?)\\n  \\);`).exec(dart);
-  const v = m && /\bcard: Color\(0x([0-9a-fA-F]{8})\)/.exec(m[1]);
+  const v = m && new RegExp(`\\b${field}: Color\\(0x([0-9a-fA-F]{8})\\)`).exec(m[1]);
   return v ? `#${v[1].toLowerCase()}` : null;
 };
 
@@ -165,11 +169,11 @@ for (const [themeName, selector, dartName] of [["浅色", ":root", "light"], ["�
       if (worst < min) bad.push(`${themeName} ${what}/壁纸 --${fg} 最差 ${worst.toFixed(2)}:1 @ ${where}（要 ≥${min}）`);
     }
   }
-  const card = cssCard(selector);
+  const card = cssRgba(selector, "card");
   if (!card) bad.push(`${themeName}：tokens.css 缺 --card: rgba(…)`);
   else {
     if (app) {
-      const appCard = dartCard(dartName);
+      const appCard = dartArgb(dartName, "card");
       if (appCard !== card.argb) bad.push(`${themeName}：--card ${card.argb} ≠ App card ${appCard}`);
     }
     if (!missing.length) {
@@ -178,6 +182,26 @@ for (const [themeName, selector, dartName] of [["浅色", ":root", "light"], ["�
         for (const [at, c] of skySamples(sky)) { const r = ratio(web[fg], mix(c, card.c, card.a)); if (r < worst) { worst = r; where = at; } }
         skyWorst.push(`${themeName}${what}/卡 ${worst.toFixed(2)}`);
         if (worst < min) bad.push(`${themeName} ${what}/卡（--card 叠壁纸）--${fg} 最差 ${worst.toFixed(2)}:1 @ ${where}（要 ≥${min}）`);
+      }
+    }
+  }
+  const glass = cssRgba(selector, "glass");
+  if (!glass) bad.push(`${themeName}：tokens.css 缺 --glass: rgba(…)`);
+  else {
+    if (app) {
+      const appGlass = dartArgb(dartName, "glass");
+      if (appGlass !== glass.argb) bad.push(`${themeName}：--glass ${glass.argb} ≠ App glass ${appGlass}`);
+    }
+    if (!missing.length && card) {
+      // 浮层下面最差的三种：壁纸 / 卡叠壁纸 / 卡叠壁纸再被墨色盖住一半（滚过主按钮、字）
+      const unders = [["壁纸", (c) => c], ["卡", (c) => mix(c, card.c, card.a)], ["卡上墨色一半", (c) => mix(mix(c, card.c, card.a), web.ink, 0.5)]];
+      for (const [what, fg, min] of GLASS_TEXT) {
+        let worst = Infinity, where = "";
+        for (const [on, under] of unders) {
+          for (const [at, c] of skySamples(sky)) { const r = ratio(web[fg], mix(under(c), glass.c, glass.a)); if (r < worst) { worst = r; where = `${on} ${at}`; } }
+        }
+        skyWorst.push(`${themeName}${what}/浮层 ${worst.toFixed(2)}`);
+        if (worst < min) bad.push(`${themeName} ${what}/浮层（--glass 叠壁纸 / 卡 / 卡上墨色）--${fg} 最差 ${worst.toFixed(2)}:1 @ ${where}（要 ≥${min}）`);
       }
     }
   }
@@ -191,4 +215,4 @@ if (bad.length) {
   console.error("配色守门失败：\n" + bad.join("\n"));
   process.exit(1);
 }
-console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题 + 壁纸全天采样 × 2 套：${skyWorst.join("、")}${dart ? "；壁纸 " + SKY_PHASES.length * SKY_PARTS.length + " 色 + --card 与 App tokens.dart 同值" : ""}）`);
+console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题 + 壁纸全天采样 × 2 套：${skyWorst.join("、")}${dart ? "；壁纸 " + SKY_PHASES.length * SKY_PARTS.length + " 色 + --card / --glass 与 App tokens.dart 同值" : ""}）`);

@@ -20,6 +20,7 @@
   - **Web 已做（wip/v3.5.1-me）**：TopBar `isShellRoot` 加 /me，“我的”顶栏常驻：滑块原位淡出（`.segments-thumb.off`，位置记在模块级 lastSegment）、头像外圈 `--pill-on` 环淡入（`.avatar-tab.on`）+ `aria-current="page"`；MeScreen 删返回钮 / “回到主页”× 和“我的”专用渐隐，改用一级页 `.shell.has-bar` 同一套；AppShell `ShellViews` 进出“我的”整页横滑 360ms（离场页元素 + location 冻住多留一段，只动 transform，渐隐条壁纸副本反向平移抵消；reduce-motion 直接切），三个分段之间、子页进出不变；SkyFade 定位改量布局位置（不受 transform 影响）。决定 + 测量见 devlog「v3.5.1 “我的” = 第四个标签（Web）」。
   - **待做**：412×915 上“退出登录”和“关于”现在要滚一小段（顶栏常驻多让出 72px，行高 64 / 用量卡 98 比 Hark 61 / 83 高、且多一行“我的电脑”），要不要收紧行高 / 卡高待定；两端真机看横滑手感未验证；Web 一级页左上按钮（ShellLead portal 进顶栏）横滑时不随页滑（App 随页滑），未改。
 - [x] 卡片不要纯白（用户 2026-10-17，第二节 27）：两端卡片 = 半透明灰白假玻璃，同一 token（App `Palette.card` / Web `--card`），减少透明度回实色；浅色 danger / warning 压深一档保卡上小字 ≥ 4.5；两端对比度守门加“卡叠壁纸”一档。决定 + 取样 + 测量见 devlog「v3.5.1 卡片 = 半透明灰白假玻璃」。未验证真机。
+- [x] 浮层也不要近乎纯白（用户 2026-10-18，第二节 27）：两端 glass token 降到 Hark 实测（浅 50% 白 / 深 76% 炭灰），透出壁纸；网页三处不模糊却读 --glass 的改读 --card（= App）；glassSheet 仍在用（表单弹层 / 对话框 / 菜单）不删；两端守门加“浮层叠壁纸 / 卡 / 卡上墨色”一档。见 devlog「v3.5.1 浮层玻璃透出壁纸」。未验证真机。
 - [ ] 之后：主要聊天 + 旁聊（第二节 25，先出设计）
 **v3.4.0 已发版：wip/v3.4 合并进 main、tag v3.4、已 push。服务器仍是 v3.2.1，未部署（用户明确说“更新服务器”才部署）；未出 APK。**
 - v3.4 内容（决定与测量见 devlog「v3.3 视觉验收」「后端偶发测试失败查根因」「“我的”页顶部渐隐」「v3.4 验证」）：
@@ -150,6 +151,7 @@ VERSION → 3.3.0，`python3 brand/sync.py`，CHANGELOG 加一节（含“删除
    - 做：新卡片只走 GlassCard / AppCard / ListGroup / BlockFrame（App）或读 `var(--card)`（Web），蓝天上自然偏冷灰、暖底上偏暖灰。
    - 不做：不写纯白 / 实色卡底；不为卡片加真模糊（BackdropFilter / 背景模糊只给浮层）；不在页面里另写一个半透明色。
    - 减少透明度时卡片回实色 surface。卡上的字按“card 叠在壁纸上”守对比度（App test/sky_test.dart、网页 check-contrast.mjs），改透明度或改字色前先跑这两个。
+   - **浮层（顶栏导航胶囊 / 输入胶囊 / “我的”搜索框 / 圆钮）同样透出壁纸**（用户 2026-10-18 反馈“还是近乎纯白，不好看”）：同一个 token App `Palette.glass` / 网页 `--glass`，两端同值（浅 `rgba(255,255,255,0.5)`，深 `rgba(27,28,33,0.76)`，Hark 取样见 devlog 2026-10-18）；浮层下面本来就有真模糊，不再加模糊层；不模糊的东西不读 glass（读 card）。浮层上的字按“glass 叠壁纸 / 卡 / 卡上墨色一半”守对比度（同上两个守门）。
 
 ## 三、工程规矩（看代码 / 改代码时）
 - **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**
