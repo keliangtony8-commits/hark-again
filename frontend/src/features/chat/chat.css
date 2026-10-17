@@ -73,7 +73,7 @@
 @media (max-width: 860px) {
   /* v3.5.1（用户 22:39“别留那个半屏的”“丑爆了”）：窄屏历史 / 项目切换不再是从左滑出的半屏玻璃卡 + 遮罩，
      而是铺满整屏、直接落在壁纸上的一页（= 项目列表页的样子）：顶栏留在上面（左上钮开 / 关），聊天区淡出让位。
-     只动 opacity / transform，不加任何离屏层或 backdrop-filter。 */
+     只动 opacity / transform，不加任何离屏层或模糊。 */
   .convs { position: fixed; inset: 0; z-index: 19; width: auto; margin: 0; padding: var(--shell-top) calc(var(--gutter) - var(--sp-2)) 0;
     opacity: 0; visibility: hidden; transform: translateY(8px); animation: none;
     transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), visibility 0s linear var(--dur); }

@@ -4,7 +4,7 @@
 //   2. @keyframes 只写在 styles/base.css（动效统一一处）。
 //   3. 聊天区和卡片块坐在玻璃上：blocks/ 与 features/chat/ 的 CSS 不许用实底 --surface-2 / --bg，填充用 --tile（= App GlassFills）。
 //   4. 材质只在底层（styles/ 与 ui/）定义（= App“boxShadow 只在 glass.dart、surface2 只在 theme/”）：其余 CSS 不许直接写
-//      var(--shadow-*) / backdrop-filter / var(--surface-2)，投影用 var(--elev-card|float|raised|knob)，模糊用 .glass / .glass.raised / .glass-drawer。
+//      var(--shadow-*) / backdrop-filter / var(--surface-2)，投影用 var(--elev-card|float|raised|knob)，模糊用 .glass / .glass.raised。
 //   5. 强调色克制（= App design_test「accent 只出现在登记过的信号位」）：var(--accent*) 只在 ACCENT 登记的文件里、且不超过登记次数
 //      （未读点、进度/运行中、链接/搜索命中、焦点环、唯一关键状态）；其余用 --ink / --text-2。
 //   6. 让出底部输入胶囊只用量出来的 --footer-h（ui/kit.tsx Page / FloatingFooter、ChatView），不许写死兜底数
@@ -89,7 +89,7 @@ for (const f of files) {
       bad.push(`${rel}:${i + 1} --footer-h 是量出来的胶囊高度，不写兜底数 → var(--footer-h)，并确认外层由 Page footer / ChatView 给值`);
     if (f.endsWith(".css") && !/^(styles|ui)\//.test(rel)) {
       if (/var\(--shadow-/.test(line)) bad.push(`${rel}:${i + 1} 投影用 var(--elev-*)，不直接写 --shadow-*`);
-      if (/backdrop-filter/.test(line)) bad.push(`${rel}:${i + 1} 页面不写 backdrop-filter → 拼 .glass / .glass.raised / .glass-drawer`);
+      if (/backdrop-filter/.test(line)) bad.push(`${rel}:${i + 1} 页面不写 backdrop-filter → 拼 .glass / .glass.raised`);
       if (/var\(--surface-2\)/.test(line)) bad.push(`${rel}:${i + 1} 玻璃上的填充用 var(--tile)，--surface-2 只在 styles/ 里`);
     }
   });
