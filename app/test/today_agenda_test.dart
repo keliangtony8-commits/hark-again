@@ -120,7 +120,7 @@ void main() {
     expect(briefTaskOf([task('once', '', prompt: '帮我准备今天', runAt: now)]), isNull);
   });
 
-  testWidgets('新面板弹层：“每天早上的简报”没排时出、点了回调；排好后不出', (tester) async {
+  testWidgets('新建面板模式：“每天早上的简报”没排时出、点了回调；排好后不出', (tester) async {
     var scheduled = 0;
     Future<void> pumpExtras(bool missing) => tester.pumpWidget(MaterialApp(
         theme: buildTheme(Brightness.light),

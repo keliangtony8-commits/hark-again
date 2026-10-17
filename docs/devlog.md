@@ -483,3 +483,14 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
   - Web：FloatingFooter 自己量高、在底条前渲染 `SkyFade kind="footer" height={h + 16}`；`.sky-fade.sky-fade-footer` 贴底 + 反向 mask（同 6 个色标）。SkyFade 的 ResizeObserver 加观察自身（底条长高时条的视口位置会变）。坑：`.sky-fade-footer` 单类名被 base.css `.sky-fade { top: 0 }` 压住，条跑到顶上 → 用双类名。
 - 验证：flutter analyze 0、flutter test 736 过 / 9 跳过；Web tsc、npm test 14/14、架构守卫、build 过；截图 App（me / me-end / 聊天回到最新 / 主页暗色）+ Web 全套 phone/desktop × 明暗看过：卡片 / 退出登录 / 气泡滚到浮条处淡进壁纸，滑到底退出登录条完整露出。
 - 帧耗时：App perf_frame_test 新旧交替各 2 轮，backdropLayers / shaderMaskLayers / fadeRebuilds 不变，每帧元素 +3（多一条），CPU 中位在噪声内（shell-scroll 新 13.2/11.1 vs 旧 10.6/9.5ms，me-scroll 4.9/3.0 vs 2.9/2.5，chat-stream 34.5/36.4 vs 36.8/33.7）。Web 4×CPU 手机视口新旧交替各 4 轮：median 16ms、p95 19–20ms 不变；>20ms 帧主页 47 vs 19、“我的” 36 vs 27（4 轮合计）——多一条动态壁纸副本 + mask 的成本，和 v3.5 子页渐隐条同类同量级。**未验证**：真机 Flutter profile、真 GPU 浏览器。
+
+## 2026-10-16 v3.5.1 新建面板 = 主页“发起”态的新面板模式（两端，照 Hark；用户 22:48“你看看 hark 做的多好，你的好丑！”）
+**依据**：Hark 点主页左上 + → 直接进整屏毛玻璃（顶部导航还在），底部是同一条输入胶囊、键盘弹出、左边收起钮；输入框上方一行淡色小字“创建一个新面板”；占位词在面板示例之间轮播；没有白底弹层、标题、“开始做”。
+**决定（替换不叠加）**
+1. 新建面板不再是一个弹层，而是主页 LaunchComposer 的一种“模式”（App `LaunchMode`，Web `LaunchMode` 同名同字段）：caption（上方小字）、hints（占位词轮播）、wrap（发出前把输入包成 newPanelPrompt）、extras（原来建议问题那一格换成本模式的胶囊）。+ 和栈底“创建一个新面板”宽胶囊都只做一件事：让输入胶囊进入新面板模式并聚焦；收起（收起钮 / 点遮罩 / 返回键 / Esc / 发出）= 回到普通主页、模式清掉。
+2. 新面板模式的 extras（原弹层的全部功能，一个不少）：面板示例胶囊（点即交给新对话）、“每天早上的简报”（还没排时才出，点了 = 收起后打开预填的定时任务表单，同原来）、最近移除（30 天内，点 = 收起后放回，同原来；胶囊 = 恢复图标 + 名字 + 淡色移除时间）。材质 = 发起态现有的玻璃胶囊（App GlassChip 加可选 icon / detail，Web .launch-chips button），不再有白卡。
+3. 占位词轮播 = 输入框的一部分（App Composer `hints` → motion.dart `CycleText`；Web Composer `hints` → 输入框上叠一层 aria-hidden 的文字），每 `Motion.hintCycle`（3.2 s）换一个：旧的上移淡出、新的从下淡入，只动 transform / opacity；减少动态 = 停在第一个不轮播；输入框有字时不显示。
+4. **删除**：App new_panel.dart 里的 createPanel（showFormSheet 白底弹层 + 回调中转）；Web NewPanelSheet.tsx 整个文件、home.css 的 .panel-idea* / .removed-* 样式；对应测试改成测新模式。new_panel.dart 只留数据与 extras（newPanelPrompt / panelIdeas / briefIdeaLabel / NewPanelExtras / newPanelMode）。
+**成本**：不新增常驻层。进入模式 = 原来聚焦时的那一层 FrostScrim（同一个模糊），胶囊比建议问题多一两行；轮播每 3.2 s 一次 240ms 的淡入上浮，只在聚焦且是新面板模式时有 Timer（失焦即停）。原来的弹层是一个路由 + 暗遮罩 + 一块毛玻璃弹层，现在少了路由和弹层。
+
+**对照 Hark 原图收尾（2026-10-17，App）**：两张 Hark 截图（files/uploads/1000035709、1000035710）——小字居中、常规字重、比占位词小一档、离胶囊顶约 24；占位词前带一个图标（地图等），随句子一起换；胶囊左边没有“+ 添加附件”。照改：小字 labelMedium(12/500) → bodyMedium(14/400) text3、上下 Sp.x4（加 Composer 上边距 Sp.x2 ≈ 24）；`LaunchMode.hintIcons` → Composer `hintIcons` → CycleText `icons`（图标 Fs.lg、和字同色、同一个 key 一起换）；Composer `attach: false`（模式里不出添加附件，左边留 Sp.x4）。新测 test/new_panel_mode_test.dart（整个 App 搭起来）。**仍与 Hark 不同（有意 / 待定）**：①Hark 模式里只有小字、没有胶囊；我们保留示例 / 早间简报 / 最近移除胶囊（本节决定 2，原弹层功能不丢）；②Hark 左边圆钮是 ↺，我们是收起 ⌄（与普通发起态共用）；③Web 还没跟（占位图标、不出附件、小字样式）。

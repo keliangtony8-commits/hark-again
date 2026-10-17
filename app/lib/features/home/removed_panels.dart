@@ -1,7 +1,7 @@
 // v2.17 移除的面板可以找回（规则在 backend app/panel_trash.py：30 天内，找回后做法都在、马上重新取数据）。
 // 这里是客户端唯一入口：
 // - removePanel：面板“更多 → 移除”。可撤销，所以不再弹危险确认；底部一条“已移除「X」· 撤销”。
-// - 找回：新面板弹层（new_panel.dart）底部列出 removedPanels()，点一个 → revivePanel。v2.78 起主页上不再单独占一行。
+// - 找回：新建面板模式（new_panel.dart，主页输入胶囊上方）列出 removedPanels()，点一个 → revivePanel。v2.78 起主页上不再单独占一行。
 // 网页版 features/home/RemovedPanels.tsx 同规则。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

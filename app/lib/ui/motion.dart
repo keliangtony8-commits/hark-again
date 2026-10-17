@@ -358,6 +358,85 @@ class SwapSwitcher extends StatelessWidget {
   );
 }
 
+/// 占位词轮播（v3.5.1 新建面板模式的输入框）：每 Motion.hintCycle 换下一句，旧的上移淡出、新的从下方淡入
+/// （只动 transform / opacity，左对齐、不改尺寸）。减少动态 = 停在第一句不轮播；被盖住的路由（TickerMode 关）不走表。
+/// icons（可选，和 items 一一对应）：照 Hark 每句前带一个图标，和字一起换。网页同义：features/chat/Composer.tsx 的 hints。
+class CycleText extends StatefulWidget {
+  const CycleText({super.key, required this.items, this.icons, this.style});
+  final List<String> items;
+  final List<IconData>? icons;
+  final TextStyle? style;
+
+  @override
+  State<CycleText> createState() => _CycleTextState();
+}
+
+class _CycleTextState extends State<CycleText> {
+  Timer? _timer;
+  int _i = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(CycleText old) {
+    super.didUpdateWidget(old);
+    if (old.items != widget.items) _i = 0;
+    _sync();
+  }
+
+  void _sync() {
+    final run = widget.items.length > 1 && !context.reduceMotion && TickerMode.valuesOf(context).enabled;
+    if (!run) {
+      _timer?.cancel();
+      _timer = null;
+      if (context.reduceMotion) _i = 0;
+    } else {
+      _timer ??= Timer.periodic(Motion.hintCycle, (_) {
+        if (mounted) setState(() => _i = (_i + 1) % widget.items.length);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.items.isEmpty ? '' : widget.items[_i % widget.items.length];
+    final icons = widget.icons;
+    final icon = icons == null || icons.isEmpty || widget.items.isEmpty ? null : icons[_i % widget.items.length % icons.length];
+    return RepaintBoundary(
+      child: AnimatedSwitcher(
+        duration: context.motion(Motion.base),
+        switchInCurve: Motion.ease,
+        switchOutCurve: Motion.ease,
+        layoutBuilder: (current, previous) => Stack(alignment: AlignmentDirectional.centerStart, children: [...previous, ?current]),
+        transitionBuilder: (c, a) {
+          final incoming = c.key == ValueKey(text);
+          return FadeTransition(
+            opacity: a,
+            child: SlideTransition(position: Tween(begin: Offset(0, incoming ? 0.5 : -0.5), end: Offset.zero).animate(a), child: c),
+          );
+        },
+        child: icon == null
+            ? Text(text, key: ValueKey(text), style: widget.style, maxLines: 1, overflow: TextOverflow.ellipsis)
+            : Row(key: ValueKey(text), mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, size: Fs.lg, color: widget.style?.color),
+                const SizedBox(width: Sp.x2),
+                Flexible(child: Text(text, style: widget.style, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ]),
+      ),
+    );
+  }
+}
+
 /// 侧栏出现/收起：横向展开 + 淡入（平板双栏里的历史栏）。child 换成 null 就收起。
 /// animate: false 时直接到位——窗口尺寸变化（转屏、展开折叠屏）引起的切换不做过渡，否则窄屏上会先挤压对话区。
 class SidePaneSwitcher extends StatelessWidget {

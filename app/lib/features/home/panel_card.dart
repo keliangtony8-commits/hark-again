@@ -36,7 +36,7 @@ class PanelCard extends ConsumerWidget {
       await ref.read(tasksProvider.notifier).reload();
     }
 
-    // v2.17 移除可以撤销 / 30 天内找回（新面板弹层里），所以不再弹危险确认
+    // v2.17 移除可以撤销 / 30 天内找回（新建面板模式里），所以不再弹危险确认
     Future<void> remove() => removePanel(context, ref, card);
 
     // 改标题/刷新指令/频率：和任务详情同一张表单；改名由服务端同步到卡片，所以之后重拉一次卡片
