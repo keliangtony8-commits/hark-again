@@ -24,10 +24,13 @@ export function SkyFade({ kind, height }: { kind: "page" | "thread" | "footer"; 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // 量布局位置（offsetLeft/Top 一路加到顶），不量 getBoundingClientRect：后者带上祖先的 transform——
+    // v3.5.1 进出“我的”横滑时新页挂载在 +100% 处，记下来就会滑完错一屏；滑动期间的位移由 shell.css 让副本反向平移抵消。
     const place = () => {
-      const r = el.getBoundingClientRect();
-      el.style.setProperty("--sky-x", `${r.left}px`);
-      el.style.setProperty("--sky-y", `${r.top}px`);
+      let x = 0, y = 0;
+      for (let n: HTMLElement | null = el; n; n = n.offsetParent as HTMLElement | null) { x += n.offsetLeft; y += n.offsetTop; }
+      el.style.setProperty("--sky-x", `${x}px`);
+      el.style.setProperty("--sky-y", `${y}px`);
     };
     place();
     const ro = new ResizeObserver(place);

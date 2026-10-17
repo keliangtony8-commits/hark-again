@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { auth, http, notifyUnauthorized, server } from "../../lib/api";
 import { outbox } from "../../lib/outbox";
 import { budgetLevel, budgetRatio, formatMoney, formatTokens, type UsageReport } from "../../lib/usage";
-import { IconBack, IconCard, IconClock, IconComputer, IconDoc, IconFeedback, IconGauge, IconLogout, IconPlug, IconSearch, IconSettings, IconShield, IconUser } from "../../ui/icons";
+import { IconCard, IconClock, IconComputer, IconDoc, IconFeedback, IconGauge, IconLogout, IconPlug, IconSearch, IconSettings, IconShield, IconUser } from "../../ui/icons";
 import { Highlight, Hint, ListGroup, ListRow, Page, SearchField, Section, stagger } from "../../ui/kit";
 import { meLocation, meWhere, searchMe, type MeEntry, type MeSection } from "./meIndex";
 import CountUp from "../../ui/CountUp";
@@ -108,12 +108,11 @@ function MeResults({ q, hits }: { q: string; hits: MeEntry[] }) {
   );
 }
 
-/** “我的”（v2.81 一屏）：页头一行（返回 + 名字/域名）→ 用量卡 → 两组行 → 退出登录整行条（v3.5 照 Hark，原居中胶囊）。外观、头像颜色、回复语言都在“偏好设置”。
+/** “我的”（v2.81 一屏；v3.5.1 第四个标签，= App me_screen.dart）：页头（名字/域名）→ 用量卡 → 两组行 → 退出登录整行条（v3.5 照 Hark，原居中胶囊）。外观、头像颜色、回复语言都在“偏好设置”。
+ *  外框 = 一级页同一套（.shell.has-bar：顶栏常驻、让出顶栏、同一条顶部渐隐）；导航在顶栏（头像为当前项），本页不再自带返回钮 / “回到主页”×、不自带渐隐（v3.5.1 删，不留两套）。
  *  v3.0：底部设置搜索（全站唯一，索引 meIndex.ts）——输入即筛，页头保留，下面换成结果；Page 的 footer 量胶囊实高，滚到底不挡“退出登录”。 */
 export default function MeScreen() {
   const nav = useNavigate();
-  // 从站内点头像进来 → 返回上一页；直接打开（深链接 / 刷新）→ 回到主页
-  const root = !((window.history.state as { idx?: number } | null)?.idx);
   // v2.61：先让服务器作废这个 token（登录设备里就没了这台），失败不拦
   const outdated = clientOutdated(useServerVersion());
   const logout = async () => { await http.post("/api/auth/logout", {}).catch(() => {}); auth.clear(); outbox.clear(); notifyUnauthorized(); };
@@ -123,7 +122,6 @@ export default function MeScreen() {
   return (
     <Page className="me" footer={<MeSearch q={q} setQ={setQ} onFirst={() => { if (hits[0]) nav(meLocation(hits[0])); }} />}>
       <div className="me-head enter">
-        <button className="glass-btn glass" onClick={() => (root ? nav("/") : nav(-1))} aria-label={root ? "回到主页" : "返回"} title={root ? "回到主页" : "返回"}><IconBack /></button>
         <Identity />
       </div>
       {searching ? <MeResults q={q} hits={hits} /> : (

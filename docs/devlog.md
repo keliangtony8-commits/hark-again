@@ -496,3 +496,15 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 - 成本 / 帧（perf_frame_test，同机先后跑）：“我的”滚动 每帧重建元素 2→0、重画 8→4、CPU 中位 1.31→1.14ms；backdropLayers 1→2、取背景 1→2 次（多的是常驻顶栏那一组，和主页 / 项目同为 ≤2，新加断言守住）；shaderMask 0、渐隐条滚动重建 0。横滑期间两页同时在台上、各自 transform，不触发布局。
 - 版面代价（未解决，记 HANDOFF）：顶栏常驻后内容多让出 72px，412×915 上“关于”与“退出登录”要滚一小段才露出（原 design_p3_test“退出登录不用滚就看得到”改为“第一组 + 第二组前两行露在搜索胶囊上方”）。不删行、不改行高就收不回；要不要把行高 64 / 用量卡 98 往 Hark 的 61 / 83 收另议。
 - 未验证：真机横滑手感与 GPU 帧；Web 未改（不在这次范围）。
+
+## 2026-10-17 v3.5.1 “我的” = 第四个标签（Web；照 App 3c00b9f，HANDOFF 第二节第 26 条）
+- 归属 / 替换（和 App 一一对应，不新增组件）：
+  1. 顶栏：`TopBar.tsx isShellRoot` 加 '/me'（= App `shellRoots` 加 '/me'），“我的”显示顶栏、/me/… 子页照旧没有顶栏（子页 `.page-head` 和返回钮不动）。分段导航在“我的”时三项都不选中：滑块 `.segments-thumb` 停在上一次的位置（模块级记住，子页回来顶栏重新挂载也不跳）原位淡出（opacity），回到分段时原位淡入再滑走；头像外圈淡入一道 `--pill-on`（= 滑块色）2px 环（`.avatar-tab::after`，opacity 过渡），头像按钮 `aria-current="page"`。
+  2. 外框：MeScreen 改用一级页同一套 `.shell.has-bar` 结构（--inset-top 让出顶栏、`.sky-fade-page` 同一条渐隐）。**删**：页头返回钮 / “回到主页”×、`.me .page-inner` 自己的上留白、shell.css 里“我的”专用渐隐带、`.me-top` 死样式。页头上留白回到一级页的 sp-4（静止时在全显线上）。
+  3. 切换动效：AppShell 里 `ShellViews`（= App `ShellBranches`）：路由仍是一个 Outlet；只有一端是“我的”、另一端是带顶栏的一级页时，把离场页的元素（`useOutlet()`，连同当时的 location，用 `UNSAFE_LocationContext` 冻住，滑出途中不按新地址重算）多留 360ms：进场层从 ±100% 滑到 0、离场层从 0 滑到 ∓100%（`--dur-slow` / `--ease` = App Motion.slow / ease），滑完离场层卸载。只动 transform；主页 / 聊天 / 项目之间、子页进出、reduce-motion、滑到一半又切走都直接切。层的 key 只在横滑时变，其余导航（如项目 A → 项目 B）组件照旧复用不重挂。
+  4. 渐隐条壁纸副本跟着层一起平移会和真壁纸错开 → 滑动期间副本里的 `.sky` 反向同曲线平移（`.sky-fade > .sky` 同一个 keyframes 取负），和全屏壁纸逐像素重合；SkyFade 的定位改用布局位置（offsetLeft/Top 链），不受进场层初始 transform 影响（原 getBoundingClientRect 会把 +100% 记进去，滑完错一屏）。
+  5. 其他入口：头像 `nav("/me")`；首页卡片 / 聊天块里直接 `Link to="/me/…"` 进子页，照旧。
+- 和 App 的差别（已知、不改）：Web 一级页左上按钮是 portal 进顶栏的（ShellLead），横滑时不随页面滑，跟着页面挂载 / 卸载出现消失；App 是 ShellPage 画的、随页滑。
+- 顺手修：`features/chat/chat.css` 注释里写了 backdrop-filter 字样，架构守卫拦住 `npm run build`（HEAD 已坏），改成“背景模糊”。
+- 验证：`tsc -b`、`npm test` 14/14、`npm run build`（架构守卫 222 文件 + 配色守门）过。Playwright 走查（work/me_slide_check.py，手机视口）：主页点头像 → 中途 2 层（离场 / 进场各自的渐隐条一左一右）、结束 1 层，`--sky-x` 都是 0；“我的”分段 0 个选中、滑块 `.off`、头像环亮、`aria-current=page`、无返回钮；进 /me/tasks 无顶栏、不滑；返回 /me 滑块仍 off；点“聊天”反向滑；聊天 → 项目直接切；reduce-motion 全程 1 层直接切；控制台 0 错误。`shots.py` 全量 140 张，看了 phone-light/dark-me、desktop-light-me、偏好子页：版式与 Hark 个人页一致（导航胶囊悬浮、三项不选中、头像为当前项、无左上钮、页头直接接内容）。
+- 帧耗时（4× CPU、手机视口，同机新旧 dist 交替各 3 轮，机器空闲时）：“我的”滚动 median 16 / p95 19–20 新旧相同，>20ms 帧 旧 14/14/16 = 44、新 7/14/6 = 27（多了常驻顶栏一块玻璃，没变差）。横滑期间（work/slide_frames.py：主页 ↔ 我的 各 4 次、点击后 500ms 的 rAF 间隔，含新页挂载）：>20ms 帧 旧（直接切）41 / 50、新 56 / 60，max 两边都是挂载那一帧 165–222ms；即每次切换多 1–2 个慢帧（两页同时合成），挂载本身的长帧新旧一样。**未验证**：真 GPU / 真机手感。

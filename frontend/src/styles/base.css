@@ -96,6 +96,11 @@ a { color: var(--accent); text-decoration: none; }
 .sky-c > i { background: radial-gradient(closest-side, var(--sky-c) 0%, color-mix(in srgb, var(--sky-c) 93.9%, transparent) 12.5%, color-mix(in srgb, var(--sky-c) 77.9%, transparent) 25%, color-mix(in srgb, var(--sky-c) 57.0%, transparent) 37.5%, color-mix(in srgb, var(--sky-c) 36.8%, transparent) 50%, color-mix(in srgb, var(--sky-c) 21.0%, transparent) 62.5%, color-mix(in srgb, var(--sky-c) 10.5%, transparent) 75%, color-mix(in srgb, var(--sky-c) 4.7%, transparent) 87.5%, transparent 100%); }
 @keyframes sky-x { from { transform: translateX(calc(-1 * var(--ax))); } to { transform: translateX(var(--ax)); } }
 @keyframes sky-y { from { transform: translateY(calc(-1 * var(--ay))); } to { transform: translateY(var(--ay)); } }
+/* v3.5.1 进出“我的”整页横滑（shell.css .shell-view.slide）：页面层平移，渐隐条里的壁纸副本反向同步平移 */
+@keyframes view-in { from { transform: translateX(calc(var(--slide-dir) * 100%)); } to { transform: none; } }
+@keyframes view-out { from { transform: none; } to { transform: translateX(calc(var(--slide-dir) * -100%)); } }
+@keyframes view-in-sky { from { transform: translateX(calc(var(--slide-dir) * -100vw)); } to { transform: none; } }
+@keyframes view-out-sky { from { transform: none; } to { transform: translateX(calc(var(--slide-dir) * 100vw)); } }
 /* 顶部渐隐条（ui/Sky.tsx SkyFade）：壁纸副本反向偏移到视口原点；渐隐带由 .sky-fade-page / .sky-fade-thread 给（shell.css / chat.css） */
 .sky-fade { position: absolute; left: 0; right: 0; top: 0; z-index: 1; overflow: hidden; pointer-events: none; contain: paint; }
 .sky-fade > .sky { position: absolute; z-index: auto; left: calc(-1 * var(--sky-x, 0px)); top: calc(-1 * var(--sky-y, 0px)); }
