@@ -18,8 +18,8 @@ export function Sky() {
 /** 滚动区上沿的渐隐条（= App ShellPage 的 SkyLayer(fade:)，v3.3 B3 代替整区 mask-image）：
  *  一条只有渐隐带那么高的壁纸副本，按自己在视口里的位置反向偏移，和全屏壁纸逐像素重合；自身的遮罩从“全是壁纸”渐变到“全透明”。
  *  壁纸以 α 盖在内容上 = 内容以 1-α 透到壁纸，看上去和原来遮罩滚动区一样，但离屏合成的只有这一窄条。
- *  kind：page = 一级页面（.page，渐隐带见 shell.css），thread = 聊天消息流（.thread，见 chat.css），footer = 底部浮条下（v3.5，height = 底条实高，见 shell.css）。放在滚动区后面、同一个定位父元素里。 */
-export function SkyFade({ kind, height }: { kind: "page" | "thread" | "footer"; height?: number }) {
+ *  kind：page = 一级页面（.page，渐隐带见 shell.css），thread = 聊天消息流（.thread，见 chat.css），footer = 底部浮条下（v3.5，height = 底条实高，见 shell.css），sheet = 手机全屏弹层的标题行下（v3.5.1，见 ui.css）。放在滚动区后面、同一个定位父元素里。 */
+export function SkyFade({ kind, height }: { kind: "page" | "thread" | "footer" | "sheet"; height?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;

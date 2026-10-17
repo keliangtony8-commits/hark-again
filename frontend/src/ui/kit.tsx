@@ -254,19 +254,33 @@ function useVisualViewport(el: RefObject<HTMLElement | null>) {
   }, [el]);
 }
 
-/** 底部弹层（手机）/ 居中玻璃卡（桌面）。v2.93：portal 到 body——以前渲染在页面树里，页面的顶部渐隐 mask 和入场 transform
- *  各自形成层叠上下文，z-index 50 也压不过外壳顶栏（20）和底部输入胶囊（16），弹层被顶栏压住、输入框浮在弹层上。
- *  层级统一在 ui.css：输入胶囊 16 < 顶栏 20 < 抽屉 30 < 弹层 50 < 对话框 60。按钮行（actions 或子内容里的 .sheet-actions）贴底常驻。 */
+/** 弹层：桌面 = 居中浮起的玻璃卡；手机（≤860，v3.5.1 用户“别留那个半屏的”）= 铺满整屏、直接落在壁纸上的一页（= 子页的样子：
+ *  左上圆玻璃返回钮、标题居中裸字、内容整页可滚、按钮行贴底），下面的页面淡出让位（<html data-sheet>，ui.css），旧的底部半屏卡已删。
+ *  v2.93：portal 到 body——以前渲染在页面树里，页面的顶部渐隐 mask 和入场 transform 各自形成层叠上下文，z-index 50 也压不过外壳顶栏（20）和底部输入胶囊（16）。
+ *  层级统一在 ui.css：输入胶囊 16 < 顶栏 20 < 抽屉 30 < 弹层 50 < 对话框 60。按钮行（actions 或子内容里的 .sheet-actions）贴底常驻。
+ *  手机上滚过标题行 / 按钮行的内容由两条壁纸副本（SkyFade）渐隐，和子页、输入胶囊同一画法；桌面不显示它们。 */
 export function Sheet({ title, onClose, children, actions }: { title: string; onClose: () => void; children: ReactNode; actions?: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const scrim = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
+  const [footH, setFootH] = useState(0);
   useVisualViewport(scrim);
+  // 按钮行可能来自 actions，也可能在子内容里（ProjectForm）：量它的实高给底部渐隐条
+  useLayoutEffect(() => {
+    const bar = box.current?.querySelector<HTMLElement>(".sheet-actions");
+    if (!bar) return;
+    const report = () => setFootH(bar.offsetHeight);
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
   // v1.16：弹层是模态框——打开时焦点移进来（键盘/读屏从标题开始），Esc 关最上面一层，关掉后焦点回到打开它的键。
   useEffect(() => {
     const me = Symbol("sheet");
     openSheets.push(me);
+    document.documentElement.dataset.sheet = "";
     const back = document.activeElement as HTMLElement | null;
     if (!box.current?.contains(document.activeElement)) box.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
@@ -278,17 +292,22 @@ export function Sheet({ title, onClose, children, actions }: { title: string; on
     return () => {
       document.removeEventListener("keydown", onKey);
       openSheets.splice(openSheets.indexOf(me), 1);
+      if (!openSheets.length) delete document.documentElement.dataset.sheet;
       if (back?.isConnected) back.focus({ preventScroll: true });
     };
   }, []);
   return createPortal(
     <div ref={scrim} className="sheet-scrim" onClick={onClose}>
       <div ref={box} tabIndex={-1} className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
-        <div className="sheet-grip" />
-        <h2>{title}</h2>
+        <header className="sheet-head">
+          <button className="glass-btn glass sheet-close" onClick={onClose} aria-label="关闭" title="关闭（Esc）"><IconBack /></button>
+          <h2>{title}</h2>
+        </header>
         {children}
         {actions && <div className="sheet-actions">{actions}</div>}
       </div>
+      <SkyFade kind="sheet" />
+      {footH > 0 && <SkyFade kind="footer" height={footH + 16} />}
     </div>,
     document.body,
   );

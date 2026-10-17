@@ -85,23 +85,55 @@ a.row:hover, button.row:hover { background: var(--tile); }
 .segmented button { position: relative; padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text-2); transition: color var(--dur) var(--ease); }
 .segmented button.on { color: var(--on-ink); }
 
-/* 弹层（v2.93 修手机遮挡）：Sheet 已 portal 到 body，层级 输入胶囊 16 < 顶栏 20 < 抽屉 30 < 弹层 50 < 对话框 60；
+/* 弹层（ui/kit.tsx Sheet）：portal 到 body，层级 输入胶囊 16 < 顶栏 20 < 抽屉 30 < 弹层 50 < 对话框 60；
    遮罩贴住 visualViewport 给的可见区域（--vv-top / --vv-h，由 ui/kit.tsx 写；没有时 = 100dvh），浏览器工具栏 / 软键盘出来时弹层底边跟着走；
-   按钮行 .sheet-actions 在弹层里 sticky 贴底，内容再长取消 / 创建也看得见 */
-.sheet-scrim { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100dvh); z-index: 50; background: var(--glass-scrim); -webkit-backdrop-filter: blur(var(--blur-scrim)); backdrop-filter: blur(var(--blur-scrim)); display: flex; align-items: flex-end; justify-content: center; animation: fade var(--dur) var(--ease); }
-.sheet { width: 100%; max-width: 560px; max-height: calc(var(--vv-h, 100dvh) - var(--sp-5) - var(--sat)); overflow-y: auto; overscroll-behavior: contain; background: var(--glass-sheet); border: 1px solid var(--glass-border); border-bottom: 0;
-  border-radius: var(--r-card) var(--r-card) 0 0; padding: var(--sp-2) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom)); box-shadow: var(--elev-raised);
-  -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); animation: slideup calc(var(--dur) * 1.5) var(--ease); }
+   按钮行 .sheet-actions 在弹层里 sticky 贴底，内容再长取消 / 创建也看得见。
+   桌面：居中浮起的玻璃卡（遮罩模糊）。 */
+.sheet-scrim { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100dvh); z-index: 50; background: var(--glass-scrim); -webkit-backdrop-filter: blur(var(--blur-scrim)); backdrop-filter: blur(var(--blur-scrim)); display: flex; align-items: center; justify-content: center; animation: fade var(--dur) var(--ease); }
+.sheet { width: 100%; max-width: 560px; max-height: calc(var(--vv-h, 100dvh) - var(--sp-5) - var(--sat)); overflow-y: auto; overscroll-behavior: contain; background: var(--glass-sheet); border: 1px solid var(--glass-border);
+  border-radius: var(--r-card); padding: var(--sp-5) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom)); box-shadow: var(--elev-raised);
+  -webkit-backdrop-filter: var(--frost); backdrop-filter: var(--frost); animation: pop calc(var(--dur) * 1.5) var(--ease); }
 .sheet:focus { outline: none; } /* 打开时程序把焦点放进来，不画焦点框 */
-.sheet-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--glass-border); margin: var(--sp-1) auto var(--sp-4); }
 .sheet h2 { margin: 0 0 var(--sp-4); font-size: var(--fs-lg); font-weight: var(--fw-title); }
+.sheet .sheet-close, .sheet-scrim > .sky-fade { display: none; } /* 桌面点遮罩 / Esc 关；返回钮和渐隐条只在手机全屏时用 */
 .sheet .desc { margin-left: 0; margin-right: 0; }
 .sheet-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-5);
-  position: sticky; bottom: 0; z-index: 1;
+  position: sticky; bottom: 0; z-index: 2;
   margin-left: calc(-1 * var(--sp-5)); margin-right: calc(-1 * var(--sp-5)); margin-bottom: calc(-1 * (var(--sp-5) + env(safe-area-inset-bottom)));
   padding: var(--sp-3) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom)); background: var(--glass-sheet); }
-/* 桌面：居中浮起的玻璃卡，四角同圆、没有拖动条（拖动条只是手机上“可下滑关闭”的暗示） */
-@media (min-width: 861px) { .sheet-scrim { align-items: center; } .sheet { border-radius: var(--r-card); border-bottom: 1px solid var(--glass-border); padding-top: var(--sp-5); animation-name: pop; } .sheet-grip { display: none; } }
+/* 手机（v3.5.1，用户“别留那个半屏的”“丑爆了”）：不再是从底部升起的白卡 + 模糊遮罩，而是铺满整屏、直接落在壁纸上的一页（= 子页 .page-head 的样子）：
+   左上圆玻璃返回钮、标题居中裸字（sticky），内容整页滚，按钮行贴在屏幕底（内容短时也在底：flex 列 + margin-top: auto）。
+   下面的页面（.shell）淡出隐藏，壁纸 .sky 不动；套着打开的弹层只显示最上面那层。不模糊、不加离屏层，只动 opacity。
+   滚过标题行 / 按钮行的内容由两条壁纸副本渐隐（kit.tsx Sheet 里的 SkyFade：sheet 在这里、footer 在 shell.css），标题行 / 按钮行 z 2 压在渐隐条（z 1）上；
+   所以 .sheet 在手机上不能建层叠上下文（不给 transform / 模糊 / 动画）。 */
+@media (max-width: 860px) {
+  .sheet-scrim { display: block; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; animation: fade var(--dur) var(--ease) both; }
+  .sheet-scrim:has(~ .sheet-scrim) { visibility: hidden; }
+  .sheet { display: flex; flex-direction: column; max-width: none; height: 100%; max-height: none; border: 0; border-radius: 0; background: none; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none; animation: none;
+    padding: 0 max(var(--gutter), calc((100% - var(--content-w)) / 2 + var(--gutter))) calc(var(--sp-5) + env(safe-area-inset-bottom)); }
+  .sheet > * { flex-shrink: 0; }
+  .sheet-head { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; align-items: center; gap: var(--sp-3);
+    height: var(--topbar-h); padding-top: calc(var(--topbar-top) + var(--sat)); margin-bottom: var(--sp-5); box-sizing: content-box; }
+  .sheet .sheet-close { display: inline-grid; grid-column: 1; justify-self: start; width: var(--topbar-h); height: var(--topbar-h); }
+  .sheet-head h2 { grid-column: 2; margin: 0; min-width: 0; text-align: center; font-size: var(--fs-md); font-weight: var(--fw-strong);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sheet-actions { margin: auto 0 calc(-1 * (var(--sp-5) + env(safe-area-inset-bottom))); padding: var(--sp-5) 0 calc(var(--sp-5) + env(safe-area-inset-bottom)); background: none; }
+  .sheet-scrim > .sky-fade { display: block; }
+  .sky-fade-sheet { height: calc(var(--topbar-top) + var(--topbar-h) + var(--sp-5) + var(--sat));
+    --fade-a: calc(var(--topbar-top) + var(--topbar-h) / 2 + var(--sat));
+    --fade-b: calc(var(--topbar-top) + var(--topbar-h) + var(--sp-5) + var(--sat));
+    --fade: linear-gradient(to bottom, #000 var(--fade-a),
+      rgba(0, 0, 0, .9) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .2),
+      rgba(0, 0, 0, .65) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .4),
+      rgba(0, 0, 0, .35) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .6),
+      rgba(0, 0, 0, .1) calc(var(--fade-a) + (var(--fade-b) - var(--fade-a)) * .8),
+      transparent var(--fade-b));
+    -webkit-mask-image: var(--fade); mask-image: var(--fade); }
+  /* 弹层下面的页面让位：淡出后不再绘制（visibility），关掉时淡回 */
+  .shell { transition: opacity var(--dur) var(--ease), visibility 0s; }
+  :root[data-sheet] .shell { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity var(--dur) var(--ease), visibility 0s linear var(--dur); }
+}
 
 /* 居中确认框（ui/dialog.tsx）：和 .sheet 同一块玻璃、同一遮罩，但永远居中、最宽 400（= App Layout.dialogMax），
    两颗等宽胶囊，危险动作实心危险色（= App PillButton.danger） */

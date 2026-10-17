@@ -39,7 +39,6 @@ a { color: var(--accent); text-decoration: none; }
 
 /* 全局动效：所有组件共用 */
 @keyframes fade { from { opacity: 0; } }
-@keyframes slideup { from { transform: translateY(40px); opacity: 0; } }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(var(--rise)); } to { opacity: 1; transform: none; } }
 @keyframes send-rise { from { transform: translateY(var(--send-rise)); } to { transform: none; } }  /* §O 只动 transform，透明度另用 fade */
