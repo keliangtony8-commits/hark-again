@@ -135,6 +135,7 @@ class AssistantApp extends ConsumerWidget {
       themeMode: mode,
       themeAnimationDuration: Motion.theme,
       themeAnimationCurve: Motion.ease,
+      scrollBehavior: const AppScrollBehavior(),
       builder: (context, child) => MediaQuery.withClampedTextScaling(
         // 跟随系统字号，但封顶：页面在 1.3 倍下有测试兜底，再往上只保证不崩
         maxScaleFactor: A11y.textScaleMax,

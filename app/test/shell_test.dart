@@ -73,7 +73,7 @@ void main() {
     await tester.tap(find.byTooltip('历史').first);
     await _settle(tester);
     expect(_barShown(tester), isFalse);
-    await tester.tapAt(const Offset(390, 400)); // 点遮罩关抽屉
+    await tester.flingFrom(const Offset(380, 400), const Offset(-300, 0), 1500); // v3.5.1 抽屉全屏、没有遮罩：左滑关
     await _settle(tester);
     expect(_barShown(tester), isTrue);
   });
