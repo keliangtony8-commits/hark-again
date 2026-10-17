@@ -174,7 +174,9 @@ void main() {
     expect(find.text('取消'), findsNothing);
     await tester.tap(find.text('完整日志'));
     await tester.pumpAndSettle();
-    expect(find.text('装依赖'), findsNWidgets(2)); // 卡片 + 日志弹层标题
+    // 全屏弹层（v3.5.1）：顶上标题“完整日志”、内容里是任务名；淡入完成后下面的卡不再绘制（offstage）
+    expect(find.text('装依赖'), findsOneWidget);
+    expect(find.text('装依赖', skipOffstage: false), findsNWidgets(2)); // 卡片 + 日志弹层
   });
 
   testWidgets('护栏停掉的卡：警示状态词 + 日志下写原因', (tester) async {

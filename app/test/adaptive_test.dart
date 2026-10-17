@@ -125,8 +125,9 @@ void main() {
     expect(find.byTooltip('新项目'), findsOneWidget); // 手机抽屉里不再有第二个 +
     await tester.tap(find.byTooltip('新项目'));
     await tester.pumpAndSettle();
-    expect(find.byType(Drawer), findsNothing);
-    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isFalse);
+    expect(find.byType(Drawer, skipOffstage: false), findsNothing);
+    // 新建项目表单是全屏弹层（v3.5.1）：淡入完成后下面的页面不再绘制（offstage），钮的状态照样复位
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon, skipOffstage: false)).plus, isFalse);
     expect(find.text('创建'), findsOneWidget, reason: '新建项目表单');
   });
 

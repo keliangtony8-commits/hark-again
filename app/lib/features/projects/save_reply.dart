@@ -48,7 +48,7 @@ Future<void> saveReplyToProject(BuildContext context, WidgetRef ref, {required S
     if (!context.mounted) return;
     final chosen = projects.isEmpty
         ? personalWorkspace
-        : await showAppScrollSheet<String>(context, builder: (_) => _ProjectPicker(projects: saveTargets(projects)));
+        : await showAppScrollSheet<String>(context, title: '存到哪里', builder: (_) => _ProjectPicker(projects: saveTargets(projects)));
     if (chosen == null) return;
     pid = chosen;
   }
@@ -69,10 +69,6 @@ class _ProjectPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x1),
-          child: Text('存到哪里', style: context.text.titleLarge),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x3),
           child: Text('存成一份 Markdown，之后的对话都能引用。', style: context.text.bodySmall),

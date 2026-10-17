@@ -16,7 +16,7 @@ import '../../ui/sheets.dart';
 const oauthRestartCommand = 'docker compose up -d --force-recreate backend worker';
 
 Future<void> showOAuthSetupSheet(BuildContext context, List<Connector> missing) =>
-    showAppScrollSheet<void>(context, builder: (ctx) => OAuthSetupSheet(missing: missing));
+    showAppScrollSheet<void>(context, title: '配置 ${missing.map((c) => c.name).join(' / ')} 授权', builder: (ctx) => OAuthSetupSheet(missing: missing));
 
 class OAuthSetupSheet extends StatelessWidget {
   const OAuthSetupSheet({super.key, required this.missing});
@@ -25,7 +25,6 @@ class OAuthSetupSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final names = missing.map((c) => c.name).join(' / ');
     final callback = missing.map((c) => c.setup!.callback).firstWhere((u) => u.isNotEmpty, orElse: () => '');
     final env = [for (final c in missing) ...c.setup!.env].join('\n');
     var i = 0;
@@ -48,10 +47,6 @@ class OAuthSetupSheet extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x5, 0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('服务器配置', style: context.text.labelSmall),
-          const SizedBox(height: Sp.x1),
-          Text('配置 $names 授权', style: context.text.titleLarge),
-          const SizedBox(height: Sp.x2),
           Text('一键授权由服务器上的 OAuth 应用完成。按以下三步配置一次，之后在连接器页点一下即可连接。',
               style: context.text.bodyMedium?.copyWith(color: p.text2)),
         ]),

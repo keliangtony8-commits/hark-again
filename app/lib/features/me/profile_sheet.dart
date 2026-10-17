@@ -14,7 +14,7 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 
-Future<void> showProfileSheet(BuildContext context) => showAppSheet<void>(context, builder: (_) => const ProfileSheet());
+Future<void> showProfileSheet(BuildContext context) => showAppSheet<void>(context, title: '个人资料', builder: (_) => const ProfileSheet());
 
 class ProfileSheet extends ConsumerStatefulWidget {
   const ProfileSheet({super.key});
@@ -93,8 +93,6 @@ class _ProfileSheetState extends ConsumerState<ProfileSheet> {
       padding: EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, MediaQuery.viewInsetsOf(context).bottom + Sp.x5),
       child: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('个人资料', style: context.text.titleLarge),
-          const SizedBox(height: Sp.x4),
           Center(
             child: Stack(alignment: Alignment.center, children: [
               Avatar(

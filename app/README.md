@@ -87,7 +87,7 @@ TZ=Asia/Shanghai SHOTS=1 flutter test test/screens/shots_test.dart   # 输出 /t
 - 本地：`flutter build apk --release`（需要 Android SDK）
 - iOS：Actions 手动运行并勾选 iOS；装到 iPhone 需要苹果开发者账号签名
 - 子页面（`test/sub_page_test.dart`）：`SubPage(title:, actions:, body:)` 代替 `Scaffold(appBar: AppBar(...))`；卡片用 AppCard/ListGroup（玻璃材质，减少透明度时实色），下拉刷新用 kit 的 `PullRefresh`（转圈从标题栏下面出来）。不要对 lib 跑 `dart format`（新格式器会重排全部文件）。
-- 字样：theme/app_theme.dart 里的 `t()` 是唯一字样工厂（平台系统字族 + 表情兜底）。主题里任何不经过 textTheme 的样式（AppBar 标题、按钮字、SnackBar）都必须用它，不写裸 `TextStyle(...)`。登录页也在 Backdrop 上，表单是 GlassSurface。截图回归现在还拍 `-usage`/`-brief`（子页面）、`-login` 和 `-sheet-form`/`-sheet-actions`（玻璃弹层）。
+- 字样：theme/app_theme.dart 里的 `t()` 是唯一字样工厂（平台系统字族 + 表情兜底）。主题里任何不经过 textTheme 的样式（AppBar 标题、按钮字、SnackBar）都必须用它，不写裸 `TextStyle(...)`。登录页也在 Backdrop 上，表单是 GlassSurface。截图回归现在还拍 `-usage`/`-brief`（子页面）、`-login` 和 `-sheet-form`/`-sheet-actions`（全屏弹层，v3.5.1）。
 - 设计 v2.1「克制」（v0.55）：强调色一屏最多两处（未读点、进度条、链接）；主按钮/用户气泡/导航选中/发送键用 `p.ink`/`p.onInk`。字重只用 `Weights.body/title/strong`（页面禁写 w700，`test/design_test.dart` 守着）；页面主标题用 `displayMedium`、大数字 `displaySmall`/`headlineMedium`（主题里已是衬线 + 等宽数字，不再手动 `.serif`）。行首图标用 `IconBadge`（细线、无色块）；卡片不加外投影，顶边高光由 `GlassSurface`/`AppCard` 自带。
 - 实色守卫（`test/sheet_test.dart`）：`surface2` 只许出现在 `lib/theme/` 和 `ui/glass_mode.dart`，别处一律 `context.tileFill`；外投影只许在 `ui/glass.dart`（floatShadow），页面不写 boxShadow / elevation。
 - 强调色克制落地（v0.60）：`p.accent`/`accentSoft` 只做信号——未读点、进度/运行中、链接/搜索命中、唯一关键状态（浏览器接管）。数据条/图表/占比条用 `p.ink`，状态字、标签、成功勾用 `p.text2`；TextButton 前景是墨色。`test/design_test.dart`「强调色克制」按文件登记允许次数，新增用法先登记角色。

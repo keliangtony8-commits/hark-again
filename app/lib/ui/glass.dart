@@ -9,7 +9,6 @@
 //   GlassIconButton 圆形玻璃按钮（顶栏左侧的上下文按钮等）
 //   Avatar        圆形头像（首字母 + 自选底色），点开“我的”
 //   GlassChip     玻璃小胶囊（建议问题等，可点）
-//   GlassSheet    底部弹层的玻璃框（更实的 glassSheet 着色 + 真模糊 + 顶部圆角 + 把手）：只由 ui/sheets.dart 用
 //   GlassDialog   居中对话框的玻璃框（同 glassSheet 着色 + 真模糊 + 四角 Radii.card）：只由 ui/sheets.dart 用
 //   GlassMode / GlassFills 在 glass_mode.dart（最底层，motion.dart 也用；本文件 re-export）
 //   FrostScrim    整页的“磨砂遮罩”：输入胶囊聚焦时盖住页面，模糊和颜色一起渐入，点一下收起
@@ -135,8 +134,9 @@ class _BlurGroupState extends State<BlurGroup> {
 class BackdropFade extends StatelessWidget {
   const BackdropFade({super.key, required this.clear, required this.solid}) : local = false;
 
-  /// v3.5 底部浮条下的渐隐（FloatingFooter）：[solid] 以上内容全显、到 [clear] 全是壁纸（solid < clear），坐标是条自身的本地 y。
-  const BackdropFade.bottom({super.key, required this.solid, required this.clear}) : local = true;
+  /// 坐标是条自身本地 y 的渐隐条（位置随布局变）：v3.5 底部浮条下（FloatingFooter，solid < clear：往下淡成壁纸）、
+  /// v3.5.1 全屏弹层滚动区的上 / 下沿和 SheetList 上沿（ui/sheets.dart，两个方向都有）。
+  const BackdropFade.local({super.key, required this.solid, required this.clear}) : local = true;
   final double clear, solid;
 
   /// clear / solid 是条自身的本地 y（底部条）；否则是屏幕 y（上沿条从屏幕顶开始）。
@@ -343,15 +343,18 @@ class WidePill extends StatelessWidget {
 
 /// 圆形玻璃图标按钮，尺寸 = 顶栏高度（≥ A11y.minTap）。tooltip 同时是读屏名字。
 class GlassIconButton extends StatelessWidget {
-  const GlassIconButton({super.key, required IconData this.icon, required this.tooltip, required this.onTap, this.size = Layout.topBar}) : glyph = null;
+  const GlassIconButton({super.key, required IconData this.icon, required this.tooltip, required this.onTap, this.size = Layout.topBar, this.blur = true}) : glyph = null;
 
   /// 图标不是字体图标时（v2.93 项目左上的 ≡/+ MenuPlusIcon）。
-  const GlassIconButton.glyph({super.key, required Widget this.glyph, required this.tooltip, required this.onTap, this.size = Layout.topBar}) : icon = null;
+  const GlassIconButton.glyph({super.key, required Widget this.glyph, required this.tooltip, required this.onTap, this.size = Layout.topBar, this.blur = true}) : icon = null;
   final IconData? icon;
   final Widget? glyph;
   final String tooltip;
   final VoidCallback? onTap;
   final double size;
+
+  /// false = 只有着色 + 发丝边、不模糊（v3.5.1 全屏弹层的返回钮：底下只有壁纸，模糊白花一次取背景）。
+  final bool blur;
 
   @override
   Widget build(BuildContext context) => Tooltip(
@@ -363,7 +366,7 @@ class GlassIconButton extends StatelessWidget {
           scale: 0.92,
           child: SizedBox.square(
             dimension: size,
-            child: GlassSurface(blur: true, radius: Radii.full, child: Center(child: glyph ?? Icon(icon, color: context.palette.text))),
+            child: GlassSurface(blur: blur, radius: Radii.full, child: Center(child: glyph ?? Icon(icon, color: context.palette.text))),
           ),
         ),
       );
@@ -499,53 +502,6 @@ class FrostLayer extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 底部弹层的玻璃框：上圆角 Radii.card、真模糊、glassSheet 着色、顶部发丝边、居中把手，底部让出手势条。
-/// 页面不直接用它——走 ui/sheets.dart 的 showAppSheet / showAppScrollSheet。
-class GlassSheet extends StatelessWidget {
-  const GlassSheet({super.key, required this.child});
-  final Widget child; // 随内容高度；放不下时由内容自己滚（showAppScrollSheet + SheetList）
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final solid = GlassMode.solidOf(context);
-    const shape = BorderRadius.vertical(top: Radius.circular(Radii.card));
-    final body = DecoratedBox(
-      decoration: BoxDecoration(
-        color: solid ? p.surface : p.glassSheet,
-        borderRadius: shape,
-        border: Border(top: BorderSide(color: solid ? p.border : p.glassBorder)),
-      ),
-      // 透明 Material：里面 ListTile 的水波纹画在玻璃之上，而不是被着色盖住
-      child: Material(
-        type: MaterialType.transparency,
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: Sp.x3),
-          child: Center(
-            child: Container(
-              key: const ValueKey('sheet-grabber'),
-              width: Glass.grabber.width,
-              height: Glass.grabber.height,
-              decoration: BoxDecoration(color: p.text3.withValues(alpha: Op.dimmed), borderRadius: BorderRadius.circular(Radii.full)),
-            ),
-          ),
-        ),
-        // 底部安全区由这里统一让出（键盘弹起时 paddingOf 自动归零），内容里的 SafeArea 不再重复加
-        Flexible(child: _noBottom(context, child)),
-        SizedBox(height: MediaQuery.paddingOf(context).bottom),
-        ]),
-      ),
-    );
-    return ClipRRect(
-      borderRadius: shape,
-      child: solid ? body : BackdropFilter(filter: ImageFilter.blur(sigmaX: Glass.blur, sigmaY: Glass.blur), child: body),
-    );
-  }
-
-  static Widget _noBottom(BuildContext context, Widget child) => MediaQuery.removePadding(context: context, removeBottom: true, child: child);
 }
 
 /// 居中对话框的玻璃框：四角 Radii.card、真模糊、glassSheet 着色、发丝边、贴身的淡投影；最宽 Layout.dialogMax。

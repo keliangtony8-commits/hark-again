@@ -131,6 +131,7 @@ class ShellBlockView extends StatelessWidget {
 /// 完整输出（就在消息里，不用再问服务器）：可选中复制。
 Future<void> showShellOutput(BuildContext context, ShellBlock b) => showAppScrollSheet<void>(
       context,
+      title: '完整输出',
       builder: (ctx) {
         final p = ctx.palette;
         return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [

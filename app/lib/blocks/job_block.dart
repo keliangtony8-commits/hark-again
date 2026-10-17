@@ -326,6 +326,7 @@ Future<void> showJobLog(BuildContext context, WidgetRef ref, JobInfo j) {
   final full = ref.read(apiProvider).get('/api/jobs/${j.id}?tail=20000');
   return showAppScrollSheet<void>(
     context,
+    title: '完整日志',
     builder: (ctx) {
       final p = ctx.palette;
       return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [

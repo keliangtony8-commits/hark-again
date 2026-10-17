@@ -1,11 +1,18 @@
 // 弹层与对话框：表单、操作菜单、危险确认。所有“填几个字段 / 选一个操作 / 确认一下”都走这里，
-// 页面不再各自拼 showModalBottomSheet / showDialog，版式、玻璃材质、动效和键盘避让全 App 一致。
-//   showAppSheet        随内容高度的底部弹层（菜单、表单、选择器、小卡片）
-//   showAppScrollSheet  长列表弹层：随内容高度、封顶后内部滚动（工具列表、项目文件、选项目）
+// 页面不再各自拼路由 / showDialog，版式、材质、动效和键盘避让全 App 一致。
+//   showAppSheet        全屏弹层（菜单、表单、选择器、小卡片）：内容整页滚
+//   showAppScrollSheet  全屏长列表弹层（工具列表、项目文件、选项目）：标题等固定、[SheetList] 在里面滚
 //   showAppDialog       居中对话框（短确认、一句话提示）：磨砂遮罩 + GlassDialog + PopTransition
 //   showAppViewer       全屏查看器（v2.99 图片一摞点开）：实底盖满、淡入，内容自己排版
-// 弹层套 ui/glass.dart 的 GlassSheet，对话框套 GlassDialog；showModalBottomSheet / showDialog / showMenu /
+// 弹层画在 [SheetPage] 上，对话框套 GlassDialog；showModalBottomSheet / showDialog / showMenu /
 // PopupMenuButton 只允许出现在本文件（test/sheet_test.dart 的架构守卫）。
+//
+// v3.5.1 弹层全屏（用户 2026-10-16“别留那个半屏的”“丑爆了”，HANDOFF 第二节 24；= Web 43366c7 手机 .sheet）：
+// 不再是从底部升起的玻璃半屏卡（GlassSheet + showModalBottomSheet + 把手，已删），而是铺满整屏、直接落在流光壁纸上的一页，
+// 样子 = 子页（左上圆玻璃返回钮 + 居中裸字标题，复用 GlassAppBar）：内容整页滚、按钮行（表单的提交钮）钉在屏幕底，
+// 滚过标题行 / 按钮行的内容由壁纸渐隐条（BackdropFade）盖住；只淡入、不上移；路由不透明，淡入完成后下面的页面不再绘制（= Web .shell 隐藏）。
+// 成本：没有 BackdropFilter（返回钮也不模糊——底下只有壁纸），也没有离屏层；一张 Backdrop 壁纸 + 两三条渐隐条（同一个 SkyLayer 着色器）。
+// 平板 / 宽屏也全屏（弹层以前没有自适应断点），内容按 Layout.contentMax 居中（= Web --content-w），和子页一样。
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -14,52 +21,139 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'glass.dart';
 import 'motion.dart';
+import 'sub_page.dart' show GlassAppBar;
 
-// 弹层一律开在根导航器上（v2.78）：盖住外壳的浮动顶栏和底部输入胶囊，遮罩也盖住它们——以前开在 Tab 自己的导航器里，
-// 顶栏浮在遮罩上面“叠在一起”。v2.93：isScrollControlled 的弹层再加 useSafeArea——长表单 / 键盘弹起时最高只到状态栏下面，
-// 不再顶进状态栏和顶栏的位置（和网页 Sheet 修遮挡同一轮）。
-Future<T?> showAppSheet<T>(BuildContext context, {required WidgetBuilder builder}) => showModalBottomSheet<T>(
-      context: context,
-      useRootNavigator: true,
-      useSafeArea: true,
-      isScrollControlled: true, // 让表单能随键盘长高；高度仍随内容
-      builder: (ctx) => GlassSheet(child: builder(ctx)),
-    );
+// 弹层一律开在根导航器上（v2.78）：盖住外壳的浮动顶栏和底部输入胶囊。
+// PageRoute + opaque：淡入过程中下面的页面还看得见（跟着淡出让位），淡入完成后 Navigator 不再绘制下面的路由；
+// fullscreenDialog：下面的页面不做 Material 的退场动画（只有这一层淡入，= Web 只淡入不上移）。
+Future<T?> _pushSheet<T>(BuildContext context, WidgetBuilder page) {
+  final solid = GlassMode.solidOf(context);
+  final d = context.motion(Motion.base);
+  return Navigator.of(context, rootNavigator: true).push<T>(PageRouteBuilder<T>(
+    opaque: true,
+    fullscreenDialog: true,
+    transitionDuration: d,
+    reverseTransitionDuration: d,
+    // 新路由在根 Navigator 的 overlay 里，拿不到页面上的 GlassMode：在这里重新注入
+    pageBuilder: (_, _, _) => GlassMode(solid: solid, child: Builder(builder: page)),
+    transitionsBuilder: (_, animation, _, child) => FadeTransition(opacity: CurvedAnimation(parent: animation, curve: Motion.ease), child: child),
+  ));
+}
 
-/// 长列表弹层（工具列表、项目文件、选项目）：高度随内容，最高到屏幕的 [max]，再长就在里面滚。
-/// 以前固定开到 60–70% 屏高，三个项目的选择器下面空一大片；现在短列表就是短弹层，数据到了高度平滑长出来。
-/// [builder] 返回 Column(mainAxisSize: min)：标题等固定部分 + 一个 [SheetList]（或 Flexible 包住的空态/骨架）。
-Future<T?> showAppScrollSheet<T>(
-  BuildContext context, {
-  required WidgetBuilder builder,
-  double max = 0.85,
-}) =>
-    showModalBottomSheet<T>(
-      context: context,
-      useRootNavigator: true,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (ctx) => ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * max),
-        child: GlassSheet(
-          child: AnimatedSize(
-            duration: ctx.motion(Motion.base),
-            curve: Motion.ease,
-            alignment: Alignment.topCenter,
-            child: builder(ctx),
-          ),
-        ),
+/// 全屏弹层：内容整页滚（[builder] 返回的内容随自身高度排版，不要用 Flexible / Expanded 撑高）。[title] = 顶上居中的标题。
+Future<T?> showAppSheet<T>(BuildContext context, {String? title, required WidgetBuilder builder}) =>
+    _pushSheet<T>(context, (ctx) => SheetPage(title: title, child: Builder(builder: builder)));
+
+/// 全屏长列表弹层（工具列表、项目文件、选项目）：[builder] 返回 Column(mainAxisSize: min)：固定部分（说明、筛选）+ 一个 [SheetList]
+/// （或 Flexible 包住的空态 / 骨架），列表占满剩下的高度在里面滚。
+Future<T?> showAppScrollSheet<T>(BuildContext context, {String? title, required WidgetBuilder builder}) =>
+    _pushSheet<T>(context, (ctx) => SheetPage(title: title, scroll: false, child: Builder(builder: builder)));
+
+/// 全屏弹层的一页（v3.5.1，规则见文件头）：壁纸 + 标题行（返回钮 · 居中标题）+ 内容区 + 可选钉底的 [footer]。
+/// [scroll] = 内容整页滚；false = 内容拿到“剩下的高度”自己排（[SheetList] 在里面滚）。页面不直接用它——走 showAppSheet / showAppScrollSheet / showFormSheet。
+class SheetPage extends StatelessWidget {
+  const SheetPage({super.key, this.title, required this.child, this.footer, this.scroll = true});
+  final String? title;
+  final Widget child;
+  final Widget? footer;
+  final bool scroll;
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final top = mq.padding.top;
+    // 标题行中线以上全是壁纸，到标题行下沿再往下 Sp.x5 内容全显（= Web .sky-fade-sheet 的 fade-a / fade-b，= 子页 BackdropFade.clearOf）
+    final clear = top + Layout.topBarTop + Layout.topBar / 2;
+    final solid = top + Layout.topBarTop + Layout.topBar + Sp.x5;
+    final keyboard = mq.viewInsets.bottom;
+    // 底部：键盘弹起时贴键盘，否则让出手势条；再留 Sp.x5（= Web padding-bottom sp-5 + safe-area）
+    final foot = (keyboard > 0 ? 0.0 : mq.padding.bottom) + Sp.x5;
+    const ramp = Layout.topFadeRamp;
+    // 内容里不再有安全区 / 键盘让位（这里统一给）：调用处的 SafeArea、viewInsets 留白自动归零，不重复
+    Widget content = MediaQuery(
+      data: mq.removePadding(removeTop: true, removeBottom: true).removeViewInsets(removeBottom: true),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: Layout.contentMax), child: child),
       ),
     );
+    final bottomPad = footer == null ? foot : ramp;
+    content = scroll
+        ? SingleChildScrollView(padding: EdgeInsets.only(top: solid - clear, bottom: bottomPad), child: content)
+        : Padding(padding: EdgeInsets.only(top: solid - clear), child: _SheetInset(bottom: bottomPad, child: content));
+    final region = Stack(children: [
+      Positioned.fill(child: content),
+      // 上沿：从标题行中线（这一区的顶）淡到 solid；下沿：最后 [bottomPad] 淡成壁纸（有按钮行时淡在按钮行上面）
+      Positioned(top: 0, left: 0, right: 0, height: solid - clear, child: BackdropFade.local(clear: 0, solid: solid - clear)),
+      Positioned(left: 0, right: 0, bottom: 0, height: bottomPad, child: BackdropFade.local(solid: 0, clear: footer == null ? bottomPad - (foot - Sp.x5) : bottomPad)),
+    ]);
+    return Backdrop(
+      child: Material(
+        type: MaterialType.transparency, // ListTile 的水波纹、TextField 要一层 Material
+        child: Stack(children: [
+          Positioned.fill(
+            top: clear,
+            bottom: keyboard,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(child: region),
+              if (footer != null)
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: Layout.contentMax),
+                    child: Padding(padding: EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, foot), child: SizedBox(width: double.infinity, child: footer)),
+                  ),
+                ),
+            ]),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: top + Layout.shellTop,
+            child: GlassAppBar(
+              title: title == null ? const SizedBox.shrink() : Text(title!),
+              leading: GlassIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '关闭', blur: false, onTap: () => Navigator.of(context).maybePop()),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// [showAppScrollSheet] 内容区底部要让出的高度（下沿渐隐条 + 手势条），[SheetList] 加进自己的底部留白：列表滚到底时最后一行停在渐隐上面。
+class _SheetInset extends InheritedWidget {
+  const _SheetInset({required this.bottom, required super.child});
+  final double bottom;
+
+  static double of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<_SheetInset>()?.bottom ?? 0;
+
+  @override
+  bool updateShouldNotify(_SheetInset old) => old.bottom != bottom;
+}
 
 /// [showAppScrollSheet] 里的列表：内容少就收拢，内容多就占满剩下的高度并滚动。
+/// 上沿一条壁纸渐隐（滚上去的行淡进壁纸，不在固定的标题 / 说明下面切硬边），底部留白让到弹层的下沿渐隐之上。
 class SheetList extends StatelessWidget {
   const SheetList({super.key, this.padding = const EdgeInsets.fromLTRB(Sp.x4, 0, Sp.x4, Sp.x4), required this.children});
   final EdgeInsetsGeometry padding;
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Flexible(child: ListView(shrinkWrap: true, padding: padding, children: children));
+  Widget build(BuildContext context) {
+    const ramp = Layout.topFadeRamp;
+    return Flexible(
+      child: Stack(children: [
+        ListView(
+          shrinkWrap: true,
+          padding: padding.add(EdgeInsets.only(top: ramp, bottom: _SheetInset.of(context))),
+          children: children,
+        ),
+        const Positioned(top: 0, left: 0, right: 0, height: ramp, child: BackdropFade.local(clear: 0, solid: ramp)),
+      ]),
+    );
+  }
 }
 
 /// 表单里的一个输入框。
@@ -83,9 +177,10 @@ Future<Map<String, String>?> showFormSheet(
   String submit = '保存',
   Widget? extra,
 }) {
-  return showAppSheet<Map<String, String>>(
+  // 自己画 SheetPage：提交钮要钉在屏幕底（footer），它的可点状态跟着输入框变
+  return _pushSheet<Map<String, String>>(
     context,
-    builder: (_) => _FormSheet(title: title, subtitle: subtitle, fields: fields, submit: submit, extra: extra),
+    (_) => _FormSheet(title: title, subtitle: subtitle, fields: fields, submit: submit, extra: extra),
   );
 }
 
@@ -125,34 +220,29 @@ class _FormSheetState extends State<_FormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // 字段在可滚区里，提交钮钉在下面（v2.93）：键盘弹起、字段多时按钮也始终看得见，不用先往下滚
-    return Padding(
-      padding: EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, MediaQuery.viewInsetsOf(context).bottom + Sp.x5),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Flexible(
-          child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text(widget.title, style: context.text.titleLarge),
-              if (widget.subtitle != null) ...[const SizedBox(height: Sp.x1), Text(widget.subtitle!, style: context.text.bodySmall)],
-              for (final (i, f) in widget.fields.indexed) ...[
-                const SizedBox(height: Sp.x3),
-                TextField(
-                  controller: _c[f.key],
-                  autofocus: i == 0,
-                  obscureText: f.obscure,
-                  keyboardType: f.keyboard,
-                  minLines: f.lines,
-                  maxLines: f.obscure ? 1 : (f.lines == 1 ? 1 : f.lines * 2),
-                  decoration: InputDecoration(labelText: f.label, hintText: f.hint),
-                ),
-              ],
-              if (widget.extra != null) ...[const SizedBox(height: Sp.x3), widget.extra!],
-            ]),
-          ),
-        ),
-        const SizedBox(height: Sp.x4),
-        FilledButton(onPressed: _valid ? _done : null, child: Text(widget.submit)),
-      ]),
+    // 字段整页滚，提交钮钉在屏幕底（v2.93 起钉底；v3.5.1 全屏）：键盘弹起、字段多时按钮也始终看得见，不用先往下滚
+    return SheetPage(
+      title: widget.title,
+      footer: FilledButton(onPressed: _valid ? _done : null, child: Text(widget.submit)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Sp.x5),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (widget.subtitle != null) Text(widget.subtitle!, style: context.text.bodySmall),
+          for (final (i, f) in widget.fields.indexed) ...[
+            if (i > 0 || widget.subtitle != null) const SizedBox(height: Sp.x3),
+            TextField(
+              controller: _c[f.key],
+              autofocus: i == 0,
+              obscureText: f.obscure,
+              keyboardType: f.keyboard,
+              minLines: f.lines,
+              maxLines: f.obscure ? 1 : (f.lines == 1 ? 1 : f.lines * 2),
+              decoration: InputDecoration(labelText: f.label, hintText: f.hint),
+            ),
+          ],
+          if (widget.extra != null) ...[const SizedBox(height: Sp.x3), widget.extra!],
+        ]),
+      ),
     );
   }
 }
@@ -172,23 +262,17 @@ Future<T?> showActionSheet<T>(BuildContext context, {String? title, required Lis
   final p = context.palette;
   final chosen = await showAppSheet<SheetAction<T>>(
     context,
-    builder: (ctx) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (title != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x2),
-            child: Text(title, style: ctx.text.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ),
-        for (final a in actions)
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x5), // 图标和标题对齐同一条线
-            leading: Icon(a.icon, color: a.danger ? p.danger : null),
-            title: Text(a.label, style: a.danger ? TextStyle(color: p.danger) : null),
-            subtitle: a.subtitle == null ? null : Text(a.subtitle!, style: ctx.text.bodySmall?.copyWith(color: p.text2)),
-            onTap: () => Navigator.pop(ctx, a),
-          ),
-      ]),
-    ),
+    title: title,
+    builder: (ctx) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      for (final a in actions)
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: Sp.x5), // 图标和标题对齐同一条线
+          leading: Icon(a.icon, color: a.danger ? p.danger : null),
+          title: Text(a.label, style: a.danger ? TextStyle(color: p.danger) : null),
+          subtitle: a.subtitle == null ? null : Text(a.subtitle!, style: ctx.text.bodySmall?.copyWith(color: p.text2)),
+          onTap: () => Navigator.pop(ctx, a),
+        ),
+    ]),
   );
   chosen?.onTap?.call(); // 先关菜单再执行，避免在已关闭的弹层上弹对话框
   return chosen?.value;

@@ -16,6 +16,7 @@ import '../../ui/sheets.dart';
 
 Future<void> showAvatarColorSheet(BuildContext context) => showAppSheet<void>(
       context,
+      title: '头像颜色',
       builder: (_) => const AvatarColorPicker(),
     );
 
@@ -34,8 +35,6 @@ class AvatarColorPicker extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(Layout.gutter, 0, Layout.gutter, Sp.x5),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('头像颜色', style: context.text.titleMedium),
-        const SizedBox(height: Sp.x4),
         Avatar(initial: initial, onTap: null, size: Layout.avatarLarge, color: current, tooltip: '预览'),
         const SizedBox(height: Sp.x5),
         Wrap(alignment: WrapAlignment.center, spacing: Sp.x3, runSpacing: Sp.x3, children: [

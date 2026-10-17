@@ -47,7 +47,7 @@ final conversationShareProvider =
     AsyncNotifierProvider.autoDispose.family<ConversationShareNotifier, ConversationShare, String>(ConversationShareNotifier.new);
 
 Future<void> showConversationShare(BuildContext context, String id) =>
-    showAppSheet<void>(context, builder: (_) => ConversationShareSheet(id: id));
+    showAppSheet<void>(context, title: '分享对话', builder: (_) => ConversationShareSheet(id: id));
 
 class ConversationShareSheet extends ConsumerStatefulWidget {
   const ConversationShareSheet({super.key, required this.id});
@@ -104,8 +104,6 @@ class _ConversationShareSheetState extends ConsumerState<ConversationShareSheet>
       child: Padding(
         padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x5),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('分享对话', style: context.text.titleLarge),
-          const SizedBox(height: Sp.x2),
           Text('生成一张只读网页快照，拿到链接的人都能看。审批卡和浏览器画面不会出现，附件只显示文件名。',
               style: context.text.bodySmall?.copyWith(color: p.text2)),
           const SizedBox(height: Sp.x4),

@@ -460,11 +460,8 @@ class _QuotaTile extends StatelessWidget {
 
 void _showTools(BuildContext context, List<InstalledTool> tools) => showAppScrollSheet<void>(
       context,
+      title: '装过的工具',
       builder: (ctx) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x5, Sp.x1),
-          child: Text('装过的工具', style: ctx.text.titleLarge),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x3),
           child: Text('装在工作区 ~/.local 里，以后的对话和后台任务都能直接用；不含系统预装的。', style: ctx.text.bodySmall),

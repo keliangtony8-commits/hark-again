@@ -162,16 +162,6 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: p.text3),
     dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
-    // 弹层的底、圆角、把手全由 ui/glass.dart 的 GlassSheet 画（真模糊玻璃），Material 这层只留透明的壳。
-    // 入口只有 ui/sheets.dart 的 showAppSheet / showAppScrollSheet（test/arch_test.dart 守着）。
-    bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: Colors.transparent,
-      modalBackgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      modalElevation: 0,
-      showDragHandle: false,
-    ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: p.ink,

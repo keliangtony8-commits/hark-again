@@ -102,7 +102,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.logs.first, '/api/jobs/j1');
     expect(find.text('backup ok'), findsOneWidget);
-    await tester.tapAt(const Offset(10, 10));
+    await tester.tap(find.byTooltip('关闭')); // 全屏弹层：左上返回钮关掉（v3.5.1）
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('编辑'));
     await tester.pumpAndSettle();

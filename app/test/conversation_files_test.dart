@@ -99,7 +99,7 @@ void main() {
   testWidgets('弹层：列表、筛选、不在了的行、打包按钮', (tester) async {
     final api = await _pump(tester, _Api(_body()));
     expect(api.calls, ['GET /api/conversations/c1/files']);
-    expect(find.text('本对话全部文件'), findsOneWidget);
+    // 标题“本对话全部文件”在全屏弹层顶上（showConversationFiles 传 title，v3.5.1），不在内容里
     expect(find.text('3 个文件 · 6 KB'), findsOneWidget);
     expect(find.text('报告.pdf'), findsOneWidget);
     expect(find.textContaining('已不在', findRichText: true), findsOneWidget);

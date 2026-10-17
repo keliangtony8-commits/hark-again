@@ -649,7 +649,7 @@ class _FloatingFooterState extends State<FloatingFooter> {
           right: 0,
           bottom: 0,
           height: _height + Layout.topFadeRamp,
-          child: BackdropFade.bottom(solid: 0, clear: Layout.topFadeRamp + (_height < Layout.bottomFadeClear ? _height : Layout.bottomFadeClear)),
+          child: BackdropFade.local(solid: 0, clear: Layout.topFadeRamp + (_height < Layout.bottomFadeClear ? _height : Layout.bottomFadeClear)),
         ),
       if (widget.behind != null) Positioned.fill(child: widget.behind!),
       Positioned(left: 0, right: 0, bottom: 0, child: _SizeReporter(onSize: _onSize, child: widget.footer)),

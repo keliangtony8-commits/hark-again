@@ -72,6 +72,7 @@ class ChatTitle extends ConsumerWidget {
 
 Future<void> showConversationUsage(BuildContext context, String id) => showAppSheet<void>(
       context,
+      title: '本对话用量',
       builder: (_) => ConversationUsageSheet(id: id),
     );
 
@@ -91,7 +92,7 @@ class ConversationUsageSheet extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(left: Sp.x1),
               child: Row(children: [
-                Expanded(child: Text('本对话用量', style: context.text.titleLarge)),
+                const Spacer(),
                 // 当前对话的文件 / 分享入口：从用量页换到对应 Sheet（同一位置，不叠两层）
                 IconButton(
                   tooltip: '本对话全部文件',

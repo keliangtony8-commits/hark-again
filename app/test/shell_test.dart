@@ -73,7 +73,8 @@ void main() {
     await tester.tap(find.byTooltip('历史').first);
     await _settle(tester);
     expect(_barShown(tester), isFalse);
-    await tester.tapAt(const Offset(390, 400)); // 点遮罩关抽屉
+    // v3.5.1 抽屉铺满整屏（FullDrawer），没有露出的遮罩可点：往左滑关上
+    await tester.fling(find.byType(Drawer), const Offset(-300, 0), 1000);
     await _settle(tester);
     expect(_barShown(tester), isTrue);
   });

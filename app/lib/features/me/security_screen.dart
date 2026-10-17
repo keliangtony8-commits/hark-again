@@ -123,7 +123,7 @@ Future<void> enableTwoFactor(BuildContext context, WidgetRef ref) async {
     return;
   }
   if (!context.mounted) return;
-  final done = await showAppScrollSheet<Map>(context, builder: (_) => SetupSheet(setup: setup, api: api));
+  final done = await showAppScrollSheet<Map>(context, title: '打开两步验证', builder: (_) => SetupSheet(setup: setup, api: api));
   ref.invalidate(twoFactorProvider);
   if (done == null || !context.mounted) return;
   // v2.61 打开 = 服务器顺手退出其他所有设备；本机是老 token 时换发了新 token
@@ -213,8 +213,6 @@ class _SetupSheetState extends State<SetupSheet> {
     final ready = looksLikeTotp(_code.text) && !_busy;
     return Column(mainAxisSize: MainAxisSize.min, children: [
       SheetList(padding: EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x5 + MediaQuery.viewInsetsOf(context).bottom), children: [
-        Text('打开两步验证', style: context.text.titleLarge),
-        const SizedBox(height: Sp.x1),
         Text('① 用验证器 App 扫码，或直接在这台手机上添加', style: context.text.bodySmall),
         const SizedBox(height: Sp.x4),
         if (s.drawable) FadeSlideIn(child: Center(child: QrMatrix(rows: s.qr))),
@@ -277,12 +275,12 @@ class _SetupSheetState extends State<SetupSheet> {
 /// 一次性展示恢复码：两列等宽字体、复制全部；关掉就再也看不到（服务器只存哈希）。
 /// [note]：顺带发生的事（打开时退出了别的设备），写在说明下面。
 Future<void> showRecoveryCodes(BuildContext context, List<String> codes, {String account = '', required String title, String? note}) =>
-    showAppScrollSheet<void>(context, builder: (ctx) => _CodesSheet(codes: codes, account: account, title: title, note: note));
+    showAppScrollSheet<void>(context, title: title, builder: (ctx) => _CodesSheet(codes: codes, account: account, note: note));
 
 class _CodesSheet extends StatelessWidget {
-  const _CodesSheet({required this.codes, required this.account, required this.title, this.note});
+  const _CodesSheet({required this.codes, required this.account, this.note});
   final List<String> codes;
-  final String account, title;
+  final String account;
   final String? note;
 
   @override
@@ -291,7 +289,7 @@ class _CodesSheet extends StatelessWidget {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       SheetList(padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x5), children: [
       Row(children: [
-        Expanded(child: Text(title, style: context.text.titleLarge)),
+        const Spacer(),
         CopyAction(text: recoveryCodesText(codes, account: account), tooltip: '复制全部'),
       ]),
       const SizedBox(height: Sp.x1),

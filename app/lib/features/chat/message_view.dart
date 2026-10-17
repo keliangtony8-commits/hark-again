@@ -199,11 +199,8 @@ class MessageView extends StatelessWidget {
   /// “选择文字”：整条回复放进一张可选中的弹层（聊天里原地选字会抢点按和长按）。
   void _selectText(BuildContext context, String text) => showAppScrollSheet<void>(
         context,
+        title: '选择文字',
         builder: (ctx) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x3),
-            child: Text('选择文字', style: ctx.text.titleMedium),
-          ),
           SheetList(padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x5), children: [AppMarkdown(text)]),
         ]),
       );

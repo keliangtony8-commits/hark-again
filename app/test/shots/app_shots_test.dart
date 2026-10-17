@@ -2,7 +2,7 @@
 // 中英数字 = 打包的 MiSans（assets/fonts，三种字重，和真机一致），子集外的字落到 Noto Sans CJK，
 // MaterialIcons 来自 Flutter SDK。默认跳过；要出图（先按 app/README.md「截图」下 NotoSansSC.ttf）：
 //   SHOTS_DIR=/tmp/shots/app flutter test test/shots/app_shots_test.dart
-// 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-end-light / me-dark / me-preferences-dark / chat-times-dark / chat-menu-dark（手机 412×915 逻辑像素，2.625 倍）。
+// 出：home-light / home-dark / home-end-light / new-panel-light / chat-drawer-light / me-light / me-end-light / me-dark / me-preferences-dark / chat-times-dark / chat-menu-dark / sheet-form-{light,dark} / sheet-actions-{light,dark}（手机 412×915 逻辑像素，2.625 倍）。
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -233,4 +233,24 @@ void main() {
     await _settle(tester);
     await _shot(tester, 'me-preferences-dark');
   }, skip: _out == null);
+
+  // v3.5.1：弹层全屏（= Web 手机 .sheet）——表单（新面板，提交钮钉底）+ 动作单（外观），明暗各一套；再拍表单键盘收起后滚到中段
+  for (final dark in [false, true]) {
+    final tone = dark ? 'dark' : 'light';
+    testWidgets('sheets $tone', (tester) async {
+      final router = await _pump(tester, dark: dark);
+      await tester.tap(find.byTooltip('新建面板'));
+      await _settle(tester);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await _settle(tester);
+      await _shot(tester, 'sheet-form-$tone');
+      await tester.tap(find.byTooltip('关闭'));
+      await _settle(tester);
+      router.push('/me/preferences');
+      await _settle(tester);
+      await tester.tap(find.text('外观'));
+      await _settle(tester);
+      await _shot(tester, 'sheet-actions-$tone');
+    }, skip: _out == null);
+  }
 }

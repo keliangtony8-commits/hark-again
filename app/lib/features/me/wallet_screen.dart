@@ -56,7 +56,7 @@ class WalletScreen extends ConsumerWidget {
 
 /// 加一张卡：弹层填好 → 上传 → 列表重拉（服务器按添加先后排）。
 Future<void> addCard(BuildContext context, WidgetRef ref) async {
-  final v = await showAppSheet<Map<String, dynamic>>(context, builder: (_) => const AddCardSheet());
+  final v = await showAppSheet<Map<String, dynamic>>(context, title: '添加付款卡', builder: (_) => const AddCardSheet());
   if (v == null || !context.mounted) return;
   try {
     final notifier = ref.read(walletProvider.notifier);
@@ -181,8 +181,6 @@ class _AddCardSheetState extends State<AddCardSheet> {
         padding: EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, MediaQuery.viewInsetsOf(context).bottom + Sp.x5),
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('添加付款卡', style: context.text.titleLarge),
-            const SizedBox(height: Sp.x1),
             Text('只上传这一次，之后只显示尾号；付款前我一定先问你', style: context.text.bodySmall),
             const SizedBox(height: Sp.x4),
             Center(

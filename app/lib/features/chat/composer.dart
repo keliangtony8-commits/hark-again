@@ -267,7 +267,7 @@ class _ComposerState extends ConsumerState<Composer> {
                 child: Pressable(
                   onTap: () => Navigator.pop(ctx, src),
                   semanticLabel: label,
-                  // mainAxisSize.min：GlassSheet 给内容的是“最高到屏幕”的松约束，Column 默认 max 会把弹层撑满全屏（v2.97 附件弹层高度）
+                  // mainAxisSize.min：弹层内容整页滚（高度不受限），Column 只按内容高
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Container(
                       width: Sp.x7 + Sp.x2,

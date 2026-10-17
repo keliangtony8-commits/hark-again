@@ -483,3 +483,19 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
   - Web：FloatingFooter 自己量高、在底条前渲染 `SkyFade kind="footer" height={h + 16}`；`.sky-fade.sky-fade-footer` 贴底 + 反向 mask（同 6 个色标）。SkyFade 的 ResizeObserver 加观察自身（底条长高时条的视口位置会变）。坑：`.sky-fade-footer` 单类名被 base.css `.sky-fade { top: 0 }` 压住，条跑到顶上 → 用双类名。
 - 验证：flutter analyze 0、flutter test 736 过 / 9 跳过；Web tsc、npm test 14/14、架构守卫、build 过；截图 App（me / me-end / 聊天回到最新 / 主页暗色）+ Web 全套 phone/desktop × 明暗看过：卡片 / 退出登录 / 气泡滚到浮条处淡进壁纸，滑到底退出登录条完整露出。
 - 帧耗时：App perf_frame_test 新旧交替各 2 轮，backdropLayers / shaderMaskLayers / fadeRebuilds 不变，每帧元素 +3（多一条），CPU 中位在噪声内（shell-scroll 新 13.2/11.1 vs 旧 10.6/9.5ms，me-scroll 4.9/3.0 vs 2.9/2.5，chat-stream 34.5/36.4 vs 36.8/33.7）。Web 4×CPU 手机视口新旧交替各 4 轮：median 16ms、p95 19–20ms 不变；>20ms 帧主页 47 vs 19、“我的” 36 vs 27（4 轮合计）——多一条动态壁纸副本 + mask 的成本，和 v3.5 子页渐隐条同类同量级。**未验证**：真机 Flutter profile、真 GPU 浏览器。
+
+## 2026-10-17 v3.5.1 App 弹层全屏（= Web 43366c7；HANDOFF 第二节 24：“别留那个半屏的”“丑爆了”）
+**归属**：弹层只有 `ui/sheets.dart` 一个入口（架构守卫 test/sheet_test.dart），所以在这一层整体换掉，调用处只多传一个 `title:`（标题从内容里搬到顶上居中）。
+**替换了什么（删）**：`GlassSheet`（glass.dart：顶部圆角玻璃卡 + 真模糊 + 把手）、`showModalBottomSheet` 两处、`showAppScrollSheet` 的 85% 封顶与 AnimatedSize、`Glass.grabber` token、app_theme 的 `bottomSheetTheme`；旧测试“玻璃框 / 把手 / 85% 封顶 / 附件弹层只有一排高”改成全屏的新断言。不留两套。
+**新版式（`SheetPage`，sheets.dart）**
+1. 路由：根导航器上的 `PageRouteBuilder(opaque, fullscreenDialog)`，只淡入（FadeTransition，减少动态 = 直接出现），不上移；淡入完成后 Navigator 不再绘制下面的路由（= Web `:root[data-sheet] .shell` 隐藏），fullscreenDialog 让下面的 Material 页不做退场动画。
+2. 一页 = `Backdrop`（同一张流光壁纸，减少透明度 = 实色 bg）+ `GlassAppBar`（子页同款：左上圆钮 ‹ + 居中裸字标题；钮 tooltip “关闭”= Web aria-label）+ 内容区 + 可选钉底 footer。
+3. `showAppSheet` / `showActionSheet`：内容整页滚（SingleChildScrollView），视口从标题行中线起；`showFormSheet`：字段整页滚，提交钮钉在屏幕底（footer，整行宽）；`showAppScrollSheet`：固定部分 + `SheetList` 占满剩下高度在里面滚。
+4. 渐隐（全部复用 `BackdropFade` 的 SkyLayer 着色器，不新增组件）：上沿 clear = 标题行中线、solid = 标题行下沿 + Sp.x5（= Web .sky-fade-sheet 的 fade-a / fade-b）；下沿淡成壁纸（无按钮行时让出手势条，有按钮行时淡在按钮行上面）；`SheetList` 上沿一条 topFadeRamp（列表在固定说明下面滚，不切硬边）。`BackdropFade.bottom` 改名 `BackdropFade.local`（本地坐标，两个方向都用；FloatingFooter 同步改）。
+5. 安全区 / 键盘由 SheetPage 统一给（内容区贴键盘），内容里的 SafeArea / viewInsets 留白自动归零，调用处不用改。
+6. 平板 / 宽屏：弹层以前没有自适应断点（Material 底部弹层），这里也不加——全屏，内容按 `Layout.contentMax` 居中（= Web --content-w，和子页一致）。Web 桌面（≥861）仍是居中玻璃卡；App 平板要不要也做居中卡，留给用户 / Hark 截图定。
+7. 居中确认框（showAppDialog / confirmDanger）不动。
+**成本**：没有 BackdropFilter（返回钮 `GlassIconButton(blur: false)`——底下只有壁纸，模糊白花一次取背景），没有离屏层；一张 Backdrop + 2–3 条渐隐条（同一个着色器、各自是重绘边界）。旧半屏卡每次打开 1 次整卡模糊取样 + 页面在底下照常绘制，新版淡入后底下不绘制，判断不会更重；真机光栅耗时未测。
+**调用处**：标题搬到 `title:`（分享对话、哪里不好、装过的工具、头像颜色、MCP 工具、OAuth 配置、个人资料、两步验证、恢复码、添加付款卡、存到哪里、任务记忆、本对话全部文件 / 用量、项目文件 / 引用文件、选择文字）；标题行带按钮的（打包下载、用量里的文件 / 分享钮、已选 N、上传、复制全部）按钮留在内容第一行右侧；完整日志 / 完整输出加顶上标题，任务信息块不动。
+**测试**：sheet_test 新断言（铺满整屏、落在 Backdrop 上、无 BackdropFilter、下面页面不绘制、标题按整屏居中、提交钮离底 Sp.x5 且整行宽、只淡入不上移、返回钮 = 取消、长列表占满到屏幕底且最后一行停在下沿渐隐之上）；project_file_refs / script_task 用返回钮关弹层；job_block / adaptive 按“下面的页面 offstage”改；conversation_files 标题不在内容里。shell_test“历史抽屉点遮罩关”在 HEAD 上就已失败（FullDrawer 铺满后没有露出的遮罩），改成往左滑关。
+**截图**：test/shots/app_shots_test.dart 新增 `sheets light/dark`（新面板表单 + 外观动作单），输出 sheet-{form,actions}-{light,dark}.png，四张都看过。

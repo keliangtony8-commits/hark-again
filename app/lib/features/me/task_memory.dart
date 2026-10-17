@@ -68,7 +68,7 @@ class _MemoRow extends ConsumerWidget {
   }
 
   Future<void> _open(BuildContext context, WidgetRef ref) async {
-    final clear = await showAppScrollSheet<bool>(context, builder: (ctx) => _MemoSheet(memo: memo));
+    final clear = await showAppScrollSheet<bool>(context, title: memo.title, builder: (ctx) => _MemoSheet(memo: memo));
     if (clear != true || !context.mounted) return;
     if (!await confirmDanger(context, title: '清空${memo.title}？', text: '下次运行时助手会重新摸索、重新记。', action: '清空')) return;
     try {
@@ -93,7 +93,6 @@ class _MemoSheet extends StatelessWidget {
         child: Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(memo.title, style: context.text.titleMedium),
               Text(memo.hint, style: context.text.bodySmall),
             ]),
           ),

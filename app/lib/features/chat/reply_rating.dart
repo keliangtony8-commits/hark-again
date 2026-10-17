@@ -35,7 +35,7 @@ Future<void> _send(BuildContext context, RateReply onRate, String? kind, {String
 }
 
 Future<void> _down(BuildContext context, RateReply onRate) async {
-  final picked = await showAppSheet<(String, String)>(context, builder: (_) => const _ReasonSheet());
+  final picked = await showAppSheet<(String, String)>(context, title: '哪里不好？', builder: (_) => const _ReasonSheet());
   if (picked != null && context.mounted) await _send(context, onRate, picked.$1, note: picked.$2);
 }
 
@@ -62,8 +62,6 @@ class _ReasonSheetState extends State<_ReasonSheet> {
         padding: EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, MediaQuery.viewInsetsOf(context).bottom + Sp.x5),
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('哪里不好？', style: context.text.titleLarge),
-            const SizedBox(height: Sp.x1),
             Text('会连同这条回复和每一步的记录存一份报告，在“我的 → 反馈”里能看到。', style: context.text.bodySmall),
             const SizedBox(height: Sp.x4),
             Wrap(spacing: Sp.x2, runSpacing: Sp.x2, children: [

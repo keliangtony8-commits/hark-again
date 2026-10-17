@@ -1,4 +1,4 @@
-// v0.53：底部弹层统一玻璃化（GlassSheet）+ 输入框坐在玻璃上（tile 底、聚焦变实底）+ 架构守卫。
+// 弹层：v3.5.1 全屏（SheetPage，= Web 手机 .sheet）+ 输入框 tile 底、聚焦变实底 + 对话框玻璃 + 架构守卫。
 import 'dart:io';
 
 import 'package:assistant/theme/app_theme.dart';
@@ -14,19 +14,22 @@ Widget _app(void Function(BuildContext) open, {bool solid = false}) => MaterialA
       home: Builder(builder: (context) => Scaffold(body: Center(child: TextButton(onPressed: () => open(context), child: const Text('打开'))))),
     );
 
-DecoratedBox _sheetBox(WidgetTester tester) => tester.widget<DecoratedBox>(
-      find.descendant(of: find.byType(GlassSheet), matching: find.byType(DecoratedBox)).first,
-    );
-
 void main() {
-  testWidgets('表单弹层：玻璃框（真模糊 + glassSheet 着色 + 把手），输入框 tile 底、聚焦变实底', (tester) async {
-    await tester.pumpWidget(_app((c) => showFormSheet(c, title: '新建', fields: const [FieldSpec('name', '名字')])));
+  testWidgets('表单弹层全屏（v3.5.1）：铺满整屏、落在壁纸上、不模糊、无把手；返回钮 + 居中标题；提交钮钉在屏幕底；输入框 tile 底、聚焦变实底', (tester) async {
+    Map<String, String>? result;
+    await tester.pumpWidget(_app((c) async => result = await showFormSheet(c, title: '新建', fields: const [FieldSpec('name', '名字')])));
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    expect(find.byType(GlassSheet), findsOneWidget);
-    expect(find.descendant(of: find.byType(GlassSheet), matching: find.byType(BackdropFilter)), findsOneWidget);
-    expect(find.byKey(const ValueKey('sheet-grabber')), findsOneWidget);
-    expect((_sheetBox(tester).decoration as BoxDecoration).color, Palette.light.glassSheet);
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    expect(tester.getRect(find.byType(SheetPage)), Offset.zero & screen);
+    expect(find.descendant(of: find.byType(SheetPage), matching: find.byType(Backdrop)), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsNothing);
+    expect(find.text('打开'), findsNothing); // 下面的页面不再绘制
+    // 标题居中（按整屏宽），返回钮在左上
+    expect(tester.getCenter(find.text('新建')).dx, moreOrLessEquals(screen.width / 2, epsilon: 1));
+    expect(tester.getCenter(find.byTooltip('关闭')).dx, lessThan(screen.width / 4));
+    // 提交钮钉在屏幕底：离底 = Sp.x5（无手势条）
+    expect(screen.height - tester.getRect(find.byType(FilledButton)).bottom, moreOrLessEquals(Sp.x5, epsilon: 0.5));
 
     // 第一项自动聚焦 → 实底；收起焦点 → tile 底
     Color fill() {
@@ -41,49 +44,73 @@ void main() {
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpAndSettle();
     expect(fill(), Palette.light.tile);
+
+    await tester.enterText(find.byType(TextField), ' 甲 ');
+    await tester.pump();
+    expect(tester.getSize(find.byType(FilledButton)).width, (screen.width < Layout.contentMax ? screen.width : Layout.contentMax) - 2 * Sp.x5); // 整行宽（宽屏按阅读宽度封顶）
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(result, {'name': '甲'});
+    expect(find.byType(SheetPage), findsNothing);
   });
 
-  testWidgets('减少透明度：弹层实色、不模糊', (tester) async {
+  testWidgets('只淡入、不上移；返回钮 = 取消；减少透明度：实色底、不模糊', (tester) async {
+    int? picked = -1;
     await tester.pumpWidget(_app(
-      (c) => showActionSheet<int>(c, title: '操作', actions: const [SheetAction(Icons.edit, '改名', value: 1)]),
+      (c) async => picked = await showActionSheet<int>(c, title: '操作', actions: const [SheetAction(Icons.edit, '改名', value: 1)]),
       solid: true,
     ));
     await tester.tap(find.text('打开'));
+    await tester.pump();
+    await tester.pump(Motion.base ~/ 2);
+    // 动画中途：位置已经到位（不上移），只是透明度在变；下面的页面还在（跟着淡出让位）
+    expect(tester.getRect(find.byType(SheetPage)).top, 0);
+    final fade = tester.widget<FadeTransition>(find.ancestor(of: find.byType(SheetPage), matching: find.byType(FadeTransition)).first);
+    expect(fade.opacity.value, inExclusiveRange(0, 1));
+    expect(find.text('打开'), findsOneWidget);
     await tester.pumpAndSettle();
-    expect(find.byType(GlassSheet), findsOneWidget);
-    expect(find.descendant(of: find.byType(GlassSheet), matching: find.byType(BackdropFilter)), findsNothing);
-    expect((_sheetBox(tester).decoration as BoxDecoration).color, Palette.light.surface);
+    expect(find.byType(BackdropFilter), findsNothing);
+    expect(find.descendant(of: find.byType(SheetPage), matching: find.byWidgetPredicate((w) => w is ColoredBox && w.color == Palette.light.bg)), findsWidgets);
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(picked, isNull);
+    expect(find.byType(SheetPage), findsNothing);
+
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('改名'));
     await tester.pumpAndSettle();
-    expect(find.byType(GlassSheet), findsNothing);
+    expect(picked, 1);
   });
 
-  testWidgets('长列表弹层：短内容就是短弹层，长内容封顶在 85% 屏高并在里面滚', (tester) async {
+  testWidgets('长列表弹层：铺满整屏，短列表收拢在上面，长列表占满剩下的高度在里面滚，最后一行能滚到底部渐隐之上', (tester) async {
     Future<void> open(int n) async {
-      await tester.pumpWidget(_app((c) => showAppScrollSheet<void>(c, builder: (_) => Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('标题'),
+      await tester.pumpWidget(_app((c) => showAppScrollSheet<void>(c, title: '列表', builder: (_) => Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('说明'),
             SheetList(children: [for (var i = 0; i < n; i++) ListTile(title: Text('行 $i'))]),
           ]))));
       await tester.tap(find.text('打开'));
       await tester.pumpAndSettle();
     }
 
-    final screen = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
     await open(3);
-    final short = tester.getSize(find.byType(GlassSheet)).height;
-    expect(short, lessThan(screen * 0.5)); // 不再固定开到 60%，下面不空一大片
+    expect(tester.getRect(find.byType(SheetPage)), Offset.zero & screen);
+    expect(tester.getRect(find.byType(ListView)).height, lessThan(screen.height * 0.5)); // 短列表不撑高
     expect(find.text('行 2'), findsOneWidget);
-    Navigator.of(tester.element(find.byType(GlassSheet))).pop();
+    await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
 
     await open(60);
-    final tall = tester.getSize(find.byType(GlassSheet)).height;
-    expect(tall, lessThanOrEqualTo(screen * 0.85 + 0.5));
-    expect(tall, greaterThan(screen * 0.8));
+    final list = tester.getRect(find.byType(ListView));
+    expect(list.bottom, moreOrLessEquals(screen.height, epsilon: 0.5)); // 占满到屏幕底
     expect(find.text('行 0'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -600));
     await tester.pumpAndSettle();
-    expect(find.text('行 0'), findsNothing); // 封顶后在里面滚
+    expect(find.text('行 0'), findsNothing); // 在里面滚
+    await tester.fling(find.byType(ListView), const Offset(0, -20000), 5000);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.text('行 59')).bottom, lessThanOrEqualTo(screen.height - Sp.x5)); // 停在下沿渐隐之上
   });
 
   testWidgets('危险确认：玻璃对话框（真模糊 + 磨砂遮罩），两颗等宽胶囊，动作是实心危险色', (tester) async {

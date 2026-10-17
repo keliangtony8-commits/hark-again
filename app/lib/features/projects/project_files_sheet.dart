@@ -50,6 +50,7 @@ Future<List<FileBlock>?> pickProjectFiles(BuildContext context, String projectId
         {Set<String> taken = const {}, int room = maxMessageFiles}) =>
     showAppScrollSheet<List<FileBlock>>(
       context,
+      title: '引用${workspaceFilesTitle(projectId)}',
       builder: (_) => _FilePicker(projectId: projectId, taken: taken, room: room),
     );
 
@@ -87,7 +88,7 @@ class _FilePickerState extends ConsumerState<_FilePicker> {
       Padding(
         padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x5, Sp.x1),
         child: Row(children: [
-          Expanded(child: Text('引用${workspaceFilesTitle(widget.projectId)}', style: context.text.titleLarge)),
+          const Spacer(),
           SwapSwitcher(
             child: Text(_chosen.isEmpty ? '可多选' : '已选 ${_chosen.length}',
                 key: ValueKey(_chosen.length), style: context.text.labelSmall),
@@ -185,6 +186,7 @@ class _PickRow extends StatelessWidget {
 
 Future<void> showProjectFiles(BuildContext context, String projectId) => showAppScrollSheet<void>(
   context,
+  title: workspaceFilesTitle(projectId),
   builder: (_) => _ProjectFiles(projectId: projectId),
 );
 
@@ -228,7 +230,7 @@ class _ProjectFilesState extends ConsumerState<_ProjectFiles> {
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x3, Sp.x2),
           child: Row(
             children: [
-              Expanded(child: Text(workspaceFilesTitle(widget.projectId), style: context.text.titleLarge)),
+              const Spacer(),
               AnimatedSwitcher(
                 duration: Motion.base,
                 child: _uploading > 0

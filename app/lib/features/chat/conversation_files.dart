@@ -21,7 +21,7 @@ final conversationFilesProvider =
     swrGetFamily<ConversationFiles, String>(conversationFilesPath, (j) => ConversationFiles.fromJson(jsonMap(j)));
 
 Future<void> showConversationFiles(BuildContext context, String id) =>
-    showAppScrollSheet<void>(context, builder: (_) => ConversationFilesSheet(id: id));
+    showAppScrollSheet<void>(context, title: '本对话全部文件', builder: (_) => ConversationFilesSheet(id: id));
 
 class ConversationFilesSheet extends ConsumerStatefulWidget {
   const ConversationFilesSheet({super.key, required this.id});
@@ -50,7 +50,7 @@ class _ConversationFilesSheetState extends ConsumerState<ConversationFilesSheet>
           padding: const EdgeInsets.fromLTRB(Sp.x5, 0, Sp.x3, Sp.x1),
           child: Row(
             children: [
-              Expanded(child: Text('本对话全部文件', style: context.text.titleLarge)),
+              const Spacer(),
               FadeSwitcher(
                 child: data == null || data.files.isEmpty
                     ? const SizedBox(key: ValueKey('no-zip'), height: A11y.minTap)

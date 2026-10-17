@@ -9,6 +9,7 @@
 
 **v3.5.0 已部署（2026-10-16 22:25，/api/version 3.5.0；备份 /root/app-v321-backup.tgz、/root/env.bak.v35）+ APK toyuis-3.5.0-arm64.apk 已交付。现在 wip/v3.5.1：用户真机反馈一批（22:27–22:48），进度：**
 - [x] 半屏抽屉 → 全屏（第二节 24）：Web 窄屏 .convs 铺满、落在壁纸上、聊天区淡出、删 .glass-drawer / 遮罩 / ×（左上钮开关）；App FullDrawer（glass.dart）铺满 + Backdrop。截图 App 已看；Web 待截图
+- [x] 所有半屏弹层 → 全屏（第二节 24，2026-10-17）：Web 43366c7（手机 .sheet 全屏、桌面居中卡）；App ui/sheets.dart `SheetPage`（壁纸 + 圆钮 ‹ + 居中标题、内容整页滚、表单提交钮钉底、上下 BackdropFade、只淡入、opaque 路由下面不绘制、无 BackdropFilter），GlassSheet / 把手 / showModalBottomSheet 已删；App 平板也全屏（Web 桌面是居中卡，要不要对齐待定）。真机光栅未测
 - [x] 浏览器里顶部凭空多约 44px：手机浏览器报了 safe-area-inset-top → 统一 --sat（tokens.css），浏览器标签页里为 0
 - [x] Web 计划钮手机上点了看不出：开着时显示“计划”+ 细边（= App）
 - [ ] 主页空态建议卡被输入框挡（待查，可能顶部空白修掉后就够）

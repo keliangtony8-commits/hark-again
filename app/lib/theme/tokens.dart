@@ -75,7 +75,7 @@ class Palette {
   /// 玻璃卡片里再嵌一层的“小块”（面板里 标签 + 大数字 的 tile、卡片里的次要胶囊按钮）：比卡片深一点。
   final Color tile;
 
-  /// 底部弹层的玻璃：比浮条（glass）更实，表单字要压得住底下被模糊的页面（= 网页版 --glass-sheet）。
+  /// 居中对话框的玻璃：比浮条（glass）更实，字要压得住底下被模糊的页面（= 网页版 --glass-sheet）。
   final Color glassSheet;
 
   /// v2.80「Hark 式」浅色（home-redesign.md F）：暖白底、白卡不描边、唯一强调色 = 近黑（主按钮黑胶囊）。
@@ -376,7 +376,6 @@ abstract final class Glass {
   static const blur = 24.0; // 背景模糊 sigma
   static const scrimBlur = 14.0; // 输入胶囊聚焦时整页的模糊（比浮层轻：还认得出后面是什么）
   static const focusBlur = 28.0; // 长按聚焦菜单（§J）：背景重度模糊，只剩被按的那条清晰
-  static const grabber = Size(36, 4); // 弹层顶上那根把手
 }
 
 /// 浮层的投影：贴着玻璃的一圈很淡的影子（v0.46 起：不要“贴纸感”的重投影，靠 1px 发丝边分层）。

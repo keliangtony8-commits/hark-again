@@ -274,6 +274,7 @@ class _McpRow extends ConsumerWidget {
     final tools = ref.read(apiProvider).get('/api/connectors/mcp/${s.id}/tools');
     await showAppScrollSheet<void>(
       context,
+      title: s.name,
       builder: (ctx) => FutureBuilder(
           future: tools,
           builder: (ctx, snap) {
@@ -285,8 +286,6 @@ class _McpRow extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x5, Sp.x3),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('${list.length} 个工具 · ${hostOf(s.url)}', style: ctx.text.labelSmall),
-                  const SizedBox(height: Sp.x1),
-                  Text(s.name, style: ctx.text.titleLarge),
                 ]),
               ),
               if (list.isEmpty)
