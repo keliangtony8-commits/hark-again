@@ -483,3 +483,16 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
   - Web：FloatingFooter 自己量高、在底条前渲染 `SkyFade kind="footer" height={h + 16}`；`.sky-fade.sky-fade-footer` 贴底 + 反向 mask（同 6 个色标）。SkyFade 的 ResizeObserver 加观察自身（底条长高时条的视口位置会变）。坑：`.sky-fade-footer` 单类名被 base.css `.sky-fade { top: 0 }` 压住，条跑到顶上 → 用双类名。
 - 验证：flutter analyze 0、flutter test 736 过 / 9 跳过；Web tsc、npm test 14/14、架构守卫、build 过；截图 App（me / me-end / 聊天回到最新 / 主页暗色）+ Web 全套 phone/desktop × 明暗看过：卡片 / 退出登录 / 气泡滚到浮条处淡进壁纸，滑到底退出登录条完整露出。
 - 帧耗时：App perf_frame_test 新旧交替各 2 轮，backdropLayers / shaderMaskLayers / fadeRebuilds 不变，每帧元素 +3（多一条），CPU 中位在噪声内（shell-scroll 新 13.2/11.1 vs 旧 10.6/9.5ms，me-scroll 4.9/3.0 vs 2.9/2.5，chat-stream 34.5/36.4 vs 36.8/33.7）。Web 4×CPU 手机视口新旧交替各 4 轮：median 16ms、p95 19–20ms 不变；>20ms 帧主页 47 vs 19、“我的” 36 vs 27（4 轮合计）——多一条动态壁纸副本 + mask 的成本，和 v3.5 子页渐隐条同类同量级。**未验证**：真机 Flutter profile、真 GPU 浏览器。
+
+## 2026-10-17 v3.5.1 “我的” = 第四个分支（App；HANDOFF 第二节第 26 条，照 Hark 截图）
+- 依据：用户 22:48–22:49“切到个人页的时候，主页聊天和项目都还在…点击他做了一个从左往右滑的特效，就相当于切过去了”“把那个返回键给删掉 个人页面那个”；Hark 截图：导航胶囊三项都不选中、右上头像为当前项、无返回钮、无左上按钮。
+- 归属 / 替换：
+  1. 路由：/me（连同全部二级子页）从“盖在外壳上的根路由”移进 StatefulShellRoute 第四个分支；`shellRoots` 加 '/me'，`shellBarShown` 因此在“我的”显示顶栏、在 /me/… 子页照旧淡出（子页 SubPage 样式和返回钮不动）。
+  2. 外框：MeScreen 换成和其他一级页同一个 ShellPage——**删** MeScreen 自带的 Backdrop、`me-fade` 渐隐条、页头返回钮 / “回到主页”×，不留两套；页头上留白仍是 topFadeRamp（静止时在全显线上）。
+  3. 顶栏：不新增组件。SegmentedNav 变 Stateful 只为记住滑块上次位置：index 不在分段里时滑块原位淡出（AnimatedOpacity），回来时原位淡入再滑走；头像外加一道 pillOn 色环（= 选中滑块颜色）淡入，读屏 selected。
+  4. 切换动效：`StatefulShellRoute(navigatorContainerBuilder: ShellBranches)` 替换 `.indexedStack`。ShellBranches = go_router 自带容器的同一结构（每分支 Offstage + TickerMode 常驻），多一个 360ms easeOutCubic 控制器：只有一端是“我的”时，进场页从 ±1 屏宽滑到 0、离场页从 0 滑到 ∓1（FractionalTranslation，只动 transform）；滑完离场页下台；三个分段之间、减少动态、滑到一半又切走都直接到位。参考：go_router 官方示例 example/lib/others/custom_stateful_shell_route.dart（BSD-3，自定义 navigatorContainerBuilder 做分支切换动画）的思路，代码按本项目 token 自写、未移植。
+  5. 返回键：“我的”PopScope 不可弹，搜着先清空，否则 `StatefulNavigationShell.maybeOf(context).goBranch(0)`（主页导航栈原样恢复）。
+  6. 其他入口：头像 = goBranch(3)（已在“我的”再点 = 回到“我的”栈底，和分段一致）；主页卡片 / 面板 / 聊天块里的 `context.push('/me/…')` 实测 go_router 18 跨分支 push 照旧叠在当前页上、返回回原处，保留不改（action_card 只更新注释）。
+- 成本 / 帧（perf_frame_test，同机先后跑）：“我的”滚动 每帧重建元素 2→0、重画 8→4、CPU 中位 1.31→1.14ms；backdropLayers 1→2、取背景 1→2 次（多的是常驻顶栏那一组，和主页 / 项目同为 ≤2，新加断言守住）；shaderMask 0、渐隐条滚动重建 0。横滑期间两页同时在台上、各自 transform，不触发布局。
+- 版面代价（未解决，记 HANDOFF）：顶栏常驻后内容多让出 72px，412×915 上“关于”与“退出登录”要滚一小段才露出（原 design_p3_test“退出登录不用滚就看得到”改为“第一组 + 第二组前两行露在搜索胶囊上方”）。不删行、不改行高就收不回；要不要把行高 64 / 用量卡 98 往 Hark 的 61 / 83 收另议。
+- 未验证：真机横滑手感与 GPU 帧；Web 未改（不在这次范围）。

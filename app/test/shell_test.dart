@@ -1,11 +1,16 @@
-// 设计 v2 外壳：浮动顶栏只在一级页面出现，进子页面淡出；头像进入“我的”（盖在外壳上，返回回到原处）；
-// 深链直接落在 /me/… 时，“我的”的返回去主页而不是退出 App；一级页面的上下文按钮各就各位。
+// 设计 v2 外壳：浮动顶栏只在一级页面出现，进子页面淡出；一级页面的上下文按钮各就各位。
+// v3.5.1：“我的”= 第四个分支——点头像顶栏仍在、三个分段都不选中、头像高亮、无返回钮；进出“我的”整页横滑；返回键在“我的”回主页；
+// 深链直接落在 /me/… 时返回回到“我的”。
 import 'dart:async';
 
 import 'package:assistant/app.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
+import 'package:assistant/features/home/home_screen.dart';
+import 'package:assistant/features/me/me_screen.dart';
+import 'package:assistant/features/projects/projects_screen.dart';
+import 'package:assistant/shell/app_shell.dart';
 import 'package:assistant/shell/top_bar.dart';
 import 'package:assistant/ui/motion.dart';
 import 'package:assistant/ui/sky.dart';
@@ -113,26 +118,80 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('头像 → 我的（盖在外壳上），返回回到原来的 Tab', (tester) async {
+  testWidgets('v3.5.1 点头像 → 我的：顶栏仍在、三个分段都不选中、头像高亮、无返回钮；横滑切过去；点主页切回', (tester) async {
     final router = await _pump(tester);
+    double dx(Type page) => tester.widget<FractionalTranslation>(find.ancestor(of: find.byType(page), matching: find.byType(FractionalTranslation)).first).translation.dx;
+    double opacity(String key) => tester.widget<AnimatedOpacity>(find.byKey(Key(key))).opacity;
+
     await tester.tap(find.byTooltip('我的'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120)); // 滑到一半：主页向左滑出、“我的”从右滑入，两页都在台上
+    expect(dx(HomeScreen), lessThan(0));
+    expect(dx(MeScreen), greaterThan(0));
     await _settle(tester);
+
     expect(router.state.uri.path, '/me');
     expect(find.text('个人资料'), findsOneWidget);
-    expect(find.byTooltip('回到主页'), findsNothing); // 能返回：左上是返回钮（我的页没有 AppBar，是玻璃圆钮）
-    await tester.tap(find.byTooltip('返回'));
+    expect(_barShown(tester), isTrue, reason: '“我的”是一级分支，顶栏不消失');
+    expect(tester.widget<FloatingTopBar>(find.byType(FloatingTopBar)).index, meBranch);
+    expect(opacity('nav-thumb'), 0, reason: '三个分段都不选中：滑块淡出');
+    expect(opacity('avatar-ring'), 1, reason: '头像高亮为当前项');
+    expect(find.byTooltip('返回'), findsNothing);
+    expect(find.byTooltip('回到主页'), findsNothing);
+    expect(dx(MeScreen), 0);
+    expect(find.byType(HomeScreen, skipOffstage: true), findsNothing, reason: '滑完离场页下台');
+
+    await tester.tap(find.text('主页'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120)); // 反向：“我的”向右滑出、主页从左滑入
+    expect(dx(MeScreen), greaterThan(0));
+    expect(dx(HomeScreen), lessThan(0));
     await _settle(tester);
     expect(router.state.uri.path, '/home');
+    expect(opacity('nav-thumb'), 1);
+    expect(opacity('avatar-ring'), 0);
+    expect(dx(HomeScreen), 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('主页 / 聊天 / 项目之间照旧直接切换（不横滑）', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text('项目'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.byType(HomeScreen, skipOffstage: true), findsNothing);
+    final t = tester.widget<FractionalTranslation>(find.ancestor(of: find.byType(ProjectsScreen), matching: find.byType(FractionalTranslation)).first);
+    expect(t.translation, Offset.zero);
+  });
+
+  testWidgets('返回键在“我的”回主页（主页状态原样）；在主页上的“我的”子页（push）返回回主页', (tester) async {
+    final router = await _pump(tester);
+    router.go('/me');
+    await _settle(tester);
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+    expect(router.state.uri.path, '/home');
+    expect(_barShown(tester), isTrue);
+
+    unawaited(router.push('/me/usage')); // 主页卡片 / 聊天块打开“我的”子页：叠在当前页上
+    await _settle(tester);
+    expect(_barShown(tester), isFalse);
+    router.pop();
+    await _settle(tester);
+    expect(router.state.uri.path, '/home');
+    expect(_barShown(tester), isTrue);
   });
 
   testWidgets('深链直达 /me/usage：返回到“我的”，再返回去主页', (tester) async {
     final router = await _pump(tester);
     router.go('/me/usage');
     await _settle(tester);
+    expect(_barShown(tester), isFalse); // 子页：顶栏让位，自带返回钮
     await tester.tap(find.byTooltip('返回')); // v3.5 子页返回是圆玻璃钮（不是 AppBar 的 BackButton，pageBack 找不到）
     await _settle(tester);
     expect(router.state.uri.path, '/me');
-    await tester.tap(find.byTooltip('回到主页'));
+    expect(_barShown(tester), isTrue);
+    await tester.binding.handlePopRoute();
     await _settle(tester);
     expect(router.state.uri.path, '/home');
     expect(_barShown(tester), isTrue);
@@ -178,5 +237,18 @@ void main() {
     await tester.pump();
     expect(repaintsOnTick(), isTrue);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('减少动态：进出“我的”直接切换，不横滑', (tester) async {
+    Widget at(int i) => MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: Directionality(textDirection: TextDirection.ltr, child: ShellBranches(index: i, children: const [Text('a'), Text('b'), Text('c'), Text('d')])),
+        );
+    await tester.pumpWidget(at(0));
+    await tester.pumpWidget(at(meBranch));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('a'), findsNothing, reason: '离场页立刻下台');
+    final t = tester.widget<FractionalTranslation>(find.ancestor(of: find.text('d'), matching: find.byType(FractionalTranslation)));
+    expect(t.translation, Offset.zero);
   });
 }

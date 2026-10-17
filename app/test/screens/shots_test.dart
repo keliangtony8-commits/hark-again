@@ -640,7 +640,7 @@ void main() {
       await _shot(tester, '$mode-dialog');
       Navigator.of(nav).pop();
       await _calm(tester);
-      router.push('/me');
+      router.go('/me'); // v3.5.1 “我的”是第四个分支
       await _shot(tester, '$mode-me');
       router.push('/me/connectors'); // 连接的账号：账户 / MCP 行上的问题 / 网站登录 / API Key 同一页（v2.96）
       await _shot(tester, '$mode-connectors');
@@ -738,7 +738,7 @@ void main() {
         await _shot(tester, '$tag-chat-streaming');
         router.go('/projects');
         await _shot(tester, '$tag-projects');
-        router.push('/me');
+        router.go('/me'); // v3.5.1 “我的”是第四个分支
         await _shot(tester, '$tag-me');
         // 翻到中间：页头滚进状态栏那一截，看顶部渐隐条（状态栏以上全是壁纸，不切硬边）
         final meScroll = tester.state<ScrollableState>(find.descendant(of: find.byType(MeScreen), matching: find.byType(Scrollable)).first).position;

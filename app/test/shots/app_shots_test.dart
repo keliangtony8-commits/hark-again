@@ -216,7 +216,7 @@ void main() {
   // v2.81：我的页一屏 + 偏好设置
   testWidgets('me page light', (tester) async {
     final router = await _pump(tester, dark: false);
-    router.push('/me');
+    router.go('/me'); // v3.5.1 “我的”是第四个分支
     await _settle(tester);
     await _shot(tester, 'me-light');
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -600)); // v3.5：滚到底看“退出登录”整行条
@@ -226,7 +226,7 @@ void main() {
 
   testWidgets('me page dark + preferences', (tester) async {
     final router = await _pump(tester, dark: true);
-    router.push('/me');
+    router.go('/me'); // v3.5.1 “我的”是第四个分支
     await _settle(tester);
     await _shot(tester, 'me-dark');
     router.push('/me/preferences');

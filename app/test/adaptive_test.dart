@@ -141,11 +141,11 @@ void main() {
     expect(find.byTooltip('新项目'), findsOneWidget); // 常驻栏自带新建项目
   });
 
-  test('v2.93 shellBarShown：一级页面和项目页显示顶栏，项目的子页面不显示', () {
-    for (final l in ['/home', '/chat', '/projects', '/projects/p1']) {
+  test('v2.93 shellBarShown：一级页面（v3.5.1 含“我的”）和项目页显示顶栏，子页面不显示', () {
+    for (final l in ['/home', '/chat', '/projects', '/projects/p1', '/me']) {
       expect(shellBarShown(l), isTrue, reason: l);
     }
-    for (final l in ['/projects/p1/brief', '/projects/p1/computer', '/me', '/me/memory']) {
+    for (final l in ['/projects/p1/brief', '/projects/p1/computer', '/me/memory', '/me/usage']) {
       expect(shellBarShown(l), isFalse, reason: l);
     }
   });

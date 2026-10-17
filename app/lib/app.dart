@@ -1,4 +1,5 @@
-// 路由与主题。未登录 → /login；登录后三个一级 Tab（主页/聊天/项目），各自一条导航栈；“我的”是头像进入的全屏页。
+// 路由与主题。未登录 → /login；登录后四个一级分支（主页/聊天/项目/我的），各自一条导航栈。
+// “我的”是第四个分支（v3.5.1 照 Hark）：顶栏右上头像进入，顶栏不消失；和其他分支之间横滑切换（shell/app_shell.dart ShellBranches）。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,8 +56,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      StatefulShellRoute.indexedStack(
+      StatefulShellRoute(
         builder: (_, state, shell) => AppShell(shell: shell, location: state.uri.path),
+        navigatorContainerBuilder: (_, shell, children) => ShellBranches(index: shell.currentIndex, children: children),
         branches: [
           StatefulShellBranch(routes: [GoRoute(path: '/home', builder: (_, _) => const HomeScreen())]),
           StatefulShellBranch(routes: [GoRoute(path: '/chat', builder: (_, _) => const ChatScreen())]),
@@ -79,32 +81,34 @@ final routerProvider = Provider<GoRouter>((ref) {
               ]),
             ]),
           ]),
+          // 我的：第四个分支（头像进入）。子页仍是 SubPage（自带返回钮，顶栏淡出）；深链 /me/connectors?… 直接打开时栈底是“我的”，返回回到它。
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/me', builder: (_, _) => const MeScreen(), routes: [
+              GoRoute(path: 'memory', builder: (_, _) => const MemoryScreen(), routes: [
+                GoRoute(path: 'notes/:id', builder: (_, s) => MemoryNoteScreen(id: s.pathParameters['id']!)),
+              ]),
+              GoRoute(path: 'tasks', builder: (_, _) => const TasksScreen(), routes: [
+                GoRoute(path: ':id', builder: (_, s) => TaskDetailScreen(id: s.pathParameters['id']!)),
+              ]),
+              GoRoute(path: 'connectors', builder: (_, s) => ConnectorsScreen(oauth: OAuthResult.fromQuery(s.uri.queryParameters))),
+              GoRoute(path: 'wallet', builder: (_, _) => const WalletScreen()),
+              GoRoute(path: 'security', builder: (_, s) => _spot(s, const SecurityScreen())),
+              GoRoute(path: 'feedback', builder: (_, _) => const FeedbackScreen(), routes: [
+                GoRoute(path: ':id', builder: (_, s) => FeedbackDetailScreen(id: s.pathParameters['id']!)),
+              ]),
+              GoRoute(path: 'computer', builder: (_, s) => _spot(s, const ComputerScreen())),
+              GoRoute(path: 'pages', builder: (_, _) => const PagesScreen()),
+              GoRoute(path: 'usage', builder: (_, _) => const UsageScreen()),
+              GoRoute(path: 'profile', builder: (_, _) => const MeHubScreen(hub: MeHub.profile)),
+              GoRoute(path: 'preferences', builder: (_, s) => _spot(s, const PreferencesScreen())),
+              GoRoute(path: 'about', builder: (_, s) => _spot(s, const AboutScreen())),
+              GoRoute(path: 'skills', builder: (_, _) => const SkillsScreen(), routes: [
+                GoRoute(path: ':id', builder: (_, s) => SkillEditorScreen(id: s.pathParameters['id']!, starter: s.extra is SkillStarter ? s.extra as SkillStarter : null)),
+              ]),
+            ]),
+          ]),
         ],
       ),
-      // 我的：点头像进入的全屏页，盖在外壳上面（不是 Tab）。深链 /me/connectors?… 直接打开时返回会回到主页（见 MeScreen）。
-      GoRoute(path: '/me', builder: (_, _) => const MeScreen(), routes: [
-        GoRoute(path: 'memory', builder: (_, _) => const MemoryScreen(), routes: [
-          GoRoute(path: 'notes/:id', builder: (_, s) => MemoryNoteScreen(id: s.pathParameters['id']!)),
-        ]),
-        GoRoute(path: 'tasks', builder: (_, _) => const TasksScreen(), routes: [
-          GoRoute(path: ':id', builder: (_, s) => TaskDetailScreen(id: s.pathParameters['id']!)),
-        ]),
-        GoRoute(path: 'connectors', builder: (_, s) => ConnectorsScreen(oauth: OAuthResult.fromQuery(s.uri.queryParameters))),
-        GoRoute(path: 'wallet', builder: (_, _) => const WalletScreen()),
-        GoRoute(path: 'security', builder: (_, s) => _spot(s, const SecurityScreen())),
-        GoRoute(path: 'feedback', builder: (_, _) => const FeedbackScreen(), routes: [
-          GoRoute(path: ':id', builder: (_, s) => FeedbackDetailScreen(id: s.pathParameters['id']!)),
-        ]),
-        GoRoute(path: 'computer', builder: (_, s) => _spot(s, const ComputerScreen())),
-        GoRoute(path: 'pages', builder: (_, _) => const PagesScreen()),
-        GoRoute(path: 'usage', builder: (_, _) => const UsageScreen()),
-        GoRoute(path: 'profile', builder: (_, _) => const MeHubScreen(hub: MeHub.profile)),
-        GoRoute(path: 'preferences', builder: (_, s) => _spot(s, const PreferencesScreen())),
-        GoRoute(path: 'about', builder: (_, s) => _spot(s, const AboutScreen())),
-        GoRoute(path: 'skills', builder: (_, _) => const SkillsScreen(), routes: [
-          GoRoute(path: ':id', builder: (_, s) => SkillEditorScreen(id: s.pathParameters['id']!, starter: s.extra is SkillStarter ? s.extra as SkillStarter : null)),
-        ]),
-      ]),
     ],
   );
 });

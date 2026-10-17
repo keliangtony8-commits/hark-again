@@ -167,7 +167,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('我的：常见安卓手机（412×915）一屏装下，退出登录不用滚就看得到', (tester) async {
+  testWidgets('我的：常见安卓手机（412×915）第一屏看到用量卡、第一组和第二组前几行（v3.5.1 顶栏常驻）', (tester) async {
     SharedPreferences.setMockInitialValues({'server': 'https://me.example'});
     FlutterSecureStoragePlatformMock.install();
     tester.view.physicalSize = const Size(1236, 2745);
@@ -179,8 +179,13 @@ void main() {
     addTearDown(c.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: c, child: _wrap(const MeScreen())));
     await tester.pumpAndSettle();
-    final bottom = tester.getBottomLeft(find.byKey(const Key('logout'))).dy;
-    expect(bottom, lessThanOrEqualTo(915));
+    // v3.5.1 “我的”成了一级分支：内容让出常驻顶栏（Layout.shellTop = 72），和 Hark 个人页一样搜索胶囊浮在列表末尾之上。
+    // 原“退出登录不用滚就看得到”在顶栏常驻后做不到（多让出 72，不删行、不改行高的前提下差约 58）：底线改为第一屏看到用量卡、第一组全部和第二组的
+    // 前几行（露在搜索胶囊上方）；第二组末行与“退出登录”滚一小段就到，且滚到底不被胶囊挡（me_search_test 守）。行高 / 卡高要不要收紧另议（HANDOFF 待决）。
+    final search = tester.getRect(find.byKey(const Key('me-search')));
+    for (final t in ['个人资料', '我的电脑', '安全', '偏好设置']) {
+      expect(tester.getRect(find.ancestor(of: find.text(t), matching: find.byType(ListRow))).bottom, lessThanOrEqualTo(search.top), reason: t);
+    }
   });
 }
 

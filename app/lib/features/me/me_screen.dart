@@ -1,14 +1,13 @@
-// 我的：点右上角头像进入的全屏页（v2.81 按 docs/home-redesign.md B 做减法，对照 Hark 个人页，一屏装下）。
-// 从上到下：页头一行（返回钮 + 名字大字 / 服务器域名小字）→ 用量卡（本月花费 + 查看用量）
+// 我的：第四个一级分支（v3.5.1 照 Hark 个人页：顶栏右上头像进入，导航胶囊悬浮在内容上方，三个分段都不选中、头像高亮；无返回钮、无左上按钮）。
+// 从上到下：页头（名字大字 / 服务器域名小字，可点改资料）→ 用量卡（本月花费 + 查看用量）
 //   → 组 1：个人资料（记忆、技能）· 定时任务 · 连接的账号 · 钱包 · 我的电脑（状态、文件、Pages）
 //   → 组 2：安全（两步验证、登录设备）· 偏好设置（外观、透明度、头像颜色、回复语言）· 反馈 · 关于
 //   → 一条“退出登录”整行条（v3.5 照 Hark，原居中胶囊）。每行只有 图标 + 标题 + 箭头，说明都在子页顶部；路由在 app.dart，子页是 ui/sub_page.dart 的 SubPage。
+// 外框 = 一级页面的 ShellPage（和主页/聊天/项目同一个）：让出顶栏、顶部渐隐条、毛玻璃分组都由它出，本页不再自带壁纸 / 渐隐 / 返回钮（v3.5.1 删，不留两套）。
+//   上留白 = Layout.topFadeRamp：静止时页头正好在渐隐全显处。返回键：搜着时先清空搜索，否则回主页（分支切换，主页的状态原样恢复）。
 // v3.0：底部一颗玻璃搜索胶囊 = 全 App 唯一的设置搜索（索引 me_index.dart；对话在历史抽屉里搜）。输入即筛：页头保留，
 //   下面换成结果（分区图标 + 标亮标题 + 所在位置），点了直达，带定位 id 的进页后滚到那一项闪一下（ui/kit.dart Spotlight）。
 //   胶囊放在 FloatingFooter 里：它量出胶囊实高交给 PageBody 留白，滚到底“退出登录”条不会被挡住。
-// v3.3 视觉验收：顶部一条 BackdropFade（和一级页面 ShellPage 同一个组件）：状态栏以上全是壁纸，翻下去内容不进状态栏、不切硬边；
-//   再渐显 Layout.topFadeRamp（= 页头上留白），静止时页头正好在全显处。放在 FloatingFooter 的 behind 格 = 画在列表之后、搜索胶囊之前：
-//   “我的”不进 BlurGroup（返回钮在列表里，见 devlog「v3.3 B3」），胶囊和返回钮各自独立模糊；渐隐条只占顶部一截、不和胶囊重叠，胶囊取到的背景不变。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +23,7 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../../shell/shell_page.dart';
 import '../../theme/look.dart';
 import 'me_index.dart';
 import 'profile_sheet.dart';
@@ -59,36 +59,25 @@ class _MeScreenState extends ConsumerState<MeScreen> {
     context.push(e.location);
   }
 
+  /// 返回键在“我的”回主页：在外壳里就切回主页分支（主页的导航栈、滚动位置原样恢复）；单独挂着（测试）就直接去 /home。
+  void _home() {
+    final shell = StatefulNavigationShell.maybeOf(context);
+    shell == null ? context.go('/home') : shell.goBranch(0);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 通常是从头像 push 进来，返回即回去；深链（OAuth 回调）直接落在 /me/… 时栈底就是这里，返回改去主页而不是退出 App
-    final root = ModalRoute.of(context)?.isFirst ?? false; // 按“本页在导航栈底”判断（context.canPop 看的是整个路由器，上面压着子页时也为真）
     final searching = _query.trim().isNotEmpty;
-    final top = MediaQuery.paddingOf(context).top;
     return PopScope(
-      canPop: !root && !searching, // 搜着的时候返回键先清空搜索（= iOS 设置搜索的“取消”）
+      canPop: false, // “我的”是分支栈底：返回不退出 App——搜着时先清空搜索（= iOS 设置搜索的“取消”），否则回主页
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (searching) {
-          _clear();
-        } else {
-          context.go('/home');
-        }
+        searching ? _clear() : _home();
       },
       child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Backdrop(
+        backgroundColor: Colors.transparent, // 透出外壳的壁纸
+        body: ShellPage(
           child: FloatingFooter(
-            // 渐隐带：状态栏底边 → 页头静止时的顶边（_MeBody 的上留白 = Layout.topFadeRamp）
-            behind: Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                key: const Key('me-fade'),
-                width: double.infinity,
-                height: top + Layout.topFadeRamp,
-                child: BackdropFade(clear: top, solid: top + Layout.topFadeRamp),
-              ),
-            ),
             footer: _SearchBar(
               controller: _search,
               focusNode: _focus,
@@ -99,7 +88,7 @@ class _MeScreenState extends ConsumerState<MeScreen> {
                 if (hits.isNotEmpty) _open(hits.first); // 回车 = 打开第一条
               },
             ),
-            child: _MeBody(root: root, query: _query, onOpen: _open),
+            child: _MeBody(query: _query, onOpen: _open),
           ),
         ),
       ),
@@ -146,8 +135,7 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _MeBody extends ConsumerWidget {
-  const _MeBody({required this.root, required this.query, required this.onOpen});
-  final bool root;
+  const _MeBody({required this.query, required this.onOpen});
   final String query;
   final ValueChanged<MeEntry> onOpen;
 
@@ -159,15 +147,11 @@ class _MeBody extends ConsumerWidget {
     final hits = searchMe(query);
     final searching = query.trim().isNotEmpty;
 
-    // 上留白 = 顶部渐隐带的高度（一级页面同一个 Layout.topFadeRamp）：静止时页头正好在全显处、一点不被盖
+    // 上留白 = 顶部渐隐带的渐显高度（ShellPage 的 BackdropFade：让位线下再 Layout.topFadeRamp 全显）：静止时页头正好在全显处、一点不被盖
     return PageBody(padding: const EdgeInsets.fromLTRB(Layout.gutter, Layout.topFadeRamp, Layout.gutter, Sp.x7), children: [
-      // 页头一行：返回钮 + 名字/域名（不再单独占一行返回钮 + 一行页名，整页省出一屏）
+      // 页头：名字/域名（v3.5.1 删返回钮：“我的”是一级分支，导航在顶栏）
       FadeSlideIn(
         child: Row(children: [
-          root
-              ? GlassIconButton(icon: Icons.close_rounded, tooltip: '回到主页', onTap: () => context.go('/home'))
-              : GlassIconButton(icon: Icons.arrow_back_ios_new_rounded, tooltip: '返回', onTap: () => Navigator.of(context).maybePop()),
-          const SizedBox(width: Sp.x4),
           // v2.92 §P：头像 + 名字一起点 → 改称呼 / 助手名 / 头像
           Expanded(
             child: Pressable(

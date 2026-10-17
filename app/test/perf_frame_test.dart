@@ -20,6 +20,7 @@ import 'package:assistant/features/home/home_screen.dart';
 import 'package:assistant/features/me/me_screen.dart';
 import 'package:assistant/features/projects/projects_screen.dart';
 import 'package:assistant/theme/tokens.dart';
+import 'package:assistant/ui/glass.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -304,7 +305,7 @@ void main() {
     expect(m['shaderMaskLayers'], 0);
   });
 
-  testWidgets('“我的”页滚动：顶部渐隐条不随滚动重建、不加离屏层', (tester) async {
+  testWidgets('“我的”页滚动（v3.5.1 第四个分支，顶栏常驻）：渐隐条不随滚动重建、不加离屏层、取背景次数不超', (tester) async {
     final app = await _pump(tester);
     app.router.go('/me');
     await _settle(tester);
@@ -313,12 +314,13 @@ void main() {
     final list = find.descendant(of: find.byType(MeScreen), matching: find.byType(Scrollable)).first;
     final pos = tester.state<ScrollableState>(list).position;
     final m = await _scroll(tester, list, onRebuild: (e) {
-      if (e.widget.key == const Key('me-fade')) fadeRebuilds++;
+      if (e.widget is BackdropFade) fadeRebuilds++; // v3.5.1 渐隐条由 ShellPage 出（和其他一级页面同一个）
     });
     _report('me-scroll', {...m, 'fadeRebuilds': fadeRebuilds});
     expect(pos.pixels, greaterThan(50), reason: '确实翻下去了');
     expect(fadeRebuilds, 0, reason: '渐隐条在列表外，滚动不应重建它');
     expect(m['shaderMaskLayers'], 0);
+    expect(m['backdropFlips'] as int, lessThanOrEqualTo(2), reason: '顶栏组 + 内容组（搜索胶囊）：每帧最多取两次背景');
   });
 
   testWidgets('主页 / 项目列表滚动：每帧重画、合成层', (tester) async {
