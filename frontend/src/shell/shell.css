@@ -76,7 +76,15 @@
   -webkit-mask-image: var(--fade); mask-image: var(--fade); }
 .floating-footer > * { pointer-events: auto; }
 .launch-chips { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; max-width: var(--content-w); margin: 0 auto var(--sp-3); padding: 0 var(--gutter); }
-.launch-chips button { height: 34px; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); color: var(--text); animation: float-up var(--dur) var(--ease) both; }
-.launch-chips button:nth-child(2) { animation-delay: var(--stagger); }
-.launch-chips button:nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+.launch-chips button { height: 34px; max-width: 100%; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); color: var(--text);
+  display: inline-flex; align-items: center; gap: var(--sp-2); animation: float-up var(--dur) var(--ease) both; animation-delay: calc(var(--stagger) * var(--i, 0)); }
+.launch-chips button > svg { flex: none; color: var(--text-2); }
+.launch-chips button small { flex: none; font-size: var(--fs-xs); color: var(--text-3); }
+.launch-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v3.5.1 新建面板模式（= App _ModeAbove / NewPanelExtras）：“最近移除”一行小标签；输入框正上方居中一行淡色小字（14px 常规），离胶囊顶约 24 */
+.launch-label { max-width: var(--content-w); margin: 0 auto var(--sp-2); padding: 0 var(--gutter); text-align: center; font-size: var(--fs-xs); color: var(--text-3);
+  animation: fade var(--dur) var(--ease) both; }
+.launch-caption { max-width: var(--content-w); margin: var(--sp-2) auto var(--sp-5); padding: 0 var(--gutter); text-align: center;
+  font-size: var(--fs-sm); font-weight: var(--fw-body); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: float-up var(--dur) var(--ease) both; }
 .launch { position: relative; z-index: 16; } /* 压在自己的磨砂遮罩上面 */

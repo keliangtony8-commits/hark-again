@@ -22,23 +22,6 @@
 .panel-body { display: flex; flex-direction: column; gap: var(--sp-3); transition: opacity var(--dur) var(--ease); }
 .panel.busy .panel-body { opacity: var(--op-dimmed); }
 
-/* 新面板弹层里的起点胶囊（假玻璃，和对话页建议同一材质）+ 最近移除的面板 */
-.panel-idea-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
-.panel-idea { min-height: 44px; padding: 0 var(--sp-4); border-radius: var(--r-full); background: var(--glass); border: 1px solid var(--glass-border);
-  box-shadow: var(--elev-card); font-size: var(--fs-sm); color: var(--text);
-  transition: transform var(--dur-fast) var(--ease), border-color var(--dur) var(--ease); }
-.panel-idea:hover { border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
-.panel-idea:active { transform: scale(.97); }
-
-.removed-list { display: flex; flex-direction: column; margin-top: var(--sp-4); }
-.removed-label { font-size: var(--fs-xs); color: var(--text-3); margin-bottom: var(--sp-1); }
-.removed-item { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; padding: 0 var(--sp-1); border-radius: var(--r-inner);
-  color: var(--text); font-size: var(--fs-sm); text-align: left; transition: background var(--dur-fast) var(--ease); }
-.removed-item:hover { background: var(--tile); }
-.removed-item svg { color: var(--text-3); flex: none; }
-.removed-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.removed-time { color: var(--text-3); font-size: var(--fs-xs); }
-
 .today-row { display: flex; gap: var(--sp-3); align-items: center; }
 .today-time { font-size: var(--fs-sm); color: var(--text-2); width: 48px; flex: none; font-variant-numeric: tabular-nums; } /* = App Layout.agendaTime */
 /* “现在”标记（v1.04，同 App _NowLine）：替掉两行之间的分隔线——钟点列写“现在”，标题边起小点 + 细线到行尾。

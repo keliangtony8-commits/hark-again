@@ -73,7 +73,7 @@
 @media (max-width: 860px) {
   /* v3.5.1（用户 22:39“别留那个半屏的”“丑爆了”）：窄屏历史 / 项目切换不再是从左滑出的半屏玻璃卡 + 遮罩，
      而是铺满整屏、直接落在壁纸上的一页（= 项目列表页的样子）：顶栏留在上面（左上钮开 / 关），聊天区淡出让位。
-     只动 opacity / transform，不加任何离屏层或 backdrop-filter。 */
+     只动 opacity / transform，不加任何离屏层或背景模糊。 */
   .convs { position: fixed; inset: 0; z-index: 19; width: auto; margin: 0; padding: var(--shell-top) calc(var(--gutter) - var(--sp-2)) 0;
     opacity: 0; visibility: hidden; transform: translateY(8px); animation: none;
     transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), visibility 0s linear var(--dur); }
@@ -165,6 +165,16 @@
 .composer-lead { width: 56px; height: 56px; animation: pop var(--dur) var(--ease) both; }
 .composer textarea { flex: 1; border: 0; outline: 0; background: none; resize: none; max-height: 200px; padding: var(--sp-2) 0; line-height: 24px; min-height: 40px; }
 .composer textarea::placeholder { color: var(--text-3); }
+/* v3.5.1 占位词轮播（新建面板模式，= App CycleText）：输入框外包一层，上面叠一层只给眼睛看的字（读屏读 aria-label）；
+   每换一句新节点 float-up 浮上来（只动 transform / opacity），有字时整层不渲染。图标与字同色、和句子一起换。 */
+.composer-field { position: relative; flex: 1; min-width: 0; display: flex; }
+.composer-hints { position: absolute; inset: 0; display: flex; align-items: flex-start; padding: var(--sp-2) 0; line-height: 24px;
+  color: var(--text-3); pointer-events: none; overflow: hidden; }
+.composer-hint-item { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; max-width: 100%; white-space: nowrap;
+  animation: float-up var(--dur) var(--ease) both; }
+.composer-hint-item > span { overflow: hidden; text-overflow: ellipsis; }
+.composer-hint-item > svg { flex: none; }
+.composer-row.no-attach { padding-left: var(--sp-2); } /* 没有回形针：占位图标离胶囊左缘约 16（= App Sp.x4） */
 
 
 @media (max-width: 520px) { .suggestions { grid-template-columns: 1fr; } }

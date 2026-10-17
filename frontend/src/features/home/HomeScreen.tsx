@@ -13,7 +13,7 @@ import { IconChat, IconEdit, IconHistory, IconMore, IconPlug, IconPlus, IconRefr
 import { Menu, Page, Skeleton, stagger } from "../../ui/kit";
 import TaskSheet, { changesOf, draftOf, EMPTY_TASK } from "../me/TaskSheet";
 import WallNotice from "../me/WallNotice";
-import NewPanelSheet from "./NewPanelSheet";
+import { NEW_PANEL_CAPTION, newPanelMode } from "./newPanel";
 import StackCard from "./StackCard";
 import { SnoozedRow, SnoozeMenu, type Snooze } from "./Snooze";
 import { removedPanels, removePanel as removeCard, revivePanel } from "./RemovedPanels";
@@ -31,12 +31,14 @@ const HOME_PROMPTS = [PREP_DAY_PROMPT, "查一下今天的新闻", "帮我规划
 
 /** Home（v2.78 重做，docs/home-redesign.md，= App home_screen.dart）：居中一列同款卡，没有小节标题、问候、空状态。
  *  顺序：要你处理的建议卡（全无时一张连接引导卡）→ 今天（仅有任务时）→ 面板们 → 收件箱 → 一行稍后 → 创建一个新面板。
- *  起点 / 早间简报 / 找回移除的面板都在新面板弹层里。输入在底部浮动胶囊，顶栏左侧 + = 新面板。 */
+ *  输入在底部浮动胶囊；顶栏左侧 + 和栈底“创建一个新面板”都只做一件事：让输入胶囊进新建面板模式（newPanel.tsx，
+ *  起点 / 早间简报 / 找回移除的面板都在那个模式的胶囊里，= App home_screen.dart _newPanel）。 */
 export default function HomeScreen() {
   const nav = useNavigate();
   const cards = useResource<HomeCard>("/api/cards");
   const tasks = useResource<ScheduledTask>("/api/tasks");
-  const [newPanel, setNewPanel] = useState(false);
+  /** 底部输入胶囊是否在新建面板模式：+ / “创建一个新面板”设上，收起时 LaunchComposer onModeEnd 清掉。 */
+  const [panelMode, setPanelMode] = useState(false);
   const inbox = useInbox();
   const askNew = useAskInNewChat();
 
@@ -104,9 +106,10 @@ export default function HomeScreen() {
   // 卡片栈（= App home_screen.dart 同一顺序）：每张卡错峰浮上来；加载中整栈一块骨架
   let n = 0;
   return (
-    <Page footer={<LaunchComposer suggestions={HOME_PROMPTS} />}>
+    <Page footer={<LaunchComposer suggestions={HOME_PROMPTS} onModeEnd={() => setPanelMode(false)}
+      mode={panelMode ? newPanelMode({ briefMissing: !briefTaskOf(tasks.items), removed, onBrief: () => setSchedulingBrief(true), onRevive: revive }) : null} />}>
       <ShellLead>
-        <button className="glass-btn glass" onClick={() => setNewPanel(true)} aria-label="新面板" title="新面板"><IconPlus /></button>
+        <button className="glass-btn glass" onClick={() => setPanelMode(true)} aria-label="新面板" title="新面板"><IconPlus /></button>
       </ShellLead>
 
       {cards.loading ? <Skeleton rows={3} /> : <div className="home-stack">
@@ -204,11 +207,9 @@ export default function HomeScreen() {
         )}
 
         <SnoozedRow cards={snoozed} onSnooze={snooze} />
-        <div className="enter" style={nth(n++)}><WidePill label="创建一个新面板" onClick={() => setNewPanel(true)} /></div>
+        <div className="enter" style={nth(n++)}><WidePill label={NEW_PANEL_CAPTION} onClick={() => setPanelMode(true)} /></div>
       </div>}
 
-      {newPanel && <NewPanelSheet onClose={() => setNewPanel(false)} briefMissing={!briefTaskOf(tasks.items)} removed={removed}
-        onBrief={() => setSchedulingBrief(true)} onRevive={revive} />}
       {schedulingBrief && <TaskSheet title="早间简报" initial={{ ...EMPTY_TASK, ...MORNING_BRIEF }} onClose={() => setSchedulingBrief(false)}
         onSave={async (d) => { await tasks.create(d); }} />}
       {editing && <TaskSheet title="编辑面板" panel initial={draftOf(editing)} onClose={() => setEditing(null)}

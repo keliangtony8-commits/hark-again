@@ -445,12 +445,13 @@ def main():
                 page.get_by_text("服务器还差一步").first.click()
                 page.wait_for_timeout(600)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-sheet-oauth-setup.png"))
-                # 弹层：主页“创建一个新面板”、项目“新建项目”
+                # v3.5.1 新建面板 = 主页发起态的新面板模式（不再是弹层）：点顶栏 +，整页磨砂 + 示例胶囊 + 小字 + 占位词轮播第一句
                 page.goto(base + "/#/")
                 page.wait_for_timeout(500)
-                page.get_by_text("创建一个新面板").first.click()
-                page.wait_for_timeout(500)
-                page.screenshot(path=str(OUT / f"{name}-{theme}-sheet-panel.png"))
+                page.get_by_label("新面板", exact=True).first.click()
+                page.wait_for_timeout(700)
+                page.screenshot(path=str(OUT / f"{name}-{theme}-new-panel.png"))
+                page.keyboard.press("Escape")
                 page.goto(base + "/#/me/tasks")
                 page.wait_for_timeout(500)
                 page.get_by_label("新定时任务").first.click()

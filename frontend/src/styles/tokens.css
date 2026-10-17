@@ -117,6 +117,7 @@
   --dur-slow: 360ms;  /* 页面切换、大块位移 */
   --rise: 6px;        /* 入场：淡入 + 上移 6px */
   --stagger: 30ms;   /* 列表逐项入场的间隔，与 App Motion.stagger 一致 */
+  --hint-cycle: 3.2s; /* v3.5.1 输入框占位词轮播间隔（新建面板模式），与 App Motion.hintCycle 一致 */
   --op-dimmed: 0.6; /* 停用/下线的行，与 App Op.dimmed 一致 */
   --dur-spin: 1000ms; /* 刷新图标转一圈，与 App Motion.spin 一致 */
   --dur-count: 700ms; /* 面板关键数字滚到新值，与 App Motion.count 一致（ui/CountUp.tsx 读它） */
