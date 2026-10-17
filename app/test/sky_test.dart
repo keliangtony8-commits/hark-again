@@ -78,24 +78,34 @@ void main() {
   });
 
   // 网页 scripts/check-contrast.mjs 与 tests/sky.test.ts 用同一采样、同一阈值（两端同一张色表）。
-  group('文字对壁纸对比度（全天每 15 分钟 × 底色与三团柔光峰值）：正文 / 次要字 ≥ 4.5，最次要字 ≥ 3', () {
+  // v3.5.1 卡片是半透明 card（壁纸透色），所以卡上的字也按“card 叠在壁纸每一处”算（= 网页 --card 叠 --sky）。
+  group('文字对壁纸 / 对卡（card 叠在壁纸上）对比度（全天每 15 分钟 × 底色与三团柔光峰值）：正文 / 次要字 / 警示 ≥ 4.5，最次要字 ≥ 3', () {
     for (final (name, p) in [('浅色', Palette.light), ('深色', Palette.dark)]) {
-      for (final (what, fg, min) in [('正文 text', p.text, 4.5), ('次要字 text2', p.text2, 4.5), ('最次要字 text3', p.text3, 3.0)]) {
-        test('$name $what ≥ $min', () {
-          var worst = double.infinity;
-          var where = '';
-          for (var q = 0; q < 24 * 4; q++) {
-            final h = q / 4;
-            for (final (at, c) in _samples(p.sky.at(h))) {
-              final r = _contrast(fg, c);
-              if (r < worst) {
-                worst = r;
-                where = '$h 点 $at';
+      final under = <(String, Color Function(Color))>[('壁纸', (c) => c), ('卡', (c) => Color.alphaBlend(p.card, c))];
+      for (final (on, paint) in under) {
+        final checks = [
+          ('正文 text', p.text, 4.5),
+          ('次要字 text2', p.text2, 4.5),
+          ('最次要字 text3', p.text3, 3.0),
+          if (on == '卡') ...[('警示 warning', p.warning, 4.5), ('出错 danger', p.danger, 4.5)],
+        ];
+        for (final (what, fg, min) in checks) {
+          test('$name $what /$on ≥ $min', () {
+            var worst = double.infinity;
+            var where = '';
+            for (var q = 0; q < 24 * 4; q++) {
+              final h = q / 4;
+              for (final (at, c) in _samples(p.sky.at(h))) {
+                final r = _contrast(fg, paint(c));
+                if (r < worst) {
+                  worst = r;
+                  where = '$h 点 $at';
+                }
               }
             }
-          }
-          expect(worst, greaterThanOrEqualTo(min), reason: '$name $what 最差 ${worst.toStringAsFixed(2)} @ $where');
-        });
+            expect(worst, greaterThanOrEqualTo(min), reason: '$name $what/$on 最差 ${worst.toStringAsFixed(2)} @ $where');
+          });
+        }
       }
     }
   });

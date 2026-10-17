@@ -148,7 +148,7 @@
 .empty h1 { font-weight: var(--fw-strong); font-size: var(--fs-display); line-height: 1.2; letter-spacing: var(--display-tracking); margin: 0 0 var(--sp-2); }
 .empty p { color: var(--text-2); margin: 0 0 var(--sp-6); }
 .suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
-.suggestion { text-align: left; padding: var(--sp-4); font-size: var(--fs-sm); background: var(--glass); border: 1px solid var(--glass-border); border-radius: var(--r-card); transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.suggestion { text-align: left; padding: var(--sp-4); font-size: var(--fs-sm); background: var(--card); border: 1px solid var(--glass-border); border-radius: var(--r-card); transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease); }
 .suggestion:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--text) 18%, var(--glass-border)); }
 .suggestion small { display: block; color: var(--text-3); margin-top: var(--sp-1); }
 

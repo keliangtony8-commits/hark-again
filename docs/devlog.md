@@ -508,3 +508,22 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 - 顺手修：`features/chat/chat.css` 注释里写了 backdrop-filter 字样，架构守卫拦住 `npm run build`（HEAD 已坏），改成“背景模糊”。
 - 验证：`tsc -b`、`npm test` 14/14、`npm run build`（架构守卫 222 文件 + 配色守门）过。Playwright 走查（work/me_slide_check.py，手机视口）：主页点头像 → 中途 2 层（离场 / 进场各自的渐隐条一左一右）、结束 1 层，`--sky-x` 都是 0；“我的”分段 0 个选中、滑块 `.off`、头像环亮、`aria-current=page`、无返回钮；进 /me/tasks 无顶栏、不滑；返回 /me 滑块仍 off；点“聊天”反向滑；聊天 → 项目直接切；reduce-motion 全程 1 层直接切；控制台 0 错误。`shots.py` 全量 140 张，看了 phone-light/dark-me、desktop-light-me、偏好子页：版式与 Hark 个人页一致（导航胶囊悬浮、三项不选中、头像为当前项、无左上钮、页头直接接内容）。
 - 帧耗时（4× CPU、手机视口，同机新旧 dist 交替各 3 轮，机器空闲时）：“我的”滚动 median 16 / p95 19–20 新旧相同，>20ms 帧 旧 14/14/16 = 44、新 7/14/6 = 27（多了常驻顶栏一块玻璃，没变差）。横滑期间（work/slide_frames.py：主页 ↔ 我的 各 4 次、点击后 500ms 的 rAF 间隔，含新页挂载）：>20ms 帧 旧（直接切）41 / 50、新 56 / 60，max 两边都是挂载那一帧 165–222ms；即每次切换多 1–2 个慢帧（两页同时合成），挂载本身的长帧新旧一样。**未验证**：真 GPU / 真机手感。
+
+## 2026-10-17 v3.5.1 卡片 = 半透明灰白“假玻璃”（两端同 token；HANDOFF 第二节第 27 条）
+- 依据：用户要求卡片“不要纯白”，参考 Hark：带壁纸透色的半透明冷灰 / 暖灰玻璃。
+- 取样（Hark 截图，卡内像素 vs 紧邻卡外壁纸，多行拟合 卡 = α·C + (1−α)·壁纸，逐通道最小二乘）：
+  - 浅色“我的”列表卡 1000035715：α ≈ 0.67（R/G/B 0.67/0.67/0.66），C ≈ #FFFFFF（256.9/256.2/258.0 → 纯白）；例：壁纸 (61,106,142) 处卡 (193,209,222)，(230,227,195) 处卡 (247,246,236)——同一张卡蓝天上冷灰、暖底上暖灰，就是透色来的。
+  - 浅色主页卡 1000035707：α ≈ 0.73–0.85、C ≈ (242,239,234)（含卡内小块，噪声大，取“我的”那组为准）。
+  - 深色主页卡 1000035677：α ≈ 0.56（0.56/0.59/0.54），C ≈ #181818；深色“我的”列表卡 1000035675：α ≈ 0.70、C ≈ 近黑 (2,2,3)。
+  - Hark 卡后面有真模糊，我们不加（用户定：只用半透明色，不新增 BackdropFilter / backdrop-filter）。
+- 决定（单一来源：App `Palette.card` = 网页 `--card`，两端逐字节同值，check-contrast.mjs 查含透明度）：
+  - 浅色 `Color(0xA8F8F9FA)` = `rgba(248, 249, 250, 0.66)`：Hark 白 67%，白里压一点冷灰（“偏灰”），透明度取 0.66。
+  - 深色 `Color(0x9E16171C)` = `rgba(22, 23, 28, 0.62)`：Hark 两处 0.56 / 0.70 的中间，色取 #181818 偏一点冷（和炭灰 surface #1E2029 同族）。
+  - 减少透明度：卡片回到实色 `surface`（App `cardFill` / GlassSurface 的 solid 分支；网页 `:root[data-solid] { --card: var(--surface) }`）。
+- 归属 / 替换（不叠加）：
+  - App：卡片本来就只有两个入口——`GlassSurface` 不模糊分支（GlassCard / ListGroup / 长按菜单 / 登录表单）和 `context.cardFill`（AppCard / BlockFrame / 项目表单选中块）。两处的 `p.surface` 换成 `p.card`，页面一行不用改。主页面板卡、今天卡、“我的”列表组与用量卡、聊天里的块、子页卡全部跟着变。
+  - Web：`--card` 原是 `var(--surface)` 的别名，改成上面的 rgba；`.stack-card` / `.list` / `.card` / `.blk` / `.task-head` / 聊天回复卡 / `.focus-menu` 都已经读 `--card`。另：聊天空态建议卡 `.suggestion` 原用浮层的 `--glass`，改读 `--card`（它是卡不是浮层）；浏览器全屏接管页 `.takeover` 原借用 `--card` 当整屏底，改 `var(--surface)`（整屏不能透，保持原样）。
+  - 跟着调：浅色 danger #C43D3D → #B23434、warning #9A5B00 → #915500。卡变半透明后，夜间钢蓝天透上来，卡上的出错 / 警示小字最差只有 3.96 / 4.17，压深一档到 4.71 / 4.61（两端同值）。
+- 守门（替换原“字对实色 surface”只查一个色）：App test/sky_test.dart 的壁纸对比度组加“卡（card 叠在壁纸上）”一档，网页 check-contrast.mjs 同一采样（全天每 15 分钟 × 底色 11 高度 × 三团柔光峰值，再叠 card）：浅色 正文 14.53 / 次要字 7.21 / 最次要字 5.18 / 警示 4.61 / 出错 4.71；深色 15.66 / 6.28 / 4.14 / 6.92 / 4.80。原“字/卡”实色配对保留（减少透明度时仍是实色卡）。
+- 成本：只换填充色，不加图层、不加模糊。perf_frame_test 结构计数（backdropLayers / flips / shaderMask / 每帧重建 / 重画）新旧完全一样；CPU 中位同机先后跑 新/旧 chat-stream 22.1/23.0、shell-scroll 7.5/8.5、me-scroll 1.5/2.2、home 3.1/3.8、projects 2.9/3.3 ms（噪声内）。Web 只改变量值，无新合成层。
+- 截图：App /workspace/work/card-shots/app（home / me 明暗等 14 张），Web /workspace/work/card-shots/web（shots.py 全量 138 张）；和 Hark 1000035715 / 1000035707 / 1000035675 / 1000035677 并排看：浅色卡在蓝天处冷灰白、暖金底处暖灰白，深色卡是比壁纸暗一档的透明炭灰。**未验证**：真机 GPU、真浏览器。

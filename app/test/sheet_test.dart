@@ -125,7 +125,7 @@ void main() {
     expect((box.decoration as BoxDecoration).color, Palette.light.surface);
   });
 
-  testWidgets('GlassFills：卡片永远实色（v2.80 F.2），小块/发丝线 玻璃 ↔ 实色', (tester) async {
+  testWidgets('GlassFills：卡片 半透明 card ↔ 实色 surface（v3.5.1），小块/发丝线 玻璃 ↔ 实色', (tester) async {
     late Color card, tile, line;
     Widget probe(bool solid) => GlassMode(
           solid: solid,
@@ -140,7 +140,7 @@ void main() {
           ),
         );
     await tester.pumpWidget(probe(false));
-    expect([card, tile, line], [Palette.light.surface, Palette.light.tile, Palette.light.glassBorder]);
+    expect([card, tile, line], [Palette.light.card, Palette.light.tile, Palette.light.glassBorder]);
     await tester.pumpWidget(probe(true));
     expect([card, tile, line], [Palette.light.surface, Palette.light.surface2, Palette.light.border]);
   });

@@ -187,7 +187,7 @@ class StarterCard extends StatelessWidget {
       );
 }
 
-/// 内容卡片：实色 surface、无描边（v2.80 F.2），和 GlassCard 同一材质，
+/// 内容卡片：半透明 card、无描边（v3.5.1，原实色 surface），和 GlassCard 同一材质，
 /// 只是内边距紧一些：子页面、聊天里的块、弹层里都用它。给了 [color] 就是一张实色卡（强调/警示）。
 class AppCard extends StatelessWidget {
   const AppCard({super.key, required this.child, this.onTap, this.padding = const EdgeInsets.all(Sp.x4), this.color});

@@ -198,15 +198,15 @@ class GlassSurface extends StatelessWidget {
     final p = context.palette;
     final solid = GlassMode.solidOf(context);
     final shape = BorderRadius.circular(radius);
-    // v2.80 F.2：不模糊的面 = 列表卡片，一律实色 surface、无描边无高光；只有浮层（blur）是玻璃 + 发丝边。
+    // 不模糊的面 = 列表卡片：半透明 card（v3.5.1 假玻璃，不模糊）、无描边无高光；只有浮层（blur）是玻璃 + 发丝边。减少透明度时一律实色 surface。
     final card = !blur;
     Widget body = AnimatedContainer(
       duration: context.motion(Motion.base),
       curve: Motion.ease,
       decoration: BoxDecoration(
-        color: solid || card ? p.surface : p.glass,
+        color: solid ? p.surface : (card ? p.card : p.glass),
         borderRadius: shape,
-        border: Border.all(color: borderColor ?? (card ? p.surface.withValues(alpha: 0) : (solid ? p.border : p.chromeEdge)), width: 1),
+        border: Border.all(color: borderColor ?? (card ? p.card.withValues(alpha: 0) : (solid ? p.border : p.chromeEdge)), width: 1),
       ),
       padding: padding,
       child: child,

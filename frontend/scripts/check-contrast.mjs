@@ -8,6 +8,8 @@
 //   3. v3.3 流光壁纸色表（--sky-<时段>-<部位>）：浅/深 × 4 时段 × 5 色都和 App SkyTable.light/dark 同值；
 //      壁纸上真实出现的颜色（全天每 15 分钟按 lib/sky.ts 关键帧插值 × 底色 11 个高度按 Sky.ramp × 叠上三团柔光峰值 blobMix，
 //      = App test/sky_test.dart 同一采样）：正文 --text、次要字 --text-2 ≥ 4.5，最次要字 --text-3 ≥ 3。
+//   4. v3.5.1 卡片 --card 是半透明“假玻璃”（rgba，壁纸透色）：浅/深两套和 App Palette.card 同值（含透明度），
+//      卡上的字按“--card 叠在上面每一处壁纸”算：--text / --text-2 / --warning / --danger ≥ 4.5，--text-3 ≥ 3。
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,6 +35,16 @@ const cssTheme = (selector) => {
   const out = {};
   for (const [, k, v] of m[1].matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{3,8})/g)) out[k] = v.toLowerCase();
   return out;
+};
+
+/** 取 tokens.css 某个选择器块里 --card 的 rgba(r, g, b, a) → { c: [r,g,b] 0…1, a, argb: "#aarrggbb" }。 */
+const cssCard = (selector) => {
+  const m = new RegExp(`${selector.replace(/[[\]]/g, "\\$&")}\\s*\\{([\\s\\S]*?)\\}`).exec(css);
+  const v = m && /--card:\s*rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)/.exec(m[1]);
+  if (!v) return null;
+  const [r, g, b, a] = v.slice(1).map(Number);
+  const hex = (n) => n.toString(16).padStart(2, "0");
+  return { c: [r, g, b].map((x) => x / 255), a, argb: `#${hex(Math.round(a * 255))}${hex(r)}${hex(g)}${hex(b)}` };
 };
 
 /** 取 tokens.dart 里 static const light/dark 的字段（Color(0xAARRGGBB) → #rrggbb）。 */
@@ -114,6 +126,13 @@ function* skySamples(sky) {
   }
 }
 const SKY_TEXT = [["正文", "text", 4.5], ["次要字", "text-2", 4.5], ["最次要字", "text-3", 3]];
+const CARD_TEXT = [...SKY_TEXT, ["警示字", "warning", 4.5], ["出错字", "danger", 4.5]];
+/** App Palette.light/dark 的 card：Color(0xAARRGGBB) → "#aarrggbb"（带透明度，两端逐字节同值）。 */
+const dartCard = (name) => {
+  const m = new RegExp(`static const ${name} = Palette\\(([\\s\\S]*?)\\n  \\);`).exec(dart);
+  const v = m && /\bcard: Color\(0x([0-9a-fA-F]{8})\)/.exec(m[1]);
+  return v ? `#${v[1].toLowerCase()}` : null;
+};
 
 const bad = [];
 const skyWorst = [];
@@ -146,6 +165,22 @@ for (const [themeName, selector, dartName] of [["浅色", ":root", "light"], ["�
       if (worst < min) bad.push(`${themeName} ${what}/壁纸 --${fg} 最差 ${worst.toFixed(2)}:1 @ ${where}（要 ≥${min}）`);
     }
   }
+  const card = cssCard(selector);
+  if (!card) bad.push(`${themeName}：tokens.css 缺 --card: rgba(…)`);
+  else {
+    if (app) {
+      const appCard = dartCard(dartName);
+      if (appCard !== card.argb) bad.push(`${themeName}：--card ${card.argb} ≠ App card ${appCard}`);
+    }
+    if (!missing.length) {
+      for (const [what, fg, min] of CARD_TEXT) {
+        let worst = Infinity, where = "";
+        for (const [at, c] of skySamples(sky)) { const r = ratio(web[fg], mix(c, card.c, card.a)); if (r < worst) { worst = r; where = at; } }
+        skyWorst.push(`${themeName}${what}/卡 ${worst.toFixed(2)}`);
+        if (worst < min) bad.push(`${themeName} ${what}/卡（--card 叠壁纸）--${fg} 最差 ${worst.toFixed(2)}:1 @ ${where}（要 ≥${min}）`);
+      }
+    }
+  }
   for (const [what, fg, bg, min] of PAIRS) {
     const r = ratio(web[fg], web[bg]);
     if (r < min) bad.push(`${themeName} ${what} --${fg} on --${bg} = ${r.toFixed(2)}:1（要 ≥${min}）`);
@@ -156,4 +191,4 @@ if (bad.length) {
   console.error("配色守门失败：\n" + bad.join("\n"));
   process.exit(1);
 }
-console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题 + 壁纸全天采样 × 2 套：${skyWorst.join("、")}${dart ? "；壁纸 " + SKY_PHASES.length * SKY_PARTS.length + " 色与 App tokens.dart 同值" : ""}）`);
+console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题 + 壁纸全天采样 × 2 套：${skyWorst.join("、")}${dart ? "；壁纸 " + SKY_PHASES.length * SKY_PARTS.length + " 色 + --card 与 App tokens.dart 同值" : ""}）`);
