@@ -7,7 +7,8 @@
 // accessory：右侧圆钮左边的插槽（聊天页放模型钮，Composer 不认识它）。
 // 设计 v2：整条是浮在内容上的玻璃胶囊（真模糊，外面用 ui/kit.dart FloatingFooter 让位）；
 //   leading：胶囊左边、胶囊外的圆钮位（一级页面聚焦时的“收起”），出现/消失用 RiseSwitcher 横向长出；
-//   focusNode：外面要知道聚焦状态时传进来（LaunchComposer 用它开关整页磨砂）。
+//   focusNode：外面要知道聚焦状态时传进来（LaunchComposer 用它开关整页磨砂）；hints / hintIcons：占位词轮播（新建面板模式，
+//   照 Hark 每句前带图标）；attach: false = 不出左边的“添加附件”（新建面板模式，Hark 那里也没有，提示图标占这一位）。
 // workspace：这段对话的工作区（core/workspace.dart；项目 = 项目文件，主聊天 = 我的文件）。“添加附件”多一个从它选
 // （features/projects pickProjectFiles，不上传，只带引用）；null = 没有这个来源（如首页的快捷输入框）。
 // 打 $ → 顶部列出启用的技能，点一下补成 `$id `（服务器 app/skill_mentions.py 把正文给模型）。
@@ -66,6 +67,9 @@ class Composer extends ConsumerStatefulWidget {
       this.onCancelQuote,
       this.accessory,
       this.hint = '给 $appName 发消息',
+      this.hints,
+      this.hintIcons,
+      this.attach = true,
       this.leading,
       this.focusNode,
       this.workspace,
@@ -87,6 +91,15 @@ class Composer extends ConsumerStatefulWidget {
   /// 右侧圆钮左边的小部件（模型钮）；录音态不显示。
   final Widget? accessory;
   final String hint;
+
+  /// 占位词轮播（主页新建面板模式：面板示例）；给了就用它代替 hint（motion.dart CycleText，减少动态时停在第一句）。
+  final List<String>? hints;
+
+  /// 和 hints 一一对应的图标（Hark：占位词前带图标，和字一起换）；null = 只有字。
+  final List<IconData>? hintIcons;
+
+  /// false = 不出“添加附件”钮，输入框左边留同样的内边距。
+  final bool attach;
   final Widget? leading;
   final FocusNode? focusNode;
 
@@ -456,11 +469,14 @@ class _ComposerState extends ConsumerState<Composer> {
   }
 
   Widget _inputRow(Palette p) => Row(key: const ValueKey('input'), crossAxisAlignment: CrossAxisAlignment.end, children: [
-        IconButton(
-          onPressed: widget.busy || _editing ? null : _pick,
-          icon: Icon(Icons.add_circle_outline_rounded, color: p.text2),
-          tooltip: '添加附件',
-        ),
+        if (widget.attach)
+          IconButton(
+            onPressed: widget.busy || _editing ? null : _pick,
+            icon: Icon(Icons.add_circle_outline_rounded, color: p.text2),
+            tooltip: '添加附件',
+          )
+        else
+          const SizedBox(width: Sp.x4), // Hark：占位图标离胶囊左缘约 16
         Expanded(
           child: TextField(
             controller: _c,
@@ -471,7 +487,10 @@ class _ComposerState extends ConsumerState<Composer> {
             onChanged: (_) => setState(() {}),
             style: context.text.bodyLarge,
             decoration: InputDecoration(
-              hintText: widget.hint,
+              hintText: widget.hints?.isNotEmpty == true ? null : widget.hint,
+              hint: widget.hints?.isNotEmpty == true
+                  ? CycleText(items: widget.hints!, icons: widget.hintIcons, style: context.text.bodyLarge?.merge(Theme.of(context).inputDecorationTheme.hintStyle))
+                  : null,
               filled: false,
               border: InputBorder.none,
               enabledBorder: InputBorder.none,

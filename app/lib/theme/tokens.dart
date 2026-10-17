@@ -340,6 +340,8 @@ abstract final class Motion {
   static const stackFan = Duration(milliseconds: 420);
   static const stackTurn = 0.035; // 后面每层旋转多少弧度（约 2°），一层向右一层向左
   static const pillDrop = 8.0; // 标题药丸从上方落下的距离（出现用 spring，过冲约 2–3%）
+  // v3.5.1 输入框占位词轮播（新建面板模式，= 网页 --hint-cycle）：每隔这么久换下一个示例，换的那一下用 Motion.base
+  static const hintCycle = Duration(milliseconds: 3200);
 
   /// 列表错峰入场：第 i 项晚 i 拍，超过 10 项不再加（长列表不拖沓）。
   static const staggerStep = Duration(milliseconds: 30);

@@ -1,5 +1,5 @@
 // v2.17 移除的面板可以找回：removed_at / revivable 解析（老服务端没有 = 不可找回）；removedPanels 只留可找回的、新的在前；
-// v2.78 找回在新面板弹层（NewPanelExtras）：没有就不出那一段，有则列出、点一个 → onRevive；revivePanel → POST revive + 提示；
+// v3.5.1 找回在新建面板模式（主页输入胶囊上方的 NewPanelExtras，玻璃胶囊）：没有就不出那一段，有则列出、点一个 → onRevive；revivePanel → POST revive + 提示；
 // removePanel → POST remove + “已移除 · 撤销”，点撤销 → POST revive。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/home/new_panel.dart';
@@ -84,7 +84,8 @@ void main() {
     await pump(tester, (_) => NewPanelExtras(
         briefMissing: false, removed: cards, now: now, onIdea: (w) => idea = w, onBrief: () {}, onRevive: (c) => revived = c));
     expect(find.text('最近移除 · 30 天内可放回'), findsOneWidget);
-    expect(find.text('移除于 今天 09:00'), findsOneWidget);
+    expect(find.text('今天 09:00'), findsOneWidget, reason: '胶囊上名字后面淡色写移除时间');
+    expect(find.bySemanticsLabel('放回「上海天气」，移除于 今天 09:00'), findsOneWidget);
     await tester.tap(find.text('上海天气'));
     expect(revived?.id, 'p1');
     await tester.tap(find.text(panelIdeas[1]));

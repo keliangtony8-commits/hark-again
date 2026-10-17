@@ -1,7 +1,7 @@
 // Home（v2.78 重做，docs/home-redesign.md）：一列同款卡，没有小节标题、解释文字、空状态和问候。
 // 本文件只排顺序，每种卡一个文件：要你处理的建议卡（action_card.dart；一张都没有时是连接引导卡 ConnectCard）
 // → 今天（today_card.dart，仅当今天有任务）→ 面板们（panel_card.dart）→ 收件箱（report_actions.dart InboxCard）
-// → 一行“N 条稍后提醒”（card_snooze.dart，仅有时）→ “创建一个新面板”胶囊（new_panel.dart，起点/早间简报/找回都在弹层里）。
+// → 一行“N 条稍后提醒”（card_snooze.dart，仅有时）→ “创建一个新面板”胶囊（和顶栏 + 一样：输入胶囊进新建面板模式，new_panel.dart）。
 // 输入在底部全局胶囊（LaunchComposer），聚焦时第一个建议是“帮我准备今天”。网页版 HomeScreen.tsx 同一顺序。
 import 'dart:async';
 
@@ -39,9 +39,15 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   Timer? _poll;
 
+  /// 底部输入胶囊的模式：+ / “创建一个新面板”设成 newPanelMode（进入发起态），收起时 LaunchComposer 清回 null。
+  final _launch = ValueNotifier<LaunchMode?>(null);
+
+  void _newPanel() => _launch.value = newPanelMode;
+
   @override
   void dispose() {
     _poll?.cancel();
+    _launch.dispose();
     super.dispose();
   }
 
@@ -98,15 +104,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             refreshing: p.taskId != null && refreshing.contains(p.taskId)),
       InboxCard(reports: reports, onOpen: _openReport),
       SnoozedCards(cards: snoozed),
-      WidePill(icon: Icons.add_rounded, label: '创建一个新面板', onTap: () => createPanel(context, ref)),
+      WidePill(icon: Icons.add_rounded, label: newPanelCaption, onTap: _newPanel),
     ];
 
     return Scaffold(
       backgroundColor: Colors.transparent, // 透出外壳的壁纸
       body: ShellPage(
-        lead: GlassIconButton(icon: Icons.add_rounded, tooltip: '新建面板', onTap: () => createPanel(context, ref)),
+        lead: GlassIconButton(icon: Icons.add_rounded, tooltip: '新建面板', onTap: _newPanel),
         child: LaunchComposer(
           suggestions: homePrompts,
+          mode: _launch,
           child: PullRefresh(
             onRefresh: _refreshAll,
             child: PageBody(children: [

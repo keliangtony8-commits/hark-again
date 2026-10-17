@@ -234,17 +234,24 @@ void main() {
     await _shot(tester, 'me-preferences-dark');
   }, skip: _out == null);
 
-  // v3.5.1：弹层全屏（= Web 手机 .sheet）——表单（新面板，提交钮钉底）+ 动作单（外观），明暗各一套；再拍表单键盘收起后滚到中段
+  // v3.5.1：弹层全屏（= Web 手机 .sheet）——表单（记忆“新增 → 一句话记忆”，提交钮钉底；新建面板已改成主页发起态、不再是弹层）
+  // + 动作单（外观），明暗各一套
   for (final dark in [false, true]) {
     final tone = dark ? 'dark' : 'light';
     testWidgets('sheets $tone', (tester) async {
       final router = await _pump(tester, dark: dark);
-      await tester.tap(find.byTooltip('新建面板'));
+      router.push('/me/memory');
+      await _settle(tester);
+      await tester.tap(find.byTooltip('新增'));
+      await _settle(tester);
+      await tester.tap(find.text('一句话记忆'));
       await _settle(tester);
       FocusManager.instance.primaryFocus?.unfocus();
       await _settle(tester);
       await _shot(tester, 'sheet-form-$tone');
       await tester.tap(find.byTooltip('关闭'));
+      await _settle(tester);
+      router.go('/');
       await _settle(tester);
       router.push('/me/preferences');
       await _settle(tester);

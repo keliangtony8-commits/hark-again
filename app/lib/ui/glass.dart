@@ -437,23 +437,42 @@ class Avatar extends StatelessWidget {
 
 /// 玻璃小胶囊：建议问题、快捷入口。列表里用，所以是假玻璃（不模糊）。
 class GlassChip extends StatelessWidget {
-  const GlassChip({super.key, required this.label, required this.onTap});
+  const GlassChip({super.key, required this.label, required this.onTap, this.icon, this.detail, this.semanticLabel});
   final String label;
   final VoidCallback onTap;
 
+  /// 左侧小图标（新建面板模式里“最近移除”的恢复图标）；null = 只有字。
+  final IconData? icon;
+
+  /// 名字后面的淡色补充（移除时间）；null = 没有。
+  final String? detail;
+  final String? semanticLabel;
+
   @override
-  Widget build(BuildContext context) => Pressable(
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: A11y.minTap),
-          child: GlassSurface(
-            radius: Radii.full,
-            shadow: false,
-            padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
-            child: Text(label, style: context.text.bodyMedium?.copyWith(color: context.palette.text)),
-          ),
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Text(label, style: context.text.bodyMedium?.copyWith(color: p.text), maxLines: 1, overflow: TextOverflow.ellipsis);
+    final chip = ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: A11y.minTap),
+        child: GlassSurface(
+          radius: Radii.full,
+          shadow: false,
+          padding: const EdgeInsets.symmetric(horizontal: Sp.x4, vertical: Sp.x3),
+          child: icon == null && detail == null
+              ? text
+              : Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (icon != null) ...[Icon(icon, size: Fs.md, color: p.text2), const SizedBox(width: Sp.x2)],
+                  Flexible(child: text),
+                  if (detail != null) ...[
+                    const SizedBox(width: Sp.x2),
+                    Text(detail!, style: context.text.labelSmall?.copyWith(color: p.text3), maxLines: 1),
+                  ],
+                ]),
         ),
       );
+    // 给了读屏名字（含移除时间）就只读它，不再把胶囊里的字并进来念两遍
+    return Pressable(onTap: onTap, semanticLabel: semanticLabel, child: semanticLabel == null ? chip : ExcludeSemantics(child: chip));
+  }
 }
 
 /// 磨砂遮罩：visible 时整片模糊 + 着色渐入，挡住下面的点击；点它 = onTap（收起输入框）。

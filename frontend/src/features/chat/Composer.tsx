@@ -51,14 +51,22 @@ type Props = {
   /** 胶囊左边、胶囊外的圆钮位（一级页面聚焦时的“收起”）。 */
   leading?: ReactNode;
   placeholder?: string;
+  /** 占位词轮播（主页新建面板模式：面板示例）：给了就代替 placeholder，每 --hint-cycle 换一句（新的一句 float-up 浮上来）；
+   *  有字时不显示；减少动态 = 停在第一句不轮播。= App Composer hints（motion.dart CycleText）。 */
+  hints?: string[];
+  /** 和 hints 一一对应的图标（Hark：占位词前带图标，和字一起换）。 */
+  hintIcons?: ReactNode[];
+  /** false = 不出“添加附件”（新建面板模式，Hark 那里也没有），输入框左边多留一点内边距。 */
+  attach?: boolean;
   /** 项目对话的项目 id：“添加附件”变成菜单，多一个“项目里的文件”（只带引用，不上传）。 */
   /** 这段对话的工作区（lib/workspace.ts）：“添加附件”多一个从它引用文件；不给 = 没有这个来源。 */
   workspace?: string;
   /** 本机斜杠命令的执行者（返回一句提示）；不给 = 不接本机命令（打了当普通文字发）。 */
   onSlash?: (c: SlashCall, files: OutgoingFile[]) => Promise<string | undefined> | void;
 };
-export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, quoting = null, onCancelQuote, accessory, leading, placeholder = `给 ${appName} 发消息`, workspace, onSlash }: Props) {
+export default function Composer({ onSend, disabled, streaming = false, canSteer = false, onStop, editing = null, onCancelEdit, onEditLast, quoting = null, onCancelQuote, accessory, leading, placeholder = `给 ${appName} 发消息`, hints, hintIcons, attach = true, workspace, onSlash }: Props) {
   const [text, setText] = useState("");
+  const hint = useHintCycle(hints, !text);
   const stash = useRef<string | null>(null);   // 进入编辑前的草稿
   const editId = editing?.id ?? null;
   useEffect(() => {   // 进出编辑态：换文字、收起/放回草稿
@@ -264,15 +272,17 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
             <button className="send-btn" onClick={finishVoice} aria-label="完成"><IconCheck /></button>
           </div>
         ) : (
-          <div className="composer-row">
-            {workspace && !editing
+          <div className={`composer-row ${attach ? "" : "no-attach"}`}>
+            {!attach ? null : workspace && !editing
               ? <Menu label="添加附件" trigger={<IconClip />} items={[
                   { label: "从电脑选文件", icon: <IconFile size={16} />, onSelect: () => picker.current?.click() },
                   { label: workspaceFilesTitle(workspace), icon: <IconFolder size={16} />, onSelect: () => setPicking(true) },
                 ]} />
               : <button className="icon-btn" onClick={() => picker.current?.click()} disabled={!!editing} aria-label="添加附件"><IconClip /></button>}
             <input ref={picker} type="file" multiple hidden onChange={(e) => pick(e.target.files)} />
-            <textarea ref={ref} rows={1} value={text} placeholder={voiceBusy ? "正在识别…" : placeholder}
+            <div className="composer-field">
+            <textarea ref={ref} rows={1} value={text} placeholder={voiceBusy ? "正在识别…" : hints?.length ? "" : placeholder}
+              aria-label={hints?.length ? placeholder : undefined}
               onChange={(e) => { setText(e.target.value); track(e.target); setActive(0); if (closedAt !== null && !"@$/".includes(e.target.value[closedAt] ?? "x")) setClosedAt(null); }}
               onSelect={(e) => track(e.currentTarget)}
               onPaste={(e) => !editing && e.clipboardData.files.length && pick(e.clipboardData.files)}
@@ -290,6 +300,12 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
                 if (e.key === "ArrowUp" && !text && !editing && onEditLast) { e.preventDefault(); onEditLast(); }
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
               }} />
+            {hints?.length && !text && !voiceBusy ? (
+              <span className="composer-hints" aria-hidden>
+                <span key={hint} className="composer-hint-item">{hintIcons?.[hint % hintIcons.length]}<span>{hints[hint % hints.length]}</span></span>
+              </span>
+            ) : null}
+            </div>
             {accessory}
             {streaming && !steering && !runsNow
               ? <button key="stop" className="send-btn stop" onClick={onStop} disabled={!onStop} aria-label="停止生成" title="停止生成（Esc）"><IconStop /></button>
@@ -310,6 +326,22 @@ export default function Composer({ onSend, disabled, streaming = false, canSteer
       )}
     </div>
   );
+}
+
+/** 占位词轮播到第几句：只在有多句、输入框空着、没开“减少动态”时走表（间隔 = tokens.css --hint-cycle）；换一组句子从头来。 */
+function useHintCycle(hints: string[] | undefined, idle: boolean) {
+  const [i, setI] = useState(0);
+  const key = hints?.join("\n") ?? "";
+  useEffect(() => { setI(0); }, [key]);
+  const n = hints?.length ?? 0;
+  useEffect(() => {
+    if (n < 2 || !idle || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--hint-cycle").trim();
+    const ms = (raw.endsWith("ms") ? parseFloat(raw) : parseFloat(raw) * 1000) || 3200;
+    const t = setInterval(() => setI((x) => (x + 1) % n), ms);
+    return () => clearInterval(t);
+  }, [n, idle, key]);
+  return i;
 }
 
 /** 斜杠命令的图标（lib/slash.ts 只存名字，图标组件在这里对上）。 */
