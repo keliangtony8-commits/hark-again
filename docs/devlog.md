@@ -590,3 +590,18 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 - 决定：流光改成肉眼明显流动的多色柔光：白天在蓝 / 淡紫 / 蜜桃珊瑚 / 薄荷 / 暖金五色之间按时间轮转，5 团高斯柔光叠出层次。替换：原三团柔光 + CSS 渐变 → App 单片元着色器（app/shaders/sky.frag、ui/sky.dart），Web WebGL（frontend/src/lib/skyGl.ts，删 base.css 里原渐变动画），两端同一核心算法、同一色表（App tokens.dart = Web tokens.css / sky.ts）。减少动态只随时间换色不流动、减少透明度纯色，照旧。对比度守门（sky_test.dart / check-contrast.mjs）按新壁纸采样重跑并通过。
 - 测量：Web 无头 Chromium 4× CPU，>20ms 帧 /#/ 334 → 约 150，/#/me 约 318 → 40（WebGL 替掉 CSS 渐变后反而更省）；App 沙盒软件光栅每帧 28 → 37ms（软件光栅跑片元着色器的成本，不代表真机 GPU）。
 - **未验证**：真机 GPU 上流光的光栅耗时、真 GPU Chrome trace。
+
+## 2026-10-18 v3.5.2 真机卡顿（App，魅族 20；HANDOFF 第二节第 30 条）+ 项目 = 目录（两端，第二节第 29 条）
+- 背景：用户真机（魅族 20，骁龙 8 Gen 2，120/144Hz）反馈 App 滑动卡，同机 Hark 不卡 → 是我们软件的问题。诊断全文 /workspace/work/jank-diagnosis.md。
+- 诊断：
+  1. 没请求高刷新率：Flutter 只跟系统给的 vsync，Flyme 等系统对没声明的第三方 App 默认给 60Hz → 被锁 60Hz。
+  2. Impeller 没有 raster cache、Android 上无局部重绘：RepaintBoundary 只省 UI 线程，滑动时每个 vsync 整棵 display list 重放，整屏壁纸片元着色器（sky.frag）每帧重跑，不是每 33ms 一次。
+  3. 外壳壁纸在子页下白画：SkyCover 只停时钟，被不透明子页完全盖住时照样每帧整屏跑着色器。
+- 修复：
+  - 高刷新率（331b395）：MainActivity.kt 在同分辨率模式里挑刷新率最高的设 window preferredDisplayModeId（API 23+，onCreate / onResume 各一次，失败保持系统默认）。
+  - 壁纸 1/4 离屏贴图（d0ad7f5）：SkyFrames 每个时钟步在物理像素 1/4×1/4 离屏跑一次 sky.frag（Picture.toImageSync），整屏与渐隐条用新 shaders/sky_blit.frag 双线性放大 + 屏幕像素抖动；时钟没走就复用同一张图；滑动时暂停 SkyClock。贴图着色器加载失败回退整屏直画。
+  - 盖住不画（331b395）：SkipWhenCovered（app_shell.dart）在 SkyCoverScope 计数 > 0 时整个外壳壁纸子树不 paint（不重建、不改布局）。
+  - PulseDot 改 33ms Timer 步进（不再每 vsync 一帧）；隐藏性能浮层（core/perf_overlay.dart，关于页进入）供真机看 UI / Raster。
+  - 项目 = 目录（83869bf App / dcde221 Web）：删项目切换胶囊，目录 + 左上 ☰ 回目录。
+- 测量：沙盒软件光栅每帧 39–44ms → 约 12ms（perf_frame_test / sky_frames_test）。
+- **未验证**：真机是否真跑到 120/144Hz、真机 GPU 光栅耗时与滑动手感——按第二节 30 条必须真机确认。
