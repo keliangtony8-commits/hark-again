@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { SKY_PARTS, SKY_PHASES, lerpHex, skyAt, type SkyTable } from "../src/lib/sky.ts";
+import { SKY_BLOBS, SKY_HUES, SKY_PARTS, SKY_PHASES, lerpHex, skyAt, type SkyTable } from "../src/lib/sky.ts";
 
 /** 直接从 tokens.css 读浅 / 深两张表（与运行时 getComputedStyle 读的是同一份），连同那套主题的 --text / --text-2 / --text-3。 */
 const css = readFileSync(new URL("../src/styles/tokens.css", import.meta.url), "utf8");
@@ -47,8 +47,8 @@ test("钟点回绕：24 点 = 0 点，负数也能算", () => {
 
 // v3.3 B2：壁纸上真实出现的颜色（钟点插值 × 底色按 Sky.ramp 取 11 个高度 × 叠上三团柔光峰值，= App test/sky_test.dart 同一采样），
 // 正文 / 次要字 ≥ 4.5、最次要字 ≥ 3（浅深两套）。柔光强度读 base.css 的 --mix，底色曲线 = App Sky.rampPow 0.75。
-const baseCss = readFileSync(new URL("../src/styles/base.css", import.meta.url), "utf8");
-const BLOB_MIX = ["a", "b", "c"].map((k) => Number(new RegExp(`\\.sky-${k}\\s*\\{[^}]*--mix:\\s*([\\d.]+)`).exec(baseCss)![1]));
+// TODO(下一步)：换成五团 × 色相轮转的新采样；暂按每团最大强度 × 五个色相各取峰值
+const BLOB_MIX = SKY_BLOBS.map((b) => b[11]);
 const ramp = (y: number) => { const x = y ** 0.75; return x * x * (3 - 2 * x); };
 const lum = (hex: string) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
@@ -62,7 +62,8 @@ const worstOn = (table: SkyTable, fg: string) => {
     const c = skyAt(table, q / 4);
     for (let i = 0; i <= 10; i++) {
       const base = lerpHex(c.top, c.bottom, ramp(i / 10));
-      for (const bg of [base, lerpHex(base, c.a, BLOB_MIX[0]), lerpHex(base, c.b, BLOB_MIX[1]), lerpHex(base, c.c, BLOB_MIX[2])]) worst = Math.min(worst, contrast(fg, bg));
+      const peak = Math.max(...BLOB_MIX);
+      for (const bg of [base, ...SKY_HUES.map((h) => lerpHex(base, c[h], peak))]) worst = Math.min(worst, contrast(fg, bg));
     }
   }
   return worst;
@@ -70,7 +71,7 @@ const worstOn = (table: SkyTable, fg: string) => {
 
 for (const [name, th] of [["浅色", lightTheme], ["深色", darkTheme]] as const) {
   test(`${name}：正文 / 次要字对壁纸全天每一处 ≥ 4.5，最次要字 ≥ 3`, () => {
-    assert.equal(BLOB_MIX.length, 3);
+    assert.equal(BLOB_MIX.length, 5);
     for (const [what, fg, min] of [["正文", th.text, 4.5], ["次要字", th.text2, 4.5], ["最次要字", th.text3, 3]] as const) {
       const w = worstOn(th.sky, fg);
       assert.ok(w >= min, `${name}${what} ${fg} 对壁纸最差 ${w.toFixed(2)}:1（要 ≥${min}）`);

@@ -1,6 +1,7 @@
 // v3.3 流光壁纸（用户 10-15：随时间变化，夜里暗蓝紫灰、白天亮，柔和流动，且不能卡）。
-// 一个片元着色器（shaders/sky.frag）整屏画一次：底色竖向渐变 + 三团柔光慢速漂移；颜色来自 tokens.dart SkyTable（按钟点插值）。
-// 成本：自身是重绘边界，只有这一层按 SkyClock（≈30 帧/秒）重画，上面的内容不重建、不重绘；着色器每像素 3 次 exp。
+// 一个片元着色器（shaders/sky.frag）整屏画一次：底色竖向渐变 + 五团柔光流动（漂移 + 旋转 + 伸缩，颜色在五个色相间轮转，v3.5.1）；
+// 颜色来自 tokens.dart SkyTable（按钟点插值），每团的位置 / 形状 / 此刻颜色在画笔里每帧算一次（Sky.blobs、SkyPhase.hue）。
+// 成本：自身是重绘边界，只有这一层按 SkyClock（≈30 帧/秒）重画，上面的内容不重建、不重绘；着色器每像素 5 次 exp（原 3 次）。
 // 被盖住（不可见路由 / 后台 Tab / 外壳分支里的不透明子页进场完成后，见 SkyCover）：退订时钟、画笔不听时钟，恢复时直接取此刻（v3.3 B4）。
 // 回退（着色器没加载好 / 测试环境）：同色的竖向 LinearGradient，不闪。
 import 'dart:ui' as ui;
@@ -271,13 +272,25 @@ class _SkyPainter extends CustomPainter {
       f(origin.dy);
       f(screen.width);
       f(screen.height);
-      f(time.value);
-      for (final x in phase.colors) {
-        c(x);
-      }
       f(fade == null ? 0 : 1);
       f(fade?.$1 ?? 0);
       f(fade?.$2 ?? 0);
+      c(phase.top);
+      c(phase.bottom);
+      // 只跟时间有关的量每帧在这里算一次（5 团 × 几个 sin/cos），着色器每像素只做高斯
+      final aspect = screen.width / screen.height;
+      for (final b in Sky.blobs) {
+        final at = b.at(time.value, aspect);
+        f(at.x);
+        f(at.y);
+        // M = diag(kx, ky) · R(θ)：先转到这一团的方向，再按两条轴缩放
+        f(at.kx * at.cos);
+        f(at.kx * at.sin);
+        f(-at.ky * at.sin);
+        f(at.ky * at.cos);
+        c(phase.hue(time.value / Sky.hueStep + b.hue));
+        f(b.mix);
+      }
       canvas.drawRect(rect, Paint()..shader = s);
       return;
     }

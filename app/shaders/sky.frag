@@ -1,44 +1,66 @@
-// 流光壁纸（v3.3，Toyuis 自写，思路参考 mesh_gradient (MIT) 的“底色 + 几团柔光缓慢流动”，未复制其代码）：
-// 竖向底色渐变 + 三团高斯柔光沿各自的慢速椭圆轨道漂移 + 轻微抖动去色带。每像素只有 3 次 exp，整屏 < 0.5ms。
+// 流光壁纸（v3.3 起，Toyuis 自写，思路参考 mesh_gradient (MIT) 的“底色 + 几团柔光缓慢流动”，未复制其代码）。
+// v3.5.1：五团柔光、各自漂移 + 旋转 + 伸缩、颜色在五个色相间轮转（用户 10-18：“要清楚地看到它在流动”“白天颜色不止一种”）。
+// 只跟时间有关的量（每团的中心、旋转、伸缩、此刻的颜色）在 Dart 里每帧算一次（ui/sky.dart，= theme/tokens.dart SkyBlob.at / SkyPhase.hue），
+// 着色器每像素只做：竖向底色 + 5 次高斯（每次一个 exp）+ 抖动，和 v3.3 的 3 次 exp 同一量级。
 // uFade：> 0 时只画一条渐隐（ShellPage 的上沿渐隐：clear 以上全不透明、到 solid 渐成透明；v3.5 solid < clear 时是底部浮条下的渐隐），代替整页 ShaderMask 离屏层。
 #include <flutter/runtime_effect.glsl>
 
 uniform vec2 uSize;      // 画布大小（逻辑像素）
 uniform vec2 uOrigin;    // 画布左上角在屏幕上的位置（逻辑像素），让顶条和整屏壁纸逐像素对齐
 uniform vec2 uScreen;    // 屏幕大小（同单位）
-uniform float uTime;     // 秒
+uniform vec3 uFade;      // x = 是否渐隐条（0/1），y = 全不透明到这一行，z = 到这一行完全透明（屏幕坐标）
 uniform vec3 uTop;
 uniform vec3 uBottom;
-uniform vec3 uBlobA;
-uniform vec3 uBlobB;
-uniform vec3 uBlobC;
-uniform vec3 uFade;      // x = 是否渐隐条（0/1），y = 全不透明到这一行，z = 到这一行完全透明（屏幕坐标）
+// 每团柔光：O = 中心（屏高为单位，x 已乘宽高比），M = 2×2 矩阵（两条轴的缩放 × 旋转，按行），C = 此刻的颜色 rgb + 强度 a
+uniform vec2 uO0;
+uniform vec4 uM0;
+uniform vec4 uC0;
+uniform vec2 uO1;
+uniform vec4 uM1;
+uniform vec4 uC1;
+uniform vec2 uO2;
+uniform vec4 uM2;
+uniform vec4 uC2;
+uniform vec2 uO3;
+uniform vec4 uM3;
+uniform vec4 uC3;
+uniform vec2 uO4;
+uniform vec4 uM4;
+uniform vec4 uC4;
 
 out vec4 fragColor;
 
-float blob(vec2 p, vec2 c, float r) {
-  vec2 d = p - c;
-  return exp(-dot(d, d) / (r * r));
+// ---- 流光核心 BEGIN（与网页 frontend/src/lib/skyGl.ts 里同名段落逐字相同，frontend scripts/check-contrast.mjs 查）----
+// 一团柔光：移到中心后乘 2×2 矩阵 M（= 两条轴的缩放 × 旋转，Dart / TS 每帧算好），q = |M·d|²，高斯 exp(-q) × 强度
+vec3 skyBlob(vec3 col, vec2 p, vec2 o, vec4 m, vec4 c) {
+  vec2 d = p - o;
+  vec2 e = vec2(dot(m.xy, d), dot(m.zw, d));
+  return mix(col, c.rgb, exp(-dot(e, e)) * c.a);
 }
+
+vec3 skyColor(vec2 uv, float aspect) {
+  vec2 p = vec2(uv.x * aspect, uv.y);
+  vec3 col = mix(uTop, uBottom, smoothstep(0.0, 1.0, pow(clamp(uv.y, 0.0, 1.0), 0.75)));
+  col = skyBlob(col, p, uO0, uM0, uC0);
+  col = skyBlob(col, p, uO1, uM1, uC1);
+  col = skyBlob(col, p, uO2, uM2, uC2);
+  col = skyBlob(col, p, uO3, uM3, uC3);
+  col = skyBlob(col, p, uO4, uM4, uC4);
+  return col;
+}
+
+// 抖动：±0.5/255，消掉大面积柔和渐变的色带。用 interleaved gradient noise（Jimenez 2014，公开公式）：
+// 只有乘加和 fract，比原来的 sin 哈希便宜，噪声分布也更均匀
+vec3 skyDither(vec3 col, vec2 px) {
+  float n = fract(52.9829189 * fract(dot(px, vec2(0.06711056, 0.00583715))));
+  return col + (n - 0.5) / 255.0;
+}
+// ---- 流光核心 END ----
 
 void main() {
   vec2 px = FlutterFragCoord().xy + uOrigin;
   vec2 uv = px / uScreen;              // 0..1，按屏幕
-  float aspect = uScreen.x / uScreen.y;
-  vec2 p = vec2(uv.x * aspect, uv.y);  // 圆是圆
-
-  float t = uTime;
-  vec3 col = mix(uTop, uBottom, smoothstep(0.0, 1.0, pow(clamp(uv.y, 0.0, 1.0), 0.75))); // = Sky.ramp
-  vec2 ca = vec2((0.25 + 0.18 * sin(t * 0.050)) * aspect, 0.28 + 0.10 * cos(t * 0.041));
-  vec2 cb = vec2((0.78 + 0.16 * cos(t * 0.037)) * aspect, 0.52 + 0.14 * sin(t * 0.046));
-  vec2 cc = vec2((0.45 + 0.22 * sin(t * 0.029 + 1.7)) * aspect, 0.86 + 0.08 * cos(t * 0.034));
-  col = mix(col, uBlobA, 0.75 * blob(p, ca, 0.42));
-  col = mix(col, uBlobB, 0.65 * blob(p, cb, 0.38));
-  col = mix(col, uBlobC, 0.70 * blob(p, cc, 0.46));
-
-  // 抖动：±0.5/255，消掉大面积渐变的色带
-  float n = fract(sin(dot(px, vec2(12.9898, 78.233))) * 43758.5453);
-  col += (n - 0.5) / 255.0;
+  vec3 col = skyDither(skyColor(uv, uScreen.x / uScreen.y), px);
 
   float a = 1.0;
   if (uFade.x > 0.5) {

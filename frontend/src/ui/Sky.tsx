@@ -1,16 +1,19 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
-import { coverSky, syncSky } from "../lib/sky";
+import { coverSky } from "../lib/sky";
+import { addSkyCopy, mountSkyGl } from "../lib/skyGl";
 
-/** v3.3「流光」壁纸（= App ui/sky.dart SkyLayer）：竖向底色 + 三团柔光慢速漂移；颜色来自 lib/sky.ts 写的 --sky-*，画法 styles/base.css .sky。
- *  整个应用只有一层（main.tsx 挂在 #root 外）；顶部渐隐条里的是它的副本（SkyFade）。 */
-export function Sky() {
-  const ref = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => { if (ref.current) syncSky(ref.current); }, []);
+/** v3.5.1「流光」壁纸（= App ui/sky.dart SkyLayer）：一块 WebGL 画布（lib/skyGl.ts，与 App 同一段着色器），底下垫 .sky 的 CSS 竖向渐变（--sky-top / --sky-bottom，画布出来前 / 上下文丢失时露出）。
+ *  整个应用只有一层（main.tsx 挂在 #root 外）；copy = 顶部渐隐条里的副本（SkyFade），2D 画布，主画布每帧拷过来。 */
+export function Sky({ copy = false }: { copy?: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    return copy ? addSkyCopy(el) : mountSkyGl(el);
+  }, [copy]);
   return (
-    <div ref={ref} className="sky" aria-hidden>
-      <span className="sky-blob sky-a"><i /></span>
-      <span className="sky-blob sky-b"><i /></span>
-      <span className="sky-blob sky-c"><i /></span>
+    <div className="sky" aria-hidden>
+      <canvas ref={ref} />
     </div>
   );
 }
@@ -39,7 +42,7 @@ export function SkyFade({ kind, height }: { kind: "page" | "thread" | "footer" |
     window.addEventListener("resize", place);
     return () => { ro.disconnect(); window.removeEventListener("resize", place); };
   }, []);
-  return <div ref={ref} className={`sky-fade sky-fade-${kind}`} style={height === undefined ? undefined : { height }} aria-hidden><Sky /></div>;
+  return <div ref={ref} className={`sky-fade sky-fade-${kind}`} style={height === undefined ? undefined : { height }} aria-hidden><Sky copy /></div>;
 }
 
 /** 整屏不透明浮层（.takeover / .image-viewer）挂载后用：自身进场动画（淡入 / 弹出时壁纸还透得出来）全部结束后才算盖住，

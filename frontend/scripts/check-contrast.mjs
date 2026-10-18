@@ -5,8 +5,9 @@
 //   2. 两端同源：上面这些关键色，浅/深两套都必须和 App lib/theme/tokens.dart 同值（改了颜色忘了改另一边 = 失败）。
 //      这条只读得到完整仓库时才查：网页镜像里只有 frontend/（构建上下文就是它），那时跳过并说一声——
 //      对比度那半永远查，因为只需要 tokens.css。
-//   3. v3.3 流光壁纸色表（--sky-<时段>-<部位>）：浅/深 × 4 时段 × 5 色都和 App SkyTable.light/dark 同值；
-//      壁纸上真实出现的颜色（全天每 15 分钟按 lib/sky.ts 关键帧插值 × 底色 11 个高度按 Sky.ramp × 叠上三团柔光峰值 blobMix，
+//   3. v3.3 流光壁纸色表（--sky-<时段>-<部位>）：浅/深 × 4 时段 × 7 色都和 App SkyTable.light/dark 同值；
+//      壁纸上真实出现的颜色（全天每 15 分钟按 lib/sky.ts 关键帧插值 × 底色 11 个高度按 Sky.ramp × 叠上五团柔光峰值
+//      （强度 = SKY_BLOBS 的 mix，颜色 = 五色轮转每 1/4 步采一次，含相邻两色的 smoothstep 过渡），
 //      = App test/sky_test.dart 同一采样）：正文 --text、次要字 --text-2 ≥ 4.5，最次要字 --text-3 ≥ 3。
 //   4. v3.5.1 卡片 --card 是半透明“假玻璃”（rgba，壁纸透色）：浅/深两套和 App Palette.card 同值（含透明度），
 //      卡上的字按“--card 叠在上面每一处壁纸”算：--text / --text-2 / --warning / --danger ≥ 4.5，--text-3 ≥ 3。
@@ -22,14 +23,22 @@ const css = readFileSync(join(frontend, "src/styles/tokens.css"), "utf8");
 const dartPath = process.env.TOKENS_DART ?? join(frontend, "../app/lib/theme/tokens.dart");
 const dart = existsSync(dartPath) ? readFileSync(dartPath, "utf8") : null;
 
-// 壁纸采样参数各有唯一出处：关键帧 = lib/sky.ts SKY_KEYFRAMES，柔光强度 = base.css .sky-a/b/c 的 --mix，
-// 底色曲线 = base.css 文件头注释与 App Sky.rampPow（0.75，色标就是按它算的）。这里按文本读，Docker 里的 node 20 不能直接 import .ts。
+// 壁纸采样参数各有唯一出处：关键帧 = lib/sky.ts SKY_KEYFRAMES，柔光强度 = lib/sky.ts SKY_BLOBS 每行倒数第二个数（mix），
+// 底色曲线 = App Sky.rampPow / 着色器核心里的 pow(…, 0.75)。这里按文本读，Docker 里的 node 20 不能直接 import .ts。
+// v3.5.1 另守两条两端同源：skyGl.ts 嵌入的「流光核心 BEGIN/END」段 = App shaders/sky.frag 同名段逐字相同；SKY_BLOBS = App Sky.blobs 同值。
 const skyTs = readFileSync(join(frontend, "src/lib/sky.ts"), "utf8");
-const baseCss = readFileSync(join(frontend, "src/styles/base.css"), "utf8");
+const skyGl = readFileSync(join(frontend, "src/lib/skyGl.ts"), "utf8");
 const KEYFRAMES = [.../SKY_KEYFRAMES[^=]*=\s*\[([\s\S]*?)\];/.exec(skyTs)[1].matchAll(/\[([\d.]+),\s*"(\w+)"\]/g)].map(([, h, ph]) => [Number(h), ph]);
-const BLOB_MIX = ["a", "b", "c"].map((k) => Number(new RegExp(`\\.sky-${k}\\s*\\{[^}]*--mix:\\s*([\\d.]+)`).exec(baseCss)[1]));
+const tsBlobsBody = /SKY_BLOBS[^=]*=\s*\[([\s\S]*?)\n\];/.exec(skyTs)?.[1] ?? "";
+const SKY_BLOBS = [...tsBlobsBody.matchAll(/^\s*\[([-\d., ]+)\],/gm)].map(([, row]) => row.split(",").map((v) => Number(v.trim())));
+const BLOB_MIX = SKY_BLOBS.map((b) => b[11]);
+const HUES = ["a", "b", "c", "d", "e"];
 const RAMP_POW = 0.75;
-if (KEYFRAMES.length < 2 || BLOB_MIX.some(Number.isNaN)) throw new Error("读不到 lib/sky.ts SKY_KEYFRAMES 或 base.css .sky-a/b/c --mix");
+if (KEYFRAMES.length < 2 || SKY_BLOBS.length !== 5 || SKY_BLOBS.some((b) => b.length !== 13 || b.some(Number.isNaN)))
+  throw new Error("读不到 lib/sky.ts SKY_KEYFRAMES 或 SKY_BLOBS（要 5 行 × 13 个数）");
+const CORE_RE = /\/\/ ---- 流光核心 BEGIN[\s\S]*?\/\/ ---- 流光核心 END ----/;
+const webCore = CORE_RE.exec(skyGl)?.[0];
+if (!webCore) throw new Error("lib/skyGl.ts 里找不到「流光核心 BEGIN/END」段");
 
 /** 取 tokens.css 里某个选择器块的所有 --变量。 */
 const cssTheme = (selector) => {
@@ -59,8 +68,8 @@ const dartTheme = (name) => {
   return out;
 };
 
-/** tokens.dart 里 static const light/dark = SkyTable(...) → { "night-top": "#rrggbb", … }（顺序 = SkyPhase(top, bottom, blobA, blobB, blobC)）。 */
-const SKY_PARTS = ["top", "bottom", "a", "b", "c"];
+/** tokens.dart 里 static const light/dark = SkyTable(...) → { "night-top": "#rrggbb", … }（顺序 = SkyPhase(top, bottom, a, b, c, d, e)）。 */
+const SKY_PARTS = ["top", "bottom", "a", "b", "c", "d", "e"];
 const dartSky = (name) => {
   const m = new RegExp(`static const ${name} = SkyTable\\(([\\s\\S]*?)\\n  \\);`).exec(dart);
   if (!m) throw new Error(`tokens.dart 里找不到 SkyTable.${name}`);
@@ -112,7 +121,13 @@ const ratio = (a, b) => {
 const mix = (a, b, t) => rgb(a).map((v, i) => v + (rgb(b)[i] - v) * t);
 const ramp = (y) => { const x = y ** RAMP_POW; return x * x * (3 - 2 * x); };
 
-/** 壁纸上真实会出现的颜色：全天每 15 分钟 × 底色 11 个高度 × （底色本身 + 叠上每一团柔光的峰值）。 */
+/** 五色轮转（= lib/sky.ts skyHue）：k 处于 a…e 循环里，相邻两色 smoothstep 过渡。 */
+const hue = (ph, k) => {
+  const m = ((k % 5) + 5) % 5, i = Math.floor(m), f0 = m - i;
+  return mix(ph[2 + i], ph[2 + ((i + 1) % 5)], f0 * f0 * (3 - 2 * f0));
+};
+const MIXES = [...new Set(BLOB_MIX)];
+/** 壁纸上真实会出现的颜色：全天每 15 分钟 × 底色 11 个高度 × （底色本身 + 叠上每种强度的柔光峰值 × 轮转里每 1/4 步的颜色）。 */
 function* skySamples(sky) {
   for (let q = 0; q < 96; q++) {
     const h = q / 4;
@@ -124,7 +139,7 @@ function* skySamples(sky) {
     for (let y = 0; y <= 10; y++) {
       const base = mix(ph[0], ph[1], ramp(y / 10));
       yield [`${h} 点 y=${y / 10} 底色`, base];
-      for (let k = 0; k < 3; k++) yield [`${h} 点 y=${y / 10} 柔光${"abc"[k]}`, mix(base, ph[2 + k], BLOB_MIX[k])];
+      for (const m of MIXES) for (let k = 0; k < 20; k++) yield [`${h} 点 y=${y / 10} 柔光 mix=${m} 色相 ${HUES[Math.floor(k / 4)]}+${(k % 4) / 4}`, mix(base, hue(ph, k / 4), m)];
     }
   }
 }
@@ -211,8 +226,34 @@ for (const [themeName, selector, dartName] of [["浅色", ":root", "light"], ["�
   }
 }
 
+// v3.5.1 两端同源：着色器核心段逐字相同、五团柔光参数同值（同样只在读得到完整仓库时查）
+const fragPath = process.env.SKY_FRAG ?? join(frontend, "../app/shaders/sky.frag");
+const frag = existsSync(fragPath) ? readFileSync(fragPath, "utf8") : null;
+let coreSame = false, blobsSame = false;
+if (frag) {
+  const appCore = CORE_RE.exec(frag)?.[0];
+  if (!appCore) bad.push(`${fragPath} 里找不到「流光核心 BEGIN/END」段`);
+  else if (appCore !== webCore) {
+    const a = webCore.split("\n"), b = appCore.split("\n");
+    const i = a.findIndex((l, j) => l !== b[j]);
+    bad.push(`流光核心不同：skyGl.ts 第 ${i + 1} 行「${a[i] ?? "（无）"}」≠ sky.frag「${b[i] ?? "（无）"}」`);
+  } else coreSame = true;
+}
+if (dart) {
+  const body = /static const blobs = \[([\s\S]*?)\n\s*\];/.exec(dart)?.[1] ?? "";
+  const appBlobs = [...body.matchAll(/SkyBlob\(([-\d., ]+)\)/g)].map(([, row]) => row.split(",").map((v) => Number(v.trim())));
+  if (appBlobs.length !== SKY_BLOBS.length) bad.push(`柔光团数：网页 SKY_BLOBS ${SKY_BLOBS.length} ≠ App Sky.blobs ${appBlobs.length}`);
+  else {
+    SKY_BLOBS.forEach((row, i) => {
+      if (row.length !== appBlobs[i].length || row.some((v, j) => v !== appBlobs[i][j]))
+        bad.push(`柔光 ${"ABCDE"[i]}：网页 [${row.join(", ")}] ≠ App SkyBlob(${appBlobs[i].join(", ")})`);
+    });
+    blobsSame = !bad.some((b) => b.startsWith("柔光 "));
+  }
+}
+
 if (bad.length) {
   console.error("配色守门失败：\n" + bad.join("\n"));
   process.exit(1);
 }
-console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题 + 壁纸全天采样 × 2 套：${skyWorst.join("、")}${dart ? "；壁纸 " + SKY_PHASES.length * SKY_PARTS.length + " 色 + --card / --glass 与 App tokens.dart 同值" : ""}）`);
+console.log(`配色守门通过（${PAIRS.length} 对 × 2 套主题 + 壁纸全天采样 × 2 套：${skyWorst.join("、")}${dart ? "；壁纸 " + SKY_PHASES.length * SKY_PARTS.length + " 色 + --card / --glass 与 App tokens.dart 同值" : ""}${blobsSame ? "；5 团柔光参数与 App Sky.blobs 同值" : ""}${coreSame ? "；着色器核心与 App sky.frag 逐字相同" : ""}）`);
