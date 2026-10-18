@@ -5,6 +5,7 @@
 // 正文 text/text2、气泡字 onUserBubble、按钮 onInk/onAccent、警示 warning 与 danger/success ≥ 4.5:1；text3 ≥ 3:1。
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 @immutable
@@ -46,7 +47,7 @@ class Palette {
   final Color success;
 
   /// 设计 v2 的“壁纸 + 玻璃”（v3.3 壁纸换成随钟点流动的天色 sky，见下面 SkyTable）：
-  /// sky = 四个时段（夜 / 黎明 / 白天 / 黄昏）的底色与三团柔光；
+  /// sky = 四个时段（夜 / 黎明 / 白天 / 黄昏）的底色与五色轮转的柔光（v3.5.1）；
   /// glass = 浮层玻璃的着色（带透明度，下面是模糊后的内容）；glassBorder = 玻璃的 1px 发丝边；
   /// glassHighlight = 玻璃卡片顶边 1px 的内高光（v2.1：卡片不要外投影，靠发丝边 + 这条高光分层）。
   final SkyTable sky;
@@ -175,30 +176,40 @@ class Palette {
   );
 }
 
-/// v3.3「流光」壁纸的一个时段：竖向底色（top → bottom）+ 三团缓慢漂移的柔光（blobA 左上、blobB 右中、blobC 底部）。
-/// 画法在 shaders/sky.frag（App）与 styles/base.css .sky（网页）；颜色两端同值（frontend scripts/check-contrast.mjs 查）。
+/// v3.3「流光」壁纸的一个时段：竖向底色（top → bottom）+ 五团柔光轮流取的五个色相 a → b → c → d → e → a（v3.5.1，原三团固定色）。
+/// 五个色相按色环相邻排列（相邻两色混在一起不发灰）；每团柔光在这五色之间缓慢轮转（Sky.hueStep），所以任何时刻屏上都有五种颜色在流动。
+/// 画法在 shaders/sky.frag（App）与 frontend/src/lib/skyGl.ts（网页，同一段着色器）；颜色两端同值（frontend scripts/check-contrast.mjs 查）。
 @immutable
 class SkyPhase {
-  const SkyPhase(this.top, this.bottom, this.blobA, this.blobB, this.blobC);
-  final Color top, bottom, blobA, blobB, blobC;
+  const SkyPhase(this.top, this.bottom, this.a, this.b, this.c, this.d, this.e);
+  final Color top, bottom, a, b, c, d, e;
 
-  List<Color> get colors => [top, bottom, blobA, blobB, blobC];
+  List<Color> get colors => [top, bottom, a, b, c, d, e];
+  List<Color> get hues => [a, b, c, d, e];
 
-  static SkyPhase lerp(SkyPhase a, SkyPhase b, double t) {
-    Color l(Color x, Color y) => Color.lerp(x, y, t)!;
-    return SkyPhase(l(a.top, b.top), l(a.bottom, b.bottom), l(a.blobA, b.blobA), l(a.blobB, b.blobB), l(a.blobC, b.blobC));
+  /// 色相轮转：k = 0…5 循环（0 = a、1 = b …），相邻两色之间 smoothstep 过渡（在每个色相上稍作停留）。
+  Color hue(double k) {
+    final h = hues;
+    final m = k % h.length;
+    final i = m.floor();
+    final f = m - i;
+    return Color.lerp(h[i], h[(i + 1) % h.length], f * f * (3 - 2 * f))!;
+  }
+
+  static SkyPhase lerp(SkyPhase x, SkyPhase y, double t) {
+    Color l(Color p, Color q) => Color.lerp(p, q, t)!;
+    return SkyPhase(l(x.top, y.top), l(x.bottom, y.bottom), l(x.a, y.a), l(x.b, y.b), l(x.c, y.c), l(x.d, y.d), l(x.e, y.e));
   }
 
   @override
-  bool operator ==(Object other) =>
-      other is SkyPhase && other.top == top && other.bottom == bottom && other.blobA == blobA && other.blobB == blobB && other.blobC == blobC;
+  bool operator ==(Object other) => other is SkyPhase && listEquals(other.colors, colors);
 
   @override
-  int get hashCode => Object.hash(top, bottom, blobA, blobB, blobC);
+  int get hashCode => Object.hashAll(colors);
 }
 
 /// 一套主题的四个时段；at(钟点) 在相邻两个关键帧之间线性插值（Sky.keyframes），黎明 / 黄昏平滑过渡。
-/// 浅色整天都够亮、深色整天都够暗：正文 / 次要字 / 最次要字对壁纸任意一处（全天每 15 分钟 × 底色与三团柔光）
+/// 浅色整天都够亮、深色整天都够暗：正文 / 次要字 / 最次要字对壁纸任意一处（全天每 15 分钟 × 底色 × 柔光峰值、色相过渡、两团重叠）
 /// 分别 ≥ 4.5 / 4.5 / 3（test/sky_test.dart；网页 check-contrast.mjs 同一采样）。
 @immutable
 class SkyTable {
@@ -232,22 +243,49 @@ class SkyTable {
   @override
   int get hashCode => Object.hash(night, dawn, day, dusk);
 
-  /// 浅色：学 Hark 浅色（顶部天蓝 → 中段淡 → 底部暖米色），夜里也是钢蓝 → 暖金（v3.5 照 Hark 浅色夜间截图，原偏紫灰蓝）。v3.3 B2 整体提亮（只抬 OKLab 明度、保色相）：
-  /// 次要字 text2 压在顶部 / 夜间最暗处也要 ≥ 4.5，所以顶色比 Hark 浅得多。
+  /// 浅色：学 Hark 浅色（顶部天蓝 → 中段淡 → 底部暖米色），夜里也是钢蓝 → 暖金（v3.5 照 Hark 浅色夜间截图）。底色两端不变（v3.3 B2 / v3.5 定的值）。
+  /// v3.5.1 柔光（用户 10-18：“白天流动颜色还不止一种”）：白天 = 天蓝 · 薰衣草 · 蜜桃珊瑚 · 暖金 · 薄荷；黎明 = 长春花蓝 · 淡紫 · 玫瑰 · 蜜桃 · 浅金；
+  /// 黄昏 = 长春花蓝 · 紫罗兰 · 玫瑰 · 杏 · 金；夜里 = 钢蓝 · 长春花蓝 · 浅青 · 海雾绿 · 奶油（Hark 浅色夜间的蓝 → 青 → 金）。
+  /// 亮度都守在次要字 text2 4.5 线以上（相对亮度 ≥ ≈0.46，两团重叠后也不低于），所以是粉彩而不是纯色。
   static const light = SkyTable(
-    night: SkyPhase(Color(0xFF8EBBE3), Color(0xFFDCC58A), Color(0xFF86BCEA), Color(0xFFC6DFE8), Color(0xFFEFE4C4)),
-    dawn: SkyPhase(Color(0xFFC0D1FD), Color(0xFFF1D9C6), Color(0xFFC6D1F2), Color(0xFFF7D7BF), Color(0xFFD8CDE7)),
-    day: SkyPhase(Color(0xFFADD6FE), Color(0xFFE6DCC2), Color(0xFFB1D6F5), Color(0xFFF4EEDF), Color(0xFFEBDBBF)), // v3.3 验收：底部柔光原 #C0D4E2（冷蓝灰）把暖米底盖成灰绿，改暖沙
-    dusk: SkyPhase(Color(0xFFC5D0FB), Color(0xFFEBCDB6), Color(0xFFD2CDF7), Color(0xFFF3D2B4), Color(0xFFD8CDE5)),
+    night: SkyPhase(Color(0xFF8EBBE3), Color(0xFFDCC58A), Color(0xFF86BCEA), Color(0xFF9FBCEE), Color(0xFFC6DFE8), Color(0xFFB2DCD2), Color(0xFFEFE4C4)),
+    dawn: SkyPhase(Color(0xFFC0D1FD), Color(0xFFF1D9C6), Color(0xFFB4CDF6), Color(0xFFBDBDF6), Color(0xFFF2BACD), Color(0xFFF9C6AB), Color(0xFFF6D9A0)),
+    day: SkyPhase(Color(0xFFADD6FE), Color(0xFFE6DCC2), Color(0xFF8EC8FA), Color(0xFFC0B6F6), Color(0xFFF8BBA3), Color(0xFFF5D48A), Color(0xFF95DFC5)),
+    dusk: SkyPhase(Color(0xFFC5D0FB), Color(0xFFEBCDB6), Color(0xFFB4C3F5), Color(0xFFC4B8F6), Color(0xFFF0B3C6), Color(0xFFF7BF98), Color(0xFFF2D092)),
   );
 
-  /// 深色：夜里深灰蓝 / 深紫，白天稍微偏蓝一点，始终是暗底；柔光不能太亮（次要字 text2 对柔光峰值也要 ≥ 4.5）。
+  /// 深色：夜里深灰蓝 / 深紫，白天稍微偏蓝一点，始终是暗底；柔光同样五色轮转但压暗（相对亮度 ≤ ≈0.041：次要字 text2 对柔光峰值、两团重叠也 ≥ 4.5）。
+  /// 夜 = 青黛 · 深蓝 · 靛 · 紫 · 梅；黎明 = 石板蓝 · 靛 · 暮紫 · 梅红 · 暗玫瑰；白天 = 深青 · 深蓝 · 靛紫 · 梅 · 暗玫瑰；黄昏 = 石板蓝 · 靛 · 紫 · 梅红 · 余烬。
   static const dark = SkyTable(
-    night: SkyPhase(Color(0xFF0B1024), Color(0xFF1C1A33), Color(0xFF2A2F5C), Color(0xFF3A2C55), Color(0xFF1F3346)),
-    dawn: SkyPhase(Color(0xFF121A36), Color(0xFF2A2340), Color(0xFF363468), Color(0xFF4E2F51), Color(0xFF2C3A5A)),
-    day: SkyPhase(Color(0xFF14213F), Color(0xFF23304A), Color(0xFF223966), Color(0xFF283B59), Color(0xFF2C3A59)),
-    dusk: SkyPhase(Color(0xFF141A38), Color(0xFF2B2244), Color(0xFF3E3267), Color(0xFF4F2F4E), Color(0xFF2C395F)),
+    night: SkyPhase(Color(0xFF0B1024), Color(0xFF1C1A33), Color(0xFF1F3346), Color(0xFF253860), Color(0xFF2A2F5C), Color(0xFF3A2C55), Color(0xFF33284D)),
+    dawn: SkyPhase(Color(0xFF121A36), Color(0xFF2A2340), Color(0xFF2A3857), Color(0xFF353365), Color(0xFF35345C), Color(0xFF4C2E4F), Color(0xFF483144)),
+    day: SkyPhase(Color(0xFF14213F), Color(0xFF23304A), Color(0xFF173D4A), Color(0xFF1E3961), Color(0xFF34326A), Color(0xFF47304F), Color(0xFF4A3040)),
+    dusk: SkyPhase(Color(0xFF141A38), Color(0xFF2B2244), Color(0xFF2B375C), Color(0xFF3C3064), Color(0xFF3A2D5C), Color(0xFF4D2E4C), Color(0xFF493330)),
   );
+}
+
+/// 一团柔光（v3.5.1）：中心在 (cx, cy)（屏宽 / 屏高的比例）附近按振幅 (ax, ay)、周期 (tx, ty) 秒正弦漂移，起始相位 (px, py)；
+/// 半径 r（屏高的比例，高斯 exp(-d²/r²)）；每 tr 秒转一圈（负 = 逆时针）、每 ts 秒伸缩一次（长短轴 1 ± Sky.stretch）；强度 mix；hue = 色相轮转的起点（0…4）。
+@immutable
+class SkyBlob {
+  const SkyBlob(this.cx, this.cy, this.ax, this.ay, this.tx, this.ty, this.px, this.py, this.r, this.tr, this.ts, this.mix, this.hue);
+  final double cx, cy, ax, ay, tx, ty, px, py, r, tr, ts, mix, hue;
+
+  /// t 秒时这一团的样子（aspect = 屏宽 / 屏高）：中心（屏高为单位，x 已乘 aspect）、旋转的 cos / sin、两条轴的缩放（已含半径与伸缩）。
+  /// = 网页 lib/sky.ts skyBlobAt（两端同一组测试向量）。
+  ({double x, double y, double cos, double sin, double kx, double ky}) at(double t, double aspect) {
+    const tau = 2 * math.pi;
+    final ang = tau * t / tr;
+    final s = 1 + Sky.stretch * math.sin(tau * t / ts);
+    return (
+      x: (cx + ax * math.sin(tau * t / tx + px)) * aspect,
+      y: cy + ay * math.sin(tau * t / ty + py),
+      cos: math.cos(ang),
+      sin: math.sin(ang),
+      kx: 1 / (s * r),
+      ky: s / r,
+    );
+  }
 }
 
 enum SkyName { night, dawn, day, dusk }
@@ -260,7 +298,8 @@ abstract final class Sky {
     (16.5, SkyName.day), (18.5, SkyName.dusk), (20.5, SkyName.night), (24.0, SkyName.night),
   ];
 
-  /// 柔光漂移每帧的间隔：最快的一团约 4 逻辑像素/秒，30 帧/秒每步 < 0.2px，看起来和 60/120 帧一样顺，GPU 空转只有一半或更少。
+  /// 柔光流动每帧的间隔：最快的一团约 35 逻辑像素/秒（v3.5.1 加大了位移），30 帧/秒每步约 1px；柔光是半径上百像素的高斯，
+  /// 1px 位移让任一像素的颜色变化远小于 1/255，看起来和 60/120 帧一样顺，GPU 只画一半或更少（决定与测量见 docs/devlog.md v3.5.1 流光）。
   static const frame = Duration(milliseconds: 33);
 
   /// 天色多久按钟点重算一次（不是每帧）。
@@ -281,8 +320,22 @@ abstract final class Sky {
     return 1 - x * x * (3 - 2 * x);
   }
 
-  /// 三团柔光的强度（与 sky.frag 里 mix 的系数同值；网页 .sky-blob 的不透明度）。
-  static const blobMix = [0.75, 0.65, 0.70];
+  /// 五团柔光（= 网页 lib/sky.ts SKY_BLOBS，check-contrast.mjs 查同值）。周期两两互质（18–45 秒漂移、60–100 秒转圈、29–43 秒伸缩），
+  /// 叠在一起几乎不重复；起点 hue 让空间上相邻的两团（A-B、B-D、D-E、E-C、C-A）色相也相邻，重叠处不发灰。
+  static const blobs = [
+    //      cx   cy   ax   ay   tx  ty  px   py   r    tr   ts  mix  hue
+    SkyBlob(.20, .18, .24, .12, 23, 31, 0.0, 1.3, .30, 71, 29, .78, 0), // A 左上
+    SkyBlob(.82, .36, .22, .16, 29, 19, 2.1, 0.4, .27, -83, 37, .72, 1), // B 右中上
+    SkyBlob(.28, .60, .26, .14, 41, 27, 4.0, 2.6, .28, 97, 43, .70, 4), // C 左中下
+    SkyBlob(.74, .78, .22, .14, 37, 21, 1.2, 5.1, .30, -61, 31, .70, 2), // D 右下
+    SkyBlob(.48, .98, .30, .08, 43, 33, 3.3, 0.9, .32, 89, 41, .62, 3), // E 底部
+  ];
+
+  /// 每团柔光从一个色相过渡到下一个用的秒数（五色一圈 = 2 分钟）。
+  static const hueStep = 24.0;
+
+  /// 柔光形变：椭圆长短轴在 1 ± stretch 之间缓慢伸缩（面积不变）。
+  static const stretch = 0.30;
 }
 
 /// 间距：4 的倍数

@@ -5,9 +5,11 @@
 //   - 离屏遮罩：ShaderMaskLayer 层数（原 TopFade 整页 dstIn）；
 //   - 一级页面滚动：每帧重建元素数；
 //   - “我的”页滚动（v3.4 顶部渐隐）：每帧重建元素数、渐隐条不跟着滚动重建、毛玻璃取背景次数、无 ShaderMask；
-//   - CPU 侧 build + layout + paint + 合成的耗时中位数（测试引擎，只作相对比较）。
+//   - CPU 侧 build + layout + paint + 合成的耗时中位数（测试引擎，只作相对比较）；
+//   - 壁纸着色器（v3.5.1）：真着色器整屏 412×915 光栅一帧（测试引擎是软件光栅，比真机 GPU 慢几个数量级，只作新旧相对比较）。
 // 数字打印出来（flutter test test/perf_frame_test.dart -r expanded 可见），断言只卡住“不能退回去”的那几条。
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:assistant/app.dart';
 import 'package:assistant/core/api.dart';
@@ -17,7 +19,10 @@ import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/message_view.dart';
 import 'package:assistant/features/me/me_screen.dart';
+import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/tokens.dart';
+import 'package:assistant/ui/motion.dart';
+import 'package:assistant/ui/sky.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -301,5 +306,31 @@ void main() {
     expect(home.flips, lessThanOrEqualTo(2));
     expect(projects.flips, lessThanOrEqualTo(2));
     expect(kDebugMode, isTrue); // 重建计数依赖 debug 钩子
+  });
+
+  testWidgets('壁纸着色器：整屏光栅一帧的耗时（新旧相对比较）', (tester) async {
+    tester.view.physicalSize = const Size(412, 915);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final prog = await tester.runAsync(() => ui.FragmentProgram.fromAsset('shaders/sky.frag'));
+    SkyShader.program = prog;
+    addTearDown(() => SkyShader.program = null);
+    final clock = SkyClock.forTest(frozen: true);
+    await tester.pumpWidget(MaterialApp(theme: buildTheme(Brightness.light), home: SkyLayer(clock: clock)));
+    final boundary = tester.renderObject<RenderRepaintBoundary>(find.descendant(of: find.byType(SkyLayer), matching: find.byType(RepaintBoundary)));
+    final times = <int>[];
+    for (var i = 0; i < 12; i++) {
+      clock.time.value = 7.0 + i * 1.3;
+      await tester.pump();
+      await tester.runAsync(() async {
+        final sw = Stopwatch()..start();
+        final img = await boundary.toImage();
+        await img.toByteData(); // 等它真画完
+        times.add(sw.elapsedMicroseconds);
+        img.dispose();
+      });
+    }
+    _report('sky-shader', {'frames': times.length - 2, 'rasterMsPerFrame(median)': _median(times.sublist(2)).toStringAsFixed(2)});
+    expect(tester.takeException(), isNull);
   });
 }

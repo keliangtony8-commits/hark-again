@@ -20,13 +20,14 @@
   --scrim: rgba(0, 0, 0, 0.32); /* 弹层/抽屉背后的遮罩 */
   color-scheme: light;
 
-  /* v3.3「流光」壁纸色表（= App theme/tokens.dart SkyTable.light，scripts/check-contrast.mjs 查两端同值 + 全天每 15 分钟 × 底色与三团柔光：--text / --text-2 ≥ 4.5、--text-3 ≥ 3）：
-     四个时段 × 竖向底色 top→bottom + 三团柔光 a（左上）b（右中）c（底部）。lib/sky.ts 按钟点在相邻时段间插值，写到 --sky-top/bottom/a/b/c，
-     画法在 styles/base.css .sky。浅色 = 学 Hark 浅色：顶部天蓝 → 中段淡 → 底部暖米色；夜里也是钢蓝 → 中段发亮的浅青白（右中柔光）→ 底部暖金、正中一团奶油光（v3.5 照 Hark 浅色夜间截图，原是偏紫灰蓝；次要字同版压深一档换来更浓的天）。 */
-  --sky-night-top: #8ebbe3; --sky-night-bottom: #dcc58a; --sky-night-a: #86bcea; --sky-night-b: #c6dfe8; --sky-night-c: #efe4c4;
-  --sky-dawn-top: #c0d1fd; --sky-dawn-bottom: #f1d9c6; --sky-dawn-a: #c6d1f2; --sky-dawn-b: #f7d7bf; --sky-dawn-c: #d8cde7;
-  --sky-day-top: #add6fe; --sky-day-bottom: #e6dcc2; --sky-day-a: #b1d6f5; --sky-day-b: #f4eedf; --sky-day-c: #ebdbbf;
-  --sky-dusk-top: #c5d0fb; --sky-dusk-bottom: #ebcdb6; --sky-dusk-a: #d2cdf7; --sky-dusk-b: #f3d2b4; --sky-dusk-c: #d8cde5;
+  /* v3.3「流光」壁纸色表（= App theme/tokens.dart SkyTable.light，scripts/check-contrast.mjs 查两端同值 + 全天每 15 分钟 × 底色 × 柔光色相 / 过渡 / 两团重叠：--text / --text-2 ≥ 4.5、--text-3 ≥ 3）：
+     四个时段 × 竖向底色 top→bottom + 五个轮转色相 a→b→c→d→e（v3.5.1，色环相邻排列；五团柔光各从一个色相起步、每 24 秒换到下一个）。
+     lib/sky.ts 按钟点在相邻时段间插值，画法 lib/skyGl.ts（WebGL，与 App shaders/sky.frag 同一段着色器）。
+     白天 = 天蓝 · 薰衣草 · 蜜桃珊瑚 · 暖金 · 薄荷；黎明 = 长春花蓝 · 淡紫 · 玫瑰 · 蜜桃 · 浅金；黄昏 = 长春花蓝 · 紫罗兰 · 玫瑰 · 杏 · 金；夜 = 钢蓝 · 长春花蓝 · 浅青 · 海雾绿 · 奶油。浅色 = 学 Hark 浅色：顶部天蓝 → 中段淡 → 底部暖米色；夜里也是钢蓝 → 中段发亮的浅青白（右中柔光）→ 底部暖金、正中一团奶油光（v3.5 照 Hark 浅色夜间截图，原是偏紫灰蓝；次要字同版压深一档换来更浓的天）。 */
+  --sky-night-top: #8ebbe3; --sky-night-bottom: #dcc58a; --sky-night-a: #86bcea; --sky-night-b: #9fbcee; --sky-night-c: #c6dfe8; --sky-night-d: #b2dcd2; --sky-night-e: #efe4c4;
+  --sky-dawn-top: #c0d1fd; --sky-dawn-bottom: #f1d9c6; --sky-dawn-a: #b4cdf6; --sky-dawn-b: #bdbdf6; --sky-dawn-c: #f2bacd; --sky-dawn-d: #f9c6ab; --sky-dawn-e: #f6d9a0;
+  --sky-day-top: #add6fe; --sky-day-bottom: #e6dcc2; --sky-day-a: #8ec8fa; --sky-day-b: #c0b6f6; --sky-day-c: #f8bba3; --sky-day-d: #f5d48a; --sky-day-e: #95dfc5;
+  --sky-dusk-top: #c5d0fb; --sky-dusk-bottom: #ebcdb6; --sky-dusk-a: #b4c3f5; --sky-dusk-b: #c4b8f6; --sky-dusk-c: #f0b3c6; --sky-dusk-d: #f7bf98; --sky-dusk-e: #f2d092;
   /* 设计 v2「浮层 + 毛玻璃」：与 App theme/tokens.dart 的 Palette.glass/... 同值 */
   --glass: rgba(255, 255, 255, 0.85);        /* 玻璃着色（下面是模糊后的内容） */
   --glass-border: rgba(28, 27, 26, 0.07);    /* 玻璃的 1px 发丝边 */
@@ -163,11 +164,11 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.45);
   --shadow-float: 0 1px 12px rgba(0, 0, 0, 0.2);
-  /* v3.3 流光壁纸（= App SkyTable.dark）：夜里深灰蓝 / 深紫，白天稍偏蓝，始终是暗底 */
-  --sky-night-top: #0b1024; --sky-night-bottom: #1c1a33; --sky-night-a: #2a2f5c; --sky-night-b: #3a2c55; --sky-night-c: #1f3346;
-  --sky-dawn-top: #121a36; --sky-dawn-bottom: #2a2340; --sky-dawn-a: #363468; --sky-dawn-b: #4e2f51; --sky-dawn-c: #2c3a5a;
-  --sky-day-top: #14213f; --sky-day-bottom: #23304a; --sky-day-a: #223966; --sky-day-b: #283b59; --sky-day-c: #2c3a59;
-  --sky-dusk-top: #141a38; --sky-dusk-bottom: #2b2244; --sky-dusk-a: #3e3267; --sky-dusk-b: #4f2f4e; --sky-dusk-c: #2c395f;
+  /* v3.3 流光壁纸（= App SkyTable.dark）：夜里深灰蓝 / 深紫，白天稍偏蓝，始终是暗底；v3.5.1 五个轮转色相同样压暗（相对亮度 ≤ ≈0.041） */
+  --sky-night-top: #0b1024; --sky-night-bottom: #1c1a33; --sky-night-a: #1f3346; --sky-night-b: #253860; --sky-night-c: #2a2f5c; --sky-night-d: #3a2c55; --sky-night-e: #33284d;
+  --sky-dawn-top: #121a36; --sky-dawn-bottom: #2a2340; --sky-dawn-a: #2a3857; --sky-dawn-b: #353365; --sky-dawn-c: #35345c; --sky-dawn-d: #4c2e4f; --sky-dawn-e: #483144;
+  --sky-day-top: #14213f; --sky-day-bottom: #23304a; --sky-day-a: #173d4a; --sky-day-b: #1e3961; --sky-day-c: #34326a; --sky-day-d: #47304f; --sky-day-e: #4a3040;
+  --sky-dusk-top: #141a38; --sky-dusk-bottom: #2b2244; --sky-dusk-a: #2b375c; --sky-dusk-b: #3c3064; --sky-dusk-c: #3a2d5c; --sky-dusk-d: #4d2e4c; --sky-dusk-e: #493330;
   --glass: rgba(27, 29, 37, 0.88); /* 实测 Hark 输入胶囊 #1B1D25 */
   --glass-border: rgba(255, 255, 255, 0.08);
   --chrome-edge: transparent;

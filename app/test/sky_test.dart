@@ -1,4 +1,4 @@
-// v3.3 流光壁纸：关键帧插值、浅 / 深两套正文与次要字 text2 对壁纸任意一处 ≥ 4.5、最次要字 text3 ≥ 3（v3.3 B2）、SkyClock 单 Timer（测试环境不起、无订阅 / 后台停、
+// v3.3 流光壁纸（v3.5.1 五团柔光流动 + 五色轮转）：关键帧插值、柔光流动幅度 / 色相轮转 / 与网页同一组测试向量、浅 / 深两套正文与次要字 text2 对壁纸任意一处 ≥ 4.5、最次要字 text3 ≥ 3（v3.3 B2）、SkyClock 单 Timer（测试环境不起、无订阅 / 后台停、
 // 减少动态只换天色不漂移）、着色器加载不了时回退竖向渐变。
 import 'dart:async';
 import 'dart:math' as math;
@@ -17,15 +17,27 @@ double _contrast(Color a, Color b) {
   return (math.max(x, y) + 0.05) / (math.min(x, y) + 0.05);
 }
 
-/// 壁纸上一处真实会出现的颜色：底色按 Sky.ramp 取样，再按 sky.frag 的系数叠上每一团柔光的峰值。
+/// 壁纸上真实会出现的颜色（v3.5.1 五色轮转）：底色按 Sky.ramp 取 11 个高度，再叠上
+/// ①每个色相、②相邻两色相过渡的中点，各按每团柔光的强度；③任意两团以最大强度先后重叠（sRGB 混合会比两色都暗 / 亮）。
+/// = 网页 scripts/check-contrast.mjs 与 tests/sky.test.ts 同一采样。
 Iterable<(String, Color)> _samples(SkyPhase ph) sync* {
-  final blobs = [ph.blobA, ph.blobB, ph.blobC];
+  final hues = ph.hues;
+  final tones = [...hues, for (var j = 0; j < hues.length; j++) ph.hue(j + 0.5)];
+  final mixes = {for (final b in Sky.blobs) b.mix}.toList()..sort();
+  final top = mixes.last;
   for (var i = 0; i <= 10; i++) {
     final y = i / 10;
     final base = Color.lerp(ph.top, ph.bottom, Sky.ramp(y))!;
     yield ('底色 y=$y', base);
-    for (var b = 0; b < 3; b++) {
-      yield ('柔光$b y=$y', Color.lerp(base, blobs[b], Sky.blobMix[b])!);
+    for (final m in mixes) {
+      for (var k = 0; k < tones.length; k++) {
+        yield ('色相$k×$m y=$y', Color.lerp(base, tones[k], m)!);
+      }
+    }
+    for (var a = 0; a < hues.length; a++) {
+      for (var b = 0; b < hues.length; b++) {
+        if (a != b) yield ('重叠$a+$b y=$y', Color.lerp(Color.lerp(base, hues[a], top)!, hues[b], top)!);
+      }
     }
   }
 }
@@ -78,7 +90,7 @@ void main() {
   });
 
   // 网页 scripts/check-contrast.mjs 与 tests/sky.test.ts 用同一采样、同一阈值（两端同一张色表）。
-  group('文字对壁纸对比度（全天每 15 分钟 × 底色与三团柔光峰值）：正文 / 次要字 ≥ 4.5，最次要字 ≥ 3', () {
+  group('文字对壁纸对比度（全天每 15 分钟 × 底色 × 柔光色相 / 过渡 / 两团重叠）：正文 / 次要字 ≥ 4.5，最次要字 ≥ 3', () {
     for (final (name, p) in [('浅色', Palette.light), ('深色', Palette.dark)]) {
       for (final (what, fg, min) in [('正文 text', p.text, 4.5), ('次要字 text2', p.text2, 4.5), ('最次要字 text3', p.text3, 3.0)]) {
         test('$name $what ≥ $min', () {
@@ -98,6 +110,55 @@ void main() {
         });
       }
     }
+  });
+
+  group('柔光流动（v3.5.1：肉眼清楚可见、多色轮转）', () {
+    test('五团柔光，周期在 18–45 秒、两两不同；强度不超过 0.8', () {
+      expect(Sky.blobs, hasLength(5));
+      final periods = [for (final b in Sky.blobs) ...[b.tx, b.ty]];
+      expect(periods.every((p) => p >= 18 && p <= 45), isTrue);
+      expect(periods.toSet(), hasLength(periods.length), reason: '漂移周期两两不同，叠在一起不整齐重复');
+      expect(Sky.blobs.every((b) => b.mix <= 0.8), isTrue);
+      expect({for (final b in Sky.blobs) b.hue}, {0.0, 1.0, 2.0, 3.0, 4.0}, reason: '五团各从不同色相起步：任何时刻五色都在屏上');
+    });
+
+    test('10 秒内每一团都明显移动（≥ 屏高的 4%）或明显换色', () {
+      const aspect = 0.45;
+      for (var i = 0; i < Sky.blobs.length; i++) {
+        final b = Sky.blobs[i];
+        for (final t0 in [0.0, 13.0, 47.0, 120.0]) {
+          final p = b.at(t0, aspect), q = b.at(t0 + 10, aspect);
+          final moved = math.sqrt(math.pow(p.x - q.x, 2) + math.pow(p.y - q.y, 2));
+          final ph = SkyTable.light.day;
+          final c0 = ph.hue(t0 / Sky.hueStep + b.hue), c1 = ph.hue((t0 + 10) / Sky.hueStep + b.hue);
+          final dc = ((c0.r - c1.r).abs() + (c0.g - c1.g).abs() + (c0.b - c1.b).abs()) * 255;
+          expect(moved >= 0.04 || dc >= 12, isTrue, reason: '第 $i 团 t=$t0 → +10s 位移 ${moved.toStringAsFixed(3)}、色差 ${dc.toStringAsFixed(1)}');
+        }
+      }
+    });
+
+    test('色相轮转：整数点就是那个色相，五步一圈，之间连续', () {
+      final ph = SkyTable.light.day;
+      expect(ph.hue(0), ph.a);
+      expect(ph.hue(1), ph.b);
+      expect(ph.hue(4), ph.e);
+      expect(ph.hue(5), ph.a);
+      expect(ph.hue(-1), ph.e);
+      expect(ph.hue(0.5), Color.lerp(ph.a, ph.b, 0.5));
+      final hues = {for (final x in ph.hues) x.toARGB32()};
+      expect(hues, hasLength(5), reason: '白天五种不同颜色');
+    });
+
+    test('与网页 lib/sky.ts skyBlobAt 同一组测试向量（t = 10s、aspect = 0.5，第 0 / 3 团）', () {
+      final a = Sky.blobs[0].at(10, 0.5), d = Sky.blobs[3].at(10, 0.5);
+      expect(a.x, closeTo(0.14781, 1e-4));
+      expect(a.y, closeTo(0.15790, 1e-4));
+      expect(a.cos, closeTo(0.63332, 1e-4));
+      expect(a.kx, closeTo(2.67028, 1e-4));
+      expect(d.x, closeTo(0.39651, 1e-4));
+      expect(d.sin, closeTo(-0.85731, 1e-4));
+      expect(d.ky, closeTo(4.23114, 1e-4));
+    });
   });
 
   group('SkyClock', () {
