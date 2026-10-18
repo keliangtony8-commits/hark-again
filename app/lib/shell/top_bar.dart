@@ -77,6 +77,7 @@ class _SegmentedNavState extends State<SegmentedNav> {
     final on = _inRange(widget.index);
     return GlassSurface(
       blur: true,
+      probe: PerfBlur.topBar, // v3.5.3 性能自检“只关顶栏模糊”
       radius: Radii.full,
       // 滑块四周内缩一圈；可点区域是整条栏高（≥ A11y.minTap），只在横向内缩，与滑块对齐
       child: Stack(children: [

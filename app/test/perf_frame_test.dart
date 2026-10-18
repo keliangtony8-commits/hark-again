@@ -15,6 +15,7 @@ import 'package:assistant/app.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
 import 'package:assistant/core/chat_socket.dart';
+import 'package:assistant/core/perf_probe.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/message_view.dart';
@@ -559,6 +560,54 @@ void main() {
     final m = await _scrollCost(tester, list, poll: () => app.container.read(usageProvider.notifier).reload());
     _report('usage-scroll', m);
     expect(m['layers.shaderMask'], 0);
+  });
+
+  // v3.5.3 性能自检的沙盒参考：同样 A–H，在“我的”页上整屏软件光栅（OffsetLayer.toImage，含真壁纸着色器 + 低分辨率贴图 + 模糊）。
+  // 软件光栅（Skia CPU）和真机 Impeller-GPU 的成本结构不同，只看相对大小；真机数字以 App 内自检为准。
+  testWidgets('v3.5.3 性能自检 A–H：“我的”页整屏软件光栅（只作参考）', (tester) async {
+    final prog = await tester.runAsync(() => ui.FragmentProgram.fromAsset('shaders/sky.frag'));
+    final blit = await tester.runAsync(() => ui.FragmentProgram.fromAsset('shaders/sky_blit.frag'));
+    SkyShader.program = prog;
+    SkyShader.blit = blit;
+    SkyShader.loaded.value++;
+    addTearDown(() => SkyShader.program = SkyShader.blit = null);
+    addTearDown(SkyFrames.clear);
+    addTearDown(() => PerfProbe.restore(rebuild: false));
+    final app = await _pump(tester);
+    app.router.go('/me');
+    await _settle(tester);
+    final list = find.descendant(of: find.byType(MeScreen), matching: find.byType(Scrollable)).first;
+    final pos = tester.state<ScrollableState>(list).position;
+    final root = tester.binding.renderViews.first;
+    final rect = Offset.zero & root.size;
+    final out = <String, Object>{'extent': pos.maxScrollExtent.round()};
+    double? base;
+    for (final v in PerfVariant.values) {
+      PerfProbe.apply(v);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      final times = <int>[];
+      for (var i = 0; i < 14; i++) {
+        pos.jumpTo(pos.maxScrollExtent * (0.5 + 0.5 * math.sin(i / 3)));
+        await tester.pump(const Duration(milliseconds: 8));
+        final layer = root.debugLayer! as OffsetLayer;
+        await tester.runAsync(() async {
+          final sw = Stopwatch()..start();
+          final img = await layer.toImage(rect);
+          await img.toByteData();
+          times.add(sw.elapsedMicroseconds);
+          img.dispose();
+        });
+      }
+      final med = _median(times.sublist(2));
+      base ??= med;
+      out[v.code] = '${med.toStringAsFixed(2)}ms(${(med / base * 100).round()}%)';
+    }
+    PerfProbe.restore();
+    await tester.pump();
+    _report('perf-probe-sandbox', out);
+    expect(PerfProbe.flags, PerfFlags.all);
+    expect(tester.takeException(), isNull);
   });
 
 }

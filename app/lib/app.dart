@@ -14,6 +14,7 @@ import 'features/home/home_screen.dart';
 import 'features/computer/computer_screen.dart';
 import 'features/me/connectors_screen.dart';
 import 'features/me/about_screen.dart';
+import 'features/me/perf_probe_screen.dart';
 import 'features/me/me_hub.dart';
 import 'features/me/me_screen.dart';
 import 'features/me/preferences_screen.dart';
@@ -127,6 +128,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'profile', builder: (_, _) => const MeHubScreen(hub: MeHub.profile)),
               GoRoute(path: 'preferences', builder: (_, s) => _spot(s, const PreferencesScreen())),
               GoRoute(path: 'about', builder: (_, s) => _spot(s, const AboutScreen())),
+              GoRoute(path: 'perf-probe', builder: (_, _) => const PerfProbeScreen()), // v3.5.3 性能自检结果
               GoRoute(path: 'skills', builder: (_, _) => const SkillsScreen(), routes: [
                 GoRoute(path: ':id', builder: (_, s) => SkillEditorScreen(id: s.pathParameters['id']!, starter: s.extra is SkillStarter ? s.extra as SkillStarter : null)),
               ]),

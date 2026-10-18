@@ -24,12 +24,14 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import '../core/perf_probe.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'glass_mode.dart';
 import 'sky.dart';
 import 'motion.dart';
 
+export '../core/perf_probe.dart' show PerfBlur;
 export 'glass_mode.dart';
 
 /// 玻璃顶边的 1px 内高光（v2.1：卡片不要外投影，像光从上面打下来）：沿圆角描边，从顶部的 glassHighlight
@@ -90,7 +92,8 @@ class Backdrop extends StatelessWidget {
     final body = child ?? const SizedBox.expand();
     if (GlassMode.solidOf(context)) return ColoredBox(color: p.bg, child: body);
     // v3.3 流光壁纸（ui/sky.dart）：自身是重绘边界，只有这一层随 SkyClock 重画
-    return Stack(fit: StackFit.passthrough, children: [Positioned.fill(child: SkyLayer(coverable: coverable)), body]);
+    // v3.5.3 性能自检（core/perf_probe.dart）关壁纸：同位置换纯色，不改树结构（body 状态不丢）
+    return Stack(fit: StackFit.passthrough, children: [Positioned.fill(child: PerfProbe.flags.wallpaper ? SkyLayer(coverable: coverable) : ColoredBox(color: p.bg)), body]);
   }
 }
 
@@ -136,6 +139,7 @@ class BackdropFade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!PerfProbe.flags.fade) return const IgnorePointer(child: SizedBox.expand()); // v3.5.3 性能自检：关渐隐条
     final Widget strip = GlassMode.solidOf(context)
         ? RepaintBoundary(child: CustomPaint(painter: _SolidFadePainter(context.palette.bg, clear, solid), child: const SizedBox.expand()))
         : SkyLayer(fade: (clear, solid), fadeLocal: local);
@@ -167,8 +171,11 @@ class _SolidFadePainter extends CustomPainter {
 }
 
 class GlassSurface extends StatelessWidget {
-  const GlassSurface({super.key, required this.child, this.radius = Radii.card, this.blur = false, this.padding = EdgeInsets.zero, this.shadow = true, this.borderColor});
+  const GlassSurface({super.key, required this.child, this.radius = Radii.card, this.blur = false, this.padding = EdgeInsets.zero, this.shadow = true, this.borderColor, this.probe = PerfBlur.other});
   final Widget child;
+
+  /// 性能自检按块关模糊时属于哪一块（core/perf_probe.dart）；不影响默认视觉。
+  final PerfBlur probe;
   final double radius;
   final bool blur;
   final EdgeInsetsGeometry padding;
@@ -188,7 +195,7 @@ class GlassSurface extends StatelessWidget {
       duration: context.motion(Motion.base),
       curve: Motion.ease,
       decoration: BoxDecoration(
-        color: solid ? p.surface : (card ? p.card : p.glass),
+        color: solid ? p.surface : (card ? (PerfProbe.flags.translucentCards ? p.card : p.card.withValues(alpha: 1)) : p.glass),
         borderRadius: shape,
         border: Border.all(color: borderColor ?? (card ? p.card.withValues(alpha: 0) : (solid ? p.border : p.chromeEdge)), width: 1),
       ),
@@ -199,7 +206,8 @@ class GlassSurface extends StatelessWidget {
     if (blur && !solid) {
       body = ClipRRect(
         borderRadius: shape,
-        child: BackdropFilter.grouped(filter: ImageFilter.blur(sigmaX: Glass.blur, sigmaY: Glass.blur), child: body),
+        // enabled:false 只给性能自检用（保留玻璃底色、不改树结构）
+        child: BackdropFilter.grouped(filter: ImageFilter.blur(sigmaX: Glass.blur, sigmaY: Glass.blur), enabled: PerfProbe.flags.blur(probe), child: body),
       );
     }
     if (!shadow) return body;

@@ -12,6 +12,7 @@ import '../../theme/tokens.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sub_page.dart';
+import 'perf_probe_screen.dart';
 
 class AboutScreen extends ConsumerStatefulWidget {
   const AboutScreen({super.key});
@@ -53,6 +54,9 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
               // 不给 ListRow onTap：那会多一个箭头、像能点进去；这是隐藏开关
               child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _tapVersion, child: ListRow(icon: Icons.tag_rounded, title: '版本', value: clientVersionLabel(sv))),
             ),
+            // v3.5.3 性能自检（features/me/perf_probe_screen.dart）：只在性能浮层打开时出现，紧跟“版本”这个开关
+            if (ref.watch(perfOverlayProvider).value ?? false)
+              ListRow(key: const Key('perf-probe'), icon: Icons.speed_rounded, title: '性能自检', onTap: () => startPerfProbe(context)),
             ListRow(icon: Icons.dns_outlined, title: '服务器', value: host.isEmpty ? '未设置' : host),
             if (sv != null) ListRow(icon: Icons.update_rounded, title: '服务器版本', value: sv.version),
             const ListRow(icon: Icons.text_fields_rounded, title: '字体', value: 'MiSans（小米）'), // MiSans 许可要求在软件中注明（= 网页 AboutScreen）

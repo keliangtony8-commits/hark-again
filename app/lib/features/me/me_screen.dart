@@ -117,6 +117,7 @@ class _SearchBar extends StatelessWidget {
               child: GlassSurface(
                 key: const Key('me-search'),
                 blur: true,
+                probe: PerfBlur.search, // v3.5.3 性能自检“只关搜索框模糊”
                 radius: Radii.full,
                 child: SearchField(
                   controller: controller,
