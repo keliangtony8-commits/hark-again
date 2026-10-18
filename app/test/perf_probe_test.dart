@@ -5,6 +5,7 @@ import 'package:assistant/core/perf_overlay.dart';
 import 'package:assistant/core/perf_probe.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/me/about_screen.dart';
+import 'package:assistant/features/me/perf_probe_screen.dart';
 import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/ui/glass.dart';
 import 'package:assistant/ui/sky.dart';
@@ -51,6 +52,12 @@ bool _blurOn(WidgetTester t, String key) =>
 int _skies(WidgetTester t) => find.byType(SkyLayer).evaluate().length;
 Color _cardColor(WidgetTester t) =>
     ((t.widget<AnimatedContainer>(find.descendant(of: find.byKey(const Key('card')), matching: find.byType(AnimatedContainer))).decoration!) as BoxDecoration).color!;
+
+class _FakeRates implements PerfRateSource {
+  int calls = 0;
+  @override
+  Future<double?> sample() async => (calls++).isEven ? 60.0 : 144.0;
+}
 
 class _FakeTimings implements PerfTimingSource {
   void Function(List<PerfSample>)? cb;
@@ -109,6 +116,19 @@ void main() {
     ], 150, 350);
     expect(w.frames, 2);
     expect(w.rasterAvg, 5);
+  });
+
+  test('v3.5.4 withRate：fps = 帧数 / 时长，刷新率取最低 / 最高；读不到时显示“读不到”', () {
+    final s = PerfStats.of(List.filled(153, 4.0)).withRate(durationUs: 2500000, hz: [60, 60, 120]);
+    expect(s.fps, closeTo(61.2, 1e-9));
+    expect(s.hzMin, 60);
+    expect(s.hzMax, 120);
+    expect(s.rasterAvg, 4);
+    final none = PerfStats.of([4.0]).withRate(durationUs: 0);
+    expect(none.fps, isNull);
+    expect(none.hzMin, isNull);
+    expect(perfHzLine(PerfReport(device: const {}, rows: [(PerfVariant.a, none)], budgetMs: 8.3)), '滑动中系统刷新率：读不到');
+    expect(perfFlymeHint, contains('Flyme 若仍 60Hz'));
   });
 
   testWidgets('切变体：各层真的换、不改树结构（状态不丢）、恢复回全开', (tester) async {
@@ -177,7 +197,8 @@ void main() {
       offsets.add(pos.pixels.roundToDouble());
       cb([(vsyncUs: SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds, rasterMs: PerfProbe.flags.wallpaper ? 12.0 : 4.0, buildMs: 0.5)]);
     });
-    final runner = PerfProbeRunner(timings: fake, perVariant: const Duration(milliseconds: 1200));
+    final rates = _FakeRates();
+    final runner = PerfProbeRunner(timings: fake, rates: rates, perVariant: const Duration(milliseconds: 1200));
     final seen = <PerfVariant?>[];
     void track() => seen.add(PerfProbe.active.value);
     PerfProbe.active.addListener(track);
@@ -203,6 +224,12 @@ void main() {
     expect(b.rasterAvg, 4, reason: '切变体之后的重建/稳定期和上一个变体的帧不算进来');
     expect(b.overBudget, 0);
     expect(a.buildAvg, 0.5);
+    // v3.5.4：滑动中约每 200ms 采一次系统刷新率；fps = 帧数 / 实际时长（测试里每 16ms 一帧 ≈ 62）
+    expect(rates.calls, greaterThanOrEqualTo(2 * 5));
+    expect(a.hzMin, 60);
+    expect(a.hzMax, 144);
+    expect(a.fps, closeTo(1000 / 16, 3));
+    expect(perfHzLine(r), '滑动中系统刷新率：最低 60.0 Hz / 最高 144.0 Hz');
     expect(r.scrollExtent, 60 * 50 - 800);
     expect(offsets.contains(0) && offsets.contains(2200), isTrue, reason: '来回滚到两头');
     expect(seen, [PerfVariant.a, PerfVariant.b, null]);

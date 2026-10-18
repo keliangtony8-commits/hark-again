@@ -40,6 +40,7 @@ class PerfProbeScreen extends StatelessWidget {
     final small = context.text.bodySmall!.copyWith(color: p.text, fontFeatures: const [FontFeature.tabularFigures()]);
     final dim = small.copyWith(color: p.text2);
     String ms(double v) => v.toStringAsFixed(1);
+    String hz(double v) => v.toStringAsFixed(0);
     Widget cell(String s, {TextStyle? style, TextAlign align = TextAlign.right}) =>
         Padding(padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 3), child: Text(s, style: style ?? small, textAlign: align));
     return SubPage(
@@ -49,6 +50,8 @@ class PerfProbeScreen extends StatelessWidget {
           const PageIntro(line: '还没有结果：到“关于”页打开性能浮层后点“性能自检”。')
         else ...[
           GlassCardInfo(lines: [
+            perfFlymeHint,
+            perfHzLine(r),
             for (final e in r.device.entries) '${e.key}：${e.value}',
             '预算：${ms(r.budgetMs)} ms/帧 · 可滚动 ${r.scrollExtent.round()} px',
             if (r.note != null) r.note!,
@@ -66,6 +69,7 @@ class PerfProbeScreen extends StatelessWidget {
                 cell('最大', style: dim),
                 cell('帧数', style: dim),
                 cell('>预算', style: dim),
+                cell('fps', style: dim),
                 cell('UI均', style: dim),
               ]),
               for (final (v, s) in r.rows)
@@ -76,16 +80,29 @@ class PerfProbeScreen extends StatelessWidget {
                   cell(ms(s.rasterMax)),
                   cell('${s.frames}'),
                   cell('${(s.overBudget * 100).round()}%'),
+                  cell(s.fps == null ? '—' : hz(s.fps!)),
                   cell(ms(s.buildAvg)),
                 ]),
             ],
           ),
           const SizedBox(height: Sp.x3),
-          Text('单位 ms。光栅 = FrameTiming.rasterDuration（GPU 线程），UI = buildDuration。截一张图发回即可。', style: dim),
+          Text('单位 ms。fps = 帧数 / 实际时长。光栅 = FrameTiming.rasterDuration（GPU 线程），UI = buildDuration。截一张图发回即可。', style: dim),
         ],
       ]),
     );
   }
+}
+
+/// v3.5.4 顶部提示：系统不给高刷时让用户自己去系统设置里开（魅族 20 / Flyme 的具体菜单名未能确认，写通用说法）。
+const perfFlymeHint = 'Flyme 若仍 60Hz：到 系统设置 → 显示和亮度 里找“屏幕刷新率”选最高档；若有按应用设置刷新率的选项，给 Toyuis 选高刷';
+
+/// “滑动中系统刷新率：最低 / 最高”（所有变体合起来）。
+String perfHzLine(PerfReport r) {
+  final lo = [for (final (_, s) in r.rows) if (s.hzMin != null) s.hzMin!];
+  final hi = [for (final (_, s) in r.rows) if (s.hzMax != null) s.hzMax!];
+  if (lo.isEmpty || hi.isEmpty) return '滑动中系统刷新率：读不到';
+  String f(double v) => v.toStringAsFixed(1);
+  return '滑动中系统刷新率：最低 ${f(lo.reduce((a, b) => a < b ? a : b))} Hz / 最高 ${f(hi.reduce((a, b) => a > b ? a : b))} Hz';
 }
 
 /// 结果页顶部的一块信息（小字逐行）。

@@ -114,7 +114,7 @@ abstract final class PerfProbe {
 /// 一个变体的统计（毫秒）。
 @immutable
 class PerfStats {
-  const PerfStats({required this.frames, required this.rasterAvg, required this.rasterP90, required this.rasterMax, required this.overBudget, required this.buildAvg, required this.buildMax});
+  const PerfStats({required this.frames, required this.rasterAvg, required this.rasterP90, required this.rasterMax, required this.overBudget, required this.buildAvg, required this.buildMax, this.fps, this.hzMin, this.hzMax});
 
   final int frames;
   final double rasterAvg, rasterP90, rasterMax;
@@ -122,6 +122,26 @@ class PerfStats {
   /// 光栅超预算（> [budgetMs]）的帧占比，0–1。
   final double overBudget;
   final double buildAvg, buildMax;
+
+  /// v3.5.4 实测帧率 = 帧数 / 实际时长（秒）；没算时为 null。
+  final double? fps;
+
+  /// v3.5.4 滑动中每 200ms 采样的系统当前刷新率（display.mode.refreshRate）最低 / 最高；读不到为 null。
+  final double? hzMin, hzMax;
+
+  /// 补上实测帧率与刷新率采样（[durationUs] = 时间窗实际长度，微秒）。
+  PerfStats withRate({required int durationUs, List<double> hz = const []}) => PerfStats(
+        frames: frames,
+        rasterAvg: rasterAvg,
+        rasterP90: rasterP90,
+        rasterMax: rasterMax,
+        overBudget: overBudget,
+        buildAvg: buildAvg,
+        buildMax: buildMax,
+        fps: durationUs > 0 ? frames * 1e6 / durationUs : null,
+        hzMin: hz.isEmpty ? null : hz.reduce(math.min),
+        hzMax: hz.isEmpty ? null : hz.reduce(math.max),
+      );
 
   static const empty = PerfStats(frames: 0, rasterAvg: 0, rasterP90: 0, rasterMax: 0, overBudget: 0, buildAvg: 0, buildMax: 0);
 
@@ -179,6 +199,23 @@ class _BindingTimings implements PerfTimingSource {
   }
 }
 
+/// v3.5.4 系统当前刷新率来源（默认 MethodChannel 读 display.mode.refreshRate；测试注入假的）。读不到返回 null。
+abstract class PerfRateSource {
+  Future<double?> sample();
+}
+
+class _ChannelRate implements PerfRateSource {
+  @override
+  Future<double?> sample() async {
+    try {
+      final v = await const MethodChannel('dev.assistant/perf').invokeMethod<num>('refreshRate');
+      return v?.toDouble();
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 /// 自检结果：设备信息 + 每个变体一行。
 class PerfReport {
   PerfReport({required this.device, required this.rows, required this.budgetMs, this.scrollExtent = 0, this.note});
@@ -191,10 +228,15 @@ class PerfReport {
 
 /// 跑一遍 A–H。[locate] 每个变体前找一次“我的”页的滚动位置（重建后对象可能换）。
 class PerfProbeRunner {
-  PerfProbeRunner({PerfTimingSource? timings, this.perVariant = const Duration(milliseconds: 2500), this.settle = const Duration(milliseconds: 400), this.speed = 1500})
-      : timings = timings ?? _BindingTimings();
+  PerfProbeRunner({PerfTimingSource? timings, PerfRateSource? rates, this.perVariant = const Duration(milliseconds: 2500), this.settle = const Duration(milliseconds: 400), this.speed = 1500, this.rateEvery = const Duration(milliseconds: 200)})
+      : timings = timings ?? _BindingTimings(),
+        rates = rates ?? _ChannelRate();
 
   final PerfTimingSource timings;
+  final PerfRateSource rates;
+
+  /// 滑动中采样系统刷新率的间隔。
+  final Duration rateEvery;
   final Duration perVariant, settle;
 
   /// 匀速滚动的速度（逻辑像素 / 秒）；页太短时每程至少 300ms。
@@ -240,6 +282,12 @@ class PerfProbeRunner {
         final legMs = math.max(300, (extent / speed * 1000).round());
         final legs = math.max(2, (perVariant.inMilliseconds / legMs).round());
         final start = await _frameStamp();
+        final hz = <double>[];
+        void take() => rates.sample().then((v) {
+              if (v != null && v.isFinite && v > 0) hz.add(v);
+            });
+        take();
+        final ticker = Timer.periodic(rateEvery, (_) => take());
         for (var i = 0; i < legs; i++) {
           final to = i.isEven ? pos.maxScrollExtent : pos.minScrollExtent;
           if (extent < 1) {
@@ -249,11 +297,12 @@ class PerfProbeRunner {
           }
         }
         final end = await _frameStamp();
+        ticker.cancel();
         // timings 是批量回来的（release 约每秒一批）：等到窗口末尾那帧到了再统计，最多等 2.5 秒
         for (var waited = 0; waited < 2500 && !_samples.any((s) => s.vsyncUs >= end); waited += 100) {
           await Future<void>.delayed(const Duration(milliseconds: 100));
         }
-        rows.add((v, statsInWindow(_samples, start, end, budgetMs: budget)));
+        rows.add((v, statsInWindow(_samples, start, end, budgetMs: budget).withRate(durationUs: end - start, hz: hz)));
       }
     } finally {
       timings.remove();
@@ -307,6 +356,8 @@ Future<Map<String, String>> perfDeviceInfo() async {
       String s(String k) => '${r[k] ?? '未知'}';
       m['系统当前模式'] = '${s('modeId')} · ${s('modeRefreshRate')} Hz · ${s('modeSize')}';
       m['窗口请求模式'] = '${s('preferredModeId')}（${s('preferredRefreshRate')} Hz）';
+      m['窗口请求刷新率'] = '${s('windowRefreshRate')} Hz';
+      m['Surface 帧率'] = s('surfaceFrameRate');
       m['可选模式'] = s('supported');
       m['Impeller 后端'] = s('impellerBackend');
       m['EnableImpeller'] = s('enableImpeller');
