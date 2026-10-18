@@ -106,7 +106,7 @@ class ActionCard extends ConsumerWidget {
 
     void open(CardTarget t) {
       if (card.unread) ref.read(inboxProvider.notifier).markRead([card.id]).ignore();
-      // “我的”下的去处盖在外壳上（push），返回回到主页；聊天等 Tab 内去处直接切过去
+      // “我的”下的子页（/me/…）叠在当前页上（push，go_router 跨分支推入），返回回到主页；聊天等分支去处直接切过去
       final route = cardRoute(t, card);
       route.startsWith('/me') ? context.push(route) : context.go(route);
     }

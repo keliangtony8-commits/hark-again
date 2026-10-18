@@ -38,7 +38,7 @@
 .pill.primary:hover { background: color-mix(in srgb, var(--pill-on) 88%, var(--glass)); }
 
 .wide-pill { width: 100%; height: 52px; margin-top: var(--card-gap); border-radius: var(--r-full); display: flex; align-items: center; justify-content: center; gap: var(--sp-2);
-  background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--elev-card); color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-title);
+  background: var(--card); border: 1px solid var(--card-edge); box-shadow: var(--elev-card); color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-title);
   transition: color var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .wide-pill:hover { color: var(--text); }
 .wide-pill:active { transform: scale(0.99); }

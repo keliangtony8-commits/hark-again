@@ -35,7 +35,7 @@ export function NewPanelExtras({ go, briefMissing, removed, onBrief, onRevive }:
         {removed.map((c, i) => {
           const when = c.removed_at ? formatWhen(c.removed_at) : null;
           return (
-            <button key={c.id} className="glass" style={stagger(i)} onMouseDown={keep} onClick={() => go.then(() => onRevive(c))}
+            <button key={c.id} className="card-chip" style={stagger(i)} onMouseDown={keep} onClick={() => go.then(() => onRevive(c))}
               aria-label={`放回「${c.title}」${when ? `，移除于 ${when}` : ""}`}>
               <IconHistory size={16} /><span className="launch-chip-text">{c.title}</span>{when && <small>{when}</small>}
             </button>
@@ -46,10 +46,10 @@ export function NewPanelExtras({ go, briefMissing, removed, onBrief, onRevive }:
     <div className="launch-chips">
       {panelIdeas.map((idea, i) => {
         const Icon = IDEA_ICONS[i];
-        return <button key={idea} className="glass" style={stagger(removed.length + i)} onMouseDown={keep} onClick={() => go.ask(idea)}>
+        return <button key={idea} className="card-chip" style={stagger(removed.length + i)} onMouseDown={keep} onClick={() => go.ask(idea)}>
           <Icon size={16} /><span className="launch-chip-text">{idea}</span></button>;
       })}
-      {briefMissing && <button className="glass" style={stagger(removed.length + panelIdeas.length)} onMouseDown={keep} onClick={() => go.then(onBrief)}>
+      {briefMissing && <button className="card-chip" style={stagger(removed.length + panelIdeas.length)} onMouseDown={keep} onClick={() => go.then(onBrief)}>
         <IconAlarm size={16} /><span className="launch-chip-text">{BRIEF_IDEA_LABEL}</span></button>}
     </div>
   </>;

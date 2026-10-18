@@ -1,6 +1,6 @@
 // 卡片块的唯一外框（v0.84）：审批 / 订单 / 表单 / 浏览器以前各写一份 AnimatedContainer 边框，现在都走这里。
 // 卡片块单独成卡、直接坐在背景上（见 models/block.dart replySegments），所以和 AppCard 是同一种玻璃：
-// 实色 cardFill、Radii.card（v2.80 无高光）。语气 tone 只决定边框：
+// 半透明 cardFill（v3.5.1）、Radii.card（v2.80 无高光）。语气 tone 只决定边框：
 //   calm    不描边（看完了 / 已处理）
 //   waiting 警示色描边（等用户：待批准、待确认下单、待填写）
 //   live    强调色描边（用户正在接管浏览器，唯一关键状态）

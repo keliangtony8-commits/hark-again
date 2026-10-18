@@ -21,7 +21,7 @@ export function WidePill({ label, icon = <IconPlus size={18} />, onClick }: { la
 }
 
 /** 圆形头像：底色 = 偏好里的头像色（--avatar），上面是首字母（字色自动选白/深）；v2.92 §P 上传过头像就盖一张图（= App Avatar）。资料来自 lib/profile.ts（当前登录用户）。 */
-export function Avatar({ large, onClick, label }: { large?: boolean; onClick?: () => void; label?: string }) {
+export function Avatar({ large, onClick, label, current }: { large?: boolean; onClick?: () => void; label?: string; current?: boolean }) {
   const p = useProfile();
   const body = <>
     <span className="avatar-initial">{profileInitial(p)}</span>
@@ -29,6 +29,6 @@ export function Avatar({ large, onClick, label }: { large?: boolean; onClick?: (
       onLoad={(e) => e.currentTarget.classList.add("on")} onError={(e) => e.currentTarget.remove()} />}
   </>;
   return onClick
-    ? <button className={`avatar ${large ? "lg" : ""}`} onClick={onClick} aria-label={label} title={label}>{body}</button>
+    ? <button className={`avatar ${large ? "lg" : ""}`} onClick={onClick} aria-label={label} title={label} aria-current={current ? "page" : undefined}>{body}</button>
     : <span className={`avatar ${large ? "lg" : ""}`} aria-hidden>{body}</span>;
 }

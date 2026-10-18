@@ -23,12 +23,17 @@
 .shell .page:has(> .page-head) + .sky-fade-page { display: block;
   --fade-a: calc(var(--topbar-top) + var(--topbar-h) / 2 + var(--sat));
   --fade-b: calc(var(--topbar-top) + var(--topbar-h) + var(--sp-5) + var(--sat)); }
-/* “我的”没有顶栏也没有标题栏（返回钮在滚动内容里）：同一条渐隐（= App me_screen.dart 的 BackdropFade）。刘海 / 状态栏以上全是壁纸，
-   到页头静止时的顶边（.me .page-inner 上留白 + .me-head 上留白）恰好全显：翻下去内容不切在顶边、不进状态栏，静止时页头不被盖。 */
-.shell .page.me + .sky-fade-page { display: block;
-  --fade-a: var(--sat);
-  --fade-b: calc(var(--topbar-top) + var(--sp-2) + var(--sat)); }
 .shell-main { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; position: relative; }
+/* 页面层（AppShell ShellViews）：平时就是 .shell-main 里唯一一层，排版和以前一样（同一套 flex 列）。 */
+.shell-view { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; position: relative; }
+/* v3.5.1 进出“我的”整页横滑（= App ShellBranches，360ms easeOutCubic）：--slide-dir 1 = 去“我的”（新页从右进、旧页往左出），-1 反向。
+   只动 transform；滑动期间两层叠放、主区裁掉屏外部分。渐隐条里的壁纸副本反向同曲线平移，始终和全屏壁纸逐像素重合（不露出一条错开的天）。 */
+.shell-main.sliding { overflow: hidden; }
+.shell-view.slide { position: absolute; inset: 0; animation: var(--dur-slow) var(--ease) both; }
+.shell-view.slide.in { animation-name: view-in; }
+.shell-view.slide.out { animation-name: view-out; pointer-events: none; }
+.shell-view.slide.in .sky-fade > .sky { animation: view-in-sky var(--dur-slow) var(--ease) both; }
+.shell-view.slide.out .sky-fade > .sky { animation: view-out-sky var(--dur-slow) var(--ease) both; }
 
 .topbar { position: fixed; z-index: 20; top: calc(var(--topbar-top) + var(--sat)); left: var(--gutter); right: var(--gutter);
   height: var(--topbar-h); display: grid; grid-template-columns: 1fr minmax(0, var(--segments-w)) 1fr; align-items: center; gap: var(--sp-3);
@@ -37,13 +42,19 @@
 .topbar-lead { justify-self: start; display: flex; gap: var(--sp-2); }
 .topbar-lead:empty { pointer-events: none; }
 .topbar-trail { justify-self: end; }
+/* v3.5.1 “我的”是当前项（= App _AvatarTab）：头像外圈一道和选中滑块同色的环淡入，环与头像间留 1px 缝；在别的标签时滑块回来、环淡出。 */
+.avatar-tab { position: relative; }
+.avatar-tab::after { content: ""; position: absolute; inset: -3px; border: 2px solid var(--pill-on); border-radius: var(--r-full); pointer-events: none;
+  opacity: 0; transition: opacity var(--dur) var(--ease); }
+.avatar-tab.on::after { opacity: 1; }
 .topbar .glass-btn { width: var(--topbar-h); height: var(--topbar-h); border-radius: var(--r-full); }
 .topbar .avatar { width: var(--topbar-h); height: var(--topbar-h); }
 
 /* 分段导航：选中项是一颗实心胶囊，--i 决定位置，滑过去 */
 .segments { position: relative; height: 100%; width: 100%; display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 4px; border-radius: var(--r-full); }
 .segments-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: var(--r-full);
-  background: var(--pill-on); transform: translateX(calc(var(--i) * 100%)); transition: transform var(--dur-slow) var(--spring); }
+  background: var(--pill-on); transform: translateX(calc(var(--i) * 100%)); transition: transform var(--dur-slow) var(--spring), opacity var(--dur) var(--ease); }
+.segments-thumb.off { opacity: 0; } /* 当前是“我的”：滑块停在上一次的分段原位淡出（TopBar lastSegment） */
 .segment { position: relative; display: grid; place-items: center; color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-title); border-radius: var(--r-full);
   transition: color var(--dur) var(--ease); }
 .segment:hover { color: var(--text); }
@@ -79,6 +90,7 @@
 .launch-chips button { height: 34px; max-width: 100%; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-sm); color: var(--text);
   display: inline-flex; align-items: center; gap: var(--sp-2); animation: float-up var(--dur) var(--ease) both; animation-delay: calc(var(--stagger) * var(--i, 0)); }
 .launch-chips button > svg { flex: none; color: var(--text-2); }
+.launch-chips button.card-chip { background: var(--card); border: 1px solid var(--card-edge); } /* 新面板胶囊 = 卡片同色，不模糊（= App Palette.card） */
 .launch-chips button small { flex: none; font-size: var(--fs-xs); color: var(--text-3); }
 .launch-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* v3.5.1 新建面板模式（= App _ModeAbove / NewPanelExtras）：“最近移除”一行小标签；输入框正上方居中一行淡色小字（14px 常规），离胶囊顶约 24 */

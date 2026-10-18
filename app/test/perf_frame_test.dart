@@ -16,8 +16,11 @@ import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/message_view.dart';
+import 'package:assistant/features/home/home_screen.dart';
 import 'package:assistant/features/me/me_screen.dart';
+import 'package:assistant/features/projects/projects_screen.dart';
 import 'package:assistant/theme/tokens.dart';
+import 'package:assistant/ui/glass.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -57,6 +60,22 @@ class _Api implements Api {
   Future<dynamic> get(String path) async {
     if (path == '/api/inbox') return {'unread': 0, 'latest': null};
     if (path.startsWith('/api/conversations/c1')) return {'id': 'c1', 'messages': messages};
+    final at = _t0.toUtc().toIso8601String();
+    if (path == '/api/cards') {
+      // 主页滚动用：几张面板卡（关键数字小块 + 文字），够翻一屏多
+      return [
+        for (var i = 0; i < 8; i++)
+          {'id': 'p$i', 'kind': 'panel', 'title': '面板 $i', 'dismissed': false, 'unread': false, 'updated_at': at,
+            'blocks': [
+              {'type': 'stats', 'items': [{'label': '中间价', 'value': '7.12$i', 'note': '比昨天 −0.02%'}, {'label': '一周', 'value': '7.13–7.15'}]},
+              {'type': 'text', 'text': '第 $i 张面板的说明文字，长一点，占两行左右，像真实的面板那样。'},
+            ]},
+      ];
+    }
+    if (path == '/api/projects') {
+      return [for (var i = 0; i < 24; i++) {'id': 'w$i', 'name': '项目 $i：一个名字稍长一点的项目', 'updated_at': at, 'last_active_at': at, 'status': i % 3 == 0 ? 'running' : 'done'}];
+    }
+    if (path == '/api/usage') return {'currency': 'CNY', 'priced': [], 'today': {}, 'month': {'tokens': 3100000, 'calls': 420}};
     if (path == '/api/profile') {
       return {'username': 'keliang', 'display_name': null, 'assistant_name': null, 'assistant_default': 'Toyuis', 'avatar': null, 'greet': false};
     }
@@ -94,8 +113,8 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 /// 场景里的层：毛玻璃层数、要取背景的次数（无 key 每层一次，同 key 合并一次）、ShaderMask 离屏层数、透明度层数。
-({int backdrops, int flips, int shaderMasks, int opacity}) _layers(WidgetTester tester) {
-  var backdrops = 0, unkeyed = 0, masks = 0, opacity = 0;
+({int backdrops, int flips, int shaderMasks, int opacity, int clips, int pictures}) _layers(WidgetTester tester) {
+  var backdrops = 0, unkeyed = 0, masks = 0, opacity = 0, clips = 0, pictures = 0;
   final keys = <BackdropKey>{};
   void walk(Layer? l) {
     while (l != null) {
@@ -110,13 +129,15 @@ Future<void> _settle(WidgetTester tester) async {
       }
       if (l is ShaderMaskLayer) masks++;
       if (l is OpacityLayer) opacity++;
+      if (l is ClipRRectLayer || l is ClipRectLayer || l is ClipPathLayer) clips++;
+      if (l is PictureLayer) pictures++;
       if (l is ContainerLayer) walk(l.firstChild);
       l = l.nextSibling;
     }
   }
 
   walk(tester.binding.renderViews.first.debugLayer);
-  return (backdrops: backdrops, flips: unkeyed + keys.length, shaderMasks: masks, opacity: opacity);
+  return (backdrops: backdrops, flips: unkeyed + keys.length, shaderMasks: masks, opacity: opacity, clips: clips, pictures: pictures);
 }
 
 /// 一帧里重建了哪些元素（Element.rebuild 的调试钩子，只在 debug 下有）。
@@ -135,6 +156,29 @@ class _Rebuilds {
   void stop() => debugOnRebuildDirtyWidget = null;
 }
 
+/// 一帧里真正重画（重新录制绘制指令）的 RenderObject 个数：干净的重绘边界直接复用、不算（= PaintingContext.paintChild 的判断）。
+/// 只在 debug 下有（debugOnProfilePaint）。types 记下重画最多的类型，用来找“滚动时谁在跟着重画”。
+class _Repaints {
+  int total = 0;
+  final types = <String, int>{};
+
+  void start() {
+    debugOnProfilePaint = (ro) {
+      if (ro.isRepaintBoundary && !ro.debugNeedsPaint) return;
+      total++;
+      final t = ro.runtimeType.toString();
+      types[t] = (types[t] ?? 0) + 1;
+    };
+  }
+
+  void stop() => debugOnProfilePaint = null;
+
+  String top([int n = 6]) {
+    final e = types.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return e.take(n).map((x) => '${x.key}:${x.value}').join(',');
+  }
+}
+
 double _median(List<int> xs) {
   final s = [...xs]..sort();
   return s.isEmpty ? 0 : s[s.length ~/ 2] / 1000.0;
@@ -143,6 +187,50 @@ double _median(List<int> xs) {
 void _report(String name, Map<String, Object> m) {
   // ignore: avoid_print
   print('[perf] $name ${m.entries.map((e) => '${e.key}=${e.value}').join(' ')}');
+}
+
+/// 拖着 [list] 滚 30 帧（缓起缓停，dy 每帧最多 12），量：每帧重建元素数、每帧重画的 RenderObject 数（+ 类型分布）、CPU 每帧耗时中位数，
+/// 以及滚动中那一帧的合成层（毛玻璃 / 取背景次数 / ShaderMask / Opacity / Clip / Picture）。
+Future<Map<String, Object>> _scroll(WidgetTester tester, Finder list, {double dir = -1, void Function(Element)? onRebuild}) async {
+  final r = _Rebuilds()..start();
+  if (onRebuild != null) {
+    final hook = debugOnRebuildDirtyWidget!;
+    debugOnRebuildDirtyWidget = (e, b) {
+      hook(e, b);
+      onRebuild(e);
+    };
+  }
+  final rp = _Repaints()..start();
+  final times = <int>[], perFrame = <int>[], paints = <int>[];
+  final gesture = await tester.startGesture(tester.getCenter(list));
+  ({int backdrops, int flips, int shaderMasks, int opacity, int clips, int pictures})? mid;
+  for (var i = 0; i < 30; i++) {
+    final before = r.total, pb = rp.total;
+    await gesture.moveBy(Offset(0, dir * 12.0 * math.sin((i + 1) / 31 * math.pi)));
+    final sw = Stopwatch()..start();
+    await tester.pump(const Duration(milliseconds: 16));
+    times.add(sw.elapsedMicroseconds);
+    perFrame.add(r.total - before);
+    paints.add(rp.total - pb);
+    if (i == 15) mid = _layers(tester);
+  }
+  await gesture.up();
+  r.stop();
+  rp.stop();
+  await _settle(tester);
+  final l = mid!;
+  return {
+    'elementsPerFrame(median)': (perFrame..sort())[15],
+    'repaintsPerFrame(median)': (paints..sort())[15],
+    'repaintTypes': rp.top(),
+    'cpuMsPerFrame(median)': _median(times).toStringAsFixed(2),
+    'backdropLayers': l.backdrops,
+    'backdropFlips': l.flips,
+    'shaderMaskLayers': l.shaderMasks,
+    'opacityLayers': l.opacity,
+    'clipLayers': l.clips,
+    'pictureLayers': l.pictures,
+  };
 }
 
 void main() {
@@ -211,76 +299,43 @@ void main() {
     await app.container.read(chatProvider('').notifier).open('c1');
     await _settle(tester);
 
-    final layers = _layers(tester);
-    final r = _Rebuilds()..start();
-    final times = <int>[];
-    final perFrame = <int>[];
     final list = find.byType(Scrollable).first;
-    final gesture = await tester.startGesture(tester.getCenter(list));
-    for (var i = 0; i < 30; i++) {
-      final before = r.total;
-      await gesture.moveBy(Offset(0, 12.0 * math.cos(i / 30 * math.pi))); // 往上翻看历史（reverse 列表，手指往下拖）
-      final sw = Stopwatch()..start();
-      await tester.pump(const Duration(milliseconds: 16));
-      times.add(sw.elapsedMicroseconds);
-      perFrame.add(r.total - before);
-    }
-    await gesture.up();
-    r.stop();
-    await _settle(tester);
-    _report('shell-scroll', {
-      'frames': 30,
-      'elementsPerFrame(median)': (perFrame..sort())[15],
-      'cpuMsPerFrame(median)': _median(times).toStringAsFixed(2),
-      'backdropLayers': layers.backdrops,
-      'backdropFlips': layers.flips,
-      'shaderMaskLayers': layers.shaderMasks,
-    });
-    expect(layers.shaderMasks, 0);
+    final m = await _scroll(tester, list, dir: 1); // 往上翻看历史（reverse 列表，手指往下拖）
+    _report('shell-scroll', m);
+    expect(m['shaderMaskLayers'], 0);
   });
 
-  testWidgets('“我的”页滚动：顶部渐隐条不随滚动重建、不加离屏层', (tester) async {
+  testWidgets('“我的”页滚动（v3.5.1 第四个分支，顶栏常驻）：渐隐条不随滚动重建、不加离屏层、取背景次数不超', (tester) async {
     final app = await _pump(tester);
     app.router.go('/me');
     await _settle(tester);
 
-    final layers = _layers(tester);
-    final r = _Rebuilds()..start();
     var fadeRebuilds = 0;
-    final hook = debugOnRebuildDirtyWidget!;
-    debugOnRebuildDirtyWidget = (e, b) {
-      hook(e, b);
-      if (e.widget.key == const Key('me-fade')) fadeRebuilds++;
-    };
-    final times = <int>[];
-    final perFrame = <int>[];
     final list = find.descendant(of: find.byType(MeScreen), matching: find.byType(Scrollable)).first;
     final pos = tester.state<ScrollableState>(list).position;
-    final gesture = await tester.startGesture(tester.getCenter(list));
-    for (var i = 0; i < 30; i++) {
-      final before = r.total;
-      await gesture.moveBy(Offset(0, -12.0 * math.sin((i + 1) / 31 * math.pi))); // 一路往下翻（缓起缓停），假接口下内容不长，会翻到底
-      final sw = Stopwatch()..start();
-      await tester.pump(const Duration(milliseconds: 16));
-      times.add(sw.elapsedMicroseconds);
-      perFrame.add(r.total - before);
-    }
-    await gesture.up();
-    r.stop();
-    await _settle(tester);
-    _report('me-scroll', {
-      'frames': 30,
-      'elementsPerFrame(median)': (perFrame..sort())[15],
-      'cpuMsPerFrame(median)': _median(times).toStringAsFixed(2),
-      'backdropLayers': layers.backdrops,
-      'backdropFlips': layers.flips,
-      'shaderMaskLayers': layers.shaderMasks,
-      'fadeRebuilds': fadeRebuilds,
+    final m = await _scroll(tester, list, onRebuild: (e) {
+      if (e.widget is BackdropFade) fadeRebuilds++; // v3.5.1 渐隐条由 ShellPage 出（和其他一级页面同一个）
     });
+    _report('me-scroll', {...m, 'fadeRebuilds': fadeRebuilds});
     expect(pos.pixels, greaterThan(50), reason: '确实翻下去了');
-    expect(find.byKey(const Key('me-fade')), findsOneWidget);
     expect(fadeRebuilds, 0, reason: '渐隐条在列表外，滚动不应重建它');
-    expect(layers.shaderMasks, 0);
+    expect(m['shaderMaskLayers'], 0);
+    expect(m['backdropFlips'] as int, lessThanOrEqualTo(2), reason: '顶栏组 + 内容组（搜索胶囊）：每帧最多取两次背景');
+  });
+
+  testWidgets('主页 / 项目列表滚动：每帧重画、合成层', (tester) async {
+    final app = await _pump(tester);
+    await _settle(tester);
+    final home = find.descendant(of: find.byType(HomeScreen), matching: find.byType(Scrollable)).first;
+    final hm = await _scroll(tester, home);
+    _report('home-scroll', hm);
+    app.router.go('/projects');
+    await _settle(tester);
+    final projects = find.descendant(of: find.byType(ProjectsScreen), matching: find.byType(Scrollable)).first;
+    final pm = await _scroll(tester, projects);
+    _report('projects-scroll', pm);
+    expect(hm['shaderMaskLayers'], 0);
+    expect(pm['shaderMaskLayers'], 0);
   });
 
   testWidgets('主页 / 项目页：毛玻璃取背景次数', (tester) async {

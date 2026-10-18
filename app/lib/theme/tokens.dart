@@ -37,6 +37,7 @@ class Palette {
     required this.scrim,
     required this.tile,
     required this.glassSheet,
+    required this.card,
   });
 
   final Color bg, surface, surface2, border, text, text2, text3;
@@ -47,7 +48,7 @@ class Palette {
 
   /// 设计 v2 的“壁纸 + 玻璃”（v3.3 壁纸换成随钟点流动的天色 sky，见下面 SkyTable）：
   /// sky = 四个时段（夜 / 黎明 / 白天 / 黄昏）的底色与三团柔光；
-  /// glass = 浮层玻璃的着色（带透明度，下面是模糊后的内容）；glassBorder = 玻璃的 1px 发丝边；
+  /// glass = 浮层玻璃的着色（带透明度，下面是模糊后的内容；v3.5.1 起和 Hark 一样明显透出壁纸，= 网页 --glass，两端同值）；glassBorder = 玻璃的 1px 发丝边；
   /// glassHighlight = 玻璃卡片顶边 1px 的内高光（v2.1：卡片不要外投影，靠发丝边 + 这条高光分层）。
   final SkyTable sky;
   final Color glass, glassBorder, glassHighlight;
@@ -78,7 +79,13 @@ class Palette {
   /// 居中对话框的玻璃：比浮条（glass）更实，字要压得住底下被模糊的页面（= 网页版 --glass-sheet）。
   final Color glassSheet;
 
-  /// v2.80「Hark 式」浅色（home-redesign.md F）：暖白底、白卡不描边、唯一强调色 = 近黑（主按钮黑胶囊）。
+  /// v3.5.1 列表里的卡（主页面板卡、今天卡、“我的”列表组 / 用量卡、聊天里的块、子页卡）= 半透明“假玻璃”：
+  /// 不模糊，只靠透明度让壁纸透色（Hark 实测：浅色 ≈ 白 67%，深色 ≈ 炭灰 57–70%，devlog 2026-10-17 有取样）。
+  /// 所以同一张卡在蓝天上偏冷灰、在暖金底上偏暖灰，和 Hark 一样。字对“卡叠在壁纸上”的对比度由 test/sky_test.dart 与网页 check-contrast.mjs 同一采样守门。
+  /// 减少透明度时卡片回到实色 surface（ui/glass_mode.dart cardFill）。= 网页 --card。
+  final Color card;
+
+  /// v2.80「Hark 式」浅色（home-redesign.md F）：暖白底、半透明冷白卡（v3.5.1 card）不描边、唯一强调色 = 近黑（主按钮黑胶囊）。
   static const light = Palette(
     bg: Color(0xFFF5F4F1),
     surface: Color(0xFFFFFFFF),
@@ -90,12 +97,12 @@ class Palette {
     accent: Color(0xFF111111), // 唯一强调色 = 墨色：未读点、进度、链接
     accentSoft: Color(0xFFEDEBE7),
     onAccent: Color(0xFFFFFFFF),
-    danger: Color(0xFFC43D3D),
-    warning: Color(0xFF9A5B00), // a11y：这个色到处当小字用（bodySmall/labelSmall），得够 AA——对浅底 4.93、白卡 5.43；原来 #B86E00 只有 3.62 / 3.99
+    danger: Color(0xFFB23434), // v3.5.1 原 #C43D3D：卡变半透明后压在夜间天蓝透色上只有 3.96，压深到 ≥ 4.5（test/sky_test.dart）
+    warning: Color(0xFF915500), // a11y：到处当小字用，得够 AA——v3.5.1 卡变半透明后对“卡叠壁纸”最差 4.61（原 #9A5B00 只有 4.17，更早 #B86E00）
     success: Color(0xFF2E7D4F),
     shadow: Color(0x141C1B1A),
     sky: SkyTable.light, // v3.3 流光壁纸（原三档暖白渐变）
-    glass: Color(0xD9FFFFFF),
+    glass: Color(0x80FFFFFF), // v3.5.1 原 85% 白：Hark 浮层实测 ≈ 白 47–58%（顶栏 / 输入胶囊 / 圆钮），透出壁纸 = --glass rgba(255, 255, 255, 0.5)
     glassBorder: Color(0x121C1B1A), // = 分隔线
     chromeEdge: Color(0x121C1B1A),
     glassHighlight: Color(0x00FFFFFF), // F.2：不要玻璃描边/高光
@@ -107,6 +114,7 @@ class Palette {
     scrim: Color(0x4DE4E6EA),
     tile: Color(0x0A1C1B1A),
     glassSheet: Color(0xF2FFFFFF),
+    card: Color(0xA8F8F9FA), // 66% 冷白（Hark 浅色卡实测 ≈ 白 67%）= --card rgba(248, 249, 250, 0.66)
   );
 
   /// 逐色插值：切换浅/深色时 MaterialApp 的主题过渡用它，整屏颜色平滑渐变而不是一跳。
@@ -140,10 +148,11 @@ class Palette {
       scrim: l(a.scrim, b.scrim),
       tile: l(a.tile, b.tile),
       glassSheet: l(a.glassSheet, b.glassSheet),
+      card: l(a.card, b.card),
     );
   }
 
-  /// v2.80「Hark 式」深色（home-redesign.md F）：深海军蓝渐变底 → 近黑不透明卡（无描边）→ 白字；唯一强调色 = 白。
+  /// v2.80「Hark 式」深色（home-redesign.md F）：深海军蓝渐变底 → 半透明炭灰卡（v3.5.1 card，无描边）→ 白字；唯一强调色 = 白。
   static const dark = Palette(
     bg: Color(0xFF0D1226),
     surface: Color(0xFF1E2029), // v3.1 实测 Hark 暗色卡 / 回复气泡 #1E2029：中性炭灰，不是近黑（截图 1000035474）
@@ -160,7 +169,7 @@ class Palette {
     success: Color(0xFF62BD86),
     shadow: Color(0x80000000),
     sky: SkyTable.dark, // v3.3 流光壁纸（原深海军蓝渐变）
-    glass: Color(0xE01B1D25), // v3.1 实测 Hark 输入胶囊 #1B1D25
+    glass: Color(0xC21B1C21), // v3.5.1 原 #1B1D25 88%：Hark 深色浮层拟合 ≈ (27,27,32) 69–78%，取 76% 守住“浮层叠内容”最差对比度 = --glass rgba(27, 28, 33, 0.76)
     glassBorder: Color(0x14FFFFFF), // 8% 白 = 分隔线
     chromeEdge: Color(0x00FFFFFF), // Hark 深色浮层不描边
     glassHighlight: Color(0x00FFFFFF),
@@ -172,6 +181,7 @@ class Palette {
     scrim: Color(0x99080B16),
     tile: Color(0x0FFFFFFF),
     glassSheet: Color(0xF51E2029),
+    card: Color(0x9E16171C), // 62% 炭灰（Hark 深色卡实测 ≈ #181818 57% ~ 近黑 70%）= --card rgba(22, 23, 28, 0.62)
   );
 }
 

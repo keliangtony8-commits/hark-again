@@ -23,6 +23,20 @@ extension ThemeX on BuildContext {
   TextTheme get text => Theme.of(this).textTheme;
 }
 
+/// 全 App 的滚动行为（v3.5.1 卡顿拆因，devlog「“我的”= 第四个标签 · 卡片假玻璃 · 滚动合成成本」）：
+/// 安卓滚到头的“拉伸”效果（StretchingOverscrollIndicator）每帧都要重画 —— 没有边界时它所在的整页重绘边界跟着重画
+/// （实测“我的”页翻到底每帧 ~58 个 RenderObject 重录，含壁纸、渐隐条、搜索胶囊），真机上还会把整页拖进拉伸的离屏层。
+/// 这里给它外面套一层 RepaintBoundary：拉伸只重画滚动区本身，效果不变。iOS 回弹没有包装（原样返回）就不加。
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) {
+    final w = super.buildOverscrollIndicator(context, child, details);
+    return identical(w, child) ? w : RepaintBoundary(child: w);
+  }
+}
+
 /// 状态栏和安卓手势条跟随主题：都透明（设计 v2 内容铺满全屏，壁纸透出来），图标深浅相反。
 /// AppBar 和 app.dart 的根 AnnotatedRegion 共用这一份，没有 AppBar 的页面（登录）也对。
 SystemUiOverlayStyle systemOverlay(Brightness brightness) {

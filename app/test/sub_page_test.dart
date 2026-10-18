@@ -89,11 +89,12 @@ void main() {
     expect((card.decoration as BoxDecoration).color, ctx.palette.surface);
   });
 
-  testWidgets('卡片是实色 surface（v2.80 F.2，和主页卡片同一材质）', (tester) async {
+  testWidgets('卡片是半透明 card（v3.5.1 假玻璃，和主页卡片同一材质；不加模糊）', (tester) async {
     await tester.pumpWidget(_app(_page()));
     await tester.pumpAndSettle();
     final ctx = tester.element(find.text('卡片'));
     final card = tester.widget<Container>(find.ancestor(of: find.text('卡片'), matching: find.byType(Container)).first);
-    expect((card.decoration as BoxDecoration).color, ctx.palette.surface);
+    expect((card.decoration as BoxDecoration).color, ctx.palette.card);
+    expect(ctx.palette.card.a, lessThan(1));
   });
 }

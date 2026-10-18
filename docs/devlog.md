@@ -513,3 +513,66 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 **调用处**：标题搬到 `title:`（分享对话、哪里不好、装过的工具、头像颜色、MCP 工具、OAuth 配置、个人资料、两步验证、恢复码、添加付款卡、存到哪里、任务记忆、本对话全部文件 / 用量、项目文件 / 引用文件、选择文字）；标题行带按钮的（打包下载、用量里的文件 / 分享钮、已选 N、上传、复制全部）按钮留在内容第一行右侧；完整日志 / 完整输出加顶上标题，任务信息块不动。
 **测试**：sheet_test 新断言（铺满整屏、落在 Backdrop 上、无 BackdropFilter、下面页面不绘制、标题按整屏居中、提交钮离底 Sp.x5 且整行宽、只淡入不上移、返回钮 = 取消、长列表占满到屏幕底且最后一行停在下沿渐隐之上）；project_file_refs / script_task 用返回钮关弹层；job_block / adaptive 按“下面的页面 offstage”改；conversation_files 标题不在内容里。shell_test“历史抽屉点遮罩关”在 HEAD 上就已失败（FullDrawer 铺满后没有露出的遮罩），改成往左滑关。
 **截图**：test/shots/app_shots_test.dart 新增 `sheets light/dark`（新面板表单 + 外观动作单），输出 sheet-{form,actions}-{light,dark}.png，四张都看过。
+
+## 2026-10-17 v3.5.1 “我的” = 第四个分支（App；HANDOFF 第二节第 26 条，照 Hark 截图）
+- 依据：用户 22:48–22:49“切到个人页的时候，主页聊天和项目都还在…点击他做了一个从左往右滑的特效，就相当于切过去了”“把那个返回键给删掉 个人页面那个”；Hark 截图：导航胶囊三项都不选中、右上头像为当前项、无返回钮、无左上按钮。
+- 归属 / 替换：
+  1. 路由：/me（连同全部二级子页）从“盖在外壳上的根路由”移进 StatefulShellRoute 第四个分支；`shellRoots` 加 '/me'，`shellBarShown` 因此在“我的”显示顶栏、在 /me/… 子页照旧淡出（子页 SubPage 样式和返回钮不动）。
+  2. 外框：MeScreen 换成和其他一级页同一个 ShellPage——**删** MeScreen 自带的 Backdrop、`me-fade` 渐隐条、页头返回钮 / “回到主页”×，不留两套；页头上留白仍是 topFadeRamp（静止时在全显线上）。
+  3. 顶栏：不新增组件。SegmentedNav 变 Stateful 只为记住滑块上次位置：index 不在分段里时滑块原位淡出（AnimatedOpacity），回来时原位淡入再滑走；头像外加一道 pillOn 色环（= 选中滑块颜色）淡入，读屏 selected。
+  4. 切换动效：`StatefulShellRoute(navigatorContainerBuilder: ShellBranches)` 替换 `.indexedStack`。ShellBranches = go_router 自带容器的同一结构（每分支 Offstage + TickerMode 常驻），多一个 360ms easeOutCubic 控制器：只有一端是“我的”时，进场页从 ±1 屏宽滑到 0、离场页从 0 滑到 ∓1（FractionalTranslation，只动 transform）；滑完离场页下台；三个分段之间、减少动态、滑到一半又切走都直接到位。参考：go_router 官方示例 example/lib/others/custom_stateful_shell_route.dart（BSD-3，自定义 navigatorContainerBuilder 做分支切换动画）的思路，代码按本项目 token 自写、未移植。
+  5. 返回键：“我的”PopScope 不可弹，搜着先清空，否则 `StatefulNavigationShell.maybeOf(context).goBranch(0)`（主页导航栈原样恢复）。
+  6. 其他入口：头像 = goBranch(3)（已在“我的”再点 = 回到“我的”栈底，和分段一致）；主页卡片 / 面板 / 聊天块里的 `context.push('/me/…')` 实测 go_router 18 跨分支 push 照旧叠在当前页上、返回回原处，保留不改（action_card 只更新注释）。
+- 成本 / 帧（perf_frame_test，同机先后跑）：“我的”滚动 每帧重建元素 2→0、重画 8→4、CPU 中位 1.31→1.14ms；backdropLayers 1→2、取背景 1→2 次（多的是常驻顶栏那一组，和主页 / 项目同为 ≤2，新加断言守住）；shaderMask 0、渐隐条滚动重建 0。横滑期间两页同时在台上、各自 transform，不触发布局。
+- 版面代价（未解决，记 HANDOFF）：顶栏常驻后内容多让出 72px，412×915 上“关于”与“退出登录”要滚一小段才露出（原 design_p3_test“退出登录不用滚就看得到”改为“第一组 + 第二组前两行露在搜索胶囊上方”）。不删行、不改行高就收不回；要不要把行高 64 / 用量卡 98 往 Hark 的 61 / 83 收另议。
+- 未验证：真机横滑手感与 GPU 帧；Web 未改（不在这次范围）。
+
+## 2026-10-17 v3.5.1 “我的” = 第四个标签（Web；照 App 3c00b9f，HANDOFF 第二节第 26 条）
+- 归属 / 替换（和 App 一一对应，不新增组件）：
+  1. 顶栏：`TopBar.tsx isShellRoot` 加 '/me'（= App `shellRoots` 加 '/me'），“我的”显示顶栏、/me/… 子页照旧没有顶栏（子页 `.page-head` 和返回钮不动）。分段导航在“我的”时三项都不选中：滑块 `.segments-thumb` 停在上一次的位置（模块级记住，子页回来顶栏重新挂载也不跳）原位淡出（opacity），回到分段时原位淡入再滑走；头像外圈淡入一道 `--pill-on`（= 滑块色）2px 环（`.avatar-tab::after`，opacity 过渡），头像按钮 `aria-current="page"`。
+  2. 外框：MeScreen 改用一级页同一套 `.shell.has-bar` 结构（--inset-top 让出顶栏、`.sky-fade-page` 同一条渐隐）。**删**：页头返回钮 / “回到主页”×、`.me .page-inner` 自己的上留白、shell.css 里“我的”专用渐隐带、`.me-top` 死样式。页头上留白回到一级页的 sp-4（静止时在全显线上）。
+  3. 切换动效：AppShell 里 `ShellViews`（= App `ShellBranches`）：路由仍是一个 Outlet；只有一端是“我的”、另一端是带顶栏的一级页时，把离场页的元素（`useOutlet()`，连同当时的 location，用 `UNSAFE_LocationContext` 冻住，滑出途中不按新地址重算）多留 360ms：进场层从 ±100% 滑到 0、离场层从 0 滑到 ∓100%（`--dur-slow` / `--ease` = App Motion.slow / ease），滑完离场层卸载。只动 transform；主页 / 聊天 / 项目之间、子页进出、reduce-motion、滑到一半又切走都直接切。层的 key 只在横滑时变，其余导航（如项目 A → 项目 B）组件照旧复用不重挂。
+  4. 渐隐条壁纸副本跟着层一起平移会和真壁纸错开 → 滑动期间副本里的 `.sky` 反向同曲线平移（`.sky-fade > .sky` 同一个 keyframes 取负），和全屏壁纸逐像素重合；SkyFade 的定位改用布局位置（offsetLeft/Top 链），不受进场层初始 transform 影响（原 getBoundingClientRect 会把 +100% 记进去，滑完错一屏）。
+  5. 其他入口：头像 `nav("/me")`；首页卡片 / 聊天块里直接 `Link to="/me/…"` 进子页，照旧。
+- 和 App 的差别（已知、不改）：Web 一级页左上按钮是 portal 进顶栏的（ShellLead），横滑时不随页面滑，跟着页面挂载 / 卸载出现消失；App 是 ShellPage 画的、随页滑。
+- 顺手修：`features/chat/chat.css` 注释里写了 backdrop-filter 字样，架构守卫拦住 `npm run build`（HEAD 已坏），改成“背景模糊”。
+- 验证：`tsc -b`、`npm test` 14/14、`npm run build`（架构守卫 222 文件 + 配色守门）过。Playwright 走查（work/me_slide_check.py，手机视口）：主页点头像 → 中途 2 层（离场 / 进场各自的渐隐条一左一右）、结束 1 层，`--sky-x` 都是 0；“我的”分段 0 个选中、滑块 `.off`、头像环亮、`aria-current=page`、无返回钮；进 /me/tasks 无顶栏、不滑；返回 /me 滑块仍 off；点“聊天”反向滑；聊天 → 项目直接切；reduce-motion 全程 1 层直接切；控制台 0 错误。`shots.py` 全量 140 张，看了 phone-light/dark-me、desktop-light-me、偏好子页：版式与 Hark 个人页一致（导航胶囊悬浮、三项不选中、头像为当前项、无左上钮、页头直接接内容）。
+- 帧耗时（4× CPU、手机视口，同机新旧 dist 交替各 3 轮，机器空闲时）：“我的”滚动 median 16 / p95 19–20 新旧相同，>20ms 帧 旧 14/14/16 = 44、新 7/14/6 = 27（多了常驻顶栏一块玻璃，没变差）。横滑期间（work/slide_frames.py：主页 ↔ 我的 各 4 次、点击后 500ms 的 rAF 间隔，含新页挂载）：>20ms 帧 旧（直接切）41 / 50、新 56 / 60，max 两边都是挂载那一帧 165–222ms；即每次切换多 1–2 个慢帧（两页同时合成），挂载本身的长帧新旧一样。**未验证**：真 GPU / 真机手感。
+
+## 2026-10-17 v3.5.1 卡片 = 半透明灰白“假玻璃”（两端同 token；HANDOFF 第二节第 27 条）
+- 依据：用户要求卡片“不要纯白”，参考 Hark：带壁纸透色的半透明冷灰 / 暖灰玻璃。
+- 取样（Hark 截图，卡内像素 vs 紧邻卡外壁纸，多行拟合 卡 = α·C + (1−α)·壁纸，逐通道最小二乘）：
+  - 浅色“我的”列表卡 1000035715：α ≈ 0.67（R/G/B 0.67/0.67/0.66），C ≈ #FFFFFF（256.9/256.2/258.0 → 纯白）；例：壁纸 (61,106,142) 处卡 (193,209,222)，(230,227,195) 处卡 (247,246,236)——同一张卡蓝天上冷灰、暖底上暖灰，就是透色来的。
+  - 浅色主页卡 1000035707：α ≈ 0.73–0.85、C ≈ (242,239,234)（含卡内小块，噪声大，取“我的”那组为准）。
+  - 深色主页卡 1000035677：α ≈ 0.56（0.56/0.59/0.54），C ≈ #181818；深色“我的”列表卡 1000035675：α ≈ 0.70、C ≈ 近黑 (2,2,3)。
+  - Hark 卡后面有真模糊，我们不加（用户定：只用半透明色，不新增 BackdropFilter / backdrop-filter）。
+- 决定（单一来源：App `Palette.card` = 网页 `--card`，两端逐字节同值，check-contrast.mjs 查含透明度）：
+  - 浅色 `Color(0xA8F8F9FA)` = `rgba(248, 249, 250, 0.66)`：Hark 白 67%，白里压一点冷灰（“偏灰”），透明度取 0.66。
+  - 深色 `Color(0x9E16171C)` = `rgba(22, 23, 28, 0.62)`：Hark 两处 0.56 / 0.70 的中间，色取 #181818 偏一点冷（和炭灰 surface #1E2029 同族）。
+  - 减少透明度：卡片回到实色 `surface`（App `cardFill` / GlassSurface 的 solid 分支；网页 `:root[data-solid] { --card: var(--surface) }`）。
+- 归属 / 替换（不叠加）：
+  - App：卡片本来就只有两个入口——`GlassSurface` 不模糊分支（GlassCard / ListGroup / 长按菜单 / 登录表单）和 `context.cardFill`（AppCard / BlockFrame / 项目表单选中块）。两处的 `p.surface` 换成 `p.card`，页面一行不用改。主页面板卡、今天卡、“我的”列表组与用量卡、聊天里的块、子页卡全部跟着变。
+  - Web：`--card` 原是 `var(--surface)` 的别名，改成上面的 rgba；`.stack-card` / `.list` / `.card` / `.blk` / `.task-head` / 聊天回复卡 / `.focus-menu` 都已经读 `--card`。另：聊天空态建议卡 `.suggestion` 原用浮层的 `--glass`，改读 `--card`（它是卡不是浮层）；浏览器全屏接管页 `.takeover` 原借用 `--card` 当整屏底，改 `var(--surface)`（整屏不能透，保持原样）。
+  - 跟着调：浅色 danger #C43D3D → #B23434、warning #9A5B00 → #915500。卡变半透明后，夜间钢蓝天透上来，卡上的出错 / 警示小字最差只有 3.96 / 4.17，压深一档到 4.71 / 4.61（两端同值）。
+- 守门（替换原“字对实色 surface”只查一个色）：App test/sky_test.dart 的壁纸对比度组加“卡（card 叠在壁纸上）”一档，网页 check-contrast.mjs 同一采样（全天每 15 分钟 × 底色 11 高度 × 三团柔光峰值，再叠 card）：浅色 正文 14.53 / 次要字 7.21 / 最次要字 5.18 / 警示 4.61 / 出错 4.71；深色 15.66 / 6.28 / 4.14 / 6.92 / 4.80。原“字/卡”实色配对保留（减少透明度时仍是实色卡）。
+- 成本：只换填充色，不加图层、不加模糊。perf_frame_test 结构计数（backdropLayers / flips / shaderMask / 每帧重建 / 重画）新旧完全一样；CPU 中位同机先后跑 新/旧 chat-stream 22.1/23.0、shell-scroll 7.5/8.5、me-scroll 1.5/2.2、home 3.1/3.8、projects 2.9/3.3 ms（噪声内）。Web 只改变量值，无新合成层。
+- 截图：App /workspace/work/card-shots/app（home / me 明暗等 14 张），Web /workspace/work/card-shots/web（shots.py 全量 138 张）；和 Hark 1000035715 / 1000035707 / 1000035675 / 1000035677 并排看：浅色卡在蓝天处冷灰白、暖金底处暖灰白，深色卡是比壁纸暗一档的透明炭灰。**未验证**：真机 GPU、真浏览器。
+
+## 2026-10-18 v3.5.1 浮层玻璃透出壁纸（两端同 token；HANDOFF 第二节第 27 条）
+- 依据：用户反馈卡片改了之后，“我的”底部搜索框、顶部导航胶囊、主页输入胶囊、圆钮这些浮层仍近乎纯白（原 `glass` 浅 85% 白 / 深 #1B1D25 88%），不好看；Hark 的浮层明显透出壁纸。
+- 取样（Hark 截图，浮层内像素 vs 紧邻浮层外上下两侧壁纸的均值，拟合 浮层 = α·C + (1−α)·壁纸；浮层下面是真模糊，壁纸平滑，按未模糊的邻近壁纸算）：
+  - 浅色（C 取纯白，逐通道 α）：“我的”1000035715 顶部导航胶囊 壁纸 (58,110,154) → 胶囊 (148,179,203)，α ≈ 0.46/0.48/0.49；右段 (46,95,136) → (142,171,192)，α ≈ 0.46/0.48/0.47。“我的”底部搜索框 暖底 (231,223,185) → (239,235,211)，α ≈ 0.33/0.38/0.37；(213,203,163) → (227,223,198) α ≈ 0.33/0.39/0.38。主页 1000035707 顶部胶囊 (57,106,145) → (157,183,203) α ≈ 0.51/0.52/0.53；左上圆钮 (60,111,152) → (156,185,205) α ≈ 0.49/0.51/0.51；底部输入胶囊 (212,198,153) → (237,231,213) α ≈ 0.58/0.58/0.59。→ 浅色浮层 ≈ 白 37–58%，主要几处在 0.47–0.58。
+  - 深色（壁纸上下有落差，C、α 一起解）：主页 1000035677 顶部胶囊 壁纸 (18,23,45) → (24,25,35)，底部输入胶囊 壁纸 (50,53,74) → (31,32,40)：α ≈ 0.78/0.77/0.83、C ≈ (26,26,33)；“我的”1000035675 胶囊 (25,26,36) / 搜索框 (35,36,47)：α ≈ 0.69/0.67/0.62、C ≈ (28,28,31)。→ 深色浮层 ≈ (27,27,32) 62–83%，均值 ≈ 0.72。
+- 决定（单一来源：App `Palette.glass` = 网页 `--glass`，两端逐字节同值，check-contrast.mjs 查含透明度）：
+  - 浅色 `Color(0x80FFFFFF)` = `rgba(255, 255, 255, 0.5)`：Hark 浅色浮层主要几处 0.47–0.58 的中间。
+  - 深色 `Color(0xC21B1C21)` = `rgba(27, 28, 33, 0.76)`：色取拟合的 (27,27,32) 略偏冷；透明度没取均值 0.72，取 0.76（仍在 Hark 0.62–0.83 内），因为 0.72 在“浮层叠卡上墨色一半”那档次要字只有 4.41、最次要字 2.91，0.76 刚好守住（见下）。
+  - 减少透明度：照旧回实色（App GlassSurface solid 分支 = surface；网页 `:root[data-solid] { --glass: var(--surface) }`）。
+- 归属 / 替换（不叠加、不新增模糊层）：
+  - App：`p.glass` 只有一个读处——GlassSurface 的 blur 分支（顶栏胶囊、圆钮 GlassIconButton、输入胶囊、“我的”搜索框、子页圆钮 / 动作胶囊、聊天回到最新 / 标题胶囊、项目切换、浏览器接管条、收件箱条），下面本来就有 BackdropFilter，只改 token 值。
+  - Web：`.glass`（带 backdrop-filter）、`.page-head-actions`、`.me-search .search-field.glass` 读 `--glass`，只改值。顺手对齐 App：三处不模糊却读 `--glass` 的（`.wide-pill`“创建一个新面板”、`.glass-chip` 思考跳点、`.panel-idea` 新面板起点胶囊）改读 `--card` / `--card-edge`——App 对应的 WidePill / 思考胶囊 / GlassChip 本来就是不模糊的 GlassSurface = `Palette.card`；不改的话它们会变成 50% 白、比卡还透，且没有模糊。
+  - `glassSheet` / `--glass-sheet` 检查过：仍在用（App GlassSheet / GlassDialog = showAppSheet / showAppScrollSheet / showAppDialog / confirmDanger 共 61 处调用；网页 `.sheet`、`.dialog`、`.menu-pop`、`.glass.raised`、附件角标），弹层全屏化只改了项目切换 / 聊天历史那类抽屉，表单弹层、对话框、菜单还在，不删。
+  - 未改：几处用 `var(--glass)` 当“挖空环”色的（`.swatch.on`、`.hue-hole`、未读点 / 角标的 2px 边、骨架屏渐变、`.pill.primary:hover` 混色）跟着变淡，看过截图不突兀，不单独处理。
+- 守门（两端同一模型）：浮层上的字（导航字 text2、占位符 text3、图标 / 输入字 text）按浮层下面最差的三种算——直接是壁纸、卡叠壁纸、卡叠壁纸再被墨色 ink（浅黑 / 深白：主按钮、字）盖住一半（σ24 模糊后一颗 48px 高实心按钮中线 ≈ 一半）；全天每 15 分钟 × 底色 11 高度 × 三团柔光。App test/sky_test.dart 加“浮层·壁纸 / 浮层·卡 / 浮层·卡上墨色一半”三档，网页 check-contrast.mjs 第 5 条（并查 --glass = App glass）。结果（最差）：浅色 正文 9.96 / 次要字 4.94 / 最次要字 3.55；深色 11.69 / 4.69 / 3.09。临时把深色改回 0.6 守门即报错（次要字 3.50、最次要字 2.31），确认生效。
+- 验证：flutter analyze 0；flutter test 全量 768 过 / 9 跳过；Web tsc -b、npm test 14/14、npm run build（架构守卫 222 文件 + 配色守门）过。
+- 成本：只换填充色，不加图层、不加模糊；perf 结构计数不变（未单独重跑帧耗时）。
+- 截图：App /workspace/work/glass-shots/app（14 张），拼图 /workspace/work/glass-shots/app-montage.png（主页 / 我的 × 明暗），和 Hark 并排 /workspace/work/glass-shots/app-vs-hark.png；Web /workspace/work/glass-shots/web（shots.py 全量 138 张）。浅色导航胶囊在蓝天上是透出来的浅蓝灰、“我的”搜索框在暖底上是奶油色；深色浮层是比卡略亮一档的透明炭灰。我们的浅色壁纸本身比 Hark 淡（夜间顶 #8ebbe3 vs Hark #3a6d99），同样 50% 白看起来比 Hark 的 (149,180,205) 浅，这是壁纸差异不是玻璃。**未验证**：真机 GPU 模糊下的观感。
