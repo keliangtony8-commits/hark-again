@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import Login from "./features/auth/Login";
 import ChatScreen from "./features/chat/ChatScreen";
-import ComputerScreen from "./features/computer/ComputerScreen";
+import ComputerScreen, { ComputerDetailScreen } from "./features/computer/ComputerScreen";
 import HomeScreen from "./features/home/HomeScreen";
 import ConnectorsScreen from "./features/me/ConnectorsScreen";
 import MemoryScreen from "./features/me/MemoryScreen";
@@ -44,6 +44,7 @@ export default function App() {
           <Route path="projects" element={<ProjectsScreen />} />
           <Route path="projects/:pid" element={<ProjectScreen />} />
           <Route path="projects/:pid/computer" element={<ComputerScreen />} />
+          <Route path="projects/:pid/computer/:part" element={<ComputerDetailScreen />} />
           <Route path="me" element={<MeScreen />} />
           <Route path="me/memory" element={<MemoryScreen />} />
           <Route path="me/tasks" element={<TasksScreen />} />
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="me/feedback" element={<FeedbackScreen />} />
           <Route path="me/feedback/:id" element={<FeedbackDetail />} />
           <Route path="me/computer" element={<ComputerScreen />} />
+          <Route path="me/computer/:part" element={<ComputerDetailScreen />} />
           <Route path="me/pages" element={<PagesScreen />} />
           <Route path="me/usage" element={<UsageScreen />} />
           <Route path="me/usage/:part" element={<UsageDetailScreen />} />

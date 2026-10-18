@@ -36,3 +36,23 @@ button.computer-mem:hover { background: var(--tile); }
 /* v1.98 最近 7 天谁写得最多：头一句说明（换了数淡入） */
 .computer-diskjobs-note { padding: var(--sp-3) var(--sp-4) 0; animation: fade var(--dur) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) { .computer-diskjobs-note { animation: none; } }
+/* v3.5.1 一屏概览 + 子页（= App d8a2d73）：标题行右侧单独一颗圆玻璃钮“重启”（和左边返回钮对称，不是动作胶囊） */
+.page-head > .glass-btn.computer-restart { grid-column: 3; justify-self: end; animation: fade var(--dur) var(--ease) both; }
+.computer-restart:disabled { opacity: .5; }
+/* 导航行：行尾一个值（紧张 = 警示色、已满 = 危险色），换了淡入；值和箭头之间一个小间距 */
+.computer-nav { margin-top: var(--section-gap); }
+.computer-nav-row .row-trail { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; }
+.computer-val { color: var(--text-3); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 12em;
+  font-variant-numeric: tabular-nums; animation: fade var(--dur) var(--ease) both; }
+.computer-val.is-warning { color: var(--warning); }
+.computer-val.is-danger { color: var(--danger); }
+.computer-all .row-title { color: var(--text-2); }
+/* 页底小字（原页头说明）、子页空状态 */
+.computer-intro { margin: var(--sp-4) var(--sp-1) 0; font-size: var(--fs-xs); color: var(--text-3); }
+.computer-empty { margin: var(--sp-5) var(--sp-1); text-align: center; font-size: var(--fs-sm); color: var(--text-3); }
+/* 滚过之后才出来的块：细条不从 0 长出，直接画终态（入场动画由 useLate 不给 enter） */
+.computer-meter.is-static > span { animation: none; }
+@media (prefers-reduced-motion: reduce) { .computer-val, .page-head > .glass-btn.computer-restart { animation: none; } }
+/* 电脑页滚上去的内容在标题行底以下才开始渐显：标题行底边以上（返回钮 / 标题 / 重启钮下面）完全是壁纸，到内容静止上沿全显（= App SubPage v3.5.1） */
+.shell .page.computer-page:has(> .page-head) + .sky-fade-page {
+  --fade-a: calc(var(--topbar-top) + var(--topbar-h) + var(--sat)); }

@@ -39,6 +39,7 @@ export type InstalledTool = { kind: "pip" | "npm" | string; name: string; versio
 export type CleanupResult = { freed: number; status: ComputerStatus };
 
 export const COMPUTER_POLL_MS = 5000;     // 有后台任务在跑时多久刷新一次（每次要问 Docker，别太密）
+export const COMPUTER_POLL_IDLE_MS = 10_000; // v3.5.1 只有常驻服务、没有普通后台任务时放慢一半（= App Timing.computerPollIdle）
 export const COMPUTER_MEMORY_TIGHT = 0.85; // 内存吃到多少算紧张
 
 export const computerPath = (ws: string) => `/api/projects/${ws}/computer`;
