@@ -608,3 +608,10 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 
 ## 2026-10-18 v3.5.3 性能自检
 - 3.5.2 用户截图“我的”页 Raster avg 15.8 / max 17.1ms、UI 0.4ms（光栅是瓶颈），故加 A–H 分层性能自检（关于页开性能浮层后“性能自检 ›”）在真机逐层测光栅；等用户真机结果再定修哪层。
+
+## 2026-10-18 v3.5.4 真机结论：屏幕被锁 60Hz，不是哪一层 GPU 慢
+- 3.5.3 自检四次截图（魅族 20 / Flyme）：系统当前模式 4 · 60.0 Hz，窗口请求模式 2（144Hz），可选 120/144/90/60，Flutter 报 120Hz；每变体 2.5 秒约 153 帧 ≈ 61fps → 实际 60Hz，preferredDisplayModeId 被 Flyme 忽略。
+- 各变体双峰随机：光栅均 ≈3.5ms / p90 5ms / 0% 超预算，或均 ≈10–11ms / p90 正好 16.7ms；落哪边每次不同（A 全开一次 3.4ms/1%，H 全关一次 10.9ms/60%）。→ 真实绘制 ≈3–4ms，16.7ms 是 60Hz 交换链等 vsync 的反压计进 rasterDuration；另有 Flutter 以为 120Hz（8.3ms 节奏出帧）与 60Hz 显示不匹配造成的不均匀。
+- 修：MainActivity 多管齐下（preferredDisplayModeId + preferredRefreshRate + FlutterSurfaceView 的 Surface.setFrameRate，API31+ CHANGE_FRAME_RATE_ALWAYS；onResume / 焦点 / surface 创建变化后重设）。Flutter 3.47 无帧率 manifest 开关。
+- 自检加滑动中系统刷新率采样（每 200ms）、实测 fps、Flyme 设置提示。视觉零改动。
+

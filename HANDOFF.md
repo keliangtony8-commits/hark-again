@@ -1,4 +1,4 @@
-# Toyuis 交接文档（2026-10-18，v3.5.3）
+# Toyuis 交接文档（2026-10-18，v3.5.4）
 
 > **给每个接手的 agent**：先读第二节宗旨（1–21 条）。用户在对话里说出的任何纲领性要求，当轮用明确、不会被误解的话（不必照抄原话）带日期补进第二节，这是硬规矩（见第 16 条）。
 
@@ -6,6 +6,14 @@
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
 ## 〇、最新交接（2026-10-18，接手先读这一节）
+
+**v3.5.4 = 3.5.3 + 强制高刷多管齐下 + 自检采样刷新率（wip/v3.5.1 分支，版本号 3.5.4 / build 30504，tag v3.5.4；未部署服务器；APK toyuis-3.5.4-arm64.apk 在 VPS 编）**。
+- **真机结论（魅族 20 / Flyme，3.5.3 自检四次截图）**：系统当前模式 4 · 60.0 Hz；窗口请求模式 2（144Hz）；可选 120/144/90/60；Flutter 报 120Hz。每变体 2.5 秒约 153 帧 ≈ 61fps → 屏幕实际跑 60Hz，preferredDisplayModeId 被 Flyme 忽略。各变体结果双峰随机：要么光栅均 ≈3.5ms、p90 5ms、0% 超预算；要么均 ≈10–11ms、p90 正好 16.7ms；哪个变体落哪边每次不同（A 全开有一次 3.4ms/1%，H 全关有一次 10.9ms/60%）。→ **没有哪一层是 GPU 瓶颈**，真实绘制 ≈3–4ms；16.7ms 是 60Hz 下交换链等 vsync 的反压被计进 rasterDuration。**根因 = 屏幕被锁 60Hz**（外加 Flutter 以为 120Hz 按 8.3ms 节奏出帧、与 60Hz 显示不匹配导致不均匀）。所以不要再按层砍视觉。
+- MainActivity.kt 三招都做：① preferredDisplayModeId（保留）② window.attributes.preferredRefreshRate = 最高 Hz ③ API≥30 遍历 decorView 找 FlutterSurfaceView，对 holder.surface 调 setFrameRate(maxHz, FRAME_RATE_COMPATIBILITY_DEFAULT)，API≥31 用带 CHANGE_FRAME_RATE_ALWAYS 的重载；onCreate / onResume（含下一帧 post）/ onWindowFocusChanged(true) / surfaceCreated / surfaceChanged 后都重设。Flutter 3.47 引擎（FlutterEngineFlags.java）没有帧率相关 manifest meta-data，未加。
+- 自检：滑动中每 200ms 经 MethodChannel `refreshRate` 采 display.mode.refreshRate，结果页显示“滑动中系统刷新率：最低/最高”、每变体 fps = 帧数/实际时长、窗口请求刷新率与 Surface 帧率状态；顶部提示“Flyme 若仍 60Hz：系统设置 → 显示和亮度 → 屏幕刷新率…给 Toyuis 选高刷”（魅族 20 的确切菜单名没查到可靠来源，写的是通用说法，待用户确认）。
+- **下一步**：用户装 3.5.4 跑自检，看“滑动中系统刷新率”是否到 120/144、fps 是否 ≈120+。仍 60 → 只能靠用户在系统设置里开，或再查 Flyme 白名单机制。
+
+以下为 v3.5.3 交接：
 
 **v3.5.3 = 3.5.2 + 性能自检（wip/v3.5.1 分支，版本号 3.5.3 / build 30503，tag v3.5.3；未部署服务器；APK toyuis-3.5.3-arm64.apk 已在 VPS 编出）**。内容：
 - 性能自检（b8041ed）：关于页打开性能浮层后出现“性能自检 ›”，A–H 分层逐层开关测真机光栅耗时（core/perf_probe.dart、features/me/perf_probe_screen.dart，MainActivity.kt 新 MethodChannel）。
