@@ -1,8 +1,9 @@
-// 用量与花费（本月一次调用都没有 → 统计格下面一张说明卡，不画全零的图）：本月花了多少（对比预算、对比上月同期）、今天、本月每天（usage_chart.dart，选一天看它按模型拆分：usage_day.dart）、最花钱的对话（点开跳进去）、按模型拆分、自动选模型的账（usage_router.dart，没用过“自动”不显示）。数据只读，来自 GET /api/usage。
+// 用量与花费（本月一次调用都没有 → 概览卡下面一张说明卡，不画全零的图）：一张概览卡（本月花了多少、对比预算 / 上月同期、今天、调用次数），本月每天（usage_chart.dart，选一天看它按模型拆分：usage_day.dart）、最花钱的对话（点开跳进去；已删的合并一行；只露前 3 行，“全部 N 个 ›”进 /me/usage/conversations）、按模型拆分（前 3 行，“全部 ›”进 /me/usage/models）、自动选模型的账（usage_router.dart，没用过“自动”不显示）。数据只读，来自 GET /api/usage。
 // 右上角导出：本月报表 → CSV（models/usage_csv.dart）→ 系统分享面板，不多发请求。
 // 我的页那一行也读同一个 provider，显示“本月 ¥x / ¥预算”。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/swr.dart';
 import '../../core/share.dart';
@@ -66,19 +67,13 @@ class UsageScreen extends ConsumerWidget {
   }
 }
 
-/// 加载中的骨架：形状跟报表一致（月卡 → 两格统计 → 每日图），换成内容时不跳版。
+/// 加载中的骨架：形状跟报表一致（概览卡 → 每日图），换成内容时不跳版。
 class _ReportSkeleton extends StatelessWidget {
   const _ReportSkeleton();
 
   @override
   Widget build(BuildContext context) => const Column(children: [
-        Shimmer(height: Layout.skeletonHero, radius: Radii.card),
-        SizedBox(height: Sp.x3),
-        Row(children: [
-          Expanded(child: Shimmer(height: Layout.skeletonStat, radius: Radii.card)),
-          SizedBox(width: Sp.x3),
-          Expanded(child: Shimmer(height: Layout.skeletonStat, radius: Radii.card)),
-        ]),
+        Shimmer(height: Layout.skeletonHero + Layout.skeletonStat, radius: Radii.card),
         SizedBox(height: Sp.x3),
         Shimmer(height: Layout.skeletonChart, radius: Radii.card),
       ]);
@@ -120,15 +115,6 @@ class _Report extends StatelessWidget {
     final money = r.priced.isNotEmpty;
     return PageBody(children: [
       FadeSlideIn(child: _MonthCard(r)),
-      const SizedBox(height: Sp.x3),
-      FadeSlideIn(
-        delay: Motion.stagger(1),
-        child: Row(children: [
-          Expanded(child: _Stat(label: '今天', value: money ? formatMoney(r.today.cost, r.currency) : formatTokens(r.today.tokens), note: '${r.today.calls} 次调用')),
-          const SizedBox(width: Sp.x3),
-          Expanded(child: _Stat(label: '本月 token', value: formatTokens(r.month.tokens), note: '${r.month.calls} 次调用')),
-        ]),
-      ),
       if (r.idle)
         const EmptyHint(
           key: Key('usage-idle'),
@@ -143,14 +129,20 @@ class _Report extends StatelessWidget {
           )),
       ],
       if (r.conversations.isNotEmpty) ...[
-        const SectionTitle('本月最花钱的对话'),
-        FadeSlideIn(delay: Motion.stagger(3), child: TopConversationList(report: r)),
+        SectionTitle('本月最花钱的对话',
+            trailing: TopConversationList.rowsOf(r.conversations).length > previewRows
+                ? _AllButton(key: const Key('usage-all-conversations'), label: '全部 ${r.conversations.length} 个', to: '/me/usage/conversations')
+                : null),
+        FadeSlideIn(delay: Motion.stagger(3), child: TopConversationList(report: r, limit: previewRows)),
       ],
       if (r.month.models.isNotEmpty) ...[
-        const SectionTitle('本月按模型'),
+        SectionTitle('本月按模型',
+            trailing: r.month.models.length > previewRows
+                ? const _AllButton(key: Key('usage-all-models'), label: '全部', to: '/me/usage/models')
+                : null),
         FadeSlideIn(
           delay: Motion.stagger(4),
-          child: ModelUsageList(models: r.month.models, priced: r.priced, currency: r.currency),
+          child: ModelUsageList(models: r.month.models, priced: r.priced, currency: r.currency, limit: previewRows),
         ),
       ],
       if (r.router case final router?) ...[
@@ -161,27 +153,67 @@ class _Report extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(Sp.x1, Sp.x4, Sp.x1, 0),
           child: Text(
-            money ? '“未定价”的模型只统计 token。在服务器 .env 的 MODEL_PRICES 里补上单价即可算钱。'
-                : '还没配置单价，只统计 token。在服务器 .env 里设置 MODEL_PRICES（每百万 token 的价格）和 MONTHLY_BUDGET 后就能看到花费和预算。',
-            style: context.text.bodySmall,
+            key: const Key('usage-price-hint'),
+            money ? '未定价模型只统计 token · .env 的 MODEL_PRICES 补单价' : '未配单价，只统计 token · .env 设 MODEL_PRICES 看花费',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.text.labelSmall,
           ),
         ),
     ]);
   }
 }
 
-/// 按模型拆分的列表：用量页“本月按模型”和聊天里的“本对话用量”共用。
+/// 用量页每个列表只露前几行，其余进子页。
+const previewRows = 3;
+
+/// 区块标题行尾的“全部 … ›”：进用量页下的子页（/me/usage/:part）。
+class _AllButton extends StatelessWidget {
+  const _AllButton({super.key, required this.label, required this.to});
+  final String label, to;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+        onPressed: () => context.push(to),
+        child: Text('$label ›', style: context.text.labelSmall?.copyWith(color: context.palette.text2)),
+      );
+}
+
+/// 用量页的子页：conversations = 本月最花钱的对话全量，models = 本月按模型全量。读同一个 usageProvider（SWR，不多发请求）。
+class UsageDetailScreen extends ConsumerWidget {
+  const UsageDetailScreen({super.key, required this.part});
+  final String part;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final r = ref.watch(usageProvider).value;
+    final convs = part == 'conversations';
+    return SubPage(
+      title: Text(convs ? '本月最花钱的对话' : '本月按模型'),
+      body: r == null
+          ? const PageBody(children: [Shimmer(height: Layout.skeletonChart, radius: Radii.card)])
+          : PageBody(children: [
+              convs ? TopConversationList(report: r) : ModelUsageList(models: r.month.models, priced: r.priced, currency: r.currency),
+            ]),
+    );
+  }
+}
+
+/// 按模型拆分的列表：用量页“本月按模型”（limit 3，其余进子页）和聊天里的“本对话用量”（不传 limit，全量）共用。
 class ModelUsageList extends StatelessWidget {
-  const ModelUsageList({super.key, required this.models, required this.priced, required this.currency});
+  const ModelUsageList({super.key, required this.models, required this.priced, required this.currency, this.limit});
   final List<ModelUsage> models;
   final List<String> priced;
   final String currency;
+
+  /// 只显示前几行；null = 全量。
+  final int? limit;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     return ListGroup(children: [
-      for (final m in models)
+      for (final m in limit == null ? models : models.take(limit!))
         ListRow(
           icon: Icons.memory_rounded,
           title: m.model,
@@ -199,27 +231,53 @@ class ModelUsageList extends StatelessWidget {
 }
 
 /// 本月最花钱的对话：每行标题 + token/次数/占比 + 花费，下面一条细的占比条（MeterBar，同一套动效）。
-/// 点一行 → openConversation 跳进去；已删的对话只展示、不可点。
+/// 点一行 → openConversation 跳进去；已删的对话合并成一行“已删除的对话 N 个”（合计，只展示、不可点），排在第一个已删对话的位置。
 class TopConversationList extends ConsumerWidget {
-  const TopConversationList({super.key, required this.report});
+  const TopConversationList({super.key, required this.report, this.limit});
   final UsageReport report;
+
+  /// 只显示前几行（合并之后数）；null = 全量。
+  final int? limit;
+
+  /// 合并后的行：已删的对话并成一条（id = 'deleted'，calls/tokens/cost 为合计），其余原样、原序。
+  static List<(UsageConversation, int)> rowsOf(List<UsageConversation> list) {
+    final gone = list.where((c) => c.deleted).toList();
+    final merged = UsageConversation(
+      id: 'deleted',
+      calls: gone.fold(0, (a, c) => a + c.calls),
+      tokens: gone.fold(0, (a, c) => a + c.tokens),
+      cost: gone.fold(0.0, (a, c) => a + c.cost),
+    );
+    final rows = <(UsageConversation, int)>[];
+    var placed = false;
+    for (final c in list) {
+      if (!c.deleted) {
+        rows.add((c, 1));
+      } else if (!placed) {
+        rows.add((merged, gone.length));
+        placed = true;
+      }
+    }
+    return rows;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final money = report.priced.isNotEmpty;
+    final rows = rowsOf(report.conversations);
     return ListGroup(children: [
-      for (final c in report.conversations) _row(context, ref, c, p, money),
+      for (final (c, n) in limit == null ? rows : rows.take(limit!)) _row(context, ref, c, n, p, money),
     ]);
   }
 
-  Widget _row(BuildContext context, WidgetRef ref, UsageConversation c, Palette p, bool money) {
+  Widget _row(BuildContext context, WidgetRef ref, UsageConversation c, int n, Palette p, bool money) {
     final share = report.shareOf(c);
     final body = Column(mainAxisSize: MainAxisSize.min, children: [
       ListRow(
         icon: c.deleted ? Icons.delete_outline_rounded : Icons.chat_bubble_outline_rounded,
-        title: c.title ?? '已删除的对话',
-        subtitle: '${formatTokens(c.tokens)} token · ${c.calls} 次 · 占本月 ${(share * 100).round()}%',
+        title: c.title ?? '已删除的对话 $n 个',
+        subtitle: '${c.deleted ? '合计 ' : ''}${formatTokens(c.tokens)} token · ${c.calls} 次 · 占本月 ${(share * 100).round()}%',
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           Text(money ? formatMoney(c.cost, report.currency) : formatTokens(c.tokens),
               style: context.text.titleMedium?.copyWith(color: c.deleted ? p.text3 : p.text)),
@@ -283,6 +341,25 @@ class _MonthCard extends StatelessWidget {
           const SizedBox(height: Sp.x1),
           Text('token', style: context.text.bodySmall),
         ],
+        // 同一张卡里：今天 + 本月调用次数（以前是两张小卡，“本月 token”和大数字重复）
+        const SizedBox(height: Sp.x3),
+        const Divider(height: 1),
+        const SizedBox(height: Sp.x3),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: _Stat(
+            key: const Key('usage-today'),
+            label: '今天',
+            value: money ? formatMoney(r.today.cost, r.currency) : formatTokens(r.today.tokens),
+            note: '${r.today.calls} 次调用',
+          )),
+          const SizedBox(width: Sp.x3),
+          Expanded(child: _Stat(
+            key: const Key('usage-calls'),
+            label: '本月调用',
+            value: '${r.month.calls} 次',
+            note: money ? '${formatTokens(r.month.tokens)} token' : '本月合计',
+          )),
+        ]),
       ]),
     );
   }
@@ -335,8 +412,9 @@ class MonthCompare extends StatelessWidget {
   }
 }
 
+/// 概览卡下半的一格（不再自带卡片）。
 class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value, required this.note});
+  const _Stat({super.key, required this.label, required this.value, required this.note});
   final String label, value, note;
 
   @override
@@ -344,13 +422,11 @@ class _Stat extends StatelessWidget {
         container: true,
         label: '$label，$value，$note',
         excludeSemantics: true, // 滚动中的中间数不念，只念终值
-        child: AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: context.text.labelSmall),
-            const SizedBox(height: Sp.x1),
-            CountUp(value, style: context.text.headlineMedium),
-            Text(note, style: context.text.bodySmall),
-          ]),
-        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: context.text.labelSmall),
+          const SizedBox(height: Sp.x1),
+          CountUp(value, style: context.text.titleLarge),
+          Text(note, style: context.text.bodySmall),
+        ]),
       );
 }

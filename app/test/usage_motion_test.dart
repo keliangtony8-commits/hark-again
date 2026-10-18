@@ -37,9 +37,9 @@ void main() {
       child: MaterialApp(theme: buildTheme(Brightness.light), home: const UsageScreen()),
     ));
     await tester.pump();
-    // 骨架：月卡 + 两格 + 每日图，共 4 块
-    expect(find.byType(Shimmer), findsNWidgets(4));
-    expect(tester.getSize(find.byType(Shimmer).first).height, Layout.skeletonHero);
+    // 骨架：概览卡（月 + 今天 / 调用）+ 每日图，共 2 块
+    expect(find.byType(Shimmer), findsNWidgets(2));
+    expect(tester.getSize(find.byType(Shimmer).first).height, Layout.skeletonHero + Layout.skeletonStat);
 
     api.done.complete(body);
     await tester.pump();
