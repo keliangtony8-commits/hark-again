@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
@@ -50,7 +51,15 @@ Widget fadeInFrame(BuildContext context, Widget child, int? frame, bool wasSynch
     ? child
     : AnimatedOpacity(opacity: frame == null ? 0 : 1, duration: context.motion(Motion.base), curve: Motion.ease, child: child);
 
+/// 这一块是不是“懒构建补出来的”（v3.5.1）：所在列表已经滚过（pixels > 0）才建出来 = 首屏外、用户滚到才建，
+/// 入场动画 / 进度条从 0 涨不再补放，直接画终态（不然每滚出一节就是一串动画帧）。
+bool builtLate(BuildContext context) {
+  final pos = Scrollable.maybeOf(context)?.position;
+  return pos != null && pos.hasPixels && pos.pixels > 0;
+}
+
 /// 出现时轻轻上浮淡入（新消息、列表项、卡片）。delay 用于列表错峰。
+/// v3.5.1：透明度用 [SettleOpacity]（到 1 后不留 OpacityLayer）；懒构建补出来的（[builtLate]）直接终态。
 class FadeSlideIn extends StatelessWidget {
   const FadeSlideIn({super.key, required this.child, this.delay = Duration.zero, this.offset = Motion.rise});
   final Widget child;
@@ -63,16 +72,75 @@ class FadeSlideIn extends StatelessWidget {
     final total = Motion.base + delay;
     final start = delay.inMilliseconds / total.inMilliseconds;
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
+      tween: Tween(begin: builtLate(context) ? 1 : 0, end: 1),
       duration: total,
       curve: Interval(start, 1, curve: Motion.ease),
       child: child,
-      builder: (_, v, c) => Opacity(
+      builder: (_, v, c) => SettleOpacity(
         opacity: v,
         child: Transform.translate(offset: Offset(0, (1 - v) * offset), child: c),
       ),
     );
   }
+}
+
+/// 透明度：0 < a < 1 才推一层 OpacityLayer，到 1 直接画子树、到 0 不画（v3.5.1）。
+/// 框架的 Opacity / FadeTransition 在完全不透明时也留着一层（它们是重绘边界），静止的页面上白白多几十层。
+class SettleOpacity extends SingleChildRenderObjectWidget {
+  const SettleOpacity({super.key, required this.opacity, super.child});
+  final double opacity;
+
+  @override
+  RenderSettleOpacity createRenderObject(BuildContext context) => RenderSettleOpacity(opacity);
+
+  @override
+  void updateRenderObject(BuildContext context, RenderSettleOpacity renderObject) => renderObject.opacity = opacity;
+}
+
+class RenderSettleOpacity extends RenderProxyBox {
+  RenderSettleOpacity(double opacity) : _alpha = Color.getAlphaFromOpacity(opacity.clamp(0.0, 1.0));
+  int _alpha;
+
+  set opacity(double v) {
+    final a = Color.getAlphaFromOpacity(v.clamp(0.0, 1.0));
+    if (a == _alpha) return;
+    final was = alwaysNeedsCompositing, wasVisible = _alpha != 0;
+    _alpha = a;
+    if (was != alwaysNeedsCompositing) markNeedsCompositingBitsUpdate();
+    markNeedsPaint();
+    if (wasVisible != (_alpha != 0)) markNeedsSemanticsUpdate();
+  }
+
+  @override
+  bool get alwaysNeedsCompositing => child != null && _alpha > 0 && _alpha < 255;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child == null || _alpha == 0) {
+      layer = null;
+      return;
+    }
+    if (_alpha == 255) {
+      layer = null;
+      context.paintChild(child!, offset);
+      return;
+    }
+    layer = context.pushOpacity(offset, _alpha, super.paint, oldLayer: layer as OpacityLayer?);
+  }
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    if (child != null && _alpha > 0) visitor(child!);
+  }
+}
+
+/// FadeTransition 的替身：跟着动画画 [SettleOpacity]，过渡结束（= 1）后不留透明度层。换数字的 Swap/Rise/FadeSwitcher 用。
+class SettleFade extends AnimatedWidget {
+  const SettleFade({super.key, required Animation<double> opacity, this.child}) : super(listenable: opacity);
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) => SettleOpacity(opacity: (listenable as Animation<double>).value, child: child);
 }
 
 /// 欠阻尼弹簧曲线（§O）：0→1，冲过 1 一次再落回；t=1 时余振 < 0.5%。阻尼比来自 Motion.sendDamping。
@@ -319,7 +387,7 @@ class RiseSwitcher extends StatelessWidget {
       sizeFactor: a,
       axis: axis,
       alignment: axis == Axis.vertical ? Alignment.bottomCenter : Alignment.centerRight,
-      child: FadeTransition(
+      child: SettleFade(
         opacity: a,
         child: SlideTransition(position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(a), child: c),
       ),
@@ -345,7 +413,7 @@ class SwapSwitcher extends StatelessWidget {
       layoutBuilder: (current, previous) => Stack(alignment: Alignment.center, children: [...previous, ?current]),
       transitionBuilder: (c, a) {
         final incoming = c.key == child.key;
-        return FadeTransition(
+        return SettleFade(
           opacity: a,
           child: SlideTransition(
             position: Tween(begin: Offset(0, incoming ? 0.5 : -0.5), end: Offset.zero).animate(a),
@@ -497,7 +565,8 @@ class MeterBar extends StatelessWidget {
       child: SizedBox(
         height: height,
         child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: value.clamp(0, 1).toDouble()),
+          // 懒构建补出来的（滚到才建）直接画到值，不从 0 涨（v3.5.1）；之后值变了照常过渡
+          tween: Tween(begin: builtLate(context) ? value.clamp(0, 1).toDouble() : 0, end: value.clamp(0, 1).toDouble()),
           duration: context.motion(Motion.slow),
           curve: Motion.ease,
           builder: (_, v, _) => Stack(fit: StackFit.expand, children: [
@@ -736,6 +805,7 @@ class FadeSwitcher extends StatelessWidget {
       switchInCurve: Motion.ease,
       switchOutCurve: Motion.ease,
       layoutBuilder: (current, previous) => Stack(alignment: alignment, children: [...previous, ?current]),
+      transitionBuilder: (c, a) => SettleFade(opacity: a, child: c),
       child: child,
     ),
   );

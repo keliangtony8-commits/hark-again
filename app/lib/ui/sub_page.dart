@@ -26,11 +26,15 @@ class SubPage extends StatelessWidget {
     this.actions = const [],
     this.leading,
     this.leadingWidth,
+    this.trailing,
   });
 
   final Widget title;
   final Widget body;
   final List<Widget> actions;
+
+  /// 标题行右侧单独一颗钮（v3.5.1 我的电脑的“重启” GlassIconButton，和左边返回钮对称）；给了就不画 [actions] 胶囊。
+  final Widget? trailing;
   final Widget? leading;
 
   /// 左侧放了不止一颗钮时（项目对话：返回 + ≡/+）给出宽度。
@@ -43,7 +47,7 @@ class SubPage extends StatelessWidget {
         child: Scaffold(
           backgroundColor: Colors.transparent, // 透出壁纸
           extendBodyBehindAppBar: true,
-          appBar: GlassAppBar(title: title, actions: actions, leading: leading, leadingWidth: leadingWidth),
+          appBar: GlassAppBar(title: title, actions: actions, leading: leading, leadingWidth: leadingWidth, trailing: trailing),
           body: Builder(builder: (context) {
             // Scaffold 已把胶囊让位加进 padding.top：inset = 状态栏 + Layout.shellTop
             final top = MediaQuery.viewPaddingOf(context).top;
@@ -66,8 +70,9 @@ class SubPage extends StatelessWidget {
 /// 返回钮图标 = ‹（arrow_back_ios_new，= Hark / 网页 IconBack，“我的”页同款）；规则跟 AppBar：给了 [leading] 用它，否则路由能退（impliesAppBarDismissal）才出，点了 maybePop。
 /// 标题用 NavigationToolbar 真居中（按整屏宽居中，两侧放不下时自动让开、不和钮叠）。
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const GlassAppBar({super.key, required this.title, this.actions = const [], this.leading, this.leadingWidth});
+  const GlassAppBar({super.key, required this.title, this.actions = const [], this.leading, this.leadingWidth, this.trailing});
   final Widget title;
+  final Widget? trailing;
   final List<Widget> actions;
   final Widget? leading;
   final double? leadingWidth;
@@ -95,8 +100,8 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
               header: true,
               child: DefaultTextStyle.merge(style: style, maxLines: 1, overflow: TextOverflow.ellipsis, child: title),
             ),
-            trailing: actions.isEmpty
-                ? null
+            trailing: trailing != null || actions.isEmpty
+                ? trailing
                 : SizedBox(
                     height: Layout.topBar,
                     child: GlassSurface(

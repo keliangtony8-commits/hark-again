@@ -363,6 +363,7 @@ abstract final class Timing {
   static const clockTick = Duration(seconds: 1); // “思考中 · 8 秒”这类计时多久跳一次
   static const jobPoll = Duration(seconds: 2); // 聊天里的后台任务卡运行中多久问一次进度
   static const computerPoll = Duration(seconds: 5); // 电脑状态块：有后台任务在跑时多久刷新一次（每次要问 Docker，别太密）
+  static const computerPollIdle = Duration(seconds: 10); // v3.5.1 只有常驻服务、没有普通后台任务时放慢一半（服务的状态变得慢）
   static const liveRetryMin = Duration(seconds: 1); // 浏览器实时画面断了：1 s 起翻倍重连，封顶 15 s（= 网页 LIVE_RETRY_*）
   static const liveRetryMax = Duration(seconds: 15);
   static const takeoverInput = Duration(milliseconds: 80); // 接管页：拖动/滚动时最多这么久发一次（攒起来发，不是每帧一个请求）

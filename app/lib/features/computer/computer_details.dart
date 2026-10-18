@@ -38,9 +38,12 @@ import 'computer_section.dart';
 
 /// 正在运行的程序。
 class ProcessSection extends ConsumerWidget {
-  const ProcessSection({super.key, required this.ws, this.delay = Duration.zero});
+  const ProcessSection({super.key, required this.ws, this.delay = Duration.zero, this.titled = true});
   final String ws;
   final Duration delay;
+
+  /// false = 子页（/…/computer/:part）里用：页标题就是节名，不再画节标题（v3.5.1）。
+  final bool titled;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,7 +56,7 @@ class ProcessSection extends ConsumerWidget {
               key: const ValueKey('proc'),
               delay: delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                SectionTitle('正在运行的程序', count: list.length),
+                if (titled) SectionTitle('正在运行的程序', count: list.length),
                 ListGroup(children: [
                   for (final p in list)
                     ListRow(
@@ -71,9 +74,12 @@ class ProcessSection extends ConsumerWidget {
 
 /// 内存去哪了（v1.94）：整台已用 + 按大小排的占用者，每行一条占比细条；后台任务 / 服务点了看日志。
 class MemorySection extends ConsumerWidget {
-  const MemorySection({super.key, required this.ws, this.delay = Duration.zero});
+  const MemorySection({super.key, required this.ws, this.delay = Duration.zero, this.titled = true});
   final String ws;
   final Duration delay;
+
+  /// false = 子页（/…/computer/:part）里用：页标题就是节名，不再画节标题（v3.5.1）。
+  final bool titled;
 
   JobInfo? _job(ComputerStatus s, MemoryRow r) {
     if (r.id == null) return null;
@@ -101,7 +107,7 @@ class MemorySection extends ConsumerWidget {
                 label: memorySemantics(v),
                 excludeSemantics: true,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const SectionTitle('内存'),
+                  if (titled) const SectionTitle('内存'),
                   ListGroup(children: [
                     _MemoryHead(v),
                     for (final (i, r) in v.rows.indexed)
@@ -271,9 +277,12 @@ class DiskJobsSection extends ConsumerWidget {
 
 /// 正在监听的端口：点一下预览。
 class PortsSection extends ConsumerStatefulWidget {
-  const PortsSection({super.key, required this.ws, this.delay = Duration.zero});
+  const PortsSection({super.key, required this.ws, this.delay = Duration.zero, this.titled = true});
   final String ws;
   final Duration delay;
+
+  /// false = 子页（/…/computer/:part）里用：页标题就是节名，不再画节标题（v3.5.1）。
+  final bool titled;
 
   @override
   ConsumerState<PortsSection> createState() => _PortsSectionState();
@@ -311,7 +320,7 @@ class _PortsSectionState extends ConsumerState<PortsSection> {
               key: const ValueKey('ports'),
               delay: widget.delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                SectionTitle('正在监听的端口', count: list.length),
+                if (widget.titled) SectionTitle('正在监听的端口', count: list.length),
                 ListGroup(children: [
                   for (final p in list)
                     ListRow(
@@ -339,9 +348,12 @@ class _PortsSectionState extends ConsumerState<PortsSection> {
 
 /// 磁盘：按用途拆开 + 装过的工具 + 一键清理。
 class StorageSection extends ConsumerStatefulWidget {
-  const StorageSection({super.key, required this.ws, this.delay = Duration.zero, this.onFiles});
+  const StorageSection({super.key, required this.ws, this.delay = Duration.zero, this.onFiles, this.titled = true});
   final String ws;
   final Duration delay;
+
+  /// false = 磁盘子页：不画节标题，“清理”挪到列表最后一行（v3.5.1）。
+  final bool titled;
 
   /// 点“文件”一行（打开文件弹层）。
   final VoidCallback? onFiles;
@@ -382,7 +394,8 @@ class _StorageSectionState extends ConsumerState<StorageSection> {
     return FadeSlideIn(
       delay: widget.delay,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SectionTitle('磁盘',
+        if (widget.titled)
+          SectionTitle('磁盘',
             trailing: SwapSwitcher(
               child: label == null
                   ? const SizedBox.shrink(key: ValueKey('noclean'))
@@ -409,6 +422,13 @@ class _StorageSectionState extends ConsumerState<StorageSection> {
             subtitle: toolsSummary(s.tools),
             onTap: s.tools.isEmpty ? null : () => _showTools(context, s.tools),
           ),
+          if (!widget.titled && label != null)
+            ListRow(
+              key: const ValueKey('disk-clean'),
+              icon: Icons.cleaning_services_outlined,
+              title: _cleaning ? '正在清理' : label,
+              onTap: _cleaning ? null : _clean,
+            ),
         ]),
       ]),
     );

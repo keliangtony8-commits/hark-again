@@ -66,7 +66,7 @@ Future<_Api> _pump(WidgetTester tester, Map<String, dynamic> status) async {
       theme: buildTheme(Brightness.light),
       home: const Scaffold(
         body: SingleChildScrollView(
-          child: Column(children: [ComputerSection(ws: 'me'), ProcessSection(ws: 'me'), StorageSection(ws: 'me')]),
+          child: Column(children: [ComputerStatusGroup(ws: 'me'), ProcessSection(ws: 'me'), StorageSection(ws: 'me')]),
         ),
       ),
     ),
