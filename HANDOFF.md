@@ -1,4 +1,4 @@
-# Toyuis 交接文档（2026-10-18，v3.5.2）
+# Toyuis 交接文档（2026-10-18，v3.5.3）
 
 > **给每个接手的 agent**：先读第二节宗旨（1–21 条）。用户在对话里说出的任何纲领性要求，当轮用明确、不会被误解的话（不必照抄原话）带日期补进第二节，这是硬规矩（见第 16 条）。
 
@@ -6,6 +6,13 @@
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
 ## 〇、最新交接（2026-10-18，接手先读这一节）
+
+**v3.5.3 = 3.5.2 + 性能自检（wip/v3.5.1 分支，版本号 3.5.3 / build 30503，tag v3.5.3；未部署服务器；APK toyuis-3.5.3-arm64.apk 已在 VPS 编出）**。内容：
+- 性能自检（b8041ed）：关于页打开性能浮层后出现“性能自检 ›”，A–H 分层逐层开关测真机光栅耗时（core/perf_probe.dart、features/me/perf_probe_screen.dart，MainActivity.kt 新 MethodChannel）。
+- 用户截图（3.5.2，“我的”页）：Raster avg 15.8ms / max 17.1ms，UI 0.4ms → 瓶颈在光栅不在 UI。
+- **下一步**：等用户真机跑完 A–H 自检的结果，再定修哪一层；结果出来之前不要盲改。
+
+以下为 v3.5.2 交接：
 
 **v3.5.2 已提交（wip/v3.5.1 分支，版本号 3.5.2 / build 30502，tag v3.5.2；未部署服务器；APK toyuis-3.5.2-arm64.apk 已在 VPS 编出，等用户真机验证）**。内容：
 - 项目 = 目录（两端，83869bf App / dcde221 Web，照 Hark，第二节 29）：删项目切换胶囊（App project_switcher.dart、Web ProjectSwitcher.tsx 删除），顶栏下一行行项目名，进去左上 ☰ 回目录；聊天历史同为目录式。
