@@ -14,6 +14,7 @@ import 'package:assistant/shell/app_shell.dart';
 import 'package:assistant/shell/top_bar.dart';
 import 'package:assistant/ui/motion.dart';
 import 'package:assistant/ui/sky.dart';
+import 'package:assistant/features/chat/history_panel.dart' show HistoryPage;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,16 +70,27 @@ Future<void> _settle(WidgetTester tester) async {
 bool _barShown(WidgetTester tester) => tester.widget<FloatAway>(find.ancestor(of: find.byType(FloatingTopBar), matching: find.byType(FloatAway))).visible;
 
 void main() {
-  testWidgets('聊天历史抽屉打开时浮动顶栏让位，关上回来（v2.78 用户 15:30“还叠在一起”）', (tester) async {
+  testWidgets('v3.5.2 聊天左上 ☰ = 对话目录页（不是抽屉 / 弹层）：顶栏照常，左上变 +；点 + / 系统返回键回聊天', (tester) async {
     final router = await _pump(tester);
     router.go('/chat');
     await _settle(tester);
-    expect(_barShown(tester), isTrue);
     await tester.tap(find.byTooltip('历史').first);
     await _settle(tester);
-    expect(_barShown(tester), isFalse);
-    await tester.flingFrom(const Offset(380, 400), const Offset(-300, 0), 1500); // v3.5.1 抽屉全屏、没有遮罩：左滑关
+    expect(router.state.uri.path, '/chat/history');
+    expect(_barShown(tester), isTrue, reason: '顶栏一直在');
+    expect(find.byType(Drawer), findsNothing);
+    expect(find.byType(HistoryPage), findsOneWidget);
+    expect(find.text('历史对话'), findsNothing, reason: '目录没有大标题（照 Hark）');
+    expect(find.byTooltip('新对话'), findsOneWidget, reason: '左上 + = 新对话');
+    await tester.binding.handlePopRoute();
     await _settle(tester);
+    expect(router.state.uri.path, '/chat');
+    expect(find.byType(HistoryPage), findsNothing);
+    await tester.tap(find.byTooltip('历史').first);
+    await _settle(tester);
+    await tester.tap(find.byTooltip('新对话'));
+    await _settle(tester);
+    expect(router.state.uri.path, '/chat');
     expect(_barShown(tester), isTrue);
   });
 
@@ -96,7 +108,7 @@ void main() {
     router.go('/projects/p1');
     await _settle(tester);
     expect(_barShown(tester), isTrue); // v2.93 §Q 项目页仍在一级外壳下
-    expect(find.byTooltip('项目'), findsOneWidget); // 左上 ≡ = 项目切换（v2.95）
+    expect(find.byTooltip('项目'), findsOneWidget); // 左上 ☰ = 回项目目录（v3.5.2）
 
     router.go('/projects/p1/brief');
     await _settle(tester);
@@ -110,7 +122,7 @@ void main() {
     await _settle(tester);
     expect(_barShown(tester), isTrue);
     expect(find.byTooltip('历史'), findsOneWidget);
-    expect(find.byTooltip('新对话'), findsNothing); // 新对话收进历史面板，顶部只留标题
+    expect(find.byTooltip('新对话'), findsNothing); // 新对话在对话目录页左上，聊天顶部只留标题
     await tester.tap(find.byTooltip('历史'));
     await _settle(tester);
     expect(find.byTooltip('新对话'), findsOneWidget);

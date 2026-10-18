@@ -1,5 +1,6 @@
-// 主聊天的历史对话栏（v2.95 项目 = 一段对话后只剩主聊天用它；项目页左上 ≡ 打开的是项目切换栏 project_switcher.dart）。
-// 两种摆法同一份内容：手机上装进抽屉（HistoryPanel.drawer，点开对话后自动收起）；平板双栏时常驻左侧（docked）。
+// 主聊天的对话目录（v2.95 项目 = 一段对话后只剩主聊天用它）。
+// 两种摆法同一份内容：手机上是聊天标签里的一页（v3.5.2 照 Hark：/chat/history，HistoryPage，聊天左上 ☰ 进来、
+//   左上 + = 新对话；点开对话 = 退回聊天，系统返回键同样）；平板双栏时常驻左侧（docked，标题旁自带新对话钮）。
 // 顶部搜索（标题 + 内容，防抖；点内容命中的结果 = 打开并定位到那条消息）；平时按 置顶/今天/昨天/… 分组；长按行 = 重命名 / 置顶 / 删除，左滑删除。
 // 数据全走 ChatController，这里只管展示和交互。
 import 'dart:async';
@@ -18,6 +19,8 @@ import '../../ui/glass.dart';
 import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
+import '../../shell/shell_page.dart';
+import 'chat_scaffold.dart' show backToDirectory, chatLeadTag;
 import 'chat_controller.dart';
 import 'conversation_files.dart';
 import 'conversation_share.dart';
@@ -27,14 +30,35 @@ import 'open_conversation.dart';
 class HistoryPanel extends ConsumerStatefulWidget {
   const HistoryPanel({super.key, this.docked = false});
 
-  /// true = 常驻侧栏；false = 抽屉（选中对话后关掉抽屉）
+  /// true = 常驻侧栏；false = 对话目录页（选中对话后退回聊天）
   final bool docked;
-
-  /// 手机：同一份内容装进抽屉
-  static Widget drawer(BuildContext context) => const FullDrawer(child: HistoryPanel());
 
   @override
   ConsumerState<HistoryPanel> createState() => _HistoryPanelState();
+}
+
+/// 手机上的对话目录页（/chat/history，聊天分支内）：顶栏照常，左上 + = 新对话（和聊天的 ☰ 同一颗钮，Hero morph）。
+class HistoryPage extends ConsumerWidget {
+  const HistoryPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ShellPage(
+          lead: MenuPlusHero(
+            tag: chatLeadTag,
+            plus: true,
+            frame: (glyph) => GlassIconButton.glyph(
+                glyph: glyph,
+                tooltip: '新对话',
+                onTap: () {
+                  ref.read(chatProvider('').notifier).open(null);
+                  backToDirectory(context, '/chat');
+                }),
+          ),
+          child: const HistoryPanel(),
+        ),
+      );
 }
 
 class _HistoryPanelState extends ConsumerState<HistoryPanel> {
@@ -130,14 +154,11 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel> {
         SheetAction(Icons.delete_outline_rounded, '删除', danger: true, onTap: () => _delete(c)),
       ]);
 
-  void _newChat() {
-    _ctl.open(null);
-    if (!widget.docked) Navigator.pop(context);
-  }
+  void _newChat() => _ctl.open(null);
 
   void _open(ConversationSummary c) {
     final pid = c.projectId;
-    if (!widget.docked) Navigator.pop(context);
+    if (!widget.docked) backToDirectory(context, '/chat');
     if (pid != null) {
       openConversation(context, ref, c.id, focus: c.messageId, projectId: pid); // v3.2.1：命中项目那段 → 跳进项目
     } else {
@@ -152,18 +173,21 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel> {
     final searching = _results != null || (_q.isNotEmpty && _loading);
     // 自带 Material：常驻时它在聊天区 Scaffold 之外，搜索框和水波纹需要一张“纸”
     return Material(
-      color: widget.docked ? p.bg : Colors.transparent, // 手机：落在 FullDrawer 的壁纸上
+      color: widget.docked ? p.bg : Colors.transparent, // 手机：透出外壳的壁纸
       child: SafeArea(
         right: false,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          // 标题 + 新对话：开新对话的入口放在这里，聊天页顶部只留标题
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x2, Sp.x1),
-            child: Row(children: [
-              Expanded(child: Text('历史对话', style: context.text.titleLarge)),
-              IconButton(icon: const Icon(Icons.edit_square), tooltip: '新对话', color: p.text, onPressed: _newChat),
-            ]),
-          ),
+          // 双栏：标题 + 新对话；手机目录页没有大标题（照 Hark），新对话 = 左上 +（HistoryPage）
+          if (widget.docked)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Sp.x5, Sp.x2, Sp.x2, Sp.x1),
+              child: Row(children: [
+                Expanded(child: Text('历史对话', style: context.text.titleLarge)),
+                IconButton(icon: const Icon(Icons.edit_square), tooltip: '新对话', color: p.text, onPressed: _newChat),
+              ]),
+            )
+          else
+            const SizedBox(height: Sp.x2),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Sp.x4),
             child: SearchField(controller: _query, hint: '搜索标题和内容', onChanged: _onQuery, onClear: _clear, loading: _loading),

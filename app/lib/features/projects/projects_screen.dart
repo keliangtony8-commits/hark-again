@@ -1,9 +1,9 @@
 // 项目：长期的事各有自己的一段对话、文件和规则。列表 → 点开就是那段对话（v2.95 项目 = 一段对话；都在一级外壳下）。
-// 版式（v3.2.2 按 Hark 真机截图）：一项 = 占满整行的大字项目名（displaySmall，可折行）+ 下一行状态胶囊
-// （= 那段对话的状态，服务器 status，规则在后端 conversation_status）；没有页头小标签、emoji、⋯，长按 = 项目菜单。
-// “当前”的项目正文色，其余变灰（projectIsCurrent）。没有卡片网格、没有输入框：这一页只负责“选一件事”。
+// 版式（v3.5.2 照 Hark 真机截图：项目标签 = 一个目录）：顶栏下直接一行行项目名——裸字（Fs.dir），没有页大标题、卡片底、emoji、⋯；
+// 状态（= 那段对话的状态，服务器 status）是行尾一个小字；长按 = 项目菜单。“当前”的项目正文色，其余变灰（projectIsCurrent）。
 // 加载 / 空 / 出错 / 列表四态在同一个 FadeSwitcher 里交叉淡化，加载态是同高骨架，内容到了不跳版。
-// 左上 + = 新建项目；它和项目页的 ≡（项目切换）是同一颗钮（MenuPlusHero，tag = projectLeadTag），进出项目时原地 morph。
+// 左上 + = 新建项目；它和项目页的 ☰（回目录）是同一颗钮（MenuPlusHero，tag = projectLeadTag），进出项目时原地 morph。
+// v3.5.2 删了项目切换栏（抽屉 / 双栏常驻）和项目名药丸：项目内 ☰ = 回到这一页（同一分支内返回，系统返回键同样）。
 // 新建与编辑都走 project_form.dart 的 showProjectForm，删除都走 deleteProject（列表菜单和项目内一致）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,11 +18,9 @@ import '../../ui/motion.dart';
 import '../../ui/sheets.dart';
 import '../../shell/shell_page.dart';
 import '../../ui/glass.dart';
-import '../chat/status_capsule.dart';
 import '../chat/chat_scaffold.dart';
 import 'project_files_sheet.dart';
 import 'project_form.dart';
-import 'project_switcher.dart';
 
 /// 新建项目并直接进去。
 Future<void> createProject(BuildContext context, WidgetRef ref) async {
@@ -47,7 +45,7 @@ Future<bool> deleteProject(BuildContext context, WidgetRef ref, Project project)
   return true;
 }
 
-/// 项目的操作菜单（列表行 ⋯ / 长按、项目内的项目名药丸共用这一份）；onDeleted = 真的删了之后（项目内用来退出页面）。
+/// 项目的操作菜单（目录行长按、项目内顶栏下的项目名共用这一份）；onDeleted = 真的删了之后（项目内用来退出页面）。
 Future<void> showProjectMenu(BuildContext context, WidgetRef ref, Project project, {VoidCallback? onDeleted}) =>
     showActionSheet<void>(
       context,
@@ -146,7 +144,7 @@ class ProjectsScreen extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(Layout.gutter, 0, Layout.gutter, Sp.x5) + EdgeInsets.only(top: safe.top, bottom: safe.bottom),
             children: [
-              const SizedBox(height: Layout.headTop - Sp.x3), // 内容让位线已含顶栏下 12
+              const SizedBox(height: Layout.headTop + Sp.x3), // 内容让位线已含顶栏下 12；照截图第一行离顶栏约 54
               FadeSwitcher(child: content),
             ],
           ),
@@ -156,16 +154,15 @@ class ProjectsScreen extends ConsumerWidget {
   }
 }
 
-/// 一行一个项目（v3.2.2 按 Hark 真机截图）：大字项目名占满整行、放不下就折行（最多 3 行），状态胶囊在名字下面另起一行。
-/// 不画 emoji、不画 ⋯：emoji 留在项目内的项目名药丸上，菜单 = 长按（同项目内药丸那一份）。不是当前的项目名字用三级色。
+/// 目录的一行（v3.5.2 照 Hark）：裸字项目名（单行省略），行尾状态小字；没有底色、emoji、⋯。不是当前的项目名字用三级色。
 class _ProjectRow extends StatelessWidget {
   const _ProjectRow({required this.project, required this.current, required this.onTap, required this.onMenu});
   final Project project;
   final bool current;
   final VoidCallback onTap, onMenu;
 
-  /// 骨架行高（一行名字 + 胶囊）；真实行按内容自适应。
-  static const height = 104.0;
+  /// 骨架行高（真实行 = 一行字 + 上下 Sp.x3）。
+  static const height = 56.0;
 
   @override
   Widget build(BuildContext context) {
@@ -177,30 +174,57 @@ class _ProjectRow extends StatelessWidget {
       semanticLabel: [project.name, if (status != null) status.label].join('，'),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: Sp.x3),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(project.name,
-              style: context.text.displaySmall?.copyWith(color: current ? p.text : p.text3),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis),
-          if (status != null) ...[const SizedBox(height: Sp.x2), StatusCapsule(status)],
+        child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+          Expanded(
+            child: Text(project.name,
+                style: context.text.titleMedium?.copyWith(fontSize: Fs.dir, height: Fs.lineHeight, color: current ? p.text : p.text3),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+          if (status != null) ...[
+            const SizedBox(width: Sp.x3),
+            Text(status.label, key: const Key('project-status'), style: context.text.labelSmall?.copyWith(color: p.text3)),
+          ],
         ]),
       ),
     );
   }
 }
 
-/// 项目内（v2.95 项目 = 一段对话）：仍在一级外壳下（顶栏不消失）。顶栏下一枚项目名药丸（点开项目菜单），下面直接是这段对话；
-/// 左上 ≡ = 项目切换（开着时转成 + = 新建项目）。回项目列表 = 再点一次顶栏“项目”。
+/// 项目内（v2.95 项目 = 一段对话）：仍在一级外壳下（顶栏不消失）。顶栏下一行居中的项目名小字（ProjectTitle，点开项目菜单），下面直接是这段对话；
+/// 左上 ☰ = 回项目目录（v3.5.2 照 Hark，同系统返回键）。
 class ProjectDetailScreen extends ConsumerWidget {
   const ProjectDetailScreen({super.key, required this.id});
   final String id;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => ChatScaffold(
-        key: ValueKey(id), // 抽屉里换项目：整页换新（侧栏开合、抽屉状态不带到别的项目）
+        key: ValueKey(id),
         projectId: id,
-        title: ProjectPill(projectId: id, onDeleted: () {
+        title: ProjectTitle(projectId: id, onDeleted: () {
           if (context.mounted) context.go('/projects');
         }),
       );
+}
+
+/// 项目页顶栏下那一行：项目名小字（同主聊天的对话标题，不是胶囊），点开项目菜单。[onDeleted]：在菜单里删掉了这个项目（项目页用来退回目录）。
+class ProjectTitle extends ConsumerWidget {
+  const ProjectTitle({super.key, required this.projectId, this.onDeleted});
+  final String projectId;
+  final VoidCallback? onDeleted;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final project = ref.watch(projectsProvider).value?.where((x) => x.id == projectId).firstOrNull;
+    final name = project?.name ?? '项目';
+    return Semantics(
+      button: project != null,
+      label: '项目菜单：$name',
+      excludeSemantics: true,
+      child: Pressable(
+        onTap: project == null ? null : () => showProjectMenu(context, ref, project, onDeleted: onDeleted),
+        child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
 }

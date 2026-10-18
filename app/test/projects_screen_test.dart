@@ -1,7 +1,7 @@
-// 项目页（v3.2.2 按 Hark 真机截图）：列表 = 占满整行的大字项目名 + 下一行状态胶囊，按最近活动排序（没有页头摘要 / emoji / ⋯，菜单 = 长按），
-// 不是当前的项目变灰（projectIsCurrent）、没有输入框；⋯ 菜单：编辑（只 PATCH 改过的字段）、删除（先确认）、电脑；
-// v2.95 项目 = 一段对话：进项目直接是那段聊天（仍在一级外壳下，顶栏在），左上 + → ≡ 同一颗钮，≡ 打开项目切换抽屉、开着时变 +；
-// 顶栏下项目名药丸 = 项目菜单。
+// 项目页（v3.5.2 照 Hark 真机截图：项目标签 = 目录）：裸字项目名一行一个、行尾状态小字，按最近活动排序（没有大标题 / 卡片 / emoji / ⋯，菜单 = 长按），
+// 不是当前的项目变灰（projectIsCurrent）、没有输入框；菜单：编辑（只 PATCH 改过的字段）、删除（先确认）、电脑；
+// v2.95 项目 = 一段对话：进项目直接是那段聊天（仍在一级外壳下，顶栏在），左上 + → ☰ 同一颗钮，☰ = 回目录（同系统返回键），
+// 没有项目切换胶囊 / 抽屉；顶栏下项目名小字 = 项目菜单。
 import 'package:assistant/app.dart';
 import 'package:assistant/core/api.dart';
 import 'package:assistant/core/cache.dart';
@@ -10,7 +10,6 @@ import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/status_capsule.dart';
 import 'package:assistant/features/projects/project_files_sheet.dart' show projectFileLine;
 import 'package:assistant/features/projects/project_form.dart';
-import 'package:assistant/features/projects/project_switcher.dart';
 import 'package:assistant/features/projects/projects_screen.dart';
 import 'package:assistant/models/resources.dart';
 import 'package:assistant/theme/app_theme.dart';
@@ -135,15 +134,19 @@ void main() {
     expect(p('weird').status, isNull);
   });
 
-  testWidgets('列表（v3.2.2 按 Hark）：没有页头摘要 / emoji / ⋯，大字名占满整行、胶囊在名字下一行，按最近活动排序、汇总状态胶囊、不是当前的变灰、没有输入框', (tester) async {
+  testWidgets('目录（v3.5.2 照 Hark）：没有大标题 / 卡片 / emoji / ⋯，裸字名一行、状态是行尾小字，按最近活动排序、不是当前的变灰、没有输入框', (tester) async {
     await _pump(tester);
     expect(find.textContaining('个项目'), findsNothing, reason: 'Hark 列表没有页头小标签');
     expect(find.text('📚'), findsNothing, reason: '列表不画 emoji');
     expect(find.byTooltip('更多'), findsNothing, reason: '菜单 = 长按');
+    expect(find.byType(StatusCapsule), findsNothing, reason: '目录行不画状态胶囊');
     final name = tester.getRect(find.text('考研'));
-    final cap = tester.getRect(find.byType(StatusCapsule));
-    expect(cap.top, greaterThan(name.bottom - 1), reason: '状态胶囊在名字下一行');
-    expect(cap.left, closeTo(name.left, 1), reason: '与名字左对齐');
+    final st = tester.getRect(find.byKey(const Key('project-status')));
+    expect(st.left, greaterThan(name.right), reason: '状态在名字同一行的行尾');
+    expect((st.center.dy - name.center.dy).abs(), lessThan(name.height / 2), reason: '同一行');
+    expect(tester.widget<Text>(find.text('考研')).style?.fontSize, Fs.dir, reason: '目录裸字，字号照截图');
+    expect(find.byType(Card), findsNothing);
+    expect(find.text('📚 考研'), findsNothing, reason: '没有项目切换胶囊');
     expect(find.text('项目'), findsOneWidget); // 只有顶栏分段，不再画大标题
     final y1 = tester.getTopLeft(find.text('找实习')).dy;
     final y2 = tester.getTopLeft(find.text('考研')).dy;
@@ -156,13 +159,15 @@ void main() {
     expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isTrue);
   });
 
-  testWidgets('v2.95 进项目：直接是那段聊天（没有对话列表首屏），顶栏仍在，左上 + 转成 ≡；顶栏下项目名药丸', (tester) async {
+  testWidgets('v2.95 进项目：直接是那段聊天（没有对话列表首屏），顶栏仍在，左上 + 转成 ☰；没有项目切换胶囊，顶栏下项目名小字', (tester) async {
     await _pump(tester);
     await tester.tap(find.text('考研'));
     await _settle(tester);
     expect(find.text('续聊 c1'), findsOneWidget, reason: '项目的那一段对话自动打开');
-    expect(find.byType(ProjectPill), findsOneWidget);
-    expect(find.descendant(of: find.byType(ProjectPill), matching: find.text('📚 考研')), findsOneWidget);
+    expect(find.byType(ProjectTitle), findsOneWidget);
+    expect(find.descendant(of: find.byType(ProjectTitle), matching: find.text('考研')), findsOneWidget);
+    expect(find.text('📚 考研'), findsNothing, reason: 'v3.5.2 删了“📁 xx ⌄”切换胶囊');
+    expect(find.byIcon(Icons.expand_more_rounded), findsNothing);
     expect(find.text('主页'), findsOneWidget, reason: '一级外壳顶栏不淡出');
     expect(find.byTooltip('我的'), findsOneWidget);
     expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon).last).plus, isFalse);
@@ -173,40 +178,37 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
   });
 
-  testWidgets('v2.95 ≡ 打开项目切换抽屉（当前项目高亮、带状态胶囊），开着时钮变 +；点别的项目 → 换到它的聊天', (tester) async {
+  testWidgets('v3.5.2 项目内 ☰ = 回项目目录（同一标签内返回，不弹任何弹层），顶栏一直在', (tester) async {
     await _pump(tester, at: '/projects/p1');
+    expect(find.text('续聊 c1'), findsOneWidget);
     await tester.tap(find.byTooltip('项目'));
     await _settle(tester);
-    expect(find.byType(ProjectSwitcher), findsOneWidget);
-    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon).last).plus, isTrue);
-    expect(find.byTooltip('新项目'), findsOneWidget);
-    final inDrawer = find.descendant(of: find.byType(ProjectSwitcher), matching: find.text('找实习'));
-    expect(inDrawer, findsOneWidget);
-    expect(find.descendant(of: find.byType(ProjectSwitcher), matching: find.text('已完成')), findsOneWidget);
-    final current = find.ancestor(of: find.descendant(of: find.byType(ProjectSwitcher), matching: find.text('考研')), matching: find.byType(Semantics));
-    expect(tester.widgetList<Semantics>(current).any((w) => w.properties.selected == true), isTrue, reason: '当前项目高亮');
-    await tester.tap(inDrawer);
-    await _settle(tester);
-    expect(find.byType(ProjectSwitcher), findsNothing);
-    expect(find.text('续聊 c9'), findsOneWidget);
-    expect(find.descendant(of: find.byType(ProjectPill), matching: find.text('💼 找实习')), findsOneWidget);
-    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon).last).plus, isFalse);
+    expect(find.text('续聊 c1'), findsNothing, reason: '回到目录');
+    expect(find.byType(ProjectsScreen), findsOneWidget);
+    expect(find.byType(Drawer), findsNothing, reason: '不是抽屉');
+    expect(find.text('找实习'), findsOneWidget);
+    expect(find.text('主页'), findsOneWidget, reason: '顶栏一直在');
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isTrue, reason: '目录左上是 +');
   });
 
-  testWidgets('v2.95 抽屉开着时点 + = 新建项目（收起抽屉、弹表单）', (tester) async {
-    final api = await _pump(tester, at: '/projects/p1');
+  testWidgets('v3.5.2 项目内系统返回键 = 回项目目录', (tester) async {
+    await _pump(tester, at: '/projects/p1');
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+    expect(find.text('续聊 c1'), findsNothing);
+    expect(find.byType(ProjectsScreen), findsOneWidget);
+    expect(find.text('找实习'), findsOneWidget);
+    expect(find.text('主页'), findsOneWidget);
+  });
+
+  testWidgets('v3.5.2 从目录点进另一个项目，☰ 同样回目录', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text('找实习'));
+    await _settle(tester);
     await tester.tap(find.byTooltip('项目'));
     await _settle(tester);
-    await tester.tap(find.byTooltip('新项目'));
-    await _settle(tester);
-    expect(find.byType(ProjectSwitcher), findsNothing);
-    expect(find.text('新项目'), findsOneWidget, reason: '新建项目表单标题');
-    await tester.enterText(find.widgetWithText(TextField, '名称'), '旅行');
-    await tester.pump();
-    await tester.tap(find.text('创建'));
-    await _settle(tester);
-    expect(find.text('新项目'), findsNothing);
-    expect(api.calls, contains('POST /api/projects'));
+    expect(find.text('续聊 c9'), findsNothing);
+    expect(find.text('考研'), findsOneWidget);
   });
 
   testWidgets('切页途中：钮停在原地，按路由进度从 + 画到 ≡（Hero 飞行）', (tester) async {
@@ -242,7 +244,7 @@ void main() {
     await _settle(tester);
     expect(api.calls.last, 'PATCH /api/projects/p1');
     expect(api.bodies.last, {'emoji': '🎯'});
-    expect(find.text('🎯'), findsNothing, reason: 'v3.2.2 列表不画 emoji（emoji 在项目内药丸上）');
+    expect(find.text('🎯'), findsNothing, reason: '目录不画 emoji');
   });
 
   testWidgets('⋯ 菜单删除：取消不删，确认后 DELETE 并从列表消失', (tester) async {
@@ -286,25 +288,25 @@ void main() {
     expect(projectFileLine(f('大纲.md')), '2 KB');
   });
 
-  testWidgets('v2.95 项目名药丸 = 项目菜单（和列表 ⋯ 同一份）', (tester) async {
+  testWidgets('项目名小字 = 项目菜单（和目录长按同一份）', (tester) async {
     await _pump(tester, at: '/projects/p1');
-    await tester.tap(find.byType(ProjectPill));
+    await tester.tap(find.byType(ProjectTitle));
     await _settle(tester);
     for (final t in ['项目文件', '电脑', '规则与档案', '编辑名称和图标', '删除项目']) {
       expect(find.text(t), findsOneWidget);
     }
   });
 
-  testWidgets('项目内删除（药丸菜单）：确认后退回列表', (tester) async {
+  testWidgets('项目内删除（项目名菜单）：确认后退回目录', (tester) async {
     final api = await _pump(tester, at: '/projects/p1');
-    await tester.tap(find.byType(ProjectPill));
+    await tester.tap(find.byType(ProjectTitle));
     await _settle(tester);
     await tester.tap(find.text('删除项目'));
     await _settle(tester);
     await tester.tap(find.text('删除'));
     await _settle(tester);
     expect(api.calls, ['DELETE /api/projects/p1']);
-    expect(find.byType(ProjectPill), findsNothing);
+    expect(find.byType(ProjectTitle), findsNothing);
     expect(find.text('找实习'), findsOneWidget, reason: '退回列表，剩下的那个还在');
   });
 }

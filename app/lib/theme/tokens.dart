@@ -360,7 +360,8 @@ abstract final class Radii {
 
 /// 字号。display = 问候语这类页面主标题（衬线、偏细）；xl = 大数字。
 abstract final class Fs {
-  static const xs = 12.0, sm = 14.0, md = 16.0, lg = 19.0, xl = 30.0, display = 32.0; // v3.1 对着 Hark 真机截图降一档（同一台手机上我们的字大约大 20%）
+  // dir = 目录行（项目目录、v3.5.2 照 Hark 真机截图约 24）
+  static const xs = 12.0, sm = 14.0, md = 16.0, lg = 19.0, xl = 30.0, display = 32.0, dir = 24.0; // v3.1 对着 Hark 真机截图降一档（同一台手机上我们的字大约大 20%）
   static const lineHeight = 1.3; // v2.83 §G：界面文字（标题、行、按钮、标签）紧凑 = 网页 --lh
   static const prose = 1.4; // v3.2 1.6→1.4（Hark 回复行距约 1.33，1.6 让段落发散）； 只给要“读”的正文：聊天回复（AppMarkdown）、记忆摘要、项目档案 = 网页 --lh-prose
 }

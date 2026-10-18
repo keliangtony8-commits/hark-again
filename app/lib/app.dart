@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'core/session.dart';
 import 'features/auth/login_screen.dart';
 import 'features/chat/chat_screen.dart';
+import 'features/chat/history_panel.dart' show HistoryPage;
 import 'features/home/home_screen.dart';
 import 'features/computer/computer_screen.dart';
 import 'features/me/connectors_screen.dart';
@@ -61,7 +62,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         navigatorContainerBuilder: (_, shell, children) => ShellBranches(index: shell.currentIndex, children: children),
         branches: [
           StatefulShellBranch(routes: [GoRoute(path: '/home', builder: (_, _) => const HomeScreen())]),
-          StatefulShellBranch(routes: [GoRoute(path: '/chat', builder: (_, _) => const ChatScreen())]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/chat', builder: (_, _) => const ChatScreen(), routes: [
+              // v3.5.2 照 Hark：聊天左上 ☰ = 对话目录页（不是抽屉）；转场同项目页，左上 ☰/+ 的 Hero 骑在这条路由动画上
+              GoRoute(
+                path: 'history',
+                pageBuilder: (_, s) => CustomTransitionPage<void>(
+                  key: s.pageKey,
+                  transitionDuration: Motion.morph,
+                  reverseTransitionDuration: Motion.morph,
+                  transitionsBuilder: (ctx, a, _, child) => pageRiseTransition(ctx, a, child),
+                  child: const HistoryPage(),
+                ),
+              ),
+            ]),
+          ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/projects', builder: (_, _) => const ProjectsScreen(), routes: [
               // v2.93 §Q 项目页自带转场（淡入 + 浮上，Motion.morph）：左上 +/≡ 的 Hero 飞行要骑在一条真的路由动画上。

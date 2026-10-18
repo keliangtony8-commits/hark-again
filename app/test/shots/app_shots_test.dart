@@ -171,13 +171,13 @@ void main() {
     await _shot(tester, 'home-dark');
   }, skip: _out == null);
 
-  testWidgets('chat history drawer', (tester) async {
+  testWidgets('chat history directory', (tester) async {
     final router = await _pump(tester, dark: false);
     router.go('/chat');
     await _settle(tester);
     await tester.tap(find.byTooltip('历史').first);
     await _settle(tester);
-    await _shot(tester, 'chat-drawer-light');
+    await _shot(tester, 'chat-history-light');
   }, skip: _out == null);
 
   // v2.79：步骤收成一行（不到 1 秒不写用时）+ 往上翻出现“回到最新”

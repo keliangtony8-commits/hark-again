@@ -3,7 +3,6 @@ import 'package:assistant/core/api.dart';
 import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/features/chat/chat_scaffold.dart';
 import 'package:assistant/features/chat/history_panel.dart';
-import 'package:assistant/features/projects/project_switcher.dart';
 import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/tokens.dart';
 import 'package:assistant/shell/app_shell.dart' show shellBarShown;
@@ -72,7 +71,7 @@ void main() {
     });
   }
 
-  testWidgets('聊天：平板双栏常驻历史，转成手机宽变抽屉，输入框内容不丢', (tester) async {
+  testWidgets('聊天：平板双栏常驻历史，转成手机宽变单栏 + 左上 ☰，输入框内容不丢', (tester) async {
     _size(tester, 1100);
     await tester.pumpWidget(_app(const ChatScaffold(title: Text('新对话'))));
     await tester.pumpAndSettle();
@@ -96,54 +95,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HistoryPanel), findsNothing);
     expect(find.text('写到一半'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('历史'));
-    await tester.pumpAndSettle();
-    expect(find.byWidgetPredicate((w) => w is HistoryPanel && !w.docked), findsOneWidget);
-    expect(find.byType(Drawer), findsOneWidget);
+    expect(find.byTooltip('历史'), findsOneWidget, reason: '手机：☰ 进对话目录页（v3.5.2，路由见 shell_test）');
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isFalse);
+    expect(find.byType(Drawer), findsNothing, reason: '不再有历史抽屉');
   });
 
-  testWidgets('项目聊天（v2.95）：手机上左上 ≡ 在顶栏左槽；项目切换抽屉从 header 行下面滑出、≡ 变 +，点 + 收起抽屉并弹新建项目', (tester) async {
+  testWidgets('项目聊天（v3.5.2 照 Hark）：手机上左上 ☰ 在顶栏左槽，没有项目切换抽屉 / 胶囊', (tester) async {
     _size(tester, 400);
-    await tester.pumpWidget(_app(const ChatScaffold(projectId: 'p1', title: Text('📚 考研'))));
+    await tester.pumpWidget(_app(const ChatScaffold(projectId: 'p1', title: Text('考研'))));
     await tester.pumpAndSettle();
     final menu = find.byTooltip('项目');
     expect(menu, findsOneWidget);
     expect(tester.getTopLeft(menu).dx, Layout.gutter); // 顶栏左槽（与主聊天“历史”同位）
     expect(find.byType(BackButton), findsNothing); // 不是子页面
-    expect(find.byTooltip('返回项目列表'), findsNothing); // v2.95 header 行不再有 ‹ / ⋯
     expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isFalse);
-    await tester.tap(menu);
-    await tester.pumpAndSettle();
-    final drawer = find.byType(Drawer);
-    expect(drawer, findsOneWidget);
-    expect(tester.getTopLeft(drawer).dx, 0); // 从左边出来
-    expect(find.byWidgetPredicate((w) => w is ProjectSwitcher && !w.docked), findsOneWidget);
+    expect(find.byType(Drawer, skipOffstage: false), findsNothing, reason: '项目切换抽屉删了：☰ = 回目录（projects_screen_test）');
     expect(find.byType(HistoryPanel), findsNothing, reason: '项目里没有对话列表');
-    // 左上钮仍在抽屉之上、可点：同一颗钮现在是 + = 新建项目
-    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isTrue);
-    expect(find.byTooltip('新项目'), findsOneWidget); // 手机抽屉里不再有第二个 +
-    await tester.tap(find.byTooltip('新项目'));
-    await tester.pumpAndSettle();
-    expect(find.byType(Drawer, skipOffstage: false), findsNothing);
-    // 新建项目表单是全屏弹层（v3.5.1）：淡入完成后下面的页面不再绘制（offstage），钮的状态照样复位
-    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon, skipOffstage: false)).plus, isFalse);
-    expect(find.text('创建'), findsOneWidget, reason: '新建项目表单');
   });
 
-  testWidgets('项目聊天：双栏时项目切换栏常驻、没有 ≡，左上是收起/展开', (tester) async {
+  testWidgets('项目聊天：双栏时也没有项目切换栏，左上照样是 ☰', (tester) async {
     _size(tester, 1100);
     await tester.pumpWidget(_app(const ChatScaffold(projectId: 'p1', title: Text('项目'))));
     await tester.pumpAndSettle();
-    expect(find.byType(MenuPlusIcon), findsNothing);
-    expect(find.byWidgetPredicate((w) => w is ProjectSwitcher && w.docked), findsOneWidget);
     expect(find.byType(HistoryPanel), findsNothing);
-    expect(tester.getTopLeft(find.byTooltip('收起项目')).dx, Layout.gutter);
-    expect(find.byTooltip('新项目'), findsOneWidget); // 常驻栏自带新建项目
+    expect(find.byTooltip('收起项目'), findsNothing);
+    expect(tester.getTopLeft(find.byTooltip('项目')).dx, Layout.gutter);
+    expect(tester.widget<MenuPlusIcon>(find.byType(MenuPlusIcon)).plus, isFalse);
   });
 
   test('v2.93 shellBarShown：一级页面（v3.5.1 含“我的”）和项目页显示顶栏，子页面不显示', () {
-    for (final l in ['/home', '/chat', '/projects', '/projects/p1', '/me']) {
+    for (final l in ['/home', '/chat', '/chat/history', '/projects', '/projects/p1', '/me']) {
       expect(shellBarShown(l), isTrue, reason: l);
     }
     for (final l in ['/projects/p1/brief', '/projects/p1/computer', '/me/memory', '/me/usage']) {

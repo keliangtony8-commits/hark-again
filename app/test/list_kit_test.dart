@@ -17,7 +17,6 @@ const _rawRowFiles = {
   'lib/features/computer/computer_section.dart',
   'lib/features/me/task_detail.dart',
   'lib/features/me/usage_screen.dart',
-  'lib/features/projects/project_switcher.dart',
 };
 
 void main() {

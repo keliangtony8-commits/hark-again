@@ -1,34 +1,40 @@
 // 聊天页骨架：主聊天和项目聊天共用，一处决定侧栏怎么摆。两者都是一级页面：
 // 外框都交给 ShellPage——让出浮动顶栏、左上画本页的按钮（lead）、顶栏下一行 header 写标题（全 App 唯一的标题位）。
-//   主聊天：左上“历史”；抽屉盖全屏，开着时浮动顶栏让位（ShellCover，v2.78）；header = 对话标题（ChatTitle，点开本对话用量）。
-//   项目聊天（v2.95 项目 = 一段对话）：header = 项目名药丸（ProjectPill，点开项目菜单），下面就是这段对话。
-//     左上 ≡ 打开项目切换栏（ProjectSwitcher）。抽屉放在 ShellPage 里层的 Scaffold：从 header 行下面滑出，
-//     左上钮和 header 行画在它上面、顶栏不让位，所以同一颗钮在抽屉开着时旋转成 +（MenuPlusIcon）= 新建项目。
-//     左上钮和项目列表的 + 挂同一个 Hero（projectLeadTag）：进出项目时钮停在原地 morph（MenuPlusHero）。
-//   抽屉开着与否只放在 ValueNotifier 里，按钮自己听，不整页 setState；打开时刷新一次项目列表（状态胶囊以服务器为准）。
-//   平板/折叠屏展开（≥ Layout.expandedMin）：侧栏常驻左侧和对话并排；左上钮变成“收起/展开”（专注模式），两种聊天一致。
+// v3.5.2 照 Hark：左上 ☰ 不再开抽屉 / 弹层，而是回到本标签的“目录”页（同一分支内导航，系统返回键同样回来）：
+//   主聊天：☰ → /chat/history（对话目录，HistoryPage）；header = 对话标题（ChatTitle，点开本对话用量）。
+//   项目聊天（v2.95 项目 = 一段对话）：☰ → 回项目目录（/projects）；header = 项目名小字（ProjectTitle，点开项目菜单）。
+//   ☰ 和目录页左上的 + 挂同一个 Hero（chatLeadTag / projectLeadTag）：进出目录时钮停在原地 morph（MenuPlusHero）。
+//   平板/折叠屏展开（≥ Layout.expandedMin）：主聊天的历史栏常驻左侧和对话并排，左上钮变成“收起/展开”（专注模式）；项目没有侧栏。
 // 布局切换只增减 Row 前面的侧栏，聊天区始终是同一个带 key 的孩子——转屏时输入框里的字和滚动位置都在。
 // 只有用户点收起/展开才有过渡动画；窗口尺寸变化引起的切换直接到位（见 SidePaneSwitcher.animate）。
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../core/resource.dart';
-import '../../shell/app_shell.dart' show ShellCover, shellCoverProvider;
 import '../../shell/shell_page.dart';
 import '../../ui/adaptive.dart';
 import '../../ui/glass.dart';
 import '../../ui/motion.dart';
-import '../projects/project_switcher.dart';
-import '../projects/projects_screen.dart' show createProject;
 import 'chat_view.dart';
 import 'conversation_usage.dart';
 import 'history_panel.dart';
 
-/// 项目左上钮的 Hero tag：项目列表的 +（新建项目）和项目页的 ≡（项目切换）是“同一颗钮”。
+/// 项目左上钮的 Hero tag：项目目录的 +（新建项目）和项目页的 ☰（回目录）是“同一颗钮”。
 const projectLeadTag = 'project-lead';
+
+/// 主聊天左上钮的 Hero tag：聊天的 ☰（对话目录）和对话目录页的 +（新对话）是“同一颗钮”。
+const chatLeadTag = 'chat-lead';
+
+/// 回到本标签的目录：栈里有就退一页（和系统返回键同一条路），没有（深链直接进来）就去目录。
+void backToDirectory(BuildContext context, String directory) {
+  if (context.canPop()) {
+    context.pop();
+  } else {
+    context.go(directory);
+  }
+}
 
 class ChatScaffold extends ConsumerStatefulWidget {
   const ChatScaffold({
@@ -40,7 +46,7 @@ class ChatScaffold extends ConsumerStatefulWidget {
 
   final String projectId;
 
-  /// header 行居中的那一个：主聊天 = 对话标题（外面包 ChatTitle），项目 = ProjectPill（原样画）。
+  /// header 行居中的那一个：主聊天 = 对话标题（外面包 ChatTitle），项目 = ProjectTitle。
   final Widget title;
   final List<String> suggestions;
 
@@ -49,59 +55,11 @@ class ChatScaffold extends ConsumerStatefulWidget {
 }
 
 class _ChatScaffoldState extends ConsumerState<ChatScaffold> {
-  ShellCover? _cover; // 抽屉开着 → 外壳顶栏让位；离开页面时（抽屉可能还开着）复位
-  bool _drawerOpen = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _cover = ProviderScope.containerOf(context, listen: false).read(shellCoverProvider.notifier);
-  }
-
-  /// 项目切换抽屉开着（≡ 变 +）。只给左上那颗钮听。
-  final _listOpen = ValueNotifier(false);
-  final _inner = GlobalKey<ScaffoldState>();
-
-  /// 主聊天的历史抽屉此刻画在屏幕上（拖出一点也算）：ShellPage 据此让左侧按钮另成一组毛玻璃（见 shell_page.dart 文件头）。
-  /// 和 _cover（顶栏让位，按“开 / 关”意图）分开：这里只管画没画出来，不改让位的时机。
-  final _drawerShown = ValueNotifier(false);
-  void _onDrawerShown(bool v) {
-    if (mounted) _drawerShown.value = v;
-  }
-
-  @override
-  void dispose() {
-    _listOpen.dispose();
-    _drawerShown.dispose();
-    final cover = _cover;
-    if (cover != null && _drawerOpen) Future.microtask(() => cover.set(false)); // 抽屉开着离开才复位；不在拆树途中改状态
-    super.dispose();
-  }
-
   bool _paneOpen = true; // 双栏时用户可收起历史栏
   bool? _wasTwoPane;
   bool _animatePane = false;
 
   bool get _isProject => widget.projectId.isNotEmpty;
-  String get _listName => _isProject ? '项目' : '历史';
-
-  /// 项目左上钮：抽屉关着 → 打开；开着（显示 +）→ 收起抽屉并新建项目。
-  void _menuTap() {
-    final inner = _inner.currentState;
-    if (inner == null) return;
-    if (_listOpen.value) {
-      inner.closeDrawer();
-      createProject(context, ref);
-    } else {
-      inner.openDrawer();
-    }
-  }
-
-  void _onListChanged(bool open) {
-    _listOpen.value = open;
-    // 状态胶囊：挂起的卡片出现在一轮中途，打开时以服务器为准
-    if (open) ref.read(projectsProvider.notifier).reload().catchError((_) {});
-  }
 
   void _togglePane() => setState(() {
         _paneOpen = !_paneOpen;
@@ -111,30 +69,30 @@ class _ChatScaffoldState extends ConsumerState<ChatScaffold> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final twoPane = context.window.twoPane;
+    final twoPane = context.window.twoPane && !_isProject;
     if (_wasTwoPane != twoPane) _animatePane = false; // 尺寸变化：直接到位
     _wasTwoPane = twoPane;
     final showPane = twoPane && _paneOpen;
-    final drawer = twoPane ? null : (_isProject ? ProjectSwitcher.drawer(context, widget.projectId) : HistoryPanel.drawer(context));
 
     final Widget lead;
     if (twoPane) {
       lead = GlassIconButton(
         icon: showPane ? Icons.menu_open_rounded : Icons.notes_rounded,
-        tooltip: showPane ? '收起$_listName' : '展开$_listName',
+        tooltip: showPane ? '收起历史' : '展开历史',
         onTap: _togglePane,
       );
     } else if (_isProject) {
-      lead = ValueListenableBuilder<bool>(
-        valueListenable: _listOpen,
-        builder: (_, open, _) => MenuPlusHero(
-          tag: projectLeadTag,
-          plus: open,
-          frame: (glyph) => GlassIconButton.glyph(glyph: glyph, tooltip: open ? '新项目' : _listName, onTap: _menuTap),
-        ),
+      lead = MenuPlusHero(
+        tag: projectLeadTag,
+        plus: false,
+        frame: (glyph) => GlassIconButton.glyph(glyph: glyph, tooltip: '项目', onTap: () => backToDirectory(context, '/projects')),
       );
     } else {
-      lead = Builder(builder: (ctx) => GlassIconButton(icon: Icons.notes_rounded, tooltip: _listName, onTap: () => Scaffold.of(ctx).openDrawer()));
+      lead = MenuPlusHero(
+        tag: chatLeadTag,
+        plus: false,
+        frame: (glyph) => GlassIconButton.glyph(glyph: glyph, tooltip: '历史', onTap: () => context.push('/chat/history')),
+      );
     }
 
     final header = Row(children: [
@@ -143,20 +101,18 @@ class _ChatScaffoldState extends ConsumerState<ChatScaffold> {
         curve: Motion.ease,
         width: showPane ? Layout.sidePane - Sp.x4 : 0,
       ),
-      // 主聊天：顶栏下一行居中的小字（不是胶囊）：视觉上属于顶栏，不和消息抢层级；点它看本对话用量。
-      // 项目：项目名药丸（ProjectPill 自带样式和点按）。
+      // 顶栏下一行居中的小字（不是胶囊）：视觉上属于顶栏，不和消息抢层级。主聊天点它看本对话用量；项目点它开项目菜单（ProjectTitle 自带）。
       Expanded(
         child: Center(
-          child: _isProject
-              ? widget.title
-              : DefaultTextStyle(
-                  style: context.text.labelLarge!.copyWith(height: 1.25, color: p.text2),
-                  child: ChatTitle(scope: widget.projectId, dense: true, child: widget.title),
-                ),
+          child: DefaultTextStyle(
+            style: context.text.labelLarge!.copyWith(height: 1.25, color: p.text2),
+            child: _isProject ? widget.title : ChatTitle(scope: widget.projectId, dense: true, child: widget.title),
+          ),
         ),
       ),
     ]);
 
+    final chat = ChatView(projectId: widget.projectId, suggestions: widget.suggestions);
     final body = Row(children: [
       SidePaneSwitcher(
         animate: _animatePane,
@@ -166,63 +122,18 @@ class _ChatScaffoldState extends ConsumerState<ChatScaffold> {
                 width: Layout.sidePane,
                 child: DecoratedBox(
                   decoration: BoxDecoration(border: Border(right: BorderSide(color: p.border))),
-                  child: _isProject ? ProjectSwitcher(currentId: widget.projectId, docked: true) : const HistoryPanel(docked: true),
+                  child: const HistoryPanel(docked: true),
                 ),
               )
             : null,
       ),
-      Expanded(key: const ValueKey('chat'), child: ChatView(projectId: widget.projectId, suggestions: widget.suggestions)),
+      // 主聊天：进对话目录时聊天区淡出、☰ 留在原地 morph 成 +（同项目目录 → 项目）
+      Expanded(key: const ValueKey('chat'), child: _isProject ? chat : FadeUnderCover(child: chat)),
     ]);
 
-    // 主聊天：抽屉在外层 Scaffold（盖全屏，顶栏让位）；项目：抽屉在 ShellPage 里层（header 行下面，左上钮和 header 在它之上）
     return Scaffold(
       backgroundColor: Colors.transparent, // 透出外壳的壁纸
-      drawer: _isProject || drawer == null ? null : _Shown(onShown: _onDrawerShown, child: drawer),
-      onDrawerChanged: _isProject
-          ? null
-          : (open) {
-              _drawerOpen = open;
-              _cover?.set(open);
-            },
-      body: ShellPage(
-        covered: _drawerShown,
-        lead: lead,
-        headerHeight: Layout.chatTitle,
-        header: header,
-        child: _isProject
-            ? Scaffold(key: _inner, backgroundColor: Colors.transparent, drawer: drawer, onDrawerChanged: _onListChanged, body: body)
-            : body,
-      ),
+      body: ShellPage(lead: lead, headerHeight: Layout.chatTitle, header: header, child: body),
     );
   }
-}
-
-/// 抽屉内容的挂载 = 抽屉露出（DrawerController 只在没完全收起时才建抽屉内容），卸载 = 完全收起。
-/// 在帧后上报：挂载 / 卸载发生在别人的构建与拆树途中，那时不能让听的人 setState。
-class _Shown extends StatefulWidget {
-  const _Shown({required this.onShown, required this.child});
-  final ValueChanged<bool> onShown;
-  final Widget child;
-
-  @override
-  State<_Shown> createState() => _ShownState();
-}
-
-class _ShownState extends State<_Shown> {
-  late final ValueChanged<bool> _onShown = widget.onShown;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _onShown(mounted));
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _onShown(false));
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
 }
