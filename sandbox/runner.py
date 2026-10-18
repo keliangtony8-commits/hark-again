@@ -1126,8 +1126,9 @@ def parse_ps(text: str, limit: int | None = PROCESS_MAX) -> list[dict]:
         if len(parts) < 6 or not parts[0].isdigit():
             continue
         pid, pg, cpu, rss, et, args = parts
-        if args.startswith(("ps -eo", "sleep infinity")) or "/sys/fs/cgroup/memory" in args:
-            continue  # 查看命令本身、容器的占位进程
+        if (args.startswith(("ps -eo", "bash -c ps -eo", "sleep infinity")) or "/sys/fs/cgroup/memory" in args
+                or (args.startswith("python3 -c") and any(m in args for m in _COLLECTOR_MARKS))):
+            continue  # 查看命令本身（含外层 bash -c）、端口 / 后台任务采集脚本（python3 -c PORTS_PY / GROUPS_PY）、容器的占位进程
         try:
             out.append({"pid": int(pid), "pgid": int(pg), "cpu": float(cpu), "memory": int(rss) * 1024,
                         "elapsed": int(et), "command": args[:200]})
@@ -1341,6 +1342,9 @@ def box():
     return None
 print(json.dumps({"tck": tck, "seconds": t1 - t0, "groups": list(groups.values()), "box": box()}))
 """
+
+# v3.5.1 采集脚本在 ps 里的样子：`python3 -c <脚本>`，脚本里的换行 ps 显示成 '?' / 空格，所以按脚本第二行（各自独有的一句）认。
+_COLLECTOR_MARKS = tuple(src.strip().splitlines()[1] for src in (PORTS_PY, GROUPS_PY))
 
 
 def group_usage(text: str, cpus: float = CPUS) -> list[dict]:

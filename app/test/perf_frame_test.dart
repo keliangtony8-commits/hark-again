@@ -18,8 +18,11 @@ import 'package:assistant/core/chat_socket.dart';
 import 'package:assistant/core/session.dart';
 import 'package:assistant/features/chat/chat_controller.dart';
 import 'package:assistant/features/chat/message_view.dart';
+import 'package:assistant/features/computer/computer_screen.dart';
+import 'package:assistant/features/computer/computer_section.dart';
 import 'package:assistant/features/home/home_screen.dart';
 import 'package:assistant/features/me/me_screen.dart';
+import 'package:assistant/features/me/usage_screen.dart';
 import 'package:assistant/features/projects/projects_screen.dart';
 import 'package:assistant/theme/app_theme.dart';
 import 'package:assistant/theme/tokens.dart';
@@ -35,6 +38,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'chat_controller_test.dart' show FakeSocket;
+import 'support/computer_usage_fixture.dart';
 
 class _SignedIn extends SessionNotifier {
   @override
@@ -61,9 +65,19 @@ List<dynamic> _history(int n) => [
 class _Api implements Api {
   _Api(this.messages);
   final List<dynamic> messages;
+  int computerCalls = 0;
   @override
   Future<dynamic> get(String path) async {
     if (path == '/api/inbox') return {'unread': 0, 'latest': null};
+    // v3.5.1 我的电脑 / 用量页滚动用例：每次轮询 CPU 和运行时长都变（= 真机上每 5 秒一次的样子）
+    if (path == '/api/projects/me/computer') {
+      computerCalls++;
+      return computerFixture(cpu: 20.0 + computerCalls % 30, tick: computerCalls * 5);
+    }
+    if (path == '/api/browser/sessions') return browserSessionsFixture();
+    if (path == '/api/host') return hostFixture();
+    if (path == '/api/usage') return usageFixture();
+    if (path.startsWith('/api/usage/days/')) return usageDayFixture();
     if (path.startsWith('/api/conversations/c1')) return {'id': 'c1', 'messages': messages};
     final at = _t0.toUtc().toIso8601String();
     if (path == '/api/cards') {
@@ -238,6 +252,116 @@ Future<Map<String, Object>> _scroll(WidgetTester tester, Finder list, {double di
   };
 }
 
+/// 场景里的层（细分）：PictureLayer（每块单独录制的画）、ClipRRect / ClipRect / ClipPath 层、透明度层、毛玻璃层与取背景次数。
+Map<String, int> _layerCensus(WidgetTester tester) {
+  final m = <String, int>{'picture': 0, 'clip': 0, 'opacity': 0, 'backdrop': 0, 'shaderMask': 0, 'total': 0};
+  final keys = <BackdropKey>{};
+  var unkeyed = 0;
+  void walk(Layer? l) {
+    while (l != null) {
+      m['total'] = m['total']! + 1;
+      if (l is PictureLayer) m['picture'] = m['picture']! + 1;
+      if (l is ClipRRectLayer || l is ClipRectLayer || l is ClipPathLayer) m['clip'] = m['clip']! + 1;
+      if (l is OpacityLayer) m['opacity'] = m['opacity']! + 1;
+      if (l is ShaderMaskLayer) m['shaderMask'] = m['shaderMask']! + 1;
+      if (l is BackdropFilterLayer) {
+        m['backdrop'] = m['backdrop']! + 1;
+        if (l.backdropKey == null) {
+          unkeyed++;
+        } else {
+          keys.add(l.backdropKey!);
+        }
+      }
+      if (l is ContainerLayer) walk(l.firstChild);
+      l = l.nextSibling;
+    }
+  }
+
+  walk(tester.binding.renderViews.first.debugLayer);
+  m['flips'] = unkeyed + keys.length;
+  return m;
+}
+
+int _elementCount(WidgetTester tester) {
+  var n = 0;
+  void visit(Element e) {
+    n++;
+    e.visitChildren(visit);
+  }
+
+  tester.binding.rootElement!.visitChildren(visit);
+  return n;
+}
+
+/// 一页的滚动成本（v3.5.1 我的电脑 / 用量页）：滚 40 帧（缓起缓停，一路往下），每帧重建元素、paintChild 次数、CPU；
+/// 再空闲 30 帧（只有页里的循环动画在走）看每帧重画；最后 [poll] 给了就模拟一次轮询到新数据，那一帧重建多少元素。
+Future<Map<String, Object>> _scrollCost(WidgetTester tester, Finder scrollable, {Future<void> Function()? poll}) async {
+  final layers = _layerCensus(tester);
+  final elements = _elementCount(tester);
+  final r = _Rebuilds()..start();
+  var paints = 0;
+  debugOnProfilePaint = (o) => paints++;
+  final times = <int>[], perFrame = <int>[], paintFrame = <int>[];
+  final pos = tester.state<ScrollableState>(scrollable).position;
+  final gesture = await tester.startGesture(tester.getCenter(scrollable));
+  for (var i = 0; i < 60; i++) {
+    final before = r.total, p0 = paints;
+    await gesture.moveBy(Offset(0, -36.0 * math.sin((i + 1) / 61 * math.pi))); // 一路往下约 1400px（≈ 一次中速连续滑动）
+    final sw = Stopwatch()..start();
+    await tester.pump(const Duration(milliseconds: 16));
+    times.add(sw.elapsedMicroseconds);
+    perFrame.add(r.total - before);
+    paintFrame.add(paints - p0);
+  }
+  await gesture.up();
+  final scrolled = pos.pixels;
+  await _settle(tester);
+  final idle = <int>[], idleBuild = <int>[];
+  for (var i = 0; i < 30; i++) {
+    final p0 = paints, b0 = r.total;
+    await tester.pump(const Duration(milliseconds: 16));
+    idle.add(paints - p0);
+    idleBuild.add(r.total - b0);
+  }
+  var pollRebuilds = -1, pollPaints = -1, pollFrames = 0;
+  if (poll != null) {
+    await tester.runAsync(poll);
+    // 轮询到新数据后 600ms（38 帧）：一共重建多少元素、有几帧在重建（换数字的淡入淡出 / 进度条过渡会拖出一串动画帧）
+    final b0 = r.total, p0 = paints;
+    for (var i = 0; i < 38; i++) {
+      final b1 = r.total;
+      await tester.pump(const Duration(milliseconds: 16));
+      if (r.total > b1) pollFrames++;
+    }
+    pollRebuilds = r.total - b0;
+    pollPaints = paints - p0;
+    await _settle(tester);
+  }
+  debugOnProfilePaint = null;
+  r.stop();
+  int med(List<int> xs) => (xs..sort())[xs.length ~/ 2];
+  int p90(List<int> xs) => (xs..sort())[(xs.length * 0.9).floor()];
+  final cpuSorted = [...times]..sort();
+  return {
+    'scrolledPx': scrolled.round(),
+    'maxScrollPx': pos.maxScrollExtent.round(),
+    'elementsInTree': elements,
+    'elementsPerFrame(median)': med(perFrame),
+    'elementsPerFrame(p90)': p90(perFrame),
+    'elementsPerFrame(max)': perFrame.reduce(math.max),
+    'elementsTotal': perFrame.fold<int>(0, (a, b) => a + b),
+    'paintsPerFrame(median)': med(paintFrame),
+    'cpuMsPerFrame(median)': _median(times).toStringAsFixed(2),
+    'cpuMsPerFrame(p90)': (cpuSorted[(cpuSorted.length * 0.9).floor()] / 1000).toStringAsFixed(2),
+    'idlePaintsPerFrame(median)': med(idle),
+    'idleBuildsPerFrame(median)': med(idleBuild),
+    'pollRebuilds': pollRebuilds,
+    'pollPaints': pollPaints,
+    'pollBusyFrames': pollFrames,
+    ...{for (final e in layers.entries) 'layers.${e.key}': e.value},
+  };
+}
+
 void main() {
   testWidgets('聊天流式：每个 delta 只重建最后一条；毛玻璃取背景次数与离屏层', (tester) async {
     final app = await _pump(tester);
@@ -388,4 +512,26 @@ void main() {
     _report('sky-shader', {'frames': times.length - 2, 'rasterMsPerFrame(median)': _median(times.sublist(2)).toStringAsFixed(2)});
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('v3.5.1 我的电脑：滚动 / 空闲 / 轮询的帧成本', (tester) async {
+    final app = await _pump(tester);
+    app.router.push('/me/computer');
+    await _settle(tester);
+    final list = find.descendant(of: find.byType(ComputerScreen), matching: find.byType(Scrollable)).first;
+    final m = await _scrollCost(tester, list,
+        poll: () => app.container.read(computerProvider('me').notifier).reload());
+    _report('computer-scroll', m);
+    expect(m['layers.shaderMask'], 0);
+  });
+
+  testWidgets('v3.5.1 用量与花费：滚动 / 空闲的帧成本', (tester) async {
+    final app = await _pump(tester);
+    app.router.push('/me/usage');
+    await _settle(tester);
+    final list = find.descendant(of: find.byType(UsageScreen), matching: find.byType(Scrollable)).first;
+    final m = await _scrollCost(tester, list, poll: () => app.container.read(usageProvider.notifier).reload());
+    _report('usage-scroll', m);
+    expect(m['layers.shaderMask'], 0);
+  });
+
 }

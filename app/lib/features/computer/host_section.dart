@@ -37,8 +37,11 @@ class HostNotifier extends SwrNotifier<HostStatus> {
 final hostProvider = AsyncNotifierProvider.autoDispose<HostNotifier, HostStatus>(HostNotifier.new);
 
 class HostSection extends ConsumerStatefulWidget {
-  const HostSection({super.key, this.delay = Duration.zero});
+  const HostSection({super.key, this.delay = Duration.zero, this.titled = true});
   final Duration delay;
+
+  /// false = 子页里用，不画节标题（v3.5.1）。
+  final bool titled;
 
   @override
   ConsumerState<HostSection> createState() => _HostSectionState();
@@ -84,7 +87,7 @@ class _HostSectionState extends ConsumerState<HostSection> {
               key: const ValueKey('host'),
               delay: widget.delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SectionTitle(hostSectionTitle),
+                if (widget.titled) const SectionTitle(hostSectionTitle),
                 ListGroup(children: [_ToggleRow(status: s, busy: _toggling, onChanged: (on) => _toggle(s, on))]),
                 RiseSwitcher(
                   child: s.installed

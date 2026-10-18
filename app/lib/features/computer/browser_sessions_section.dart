@@ -38,8 +38,11 @@ final browserSessionsProvider =
     AsyncNotifierProvider.autoDispose<BrowserSessionsNotifier, List<BrowserSession>>(BrowserSessionsNotifier.new);
 
 class BrowserSessionsSection extends ConsumerStatefulWidget {
-  const BrowserSessionsSection({super.key, this.delay = Duration.zero});
+  const BrowserSessionsSection({super.key, this.delay = Duration.zero, this.titled = true});
   final Duration delay;
+
+  /// false = 子页里用，不画节标题（v3.5.1）。
+  final bool titled;
 
   @override
   ConsumerState<BrowserSessionsSection> createState() => _BrowserSessionsSectionState();
@@ -71,7 +74,7 @@ class _BrowserSessionsSectionState extends ConsumerState<BrowserSessionsSection>
               key: const ValueKey('sessions'),
               delay: widget.delay,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SectionTitle('浏览器登录'),
+                if (widget.titled) const SectionTitle('浏览器登录'),
                 ListGroup(children: [
                   if (list.isEmpty)
                     const ListRow(icon: Icons.public_rounded, title: browserSessionsEmpty, subtitle: browserSessionsEmptyLine)

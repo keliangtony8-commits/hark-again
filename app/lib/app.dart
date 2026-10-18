@@ -77,7 +77,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                       ),
                   routes: [
                 GoRoute(path: 'brief', builder: (_, s) => ProjectBriefScreen(id: s.pathParameters['id']!)),
-                GoRoute(path: 'computer', builder: (_, s) => ComputerScreen(ws: s.pathParameters['id']!)),
+                GoRoute(path: 'computer', builder: (_, s) => ComputerScreen(ws: s.pathParameters['id']!), routes: [
+                  // v3.5.1 电脑子页：tasks / ports / memory / processes / disk（见 computer_screen.dart）
+                  GoRoute(path: ':part', builder: (_, s) => ComputerDetailScreen(ws: s.pathParameters['id']!, part: s.pathParameters['part']!)),
+                ]),
               ]),
             ]),
           ]),
@@ -96,9 +99,14 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'feedback', builder: (_, _) => const FeedbackScreen(), routes: [
                 GoRoute(path: ':id', builder: (_, s) => FeedbackDetailScreen(id: s.pathParameters['id']!)),
               ]),
-              GoRoute(path: 'computer', builder: (_, s) => _spot(s, const ComputerScreen())),
+              GoRoute(path: 'computer', builder: (_, s) => _spot(s, const ComputerScreen()), routes: [
+                // v3.5.1 子页：tasks / ports / memory / processes / disk / browser-logins / pages / host
+                GoRoute(path: ':part', builder: (_, s) => ComputerDetailScreen(part: s.pathParameters['part']!)),
+              ]),
               GoRoute(path: 'pages', builder: (_, _) => const PagesScreen()),
-              GoRoute(path: 'usage', builder: (_, _) => const UsageScreen()),
+              GoRoute(path: 'usage', builder: (_, _) => const UsageScreen(), routes: [
+                GoRoute(path: ':part', builder: (_, s) => UsageDetailScreen(part: s.pathParameters['part']!)),
+              ]),
               GoRoute(path: 'profile', builder: (_, _) => const MeHubScreen(hub: MeHub.profile)),
               GoRoute(path: 'preferences', builder: (_, s) => _spot(s, const PreferencesScreen())),
               GoRoute(path: 'about', builder: (_, s) => _spot(s, const AboutScreen())),

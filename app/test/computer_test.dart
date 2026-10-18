@@ -1,4 +1,5 @@
-// 工作区的“电脑”（v1.25）：models/computer.dart 的文案规则 + ComputerSection（状态、内存条、正在跑的任务、取消、重启确认）。
+// 工作区的“电脑”（v1.25）：models/computer.dart 的文案规则 + 状态卡 / 后台任务 / 重启钮（v3.5.1 从 ComputerSection 拆开：
+// ComputerStatusGroup、ComputerJobsGroup、ComputerRestartButton；状态、内存条、正在跑的任务、取消、重启确认）。
 import 'package:assistant/core/api.dart';
 import 'package:assistant/features/computer/computer_section.dart';
 import 'package:assistant/models/computer.dart';
@@ -67,7 +68,14 @@ Future<_Api> _pump(WidgetTester tester, Map<String, dynamic> status) async {
     overrides: [apiProvider.overrideWithValue(api)],
     child: MaterialApp(
       theme: buildTheme(Brightness.light),
-      home: const Scaffold(body: SingleChildScrollView(child: ComputerSection(ws: 'me'))),
+      home: const Scaffold(
+        body: SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Align(alignment: Alignment.centerRight, child: ComputerRestartButton(ws: 'me')),
+            ComputerStatusGroup(ws: 'me'),
+          ]),
+        ),
+      ),
     ),
   ));
   for (var i = 0; i < 10; i++) {
@@ -186,7 +194,7 @@ void main() {
 
   testWidgets('重启：先确认，确认后 POST restart', (tester) async {
     final api = await _pump(tester, _status());
-    await tester.tap(find.text('重启'));
+    await tester.tap(find.byTooltip('重启')); // v3.5.1 标题行右侧玻璃圆钮
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
@@ -203,7 +211,7 @@ void main() {
   testWidgets('休眠 / 连不上：没有重启钮、没有内存条；连不上用警示图标', (tester) async {
     await _pump(tester, _status(state: 'stopped', job: false));
     expect(find.text('休眠中'), findsOneWidget);
-    expect(find.text('重启'), findsNothing);
+    expect(find.byTooltip('重启'), findsNothing);
     expect(find.byType(MeterBar), findsNothing);
   });
 
@@ -211,7 +219,7 @@ void main() {
     await _pump(tester, _status(state: 'unreachable', job: false));
     expect(find.text('无法连接沙盒'), findsOneWidget);
     expect(find.byIcon(Icons.cloud_off_rounded), findsOneWidget);
-    expect(find.text('重启'), findsNothing);
+    expect(find.byTooltip('重启'), findsNothing);
   });
 
   test('v2.85 同名服务合并（earlier_stops）+ 整台服务器一行 + 页头说清是隔出来的一块', () {

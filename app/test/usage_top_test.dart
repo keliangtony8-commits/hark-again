@@ -90,12 +90,12 @@ void main() {
     final c = await _pump(tester, api);
     expect(find.text('本月最花钱的对话'), findsOneWidget);
     expect(find.text('写论文'), findsOneWidget);
-    expect(find.text('已删除的对话'), findsOneWidget);
+    expect(find.text('已删除的对话 1 个'), findsOneWidget); // 已删的合并成一行
     expect(find.textContaining('占本月 80%'), findsOneWidget);
     expect(find.text('¥8.00'), findsOneWidget);
 
-    expect(find.descendant(of: find.byKey(const Key('top-conv-gone')), matching: find.byType(InkWell)), findsNothing);
-    await tester.tap(find.text('已删除的对话'));
+    expect(find.descendant(of: find.byKey(const Key('top-conv-deleted')), matching: find.byType(InkWell)), findsNothing);
+    await tester.tap(find.text('已删除的对话 1 个'));
     await tester.pumpAndSettle();
     expect(find.text('CHAT'), findsNothing);
 

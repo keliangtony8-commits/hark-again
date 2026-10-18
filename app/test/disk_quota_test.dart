@@ -41,7 +41,7 @@ Future<void> _pump(WidgetTester tester, Map<String, dynamic> status) async {
     child: MaterialApp(
       theme: buildTheme(Brightness.light),
       home: const Scaffold(
-        body: SingleChildScrollView(child: Column(children: [ComputerSection(ws: 'me'), StorageSection(ws: 'me')])),
+        body: SingleChildScrollView(child: Column(children: [ComputerStatusGroup(ws: 'me'), StorageSection(ws: 'me')])),
       ),
     ),
   ));

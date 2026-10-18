@@ -9,6 +9,7 @@ import 'package:assistant/ui/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 Map<String, dynamic> report({double? budget, List<String> priced = const ['fast'], double month = 12, double today = 1.5}) => {
       'currency': 'CNY',
@@ -50,7 +51,94 @@ Future<void> pump(WidgetTester tester, FakeApi api) async {
   await tester.pumpAndSettle();
 }
 
+/// 4 个模型、5 个活着的对话 + 3 个已删的（合并后 6 行）。
+Map<String, dynamic> busy() {
+  final r = report(budget: 30, priced: ['fast', 'embed', 'm3', 'm4']);
+  (r['month'] as Map)['models'] = [
+    for (final m in ['fast', 'embed', 'm3', 'm4']) {'model': m, 'calls': 1, 'prompt_tokens': 10, 'completion_tokens': 1, 'cost': 1.0},
+  ];
+  r['conversations'] = [
+    {'id': 'a', 'title': 'A', 'calls': 5, 'tokens': 500, 'cost': 3.0},
+    {'id': 'x1', 'title': null, 'calls': 2, 'tokens': 200, 'cost': 2.0},
+    {'id': 'b', 'title': 'B', 'calls': 1, 'tokens': 100, 'cost': 1.5},
+    {'id': 'x2', 'title': null, 'calls': 1, 'tokens': 100, 'cost': 1.0},
+    {'id': 'c', 'title': 'C', 'calls': 1, 'tokens': 80, 'cost': 0.8},
+    {'id': 'd', 'title': 'D', 'calls': 1, 'tokens': 60, 'cost': 0.6},
+    {'id': 'x3', 'title': null, 'calls': 1, 'tokens': 50, 'cost': 0.5},
+    {'id': 'e', 'title': 'E', 'calls': 1, 'tokens': 40, 'cost': 0.4},
+  ];
+  return r;
+}
+
+Future<void> pumpRouted(WidgetTester tester, FakeApi api) async {
+  final router = GoRouter(initialLocation: '/me/usage', routes: [
+    GoRoute(path: '/me/usage', builder: (_, _) => const UsageScreen(), routes: [
+      GoRoute(path: ':part', builder: (_, s) => UsageDetailScreen(part: s.pathParameters['part']!)),
+    ]),
+  ]);
+  await tester.pumpWidget(ProviderScope(
+    overrides: [apiProvider.overrideWithValue(api), cacheStoreProvider.overrideWithValue(MemoryCacheStore())],
+    child: MaterialApp.router(theme: buildTheme(Brightness.light), routerConfig: router),
+  ));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  test('deleted conversations merge into one row (summed)', () {
+    final rows = TopConversationList.rowsOf(UsageReport.fromJson(busy()).conversations);
+    expect(rows.length, 6);
+    final deleted = rows.where((r) => r.$1.deleted).toList();
+    expect(deleted.length, 1);
+    expect(rows[1].$1.id, 'deleted'); // 排在第一个已删对话的位置
+    expect(deleted.single.$2, 3);
+    expect(deleted.single.$1.tokens, 350);
+    expect(deleted.single.$1.cost, closeTo(3.5, 1e-9));
+  });
+
+  testWidgets('screen: one overview card, top 3 rows, 全部 › opens the full sub page', (tester) async {
+    await pumpRouted(tester, FakeApi(busy()));
+    // 概览卡：今天 + 本月调用，不再有重复的“本月 token”
+    expect(find.text('本月 token'), findsNothing);
+    expect(find.byKey(const Key('usage-today')), findsOneWidget);
+    expect(find.byKey(const Key('usage-calls')), findsOneWidget);
+    // 已删除合并成一行
+    expect(find.text('已删除的对话 3 个'), findsOneWidget);
+    // limit 生效：对话前 3 行（A、已删合并、B），模型前 3 个
+    expect(find.byKey(const Key('top-conv-a')), findsOneWidget);
+    expect(find.byKey(const Key('top-conv-deleted')), findsOneWidget);
+    expect(find.byKey(const Key('top-conv-c')), findsNothing);
+    expect(find.text('全部 8 个 ›'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('m3'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    expect(find.text('m3'), findsOneWidget);
+    expect(find.text('m4'), findsNothing);
+    // 全部 › 进子页：全量
+    await tester.ensureVisible(find.byKey(const Key('usage-all-models')));
+    await tester.tap(find.byKey(const Key('usage-all-models')));
+    await tester.pumpAndSettle();
+    expect(find.text('本月按模型'), findsOneWidget);
+    expect(find.text('m4'), findsOneWidget);
+    Navigator.of(tester.element(find.text('m4'))).pop();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.byKey(const Key('usage-all-conversations')), -200, scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('usage-all-conversations')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('top-conv-e')), findsOneWidget);
+    expect(find.text('已删除的对话 3 个'), findsOneWidget);
+  });
+
+  testWidgets('ModelUsageList without limit shows every model (chat usage)', (tester) async {
+    final r = UsageReport.fromJson(busy());
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(Brightness.light),
+      home: Scaffold(body: ModelUsageList(models: r.month.models, priced: r.priced, currency: r.currency)),
+    ));
+    for (final m in ['fast', 'embed', 'm3', 'm4']) {
+      expect(find.text(m), findsOneWidget);
+    }
+  });
+
   test('prompt cache hit label', () {
     expect(cacheHitLabel(0, 100), isNull);
     expect(cacheHitLabel(10, 0), isNull);
