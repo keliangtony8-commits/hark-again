@@ -81,6 +81,11 @@ ps = runner.parse_ps(PS)
 assert [p["pid"] for p in ps] == [42, 43], ps
 assert ps[0] == {"pid": 42, "pgid": 42, "cpu": 87.5, "memory": 204800 * 1024, "elapsed": 185, "command": "python train.py --epochs 10"}
 assert len(runner.parse_ps("\n".join(f"{i} {i} 1.0 10 5 job{i}" for i in range(1, 20)))) == runner.PROCESS_MAX
+# v3.5.1 采集进程不算：外层 bash -c ps、python3 -c PORTS_PY / GROUPS_PY（ps 把脚本换行显示成 ?）
+_flat = lambda src: src.replace("\n", "?")[:180]
+_coll = "\n".join([f"7 7 9.0 100 1 bash -c {runner._PS}", f"8 8 5.0 100 1 python3 -c {_flat(runner.PORTS_PY)}",
+                    f"9 9 5.0 100 1 python3 -c {_flat(runner.GROUPS_PY)} 0.5 42", "42 42 1.0 100 9 python app.py"])
+assert [p["pid"] for p in runner.parse_ps(_coll)] == [42], runner.parse_ps(_coll)
 assert runner.mem_bytes("1g") == 2**30 and runner.mem_bytes("512m") == 512 * 2**20 and runner.mem_bytes("1.5G") == int(1.5 * 2**30)
 assert runner.mem_bytes("lots") is None
 c = FakeContainer("running"); c.name = "sbx-me"; containers["sbx-me"] = c

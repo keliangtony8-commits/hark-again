@@ -255,6 +255,8 @@ class PullRefresh extends StatelessWidget {
           return onRefresh();
         },
         edgeOffset: MediaQuery.paddingOf(context).top,
+        // v3.5.1：只在页面停在顶部时收滚动通知——不在顶部时 RefreshIndicator 不会每帧 setState 重建；下拉刷新照常。
+        notificationPredicate: (n) => n.depth == 0 && n.metrics.extentBefore == 0,
         child: child,
       );
 }

@@ -47,10 +47,12 @@ class SubPage extends StatelessWidget {
           body: Builder(builder: (context) {
             // Scaffold 已把胶囊让位加进 padding.top：inset = 状态栏 + Layout.shellTop
             final top = MediaQuery.viewPaddingOf(context).top;
-            final solid = BackdropFade.solidOf(MediaQuery.paddingOf(context).top);
+            // v3.5.1：完全遮住到标题行底边（返回钮 / 标题下面绝不透出内容），渐显到内容静止上沿（让位线 + Sp.x2）。
+            final clear = top + Layout.topBarTop + Layout.topBar;
+            final solid = MediaQuery.paddingOf(context).top + Sp.x2;
             return Stack(children: [
               Positioned.fill(child: body),
-              Positioned(top: 0, left: 0, right: 0, height: solid, child: BackdropFade(clear: BackdropFade.clearOf(top, 0), solid: solid)),
+              Positioned(top: 0, left: 0, right: 0, height: solid, child: BackdropFade(clear: clear, solid: solid)),
             ]);
           }),
         ),

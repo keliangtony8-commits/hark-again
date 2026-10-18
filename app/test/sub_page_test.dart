@@ -56,8 +56,8 @@ void main() {
     expect(find.byTooltip('返回'), findsNothing); // 首页路由退不了：不出返回钮（= AppBar 规则）
 
     final fade = tester.widget<BackdropFade>(find.byType(BackdropFade));
-    expect(fade.clear, BackdropFade.clearOf(0, 0));
-    expect(fade.solid, BackdropFade.solidOf(Layout.shellTop));
+    expect(fade.clear, Layout.topBarTop + Layout.topBar); // v3.5.1：完全遮住到标题行底边
+    expect(fade.solid, Layout.shellTop + Sp.x2); // 渐显到内容静止上沿
     final refresh = tester.widget<RefreshIndicator>(find.byType(RefreshIndicator));
     expect(refresh.edgeOffset, _bodyTop); // 转圈从标题栏下面出来
     expect(find.byType(ListGroup), findsOneWidget); // 分组只有 ListGroup 一种实现（v2.97 E1）
