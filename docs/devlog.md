@@ -576,3 +576,17 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 - 验证：flutter analyze 0；flutter test 全量 768 过 / 9 跳过；Web tsc -b、npm test 14/14、npm run build（架构守卫 222 文件 + 配色守门）过。
 - 成本：只换填充色，不加图层、不加模糊；perf 结构计数不变（未单独重跑帧耗时）。
 - 截图：App /workspace/work/glass-shots/app（14 张），拼图 /workspace/work/glass-shots/app-montage.png（主页 / 我的 × 明暗），和 Hark 并排 /workspace/work/glass-shots/app-vs-hark.png；Web /workspace/work/glass-shots/web（shots.py 全量 138 张）。浅色导航胶囊在蓝天上是透出来的浅蓝灰、“我的”搜索框在暖底上是奶油色；深色浮层是比卡略亮一档的透明炭灰。我们的浅色壁纸本身比 Hark 淡（夜间顶 #8ebbe3 vs Hark #3a6d99），同样 50% 白看起来比 Hark 的 (149,180,205) 浅，这是壁纸差异不是玻璃。**未验证**：真机 GPU 模糊下的观感。
+
+## 2026-10-18 v3.5.1 电脑页 / 用量页精简（两端；HANDOFF 第二节第 28 条，用户 00:24 / 00:27“太长了”“卡顿”“优化，再优化”）
+- 决定：子页首屏约一屏讲完概况，长列表露前 3 + “全部 ›”进子页，同一信息只出现一次；轮询只重建数值变了的行，滚动不重建。替换：电脑页原来所有分节平铺一页 → 一屏概览 + 明细子页（App computer_screen / computer_section，Web 同构 a0bcfdc）；用量页多张卡 → 一张概览卡 + 前 3（App dbaeb72，Web 31621d3）。不删信息，明细都还在子页里。
+- 测量（App perf_frame_test，412×915，test/support/computer_usage_fixture.dart 同一份假数据，改前 → 改后）：电脑页 maxScroll 3522 → 94；滚动时每帧重建 max 189 → 15；一次轮询重建 677 → 59；opacity 层 33 → 12。
+- 配套（d8c08d6 / d8a2d73）：
+  - PullRefresh 只在滚动位置在顶部时收滚动通知，中段滚动不再每帧走下拉刷新逻辑。
+  - `SettleOpacity`（app/lib/ui/motion.dart）：淡入到 1 后不留 OpacityLayer；懒构建后补出来的行直接终态，不再逐个淡入。
+  - 采集进程过滤：sandbox/runner.py `parse_ps` 滤掉采集命令自己的进程，后台任务列表不再出现采集本身（backend/tests/smoke_computer_extras.py 加断言）。
+- 验证：flutter test 全量 787 过 / 11 跳过；Web 全过。**未验证**：真机滚动手感与光栅耗时。
+
+## 2026-10-18 v3.5.1 五色流光（两端；HANDOFF 第二节第 28 条“流光照 Hark”）
+- 决定：流光改成肉眼明显流动的多色柔光：白天在蓝 / 淡紫 / 蜜桃珊瑚 / 薄荷 / 暖金五色之间按时间轮转，5 团高斯柔光叠出层次。替换：原三团柔光 + CSS 渐变 → App 单片元着色器（app/shaders/sky.frag、ui/sky.dart），Web WebGL（frontend/src/lib/skyGl.ts，删 base.css 里原渐变动画），两端同一核心算法、同一色表（App tokens.dart = Web tokens.css / sky.ts）。减少动态只随时间换色不流动、减少透明度纯色，照旧。对比度守门（sky_test.dart / check-contrast.mjs）按新壁纸采样重跑并通过。
+- 测量：Web 无头 Chromium 4× CPU，>20ms 帧 /#/ 334 → 约 150，/#/me 约 318 → 40（WebGL 替掉 CSS 渐变后反而更省）；App 沙盒软件光栅每帧 28 → 37ms（软件光栅跑片元着色器的成本，不代表真机 GPU）。
+- **未验证**：真机 GPU 上流光的光栅耗时、真 GPU Chrome trace。
