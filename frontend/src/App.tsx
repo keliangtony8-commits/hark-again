@@ -15,7 +15,7 @@ import SecurityScreen from "./features/me/SecurityScreen";
 import FeedbackScreen from "./features/me/FeedbackScreen";
 import FeedbackDetail from "./features/me/FeedbackDetail";
 import PagesScreen from "./features/me/PagesScreen";
-import UsageScreen from "./features/me/UsageScreen";
+import UsageScreen, { UsageDetailScreen } from "./features/me/UsageScreen";
 import MeHub from "./features/me/MeHub";
 import PreferencesScreen from "./features/me/PreferencesScreen";
 import AboutScreen from "./features/me/AboutScreen";
@@ -57,6 +57,7 @@ export default function App() {
           <Route path="me/computer" element={<ComputerScreen />} />
           <Route path="me/pages" element={<PagesScreen />} />
           <Route path="me/usage" element={<UsageScreen />} />
+          <Route path="me/usage/:part" element={<UsageDetailScreen />} />
           <Route path="me/profile" element={<MeHub hub="profile" />} />
           <Route path="me/preferences" element={<PreferencesScreen />} />
           <Route path="me/about" element={<AboutScreen />} />
