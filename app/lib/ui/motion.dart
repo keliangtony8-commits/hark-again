@@ -1083,8 +1083,20 @@ class SkyClock with WidgetsBindingObserver {
     _sync();
   }
 
+  /// v3.5.2 滑动期间暂停（ui/sky.dart SkyScrollPause）：停 Timer 和秒表，放开后从停下的那一刻接着走（柔光不跳）。可叠加，成对调用。
+  void hold(bool on) {
+    _holds = math.max(0, _holds + (on ? 1 : -1));
+    _sync();
+  }
+
+  int _holds = 0;
+
+  /// 测试用：此刻是否被滑动暂停。
+  @visibleForTesting
+  bool get held => _holds > 0;
+
   void _sync() {
-    final Duration? want = frozen || !_resumed
+    final Duration? want = frozen || !_resumed || _holds > 0
         ? null
         : _animators > 0
             ? Sky.frame

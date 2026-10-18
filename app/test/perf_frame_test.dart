@@ -492,24 +492,51 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final prog = await tester.runAsync(() => ui.FragmentProgram.fromAsset('shaders/sky.frag'));
-    SkyShader.program = prog;
-    addTearDown(() => SkyShader.program = null);
+    final blit = await tester.runAsync(() => ui.FragmentProgram.fromAsset('shaders/sky_blit.frag'));
+    addTearDown(() => SkyShader.program = SkyShader.blit = null);
+    addTearDown(SkyFrames.clear);
     final clock = SkyClock.forTest(frozen: true);
     await tester.pumpWidget(MaterialApp(theme: buildTheme(Brightness.light), home: SkyLayer(clock: clock)));
     final boundary = tester.renderObject<RenderRepaintBoundary>(find.descendant(of: find.byType(SkyLayer), matching: find.byType(RepaintBoundary)));
-    final times = <int>[];
-    for (var i = 0; i < 12; i++) {
-      clock.time.value = 7.0 + i * 1.3;
-      await tester.pump();
-      await tester.runAsync(() async {
-        final sw = Stopwatch()..start();
-        final img = await boundary.toImage();
-        await img.toByteData(); // 等它真画完
-        times.add(sw.elapsedMicroseconds);
-        img.dispose();
-      });
+    final paint = tester.renderObject<RenderCustomPaint>(find.descendant(of: find.byType(SkyLayer), matching: find.byType(CustomPaint)));
+    // step = 时钟走了一步（v3.5.2 要重画低分辨率图）；same = 时钟没走、只是重光栅（Impeller 滑动帧：没有 raster cache，每帧重放）
+    Future<String> measure({required bool step}) async {
+      final times = <int>[];
+      for (var i = 0; i < 12; i++) {
+        if (step || i == 0) {
+          clock.time.value = 7.0 + i * 1.3;
+        } else {
+          paint.markNeedsPaint();
+        }
+        await tester.pump();
+        await tester.runAsync(() async {
+          final sw = Stopwatch()..start();
+          final img = await boundary.toImage();
+          await img.toByteData(); // 等它真画完
+          times.add(sw.elapsedMicroseconds);
+          img.dispose();
+        });
+      }
+      return _median(times.sublist(2)).toStringAsFixed(2);
     }
-    _report('sky-shader', {'frames': times.length - 2, 'rasterMsPerFrame(median)': _median(times.sublist(2)).toStringAsFixed(2)});
+
+    SkyShader.program = prog;
+    SkyShader.blit = null;
+    final direct = await measure(step: true);
+    SkyShader.blit = blit;
+    final renders0 = SkyFrames.renders;
+    final stepped = await measure(step: true);
+    final renders1 = SkyFrames.renders;
+    final same = await measure(step: false);
+    _report('sky-shader', {
+      'frames': 10,
+      'direct(v3.5.1) rasterMsPerFrame(median)': direct,
+      'lowres clock-step rasterMsPerFrame(median)': stepped,
+      'lowres same-step(scroll) rasterMsPerFrame(median)': same,
+    });
+    expect(renders1 - renders0, 12); // 每个时钟步一张
+    expect(SkyFrames.renders - renders1, 1); // 时钟不走：只有第一帧换步，其余复用
+    expect(SkyFrames.held, 1);
     expect(tester.takeException(), isNull);
   });
 

@@ -36,6 +36,7 @@ import 'theme/look.dart';
 import 'ui/glass.dart';
 import 'ui/kit.dart' show SpotlightScope;
 import 'ui/motion.dart';
+import 'ui/sky.dart' show SkyScrollPause;
 import 'theme/tokens.dart';
 import 'brand.dart';
 
@@ -168,7 +169,7 @@ class AssistantApp extends ConsumerWidget {
         maxScaleFactor: A11y.textScaleMax,
         child: AnnotatedRegion<SystemUiOverlayStyle>(
           value: systemOverlay(Theme.of(context).brightness),
-          child: GlassMode(solid: solid, child: child!),
+          child: GlassMode(solid: solid, child: SkyScrollPause(child: child!)), // v3.5.2 滑动期间暂停流光（ui/sky.dart）
         ),
       ),
       routerConfig: ref.watch(routerProvider),

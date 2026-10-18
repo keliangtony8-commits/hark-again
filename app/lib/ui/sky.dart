@@ -3,7 +3,12 @@
 // 颜色来自 tokens.dart SkyTable（按钟点插值），每团的位置 / 形状 / 此刻颜色在画笔里每帧算一次（Sky.blobs、SkyPhase.hue）。
 // 成本：自身是重绘边界，只有这一层按 SkyClock（≈30 帧/秒）重画，上面的内容不重建、不重绘；着色器每像素 5 次 exp（原 3 次）。
 // 被盖住（不可见路由 / 后台 Tab / 外壳分支里的不透明子页进场完成后，见 SkyCover）：退订时钟、画笔不听时钟，恢复时直接取此刻（v3.3 B4）。
+// v3.5.2 贴图（Impeller 没有 raster cache，原来滑动时每个 vsync 都整屏重跑着色器）：每个时钟步（33ms）只在 1/4 分辨率离屏跑一次 sky.frag
+// （[SkyFrames]，Picture.toImageSync），整屏壁纸和渐隐条都用 sky_blit.frag 把这张图双线性放大贴上 + 原来那份抖动（按屏幕像素），
+// 时钟没走（滑动中 SkyClock 暂停、或别的层在重画）就复用同一张图：滑动帧只贴图、不跑柔光。贴图着色器没加载好时照旧直接整屏跑 sky.frag。
 // 回退（着色器没加载好 / 测试环境）：同色的竖向 LinearGradient，不闪。
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -15,6 +20,9 @@ import 'motion.dart';
 
 class SkyShader {
   static ui.FragmentProgram? program;
+
+  /// v3.5.2 贴图着色器（shaders/sky_blit.frag）：有它时 [program] 只在离屏低分辨率图里跑（[SkyFrames]）。
+  static ui.FragmentProgram? blit;
   static Future<void>? _loading;
 
   /// 着色器加载完成时 +1：静止（减少动态）的壁纸也会立刻从回退渐变换成着色器。
@@ -22,7 +30,10 @@ class SkyShader {
 
   static void ensureLoaded() {
     if (SkyClock.inTest || _loading != null) return;
-    _loading = ui.FragmentProgram.fromAsset('shaders/sky.frag').then<void>((p) {
+    _loading = ui.FragmentProgram.fromAsset('shaders/sky.frag').then<void>((p) async {
+      try {
+        blit = await ui.FragmentProgram.fromAsset('shaders/sky_blit.frag');
+      } catch (_) {} // 贴图着色器没加载好：直接整屏跑 sky.frag（v3.5.1 的画法）
       program = p;
       loaded.value++;
     }, onError: (Object _) {}); // 加载失败：一直用回退渐变
@@ -138,7 +149,7 @@ class SkyLayerState extends State<SkyLayer> {
     final p = context.palette;
     return RepaintBoundary(
       child: CustomPaint(
-        painter: _SkyPainter(sky: p.sky, clock: _clock, repaint: _repaint, screen: MediaQuery.sizeOf(context), fade: widget.fade, fadeLocal: widget.fadeLocal, context: context),
+        painter: _SkyPainter(sky: p.sky, clock: _clock, repaint: _repaint, screen: MediaQuery.sizeOf(context), dpr: MediaQuery.devicePixelRatioOf(context), fade: widget.fade, fadeLocal: widget.fadeLocal, context: context),
         child: const SizedBox.expand(),
       ),
     );
@@ -239,11 +250,12 @@ class _SkyCoverState extends State<SkyCover> {
 }
 
 class _SkyPainter extends CustomPainter {
-  _SkyPainter({required this.sky, required this.clock, required Listenable repaint, required this.screen, required this.fade, this.fadeLocal = false, required this.context}) : super(repaint: repaint);
+  _SkyPainter({required this.sky, required this.clock, required Listenable repaint, required this.screen, required this.dpr, required this.fade, this.fadeLocal = false, required this.context}) : super(repaint: repaint);
   final SkyTable sky;
   final bool fadeLocal;
   final SkyClock clock;
   final Size screen;
+  final double dpr;
   final (double, double)? fade;
   final BuildContext context;
 
@@ -257,15 +269,13 @@ class _SkyPainter extends CustomPainter {
     final dy = fadeLocal ? origin.dy : 0.0;
     final fade = this.fade == null ? null : (this.fade!.$1 + dy, this.fade!.$2 + dy);
     final program = SkyShader.program;
-    if (program != null && screen.height > 0) {
-      final s = program.fragmentShader();
+    final blit = SkyShader.blit;
+    if (program != null && blit != null && screen.height > 0 && screen.width > 0) {
+      // v3.5.2：贴这一时钟步的低分辨率图（同一步里所有层共用一张，见 SkyFrames）
+      final img = SkyFrames.frame(program: program, sky: sky, clock: clock, screen: screen, dpr: dpr);
+      final s = blit.fragmentShader();
       var i = 0;
       void f(double v) => s.setFloat(i++, v);
-      void c(Color x) {
-        f(x.r);
-        f(x.g);
-        f(x.b);
-      }
       f(size.width);
       f(size.height);
       f(origin.dx);
@@ -275,23 +285,12 @@ class _SkyPainter extends CustomPainter {
       f(fade == null ? 0 : 1);
       f(fade?.$1 ?? 0);
       f(fade?.$2 ?? 0);
-      c(phase.top);
-      c(phase.bottom);
-      // 只跟时间有关的量每帧在这里算一次（5 团 × 几个 sin/cos），着色器每像素只做高斯
-      final aspect = screen.width / screen.height;
-      for (final b in Sky.blobs) {
-        final at = b.at(time.value, aspect);
-        f(at.x);
-        f(at.y);
-        // M = diag(kx, ky) · R(θ)：先转到这一团的方向，再按两条轴缩放
-        f(at.kx * at.cos);
-        f(at.kx * at.sin);
-        f(-at.ky * at.sin);
-        f(at.ky * at.cos);
-        c(phase.hue(time.value / Sky.hueStep + b.hue));
-        f(b.mix);
-      }
+      s.setImageSampler(0, img, filterQuality: FilterQuality.low); // 双线性放大
       canvas.drawRect(rect, Paint()..shader = s);
+      return;
+    }
+    if (program != null && screen.height > 0) {
+      SkyFrames.paintShader(canvas, program, rect: rect, origin: origin, screen: screen, fade: fade, phase: phase, time: time.value);
       return;
     }
     // 回退：同色竖向渐变（按 Sky.ramp 取 5 个色标，与着色器底色一致）
@@ -310,5 +309,166 @@ class _SkyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SkyPainter old) => old.sky != sky || old.clock != clock || old.screen != screen || old.fade != fade || old.fadeLocal != fadeLocal;
+  bool shouldRepaint(_SkyPainter old) => old.sky != sky || old.clock != clock || old.screen != screen || old.dpr != dpr || old.fade != fade || old.fadeLocal != fadeLocal;
+}
+
+/// v3.5.2 每个时钟步一张的低分辨率壁纸（物理像素的 1/4 × 1/4，sky.frag 离屏模式：不抖动、不透明）。
+/// 键 = 主题天色表 + 屏幕 + 像素比 + 时钟；图对应的 (time, hour) 没变就复用，变了才重画、旧图 dispose（已录进画面的那份由引擎持有，不受影响）。
+/// 最多留 [_keep] 个键（明暗切换渐变时天色表逐帧在变），多了丢最早的。
+abstract final class SkyFrames {
+  /// 每条边缩小的倍数。
+  static const scale = 4;
+  static const _keep = 3;
+  static final _frames = <(SkyTable, Size, double, SkyClock), _SkyFrame>{};
+
+  /// 测试用：重画过几次低分辨率图（每个时钟步一次，滑动帧不加）。
+  @visibleForTesting
+  static int renders = 0;
+
+  /// 测试用：此刻还持有几张图。
+  @visibleForTesting
+  static int get held => _frames.length;
+
+  @visibleForTesting
+  static void clear() {
+    for (final f in _frames.values) {
+      f.image.dispose();
+    }
+    _frames.clear();
+  }
+
+  static ui.Image frame({required ui.FragmentProgram program, required SkyTable sky, required SkyClock clock, required Size screen, required double dpr}) {
+    final key = (sky, screen, dpr, clock);
+    final t = clock.time.value, h = clock.hour.value;
+    final old = _frames[key];
+    if (old != null && old.time == t && old.hour == h) return old.image;
+    final w = math.max(1, (screen.width * dpr / scale).ceil()), hh = math.max(1, (screen.height * dpr / scale).ceil());
+    final rec = ui.PictureRecorder();
+    final c = Canvas(rec)..scale(w / screen.width, hh / screen.height);
+    paintShader(c, program, rect: Offset.zero & screen, origin: Offset.zero, screen: screen, fade: null, phase: sky.at(h), time: t, offscreen: true);
+    final pic = rec.endRecording();
+    final img = pic.toImageSync(w, hh);
+    pic.dispose();
+    renders++;
+    _frames.remove(key)?.image.dispose();
+    while (_frames.length >= _keep) {
+      _frames.remove(_frames.keys.first)!.image.dispose();
+    }
+    _frames[key] = _SkyFrame(img, t, h);
+    return img;
+  }
+
+  /// sky.frag 直接画（离屏低分辨率图；或贴图着色器没加载好时整屏直画）。
+  static void paintShader(Canvas canvas, ui.FragmentProgram program,
+      {required Rect rect, required Offset origin, required Size screen, required (double, double)? fade, required SkyPhase phase, required double time, bool offscreen = false}) {
+    final s = program.fragmentShader();
+    var i = 0;
+    void f(double v) => s.setFloat(i++, v);
+    void c(Color x) {
+      f(x.r);
+      f(x.g);
+      f(x.b);
+    }
+    f(rect.width);
+    f(rect.height);
+    f(origin.dx);
+    f(origin.dy);
+    f(screen.width);
+    f(screen.height);
+    f(offscreen ? -1 : fade == null ? 0 : 1); // -1 = 离屏：不抖动、不透明（sky.frag main）
+    f(fade?.$1 ?? 0);
+    f(fade?.$2 ?? 0);
+    c(phase.top);
+    c(phase.bottom);
+    // 只跟时间有关的量每步在这里算一次（5 团 × 几个 sin/cos），着色器每像素只做高斯
+    final aspect = screen.width / screen.height;
+    for (final b in Sky.blobs) {
+      final at = b.at(time, aspect);
+      f(at.x);
+      f(at.y);
+      // M = diag(kx, ky) · R(θ)：先转到这一团的方向，再按两条轴缩放
+      f(at.kx * at.cos);
+      f(at.kx * at.sin);
+      f(-at.ky * at.sin);
+      f(at.ky * at.cos);
+      c(phase.hue(time / Sky.hueStep + b.hue));
+      f(b.mix);
+    }
+    canvas.drawRect(rect, Paint()..shader = s);
+  }
+}
+
+class _SkyFrame {
+  _SkyFrame(this.image, this.time, this.hour);
+  final ui.Image image;
+  final double time, hour;
+}
+
+/// v3.5.2 滑动期间暂停流光（挂在 App 根部，app.dart MaterialApp.builder）：任一 Scrollable 开始滚动 → SkyClock.hold；
+/// 全部停下后 [resumeAfter] 再放开（时钟从停下的那一刻接着走，柔光不跳）。滑动帧只贴同一张图，不重画低分辨率图、UI 线程也不插帧。
+/// 万一某个 Scrollable 滚到一半被拆掉、收不到 ScrollEnd：[watchdog] 内没有任何滚动通知就当作已停。
+class SkyScrollPause extends StatefulWidget {
+  const SkyScrollPause({super.key, required this.child, this.clock});
+  final Widget child;
+
+  /// 测试注入；默认 SkyClock.instance。
+  final SkyClock? clock;
+
+  static const resumeAfter = Duration(milliseconds: 300);
+  static const watchdog = Duration(seconds: 3);
+
+  @override
+  State<SkyScrollPause> createState() => _SkyScrollPauseState();
+}
+
+class _SkyScrollPauseState extends State<SkyScrollPause> {
+  SkyClock get _clock => widget.clock ?? SkyClock.instance;
+  int _active = 0;
+  bool _held = false;
+  Timer? _resume, _dog;
+
+  bool _on(ScrollNotification n) {
+    if (_clock.frozen) return false; // 测试环境的冻结时钟：本来就不走，不起计时器
+    if (n is ScrollStartNotification) {
+      _active++;
+    } else if (n is ScrollEndNotification) {
+      _active = math.max(0, _active - 1);
+    }
+    if (_active > 0) {
+      _resume?.cancel();
+      _resume = null;
+      if (!_held) {
+        _held = true;
+        _clock.hold(true);
+      }
+      _dog?.cancel();
+      _dog = Timer(SkyScrollPause.watchdog, () {
+        _active = 0;
+        _release();
+      });
+    } else if (_held && _resume == null) {
+      _dog?.cancel();
+      _resume = Timer(SkyScrollPause.resumeAfter, _release);
+    }
+    return false; // 不拦：照常往上冒
+  }
+
+  void _release() {
+    _resume?.cancel();
+    _dog?.cancel();
+    _resume = _dog = null;
+    if (_held) {
+      _held = false;
+      _clock.hold(false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _release();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => NotificationListener<ScrollNotification>(onNotification: _on, child: widget.child);
 }

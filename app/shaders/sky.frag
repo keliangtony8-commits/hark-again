@@ -2,6 +2,7 @@
 // v3.5.1：五团柔光、各自漂移 + 旋转 + 伸缩、颜色在五个色相间轮转（用户 10-18：“要清楚地看到它在流动”“白天颜色不止一种”）。
 // 只跟时间有关的量（每团的中心、旋转、伸缩、此刻的颜色）在 Dart 里每帧算一次（ui/sky.dart，= theme/tokens.dart SkyBlob.at / SkyPhase.hue），
 // 着色器每像素只做：竖向底色 + 5 次高斯（每次一个 exp）+ 抖动，和 v3.3 的 3 次 exp 同一量级。
+// v3.5.2：App 里平时不直接上屏，而是每个时钟步在 1/4 分辨率离屏画一张图（uFade.x = -1），再由 sky_blit.frag 放大贴图 + 抖动。
 // uFade：> 0 时只画一条渐隐（ShellPage 的上沿渐隐：clear 以上全不透明、到 solid 渐成透明；v3.5 solid < clear 时是底部浮条下的渐隐），代替整页 ShaderMask 离屏层。
 #include <flutter/runtime_effect.glsl>
 
@@ -60,7 +61,13 @@ vec3 skyDither(vec3 col, vec2 px) {
 void main() {
   vec2 px = FlutterFragCoord().xy + uOrigin;
   vec2 uv = px / uScreen;              // 0..1，按屏幕
-  vec3 col = skyDither(skyColor(uv, uScreen.x / uScreen.y), px);
+  vec3 col = skyColor(uv, uScreen.x / uScreen.y);
+  // v3.5.2：uFade.x < 0 = 离屏低分辨率图（ui/sky.dart SkyFrames）：不抖动、不透明，抖动在 sky_blit.frag 按屏幕像素加
+  if (uFade.x < -0.5) {
+    fragColor = vec4(col, 1.0);
+    return;
+  }
+  col = skyDither(col, px);
 
   float a = 1.0;
   if (uFade.x > 0.5) {

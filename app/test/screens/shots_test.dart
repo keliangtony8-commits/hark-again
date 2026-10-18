@@ -693,7 +693,9 @@ void main() {
     await tester.runAsync(_loadFonts);
     await tester.runAsync(() => _seedImage(_offerImage));
     SkyShader.program = await tester.runAsync(() => ui.FragmentProgram.fromAsset('shaders/sky.frag'));
-    addTearDown(() => SkyShader.program = null);
+    // v3.5.2 贴图（低分辨率离屏 + 放大）；SHOTS_SKY_DIRECT=1 拍 v3.5.1 的整屏直画，用来对比
+    if (Platform.environment['SHOTS_SKY_DIRECT'] != '1') SkyShader.blit = await tester.runAsync(() => ui.FragmentProgram.fromAsset('shaders/sky_blit.frag'));
+    addTearDown(() => SkyShader.program = SkyShader.blit = null);
     tester.view.physicalSize = const Size(1080, 2340);
     tester.view.devicePixelRatio = 2.625;
     tester.view.padding = const FakeViewPadding(top: 63, bottom: 42);
