@@ -504,7 +504,7 @@ def main():
 
 
 def section_n():
-    """v2.91 §N 项目页：首屏状态胶囊、手机 ≡→+ 抽屉、进场药丸 / 停 1.5 秒收起 / 上翻浮出。只跑这一段：shots.py <目录> n"""
+    """v2.91 §N 项目页首屏（v3.5.2 起顶栏下是纯文字项目名，左上 ☰ = 回项目目录）。只跑这一段：shots.py <目录> n"""
     OUT.mkdir(parents=True, exist_ok=True)
     base = serve()
     with sync_playwright() as p:
@@ -522,11 +522,45 @@ def section_n():
                 page.goto(base + "/#/projects/pr1")
                 page.wait_for_timeout(800)
                 page.screenshot(path=str(OUT / f"{name}-{theme}-n-project-home.png"))
-                if name == "phone":  # v2.95：左上 ≡ = 项目切换栏（宽屏常驻左侧），开着时同一颗钮是“新建项目”
-                    page.get_by_role("button", name="切换项目").click()
-                    page.wait_for_timeout(500)
-                    page.screenshot(path=str(OUT / f"{name}-{theme}-n-drawer.png"))
                 ctx.close()
+        browser.close()
+    print("wrote", OUT)
+
+
+def section_dir():
+    """v3.5.2 照 Hark“项目 = 目录”：手机上项目目录 → 点进项目（☰）→ ☰ 回目录；聊天 ☰ → 对话目录。只跑这一段：shots.py <目录> dir"""
+    OUT.mkdir(parents=True, exist_ok=True)
+    base = serve()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=os.environ.get("SHOTS_CHROMIUM") or None)
+        for theme in ("dark", "light"):
+            ctx = browser.new_context(viewport={"width": 400, "height": 860}, device_scale_factor=2,
+                                      timezone_id="Asia/Shanghai", locale="zh-CN", color_scheme=theme)
+            ctx.add_init_script(f"localStorage.setItem('assistant.token','shot');localStorage.setItem('assistant.server','{base}');")
+            page = ctx.new_page()
+            page.on("pageerror", lambda e: print("PAGE ERROR:", e))
+            page.clock.set_fixed_time(NOW)
+            page.route("**/api/**", api)
+            page.route_web_socket("**/ws**", lambda ws: None)
+            page.goto(base + "/#/projects")
+            page.wait_for_timeout(900)
+            page.screenshot(path=str(OUT / f"phone-{theme}-dir-projects.png"))
+            page.get_by_text("考研数学").first.click()
+            page.wait_for_timeout(900)
+            page.screenshot(path=str(OUT / f"phone-{theme}-dir-project.png"))
+            page.get_by_role("button", name="项目", exact=True).click()  # ☰ = 退一页回目录
+            page.wait_for_timeout(600)
+            assert page.url.endswith("#/projects"), page.url
+            page.goto(base + "/#/chat")
+            page.wait_for_timeout(500)
+            page.get_by_role("button", name="历史", exact=True).click()
+            page.wait_for_timeout(600)
+            assert page.url.endswith("#/chat/history"), page.url
+            page.screenshot(path=str(OUT / f"phone-{theme}-dir-chat.png"))
+            page.get_by_text("DeepSeek 和 GPT 的价格对比").first.click()
+            page.wait_for_timeout(600)
+            assert page.url.endswith("#/chat"), page.url
+            ctx.close()
         browser.close()
     print("wrote", OUT)
 
@@ -614,6 +648,8 @@ def section_sky():
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[2] == "n":
         section_n()
+    elif len(sys.argv) > 2 and sys.argv[2] == "dir":
+        section_dir()
     elif len(sys.argv) > 2 and sys.argv[2] == "sky":
         section_sky()
     else:

@@ -54,6 +54,7 @@
   --fs-md: 16px;
   --fs-lg: 19px;
   --fs-xl: 30px;
+  --fs-dir: 24px;      /* v3.5.2 目录行（项目目录，= App Fs.dir，照 Hark 真机截图约 24） */
   --fs-display: 32px;  /* 页面主标题（无衬线 600、收紧字距） */
   --lh: 1.3;        /* 界面文字（= App Fs.lineHeight） */
   --lh-prose: 1.4;  /* v3.2 1.6→1.4； 只给要“读”的正文：聊天回复、记忆、文档（= App Fs.prose） */

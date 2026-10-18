@@ -1,17 +1,17 @@
-/* v2.93 §Q 项目列表（= App _ProjectRow）：一行一个大字项目名，下一行状态胶囊；v3.5 行上去掉 ⋯（菜单 = 右键 / 长按），行高 = App；不是“当前”的项目名用三级色（静态，不做颜色动画）。
-   骨架与行同高，换成内容不跳版 */
-.project-hero { height: var(--sp-5); }
-.project-list { display: flex; flex-direction: column; max-width: var(--content-w); }
-.project-skel { height: 88px; margin: var(--sp-2) 0 !important; border-radius: var(--r-inner); }
+/* v3.5.2 项目目录（= App _ProjectRow，照 Hark 真机截图）：顶栏下直接一行行裸字项目名（--fs-dir 24，单行省略），行尾状态小字；
+   没有大标题、卡片底、emoji、⋯（菜单 = 右键 / 长按）。不是“当前”的项目名用三级色（静态，不做颜色动画）。骨架与行同高，换成内容不跳版。
+   第一行离顶栏约 54（照截图，= App headTop + 12）。 */
+.project-list { display: flex; flex-direction: column; max-width: var(--content-w); padding-top: var(--sp-2); }
+.project-skel { height: 32px; margin: var(--sp-3) 0 !important; border-radius: var(--r-inner); }
 .project-row { position: relative; display: block; }
-.project-row-link { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3) 0; color: var(--text); border-radius: var(--r-inner);
+.project-row-link { display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-3) 0; color: var(--text); border-radius: var(--r-inner);
   -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; /* 长按出菜单，不出系统链接预览 / 选字 */
   transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease); }
 .project-row-link:hover { transform: translateX(2px); }
 .project-row-link:active { transform: scale(.98); transition-duration: var(--dur-fast); }
-.project-row-name { max-width: 100%; font-weight: var(--fw-strong); font-size: var(--fs-xl); line-height: 1.2; letter-spacing: var(--display-tracking);
-  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.project-row-status { display: flex; align-items: center; }
+.project-row-name { flex: 1; min-width: 0; font-weight: var(--fw-title); font-size: var(--fs-dir); line-height: var(--lh); letter-spacing: var(--display-tracking);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-row-status { flex: none; font-size: var(--fs-xs); color: var(--text-3); animation: fade var(--dur) var(--ease) both; }
 .project-row.is-quiet .project-row-name { color: var(--text-3); }
 .project-new { flex: none; padding: 0 var(--sp-5); }
 @media (prefers-reduced-motion: reduce) { .project-row-link, .project-row-link:hover { transition: none; transform: none; } }
@@ -25,23 +25,11 @@
 .form-field small.danger, .brief-error { color: var(--danger); }
 .brief-note { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--text-3); }
 
-/* v2.95 项目名药丸（= App ProjectPill）：顶栏下那一行，玻璃胶囊“emoji 名字 ▾”，点开项目菜单。
-   进页时从上方落下一次（float-in，只动 transform/opacity；减弱动效时 base.css 压到 1ms），之后常驻；按下轻缩 */
-.project-pill-slot { display: flex; justify-content: center; min-width: 0; max-width: 100%; animation: float-in var(--dur-slow) var(--spring) both; }
-.project-pill-slot .menu { min-width: 0; max-width: 100%; display: flex; }
-.project-pill { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; max-width: 280px; height: 34px; padding: 0 var(--sp-3) 0 var(--sp-4);
-  border-radius: var(--r-full); color: var(--text); font-size: var(--fs-sm); font-weight: var(--fw-title); line-height: 1.2;
-  transition: transform var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease); }
-.project-pill:active { transform: scale(.97); }
-.project-pill svg { flex: none; color: var(--text-3); }
-.project-pill-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (min-width: 861px) { .project-pill-slot { justify-content: flex-start; } }
-
-/* v2.95 项目切换栏（= App ProjectSwitcher）：复用历史面板的 .convs / .conv-item；当前项目 = .active 底色 + 加粗 */
-.switcher-row { text-align: left; min-height: 44px; }
-.switcher-row.active .conv-title { font-weight: var(--fw-strong); }
-.switcher-emoji { flex: none; font-size: var(--fs-md); }
-.switcher-skel { height: 36px; margin: var(--sp-2) var(--sp-1); border-radius: var(--r-inner); }
+/* v3.5.2 项目内顶栏下那一行（= App ProjectTitle）：纯文字项目名（无底、无 ⌄，同主聊天的对话标题小字），点开项目菜单 */
+.project-title { min-width: 0; max-width: 100%; padding: 0; color: inherit; font: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-radius: var(--r-inner); transition: opacity var(--dur-fast) var(--ease); }
+.project-title:active { opacity: .6; }
+.chat-top-name .menu { min-width: 0; max-width: 100%; display: flex; }
 
 /* v1.13 引用项目文件选择器 */
 .pick-note { margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); transition: color var(--dur-fast) var(--ease); }

@@ -9,7 +9,7 @@ import ShareSheet from "./ShareSheet";
 
 /** 聊天顶栏标题 + 下面一行本对话用量（“¥0.012 · 3.4K token”），点那行弹出按模型明细。与 App 的 ChatTitle 同规则。 */
 /** statusAsk：输入框 /status 每用一次 +1 → 打开用量面板（0 = 没要过）。
- *  head：v2.95 项目里这一行写项目名药丸（ProjectPill）代替标题，用量那行不画（= App 项目 header 只有药丸），/status 照样能打开明细。 */
+ *  head：项目里这一行写纯文字项目名（ProjectTitle，v3.5.2）代替标题，用量那行不画（= App 项目 header 只有项目名），/status 照样能打开明细。 */
 export default function ChatTitle({ title, conversationId, streaming, statusAsk = 0, head }: { title: string; conversationId: string | null; streaming: boolean; statusAsk?: number; head?: ReactNode }) {
   const { usage } = useConversationUsage(conversationId, streaming);
   const [open, setOpen] = useState(false);

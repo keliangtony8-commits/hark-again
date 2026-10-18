@@ -11,10 +11,12 @@ export const SEGMENTS = [
 
 export const ME = "/me";
 const PROJECT_PAGE = /^\/projects\/[^/]+$/;
+/** 一级页面之外、顶栏照常显示的“目录”页（v3.5.2 照 Hark：聊天的对话目录，= App shellBarShown 的 _directories）。 */
+const DIRECTORIES = ["/chat/history"];
 
-/** 浮动顶栏在这些路径上显示：三个一级栏目 + “我的” + 项目页（v2.93 §Q 项目对话也在一级外壳下，= App shellBarShown）；
+/** 浮动顶栏在这些路径上显示：三个一级栏目 + “我的” + 对话目录 + 项目页（v2.93 §Q 项目对话也在一级外壳下，= App shellBarShown）；
  *  项目的“电脑”、“我的”里的各个子页面让位给页面自己的返回钮和标题。 */
-export const isShellRoot = (path: string) => path === ME || SEGMENTS.some((s) => s.to === path) || PROJECT_PAGE.test(path);
+export const isShellRoot = (path: string) => path === ME || SEGMENTS.some((s) => s.to === path) || DIRECTORIES.includes(path) || PROJECT_PAGE.test(path);
 
 /** 当前路径属于哪个栏目（滑块位置）：/projects/:pid 仍算“项目”；“我的”不在分段里 → -1。 */
 const segmentOf = (path: string) => SEGMENTS.findIndex((s) => (s.end ? s.to === path : path === s.to || path.startsWith(`${s.to}/`)));

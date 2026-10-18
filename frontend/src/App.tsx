@@ -28,7 +28,7 @@ import AppShell from "./shell/AppShell";
 import { DialogHost } from "./ui/dialog";
 
 /** 路由表 = App 的地图。新增页面只在这里登记一行。HashRouter 兼容安卓 WebView。
- *  外壳在 / /chat /projects、项目页 /projects/:pid（v2.93 §Q）和“我的” /me（v3.5.1 第四个标签，顶栏头像进入）上显示浮动顶栏（shell/TopBar isShellRoot）。 */
+ *  外壳在 / /chat /projects、对话目录 /chat/history（v3.5.2）、项目页 /projects/:pid（v2.93 §Q）和“我的” /me（v3.5.1 第四个标签，顶栏头像进入）上显示浮动顶栏（shell/TopBar isShellRoot）。 */
 export default function App() {
   const [authed, setAuthed] = useState(!!auth.get());
   useEffect(() => onUnauthorized(() => { auth.clear(); resetProfile(); swrClear(); setAuthed(false); }), []);
@@ -41,6 +41,8 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<HomeScreen />} />
           <Route path="chat" element={<ChatScreen />} />
+          {/* v3.5.2 照 Hark：聊天 ☰ = 对话目录页（不是弹层）。和 /chat 挂同一个 ChatScreen：React 复用这一个实例，对话 / 连接不断 */}
+          <Route path="chat/history" element={<ChatScreen />} />
           <Route path="projects" element={<ProjectsScreen />} />
           <Route path="projects/:pid" element={<ProjectScreen />} />
           <Route path="projects/:pid/computer" element={<ComputerScreen />} />

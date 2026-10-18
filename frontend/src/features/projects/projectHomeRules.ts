@@ -5,7 +5,7 @@ import type { Project, ProjectFile } from "../../lib/types";
 
 export const activeAt = (p: Project) => p.last_active_at ?? p.updated_at;
 
-/** 最近有动静的排前面（= App byActivity；项目列表和项目切换栏共用）。 */
+/** 最近有动静的排前面（= App byActivity；项目目录用）。 */
 export const byActivity = (list: Project[]) => [...list].sort((a, b) => (Date.parse(activeAt(b) ?? "") || 0) - (Date.parse(activeAt(a) ?? "") || 0));
 
 /** v2.93 §Q 列表里哪些项目用正文色（其余变灰）：按最近活动排第一的那个，以及进行中 / 等你回复的（= App projectIsCurrent）。

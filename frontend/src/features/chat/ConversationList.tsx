@@ -18,8 +18,8 @@ type Props = {
 };
 
 /**
- * 主聊天的对话历史（v2.95 项目 = 一段对话后只剩主聊天用它；项目页左侧是项目切换栏 ProjectSwitcher）：搜索框 + 分组列表（置顶 / 今天 / …）+ 每行菜单（置顶、改名、全部文件、分享为网页、导出、删除）。
- * 桌面是常驻侧栏，移动端是抽屉——同一个组件，CSS 决定形态。数据全在 useConversations。
+ * 主聊天的对话历史（v2.95 项目 = 一段对话后只剩主聊天用它）：搜索框 + 分组列表（置顶 / 今天 / …）+ 每行菜单（置顶、改名、全部文件、分享为网页、导出、删除）。
+ * 桌面是常驻侧栏（标题 + 新对话条）；移动端是聊天标签里的对话目录页（v3.5.2 /chat/history：没有大标题，新对话 = 左上 +，裸字行）——同一个组件，CSS 决定形态。数据全在 useConversations。
  */
 export default function ConversationList({ title, list, activeId, onOpen, onDelete }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
