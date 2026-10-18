@@ -322,25 +322,74 @@ class _TypingDotsState extends State<TypingDots> with SingleTickerProviderStateM
 }
 
 /// 闪烁的小圆点（录音中、实时画面）。
+/// v3.5.2：30fps 节拍（[PulseDot.frame]）——AnimationController 每个 vsync 出一帧（120/144Hz 下整屏光栅一百多次 / 秒，只为一颗 8px 的点），
+/// 改成 Timer 按 33ms 一步算透明度：曲线不变（0.3 ↔ 1 线性往返，单程 Motion.pulse），只是步进。
+/// 不在台上（TickerMode 关：后台分支、被盖住的路由）不起 Timer；减少动态停在中间值（= 原来 value 0.5）。
 class PulseDot extends StatefulWidget {
   const PulseDot({super.key, required this.color, this.size = 8});
   final Color color;
   final double size;
 
+  /// 节拍：约 30fps。
+  static const frame = Duration(milliseconds: 33);
+
+  /// 往返周期里 [ms] 毫秒处的透明度（0.3 ↔ 1，单程 Motion.pulse）。
+  @visibleForTesting
+  static double opacityAt(int ms) {
+    final half = Motion.pulse.inMilliseconds;
+    final t = ms % (2 * half);
+    final phase = t <= half ? t / half : 2 - t / half;
+    return 0.3 + 0.7 * phase;
+  }
+
   @override
   State<PulseDot> createState() => _PulseDotState();
 }
 
-class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin, _LoopMotion {
-  late final _c = AnimationController(vsync: this, duration: Motion.pulse);
+class _PulseDotState extends State<PulseDot> {
+  final _watch = Stopwatch();
+  Timer? _timer;
+  double _opacity = PulseDot.opacityAt(0);
+
+  /// 测试用：此刻有没有在走节拍。
+  @visibleForTesting
+  bool get running => _timer != null;
+
   @override
-  AnimationController get loop => _c;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final onstage = TickerMode.valuesOf(context).enabled;
+    if (context.reduceMotion) {
+      _stop();
+      _opacity = PulseDot.opacityAt(Motion.pulse.inMilliseconds ~/ 2);
+    } else if (onstage) {
+      _timer ??= Timer.periodic(PulseDot.frame, (_) => _step());
+      _watch.start();
+    } else {
+      _stop();
+    }
+  }
+
+  void _stop() {
+    _timer?.cancel();
+    _timer = null;
+    _watch.stop();
+  }
+
+  void _step() {
+    final o = PulseDot.opacityAt(_watch.elapsedMilliseconds);
+    if (o != _opacity && mounted) setState(() => _opacity = o);
+  }
+
   @override
-  void startLoop() => _c.repeat(reverse: true);
+  void dispose() {
+    _stop();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => FadeTransition(
-    opacity: Tween(begin: 0.3, end: 1.0).animate(_c),
+    opacity: AlwaysStoppedAnimation(_opacity), // 每步重建一次（≤ 30 次 / 秒），不挂 Ticker
     child: Container(
       width: widget.size,
       height: widget.size,

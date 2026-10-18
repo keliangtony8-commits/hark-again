@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/perf_overlay.dart';
 import 'core/session.dart';
 import 'features/auth/login_screen.dart';
 import 'features/chat/chat_screen.dart';
@@ -158,6 +159,7 @@ class AssistantApp extends ConsumerWidget {
     return MaterialApp.router(
       title: appName,
       debugShowCheckedModeBanner: false,
+      showPerformanceOverlay: ref.watch(perfOverlayProvider).value ?? false, // v3.5.2 隐藏开关：关于页连点版本 5 次
       theme: _light,
       darkTheme: _dark,
       themeMode: mode,

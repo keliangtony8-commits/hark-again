@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../brand.dart';
+import '../../core/perf_overlay.dart';
 import '../../core/session.dart';
 import '../../models/version.dart';
 import '../../theme/tokens.dart';
@@ -12,11 +13,30 @@ import '../../ui/kit.dart';
 import '../../ui/motion.dart';
 import '../../ui/sub_page.dart';
 
-class AboutScreen extends ConsumerWidget {
+class AboutScreen extends ConsumerStatefulWidget {
   const AboutScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AboutScreen> createState() => _AboutScreenState();
+}
+
+class _AboutScreenState extends ConsumerState<AboutScreen> {
+  final _streak = TapStreak(); // v3.5.2 连点“版本”5 次 = 隐藏的性能浮层开关（core/perf_overlay.dart）
+
+  @override
+  void dispose() {
+    _streak.dispose();
+    super.dispose();
+  }
+
+  Future<void> _tapVersion() async {
+    if (!_streak.tap()) return;
+    final on = await ref.read(perfOverlayProvider.notifier).toggle();
+    if (mounted) showToast(context, on ? '性能浮层已打开，再连点 5 次关闭' : '性能浮层已关闭');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final server = ref.watch(sessionProvider).value?.server ?? '';
     final host = Uri.tryParse(server)?.host ?? '';
     final sv = ref.watch(serverVersionProvider).value;
@@ -27,7 +47,12 @@ class AboutScreen extends ConsumerWidget {
         FadeSlideIn(
           delay: Motion.stagger(1),
           child: ListGroup(children: [
-            Spotlight(id: 'version', row: true, child: ListRow(icon: Icons.tag_rounded, title: '版本', value: clientVersionLabel(sv))),
+            Spotlight(
+              id: 'version',
+              row: true,
+              // 不给 ListRow onTap：那会多一个箭头、像能点进去；这是隐藏开关
+              child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _tapVersion, child: ListRow(icon: Icons.tag_rounded, title: '版本', value: clientVersionLabel(sv))),
+            ),
             ListRow(icon: Icons.dns_outlined, title: '服务器', value: host.isEmpty ? '未设置' : host),
             if (sv != null) ListRow(icon: Icons.update_rounded, title: '服务器版本', value: sv.version),
             const ListRow(icon: Icons.text_fields_rounded, title: '字体', value: 'MiSans（小米）'), // MiSans 许可要求在软件中注明（= 网页 AboutScreen）

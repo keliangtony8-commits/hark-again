@@ -5,7 +5,9 @@
 // 它们是 SubPage，有自己的返回钮）就淡出让位。判定只有 shellBarShown 一处（网页 TopBar.tsx isShellRoot 同规则）。
 // 手机、平板同一套结构：平板上聊天的历史栏常驻由 ChatScaffold 决定，外壳不管宽度。
 // 收件箱提醒（横幅 + 主页角标）也挂在这一层：登录后才有外壳，正好是该轮询的范围。
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -54,8 +56,9 @@ class AppShell extends ConsumerWidget {
           child: BlurGroup(
               child: SkyCoverScope(
                   child: Stack(children: [
-        // 外壳壁纸：分支里的不透明子页（SubPage）进场完成后完全盖住它 → 暂停，返回一开始就恢复（ui/sky.dart SkyCover）
-        const Positioned.fill(child: Backdrop(coverable: true)),
+        // 外壳壁纸：分支里的不透明子页（SubPage）进场完成后完全盖住它 → 暂停，返回一开始就恢复（ui/sky.dart SkyCover）；
+        // v3.5.2 盖住期间连画都不画（SkipWhenCovered）：Impeller 每帧重放整棵 display list，只停时钟它照样每帧整屏跑着色器
+        const Positioned.fill(child: SkipWhenCovered(child: Backdrop(coverable: true))),
         Positioned.fill(child: shell),
         Positioned(
           top: 0,
@@ -76,6 +79,63 @@ class AppShell extends ConsumerWidget {
         ),
       ])))),
     );
+  }
+}
+
+/// 被外壳分支里的不透明子页完全盖住（[SkyCoverScope] 计数 > 0）时整个子树不画（v3.5.2，jank 诊断方案 2）。
+/// 不重建、不改布局、子树状态全保留：计数变化只 markNeedsPaint（计数可能在别处 build 期间变，不能 setState）。
+/// 盖住 / 撤销的时机全由 SkyCover 决定（进场完成后才 +1、返回一开始就 −1），所以看得见的那一帧之前一定已恢复。
+/// 没有 Scope 时照常画。
+class SkipWhenCovered extends SingleChildRenderObjectWidget {
+  const SkipWhenCovered({super.key, super.child});
+
+  @override
+  RenderSkipWhenCovered createRenderObject(BuildContext context) => RenderSkipWhenCovered(SkyCoverScope.coversOf(context));
+
+  @override
+  void updateRenderObject(BuildContext context, RenderSkipWhenCovered renderObject) => renderObject.covers = SkyCoverScope.coversOf(context);
+}
+
+class RenderSkipWhenCovered extends RenderProxyBox {
+  RenderSkipWhenCovered(this._covers);
+  ValueListenable<int>? _covers;
+
+  /// 此刻被盖住、不画。
+  bool get skipped => (_covers?.value ?? 0) > 0;
+
+  set covers(ValueListenable<int>? v) {
+    if (v == _covers) return;
+    if (attached) _covers?.removeListener(_changed);
+    _covers = v;
+    if (attached) v?.addListener(_changed);
+    _changed();
+  }
+
+  bool _was = false;
+
+  void _changed() {
+    final s = skipped;
+    if (s == _was) return;
+    _was = s;
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _covers?.addListener(_changed);
+    _was = skipped;
+  }
+
+  @override
+  void detach() {
+    _covers?.removeListener(_changed);
+    super.detach();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (!skipped) super.paint(context, offset);
   }
 }
 
