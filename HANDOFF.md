@@ -14,6 +14,40 @@
 | wip/main-chat | 5a41fbc | 主要聊天+旁聊 **后端+设计**（从 818bfc0 拉，worktree work/wt-mainchat） | 后端完，两端 UI 未开始 |
 | wip/takeover-input | 30935d1 | 接管电脑点击/Cloudflare（worktree work/wt-takeover） | 待用户定是否合并+升级部署 |
 
+### 0.1 接手前必知（新 agent 逐条读）
+- **唯一真相**是本文件（wip/v3.5.1 分支上的这份）。wip/main-chat、wip/takeover-input 上的 HANDOFF 是旧拷贝，以这里为准；合并时第〇节以本分支为准。
+- 仓库：GitHub `keliangtony8-commits/hark-again`。三端：`backend/`（FastAPI + Alembic，迁移号已到 0068 仅在 wip/main-chat）、`app/`（Flutter）、`frontend/`（React + Vite）。
+- 用户：中文交流；设备 **魅族 20 / Flyme**（屏 144Hz，Flyme 给普通应用上限 120Hz）；用户常换 agent，看重“严格按交接文档、记住宗旨（第二节）”。
+- 铁律（第二节宗旨的摘要，原文以第二节为准）：
+  1. 替换不叠加：新写法上线就删旧写法，不留两套。
+  2. 不准删功能/效果来“优化”性能。
+  3. App 与 Web 同步改、同样丝滑；改 UI 后做帧耗时验证（App 性能自检 / Web `work/frames.py`）。
+  4. 偶发失败找根因，不准加大超时/重试/延时掩盖。
+  5. **部署服务器、编 APK、改版本号：只有用户明确说才做。**
+  6. 用户的纲领性新要求当轮写进第二节（带日期）；中断前更新第〇节并 push。
+- 版本与产物：
+  | 版本 | tag/commit | 服务器 | APK |
+  |---|---|---|---|
+  | 3.5.1 | v3.5.1 07d7f85 | **当前线上**（VPS /api/version=3.5.1） | 已交付 |
+  | 3.5.4 | v3.5.4 0ed54b6 | 未部署 | 已交付，真机验证滑动 120Hz、≈121fps、光栅≈2ms、0% 超预算（卡顿问题已关闭） |
+  | 3.5.5 | v3.5.5 818bfc0 | 未部署 | 已交付 `toyuis-3.5.5-arm64.apk`，versionCode 32505，25,868,089 bytes，SHA1 c2e2328dd54ca6398279f94c62153b5cc58932fe |
+  | （下一版） | wip/v3.5.1 072c84f 起 | — | 未编；含提示浮层修复，版本号未改 |
+- 怎么部署 / 编 APK（仅用户授权时）：git archive 对应 tag → 上传 VPS → 解压到 /opt/assistant/app.new + 拷 .env → 换目录 → `nohup deploy/update.sh`；部署前备份旧目录和 .env。APK：tar app → /root/app.tgz → `nohup deploy/build-apk.sh`（约 10 分钟，产物 /root/toyuis-<ver>-arm64.apk）。版本号在 app/pubspec.yaml 与后端 version 一起改（versionCode 规则：3.5.5 → 32505）。
+
+### 0.2 接手后按顺序做（每步完成就 commit + push，更新本节）
+1. **收尾提示浮层修复（wip/v3.5.1）**
+   - 跑完剩余 22 个 App 测试文件（见第 1 节命令和清单），全部通过才算完成；如有失败先判断是不是沙盒环境问题（CPU 被占满、/tmp 被清、着色器缓存坏），再看是不是本次改动引起。
+   - `docs/devlog.md` 记全局决定：“全端提示统一：短 2s / 带按钮 4s，新替旧、不排队，点击/下滑关闭；性能浮层改常驻层，不再切 showPerformanceOverlay”。
+   - CHANGELOG 加“删除/合并”：删 `.notice/.share-note/.ctx-note`、`MaterialApp.showPerformanceOverlay`、pages_screen 直接调 SnackBar。
+2. **主要聊天 + 旁聊两端 UI（wip/main-chat）**：先在 work/wt-mainchat `git merge wip/v3.5.1`（拿到浮层修复和本交接），再按第 2 节规格拆四块做：
+   - a. App 目录页（主聊天置顶、旁聊分区、蓝点、未带回、已归档子页、长按/左滑）；
+   - b. App 默认打开主要聊天 + `/read` + side_note 卡 + 旁聊内“带回主要聊天”；
+   - c. Web 目录页（同 a）；
+   - d. Web 默认主聊天 + side_note + 带回（同 b）。
+   - 每块：新增测试 → `flutter analyze` 0 / Web tsc+test+build 过 → 浅深截图看图核对 → 帧耗时不劣化。四块都完成后整体合回 wip/v3.5.1，跑全量（后端 203 smoke + App 全量 + Web）。
+   - 迁移 0068 在线上会把所有旧对话变旁聊——**部署前要先给用户说明并取得同意**。
+3. **等用户决定**第 4 节的四件事，决定后照做；不要自作主张部署。
+
 ### 1. 提示浮层不消失（用户 10-19 20:24 反馈；072c84f，已提交未完全验证）
 - 根因三条（都有测试复现）：①`showToast` 先 hide 再 show，退场中新提示进队列，每条放满 4s（连点 5 次 15s 才消）；②Flutter 3.47 SnackBar 带 action 时 `persist` 默认 true，永不消失；③`MaterialApp.showPerformanceOverlay` 切换会把整个 App 换进新 Stack，ScaffoldMessenger/导航全部卸载重建，出场中的 SnackBar 动画控制器被销毁卡在 0.0；开无障碍（任何无障碍服务读一次界面即 accessibleNavigation=true）时它整条常驻。用户魅族开着无障碍属**推断，未真机验证**。
 - 修法（替换不叠加）：App `ui/kit.dart showToast` 新替旧（清队列+立即撤当前），短 2s / 带按钮 4s（`Timing.toast/toastAction`，tokens.dart），显式 `persist:false`，点击/下滑关；`core/perf_overlay.dart` 新增常驻 `PerfOverlayLayer` 挂 `MaterialApp.builder`，删 `showPerformanceOverlay`；pages_screen 改走 showToast。Web 新增 `lib/toast.ts` + `ui/toast.tsx`（ToastHost 在 App.tsx 挂一次），同规则；替换 Connectors/Security/Wallet/ShareSheet/ConversationMemory 五处，删 `.notice/.share-note/.ctx-note`。
