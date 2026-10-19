@@ -15,16 +15,13 @@ export default function AppShell() {
 function Shell() {
   const { pathname } = useLocation();
   const bar = isShellRoot(pathname);
-  const [lead, setLead] = useState<HTMLElement | null>(null);
   return (
-    <ShellLeadSlot.Provider value={lead}>
-      <div className={`shell ${bar ? "has-bar" : ""}`}>
-        <a className="skip-link" href="#main">跳到主要内容</a>
-        <ShellViews />
-        {bar && <TopBar leadRef={setLead} />}
-        <InboxBanner />
-      </div>
-    </ShellLeadSlot.Provider>
+    <div className={`shell ${bar ? "has-bar" : ""}`}>
+      <a className="skip-link" href="#main">跳到主要内容</a>
+      <ShellViews />
+      {bar && <TopBar />}
+      <InboxBanner />
+    </div>
   );
 }
 
@@ -67,14 +64,33 @@ function ShellViews() {
   const vars = slide && ({ ["--slide-dir" as string]: slide.dir } as CSSProperties);
   return (
     <main id="main" className={`shell-main ${slide ? "sliding" : ""}`} tabIndex={-1}>
-      {slide && (
-        <div key={slide.fromKey} className="shell-view slide out" style={vars!} aria-hidden {...{ inert: "" }}>
-          <UNSAFE_LocationContext.Provider value={slide.fromCtx}>{slide.from}</UNSAFE_LocationContext.Provider>
-        </div>
-      )}
-      <div key={cur.key} className={`shell-view ${slide ? "slide in" : ""}`} style={vars || undefined} onAnimationEnd={slide ? done : undefined}>
-        <UNSAFE_LocationContext.Provider value={ctx}>{outlet}</UNSAFE_LocationContext.Provider>
-      </div>
+      {slide && <ShellView key={slide.fromKey} className="shell-view slide out" style={vars!} ctx={slide.fromCtx} out>{slide.from}</ShellView>}
+      <ShellView key={cur.key} className={`shell-view ${slide ? "slide in" : ""}`} style={vars || undefined} ctx={ctx} onAnimationEnd={slide ? done : undefined}>
+        {outlet}
+      </ShellView>
     </main>
   );
+}
+
+/** 一层页面 + 它自己的顶栏左钮槽（v3.5.5，= App ShellPage 的 lead 画在页面里）：左钮属于页面，所以放在页面这一层里、
+ *  定位到顶栏左格的同一位置（shell.css .shell-lead）。进出“我的”横滑时它跟着本页一起滑走 / 滑进，不再钉在顶栏上等离场页卸载才消失。
+ *  槽只在本层是带顶栏的一级页时挂出（LeadSlot）；层的 key 不变时槽和页面一起复用。 */
+function ShellView({ ctx, out, children, ...rest }: { ctx: LocationCtx; out?: boolean; children: ReactNode; className: string; style?: CSSProperties; onAnimationEnd?: (e: AnimationEvent) => void }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const bar = isShellRoot(ctx.location.pathname);
+  return (
+    <div {...rest} {...(out ? { "aria-hidden": true, inert: "" } : {})}>
+      <ShellLeadSlot.Provider value={bar ? slot : null}>
+        <UNSAFE_LocationContext.Provider value={ctx}>{children}</UNSAFE_LocationContext.Provider>
+      </ShellLeadSlot.Provider>
+      {bar && <LeadSlot onSlot={setSlot} quiet={rest.className.includes("slide")} />}
+    </div>
+  );
+}
+
+/** 槽本身。和顶栏一起出现（从子页回到一级页、首次打开）时同一个 float-in 浮入；随横滑进来的那层不浮入——
+ *  顶栏没动，左钮跟着页面滑进来就够了（= App）。是否浮入只在槽挂上那一刻定，滑完摘掉 slide 类也不会补播。 */
+function LeadSlot({ onSlot, quiet }: { onSlot: (el: HTMLElement | null) => void; quiet: boolean }) {
+  const [cls] = useState(quiet ? "shell-lead" : "shell-lead float");
+  return <div className={cls} ref={onSlot} />;
 }

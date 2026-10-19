@@ -36,18 +36,24 @@
 .shell-view.slide.out .sky-fade > .sky { animation: view-out-sky var(--dur-slow) var(--ease) both; }
 
 .topbar { position: fixed; z-index: 20; top: calc(var(--topbar-top) + var(--sat)); left: var(--gutter); right: var(--gutter);
-  height: var(--topbar-h); display: grid; grid-template-columns: 1fr minmax(0, var(--segments-w)) 1fr; align-items: center; gap: var(--sp-3);
+  height: var(--topbar-h); display: grid; grid-template-columns: minmax(var(--topbar-h), 1fr) minmax(0, var(--segments-w)) minmax(var(--topbar-h), 1fr); align-items: center; gap: var(--sp-3);
   pointer-events: none; animation: float-in var(--dur) var(--ease) both; }
 .topbar > * { pointer-events: auto; }
-.topbar-lead { justify-self: start; display: flex; gap: var(--sp-2); }
-.topbar-lead:empty { pointer-events: none; }
+/* 左格空着、但和右格（头像）一样至少留一颗钮宽：左钮画在页面层（.shell-lead），横滑时随页走；分段宽度在有 / 没有左钮的页（“我的”）都一样，不再 252↔300 跳 */
+.topbar > .segments { grid-column: 2; }
 .topbar-trail { justify-self: end; }
+/* v3.5.5 顶栏左钮槽（AppShell ShellView，= App ShellPage lead）：每层页面自带，摆在顶栏左格同一位置、同一高度；
+   在页面层里所以进出“我的”横滑时跟着本页的 transform 走。z 同顶栏：压在页面内容 / 目录页 / 发起态磨砂上面。 */
+.shell-lead { position: absolute; z-index: 20; top: calc(var(--topbar-top) + var(--sat)); left: var(--gutter); height: var(--topbar-h);
+  display: flex; align-items: center; gap: var(--sp-2); }
+.shell-lead.float { animation: float-in var(--dur) var(--ease) both; } /* 和顶栏同时出现时一起浮入；随横滑进来的那层不浮（AppShell LeadSlot） */
+.shell-lead:empty { pointer-events: none; }
 /* v3.5.1 “我的”是当前项（= App _AvatarTab）：头像外圈一道和选中滑块同色的环淡入，环与头像间留 1px 缝；在别的标签时滑块回来、环淡出。 */
 .avatar-tab { position: relative; }
 .avatar-tab::after { content: ""; position: absolute; inset: -3px; border: 2px solid var(--pill-on); border-radius: var(--r-full); pointer-events: none;
   opacity: 0; transition: opacity var(--dur) var(--ease); }
 .avatar-tab.on::after { opacity: 1; }
-.topbar .glass-btn { width: var(--topbar-h); height: var(--topbar-h); border-radius: var(--r-full); }
+.topbar .glass-btn, .shell-lead .glass-btn { width: var(--topbar-h); height: var(--topbar-h); border-radius: var(--r-full); }
 .topbar .avatar { width: var(--topbar-h); height: var(--topbar-h); }
 
 /* 分段导航：选中项是一颗实心胶囊，--i 决定位置，滑过去 */
@@ -74,7 +80,7 @@
 .inbox-banner-title { font-size: var(--fs-sm); font-weight: var(--fw-title); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .inbox-banner-glance { font-size: var(--fs-xs); color: var(--text-2); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-@media (max-width: 520px) { .topbar { --topbar-h: 48px; gap: var(--sp-2); } }
+@media (max-width: 520px) { .topbar { --topbar-h: 48px; gap: var(--sp-2); } .shell-lead { --topbar-h: 48px; } }
 
 /* 浮动输入胶囊（聊天页、主页、项目页同一位置）：贴在底部，内容从下面滚过 */
 .floating-footer { position: absolute; z-index: 16; left: 0; right: 0; bottom: 0; pointer-events: none; }

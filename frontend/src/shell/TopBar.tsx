@@ -24,9 +24,9 @@ const segmentOf = (path: string) => SEGMENTS.findIndex((s) => (s.end ? s.to === 
 /** 滑块上一次停的分段：在“我的”时滑块原位淡出、不跳；进出子页顶栏会重新挂载，所以记在模块里而不是组件状态里。 */
 let lastSegment = 0;
 
-/** 浮动顶栏：左 = 页面的上下文按钮槽，中 = 分段导航（实心胶囊滑过去），右 = 头像 → 我的。
+/** 浮动顶栏：左格留给页面的上下文按钮（按钮本身画在页面那一层，AppShell ShellView / shell.css .shell-lead），中 = 分段导航（实心胶囊滑过去），右 = 头像 → 我的。
  *  在“我的”时三个分段都不选中：滑块停在原位淡出，头像外圈淡入一道和滑块同色的环（= App top_bar.dart _AvatarTab）。 */
-export default function TopBar({ leadRef }: { leadRef: (el: HTMLDivElement | null) => void }) {
+export default function TopBar() {
   const { pathname } = useLocation();
   const nav = useNavigate();
   const { summary } = useInbox();
@@ -35,7 +35,6 @@ export default function TopBar({ leadRef }: { leadRef: (el: HTMLDivElement | nul
   if (seg >= 0) lastSegment = seg;
   return (
     <header className="topbar">
-      <div className="topbar-lead" ref={leadRef} />
       <nav className="segments glass" aria-label="主导航" style={{ ["--n" as string]: SEGMENTS.length, ["--i" as string]: lastSegment }}>
         <span className={`segments-thumb ${seg < 0 ? "off" : ""}`} aria-hidden />
         {SEGMENTS.map(({ to, label, end }) => (
