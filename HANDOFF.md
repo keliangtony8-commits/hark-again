@@ -207,6 +207,12 @@ VERSION → 3.3.0，`python3 brand/sync.py`，CHANGELOG 加一节（含“删除
 
 30. **真机流畅才算完成，不能只拿沙盒数字**（用户 2026-10-18 原话：“魅族 20 跑 Hark 不卡，卡就是我们软件问题；必须真机高刷流畅，不能只拿沙盒数字”）：魅族 20（骁龙 8 Gen 2，120/144Hz 屏）跑 Hark 流畅，所以我们卡就是我们软件的问题，不许归咎设备。App 必须在真机上跑满高刷新率并且滑动流畅；沙盒软件光栅 / 无头浏览器的数字只能作参考，交付性能改动时要说明“真机未验证”并请用户真机确认（可用隐藏性能浮层截 UI / Raster 柱）。
 
+31. **聊天里的过程只用一颗步骤胶囊（照 Hark）**（用户 2026-10-19 18:50 原话大意：“助手的操作 / 工具调用 / 步骤现在全部展开，占空间且丑，改成 Hark 式”）：
+   - 做：回复**下方**只有一颗小胶囊（发丝描边、半透明卡片底、单行小字），生成中实时显示“当前正在做的那一步”（如“正在运行命令 · pip install pandas”，两步之间“正在思考”），步骤推进就在原地交叉淡入淡出换字；生成完胶囊收成安静的“N 个步骤 · 用时”。点胶囊展开 = 完整步骤历史（逐步、diff、失败原因，一样不少）。正文回复、需要用户操作的卡片（确认 / 表单 / 文件 / 改动 / 浏览器 / 订单等）照常展开显示。
+   - 不做：不再逐条列出步骤 / 工具小条；不为过程单独撑一张空回复卡；不删步骤历史（是收进胶囊，不是删掉）。
+   - 两端同改、同样式、同文案规则（App StepCapsule / Web StepCapsule，规则 models/activity.dart capsuleLabel = lib/activity.ts capsuleLabel）；动画只动 opacity / transform；改完要截图核对明暗。
+   - 拿不准的：计划清单卡（PlanBlock）、子助手卡（DelegateBlock）算“带结果的卡”还是“过程”，v3.5.5 没收，列给用户定。
+
 ## 三、工程规矩（看代码 / 改代码时）
 - **【部署 / APK 规则，用户 2026-10-15 13:03】不要每个版本都部署 VPS、编 APK。连续做多个版本只提交 + tag + push；只有用户说“更新服务器”才部署，APK 只在用户要时才编。**
 - Flutter：颜色/时长只在 `app/lib/theme/tokens.dart`，动效只在 `app/lib/ui/motion.dart`；弹层只在 `ui/sheets.dart`，子页面 `ui/sub_page.dart`；列表行 / 分组 / 子页说明只用 `ui/kit.dart` 的 `ListRow` / `ListGroup` / `PageIntro`（网页同名在 `ui/kit.tsx`，v2.97，两端守卫：`test/list_kit_test.dart`、check-arch 第 7 条）；**不要 `dart format lib`**；测试用 `package:assistant/...` 导入。

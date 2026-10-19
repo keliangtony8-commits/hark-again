@@ -8,7 +8,7 @@ import { formatClock } from "../../lib/format";
 import { SAVE_REPLY_LABEL } from "../../lib/saveReply";
 import type { Message, MessageQuote } from "../../lib/types";
 import { ThinkingCard, ThoughtSummary } from "./Thought";
-import ActivitySummary from "./Activity";
+import StepCapsule from "./Activity";
 import RetryLine from "./RetryLine";
 import { useSaveReply } from "../projects/useSaveReply";
 import { useReplyRating } from "./useReplyRating";
@@ -144,20 +144,18 @@ function AssistantView({ message, showTime, onRegenerate, onContinue, projectId,
   const focus = useFocusMenu(() => menu.items, { label: "这条回复的操作" });
   const note = message.pending ? null : menu.note;
   const steps = message.steps ?? [];
-  const running = steps.filter((t) => t.state === "running");
-  const empty = message.pending && message.blocks.length === 0 && running.length === 0;
-  // AI 回复 = 若干段（blocks/registry replySegments）：正文段是左侧玻璃回复卡，卡片块单独成卡、占满聊天区；
-  // 运行中的工具条跟在最后一段正文里，最后一段是卡片时另起一张小回复卡。还没出字时只是一颗“思考中”小胶囊
+  const running = !!message.pending && steps.some((t) => t.state === "running");
+  const hasThought = !!message.thought?.trim();
+  // 还没出字：没有步骤时是“思考中”小胶囊 / 思考卡；在跑工具（或两步之间没有思考内容）时回复处什么都不画，只有下面的步骤胶囊（v3.5.5，= App）
+  const waiting = !!message.pending && message.blocks.length === 0;
+  const empty = waiting && !running && (hasThought || steps.length === 0);
+  // AI 回复 = 若干段（blocks/registry replySegments）：正文段是左侧玻璃回复卡，卡片块单独成卡、占满聊天区；过程不进回复卡
   const segments = replySegments(message.blocks);
-  const tools = message.pending ? running : [];
-  if (tools.length && (!segments.length || segments[segments.length - 1].card)) segments.push({ card: false, blocks: [] });
   return (
     <div className="msg assistant" data-msg-id={message.id}>
       {/* §C 回复不紧挨着它回应的那句时：顶上一行连接线 + 原话（和用户引用同一个 QuoteLine） */}
       {showQuote && message.quote && <QuoteLine quote={message.quote} onJump={onJumpQuote} />}
-      {!empty && message.thought?.trim() && <ThoughtSummary message={message} />}
-      {/* 活动时间线（v1.28）：用过工具就多一行“做了 N 步”，生成中有完成的步骤就出现 */}
-      {steps.length > 0 && (!message.pending || steps.some((t) => t.state !== "running")) && <ActivitySummary steps={steps} pending={message.pending} />}
+      {!empty && hasThought && <ThoughtSummary message={message} />}
       {/* 模型调用失败在自动重试 / 换了备用模型（v1.50）：只在生成中出现 */}
       {message.pending && message.retry && <RetryLine notice={message.retry} />}
       <div className="ai-body" ref={body} onContextMenu={message.pending ? undefined : (e) => {
@@ -171,12 +169,11 @@ function AssistantView({ message, showTime, onRegenerate, onContinue, projectId,
         ) : (
           <div key={i} className="ai-card">
             <BlockRenderer blocks={s.blocks} />
-            {i === segments.length - 1 && tools.map((t) => (
-              <div key={t.id} className="tool-run"><span className="tool-spin" />正在{t.title}{t.detail ? <span className="tool-run-detail"> · {t.detail}</span> : "…"}</div>
-            ))}
           </div>
         ))}
       </div>
+      {/* 步骤胶囊（v3.5.5）：用过工具就在回复下方一颗——生成中显示当前那一步，生成完收成“N 个步骤 · 12 秒”，点开看全部步骤 */}
+      {steps.length > 0 && <StepCapsule steps={steps} pending={message.pending} />}
       {!message.pending && (
         <div className="msg-more">
           <button className="icon-btn sm" aria-label="这条回复的操作" aria-haspopup="menu" onClick={(e) => { e.stopPropagation(); focus.open(body.current); }}><IconMore /></button>

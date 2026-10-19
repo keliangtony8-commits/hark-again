@@ -1,11 +1,9 @@
-// 活动时间线在回复上的样子（v1.28；规则在 models/activity.dart）。和 thought_view 的“已思考 N 秒 ›”同一种低调行：
-// 回复上方一行“做了 4 步 · 12 秒 ›”（有没成的步骤时行尾补“1 步没成”，警示色），点开是一条竖向时间线——
-// 每步：状态圆点（完成 = 对勾、出错 = 感叹号、没执行 = 禁止、被停 = 停止、进行中 = 脉冲）+ 标题 + 等宽摘要（命令/路径/网址）
-// + 右侧用时；没成的步骤下面一行原因。步骤之间一根发丝线连起来。展开逐项错峰浮现。
-// 生成中也显示（“已做 2 步”），展开能看着它一步步长出来；正在跑的那一步另有输入框上方的小条（message_view _ToolChip）。
-// v1.34：改了文件的步骤（写文件 / 改文件）行尾多一个 “+3 −1”（绿/红），点这一步展开 diff（等宽，新增绿、删除红、段头淡）。
-// v2.79：默认收起；只有一轮停在出错的一步时自己展开（activityOpensItself）。不到 1 秒的步骤不写用时。
-// v1.69：一步改了几个文件（apply_patch）：行尾是合计，点开先列出每个文件（FileDiffRow，错峰浮现），再点某个文件看它的 diff。
+// 步骤胶囊（v3.5.5，照 Hark；规则在 models/activity.dart，网页同款 features/chat/Activity.tsx）：一条回复的过程只用回复下方一颗胶囊表达——
+// 生成中只显示“当前正在做的那一步”（capsuleLabel），换步骤原地交叉淡入淡出，前面一颗脉冲点；生成完收成安静的“N 个步骤 · 12 秒”
+// （有失败补“· N 项失败”，警示色）。点胶囊展开 = 竖向时间线：每步状态圆点（完成 = 对勾、出错 = 感叹号、没执行 = 禁止、被停 = 停止、进行中 = 脉冲）
+// + 标题 + 等宽摘要 + 右侧用时，没成的下面一行原因，发丝线连起来，逐项错峰浮现。替换了 v1.28 回复上方那一行和回复卡里逐条的“正在…”小条。
+// 默认收起；只有一轮停在出错的一步时自己展开（activityOpensItself）。不到 1 秒的步骤不写用时。
+// v1.34 / v1.69：改了文件的步骤行尾 “+3 −1”，点开看 diff；几个文件先列每个文件（FileDiffRow），再点某个看它的 diff。
 import 'package:flutter/material.dart';
 
 import '../../models/activity.dart';
@@ -16,21 +14,22 @@ import '../../ui/glass_mode.dart';
 import '../../ui/motion.dart';
 
 const _dot = 18.0; // 状态圆点直径；竖线从圆点中心穿过
+const _capsuleH = 28.0; // 胶囊本身的高（外面补足最小点按区）
 
-class ActivitySummary extends StatefulWidget {
-  const ActivitySummary({super.key, required this.steps, this.pending = false});
+class StepCapsule extends StatefulWidget {
+  const StepCapsule({super.key, required this.steps, this.pending = false});
   final List<ActivityStep> steps;
   final bool pending;
 
   @override
-  State<ActivitySummary> createState() => _ActivitySummaryState();
+  State<StepCapsule> createState() => _StepCapsuleState();
 }
 
-class _ActivitySummaryState extends State<ActivitySummary> {
+class _StepCapsuleState extends State<StepCapsule> {
   late bool _open = activityOpensItself(widget.steps, pending: widget.pending);
 
   @override
-  void didUpdateWidget(ActivitySummary old) {
+  void didUpdateWidget(StepCapsule old) {
     super.didUpdateWidget(old);
     if (old.pending && !widget.pending && activityOpensItself(widget.steps)) _open = true; // 刚结束、卡在出错的一步
   }
@@ -39,29 +38,57 @@ class _ActivitySummaryState extends State<ActivitySummary> {
   Widget build(BuildContext context) {
     final p = context.palette;
     final steps = widget.steps;
-    final label = activitySummary(steps, pending: widget.pending);
-    final bad = failedSteps(steps);
-    final muted = context.text.labelMedium?.copyWith(color: p.text3);
+    final live = widget.pending;
+    final (title, detail) = live ? capsuleLabel(steps) : (activitySummary(steps), '');
+    final bad = live ? 0 : failedSteps(steps);
+    final ink = context.text.labelMedium?.copyWith(color: live ? p.text2 : p.text3);
+    final label = detail.isEmpty ? title : '$title · $detail';
+    final capsule = Container(
+      height: _capsuleH,
+      padding: const EdgeInsets.symmetric(horizontal: Sp.x3),
+      decoration: BoxDecoration(
+        color: GlassMode.solidOf(context) ? p.surface : p.card,
+        border: Border.all(color: context.hairline),
+        borderRadius: BorderRadius.circular(Radii.full),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        SwapSwitcher(
+          child: live
+              ? SizedBox(key: const ValueKey('live'), width: 8, height: 8, child: Center(child: PulseDot(color: p.text2)))
+              : Icon(Icons.timeline_rounded, key: const ValueKey('done'), size: 14, color: p.text3),
+        ),
+        const SizedBox(width: Sp.x2),
+        // 换步骤：原地交叉淡入淡出（旧的往上淡出、新的从下淡入）；窄屏长摘要省略，“N 项失败”和箭头留着
+        Flexible(
+          child: SwapSwitcher(
+            child: Text.rich(
+              TextSpan(text: title, children: [
+                if (detail.isNotEmpty) TextSpan(text: ' · $detail', style: TextStyle(color: p.text3)),
+              ]),
+              key: ValueKey(label),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: ink,
+            ),
+          ),
+        ),
+        if (bad > 0) ...[
+          Text(' · ', style: ink),
+          Text('$bad 项失败', style: ink?.copyWith(color: p.warning)),
+        ],
+        const SizedBox(width: 2),
+        TurnIcon(open: _open, child: Icon(Icons.chevron_right_rounded, size: 16, color: p.text3)),
+      ]),
+    );
     return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Pressable(
-        semanticLabel: '$label${bad > 0 ? '，$bad 项失败' : ''}，${_open ? '收起' : '展开步骤'}',
-        onTap: () => setState(() => _open = !_open),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: A11y.minTap),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Sp.x4),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.timeline_rounded, size: 15, color: p.text3),
-              const SizedBox(width: Sp.x2),
-              // 窄屏 + 长摘要（“做了 12 步 · 1 分 5 秒 · 2 步没成”）不撑破：摘要可省略，“N 步没成”和箭头留着
-              Flexible(child: SwapSwitcher(child: Text(label, key: ValueKey(label), maxLines: 1, overflow: TextOverflow.ellipsis, style: muted))),
-              if (bad > 0) ...[
-                Text(' · ', style: muted),
-                Text('$bad 项失败', style: muted?.copyWith(color: p.warning)),
-              ],
-              const SizedBox(width: Sp.x1),
-              TurnIcon(open: _open, child: Icon(Icons.chevron_right_rounded, size: 18, color: p.text3)),
-            ]),
+      Semantics(
+        liveRegion: live, // 生成中：读屏播报当前这一步
+        child: Pressable(
+          semanticLabel: '$label${bad > 0 ? '，$bad 项失败' : ''}，${_open ? '收起步骤' : '展开步骤'}',
+          onTap: () => setState(() => _open = !_open),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: A11y.minTap),
+            child: Align(alignment: Alignment.centerLeft, widthFactor: 1, child: capsule),
           ),
         ),
       ),

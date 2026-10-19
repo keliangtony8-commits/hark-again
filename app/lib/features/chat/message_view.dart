@@ -15,7 +15,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../blocks/block_view.dart';
 import '../../blocks/skill_chip.dart';
 import '../../core/speech.dart';
-import '../../models/activity.dart';
 import '../../models/block.dart';
 import '../../models/message.dart';
 import '../../models/reply_end.dart';
@@ -218,31 +217,31 @@ class MessageView extends StatelessWidget {
 
   /// 回复 = 若干段（models/block.dart replySegments）：正文段是左侧玻璃回复卡（最宽 bubbleMax），
   /// 卡片块（审批/订单/表单/商品/摘要/浏览器）单独成卡、占满聊天区（平板封顶 Layout.chatCardMax）。
-  /// 运行中的工具小条跟在最后一段正文里；最后一段是卡片时另起一张小回复卡。
+  /// 过程（工具步骤）不进回复卡：回复下方一颗步骤胶囊（v3.5.5 StepCapsule）。
   Widget _assistant(BuildContext context, double width) {
     final maxWidth = width * Layout.bubbleMax;
-    final running = message.pending ? message.steps.where((t) => t.running).toList() : const <ActivityStep>[];
-    final thinking = message.pending && message.blocks.isEmpty && running.isEmpty;
+    final steps = message.steps;
+    final running = message.pending && steps.any((t) => t.running);
+    final hasThought = message.thought.trim().isNotEmpty;
+    // 还没出字：没有步骤时是跳点 / 思考卡；在跑工具（或两步之间没有思考内容）时回复处什么都不画，只有下面的步骤胶囊
+    final waiting = message.pending && message.blocks.isEmpty;
+    final thinking = waiting && !running && (hasThought || steps.isEmpty);
     final segments = replySegments(message.blocks);
-    final chips = [for (final t in running) _ToolChip(t)];
-    if (chips.isNotEmpty && (segments.isEmpty || segments.last.card)) segments.add(const ReplySegment.prose([]));
-    Widget prose(ReplySegment s, {required bool tail}) => ConstrainedBox(
+    Widget prose(ReplySegment s) => ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: GlassSurface(
             radius: Radii.card,
             shadow: false,
             padding: const EdgeInsets.fromLTRB(Sp.x4, Sp.x3, Sp.x4, Sp.x3),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (s.blocks.isNotEmpty) BlockList(s.blocks),
-              if (tail)
-                for (final (i, c) in chips.indexed) Padding(padding: EdgeInsets.only(top: s.blocks.isEmpty && i == 0 ? 0 : Sp.x2), child: c),
-            ]),
+            child: BlockList(s.blocks),
           ),
         );
     // 还一个字都没有：只是一颗小玻璃胶囊里三个跳点，不先撑开一张空卡；
     // 推理模型吐出思考内容后，胶囊长成小卡，滚动露出最新两行（不存库，正文一来就换成回复卡）
-    final body = thinking
-        ? message.thought.trim().isEmpty
+    final body = waiting && !thinking
+        ? const SizedBox.shrink(key: ValueKey('steps-only'))
+        : thinking
+        ? !hasThought
             ? const GlassSurface(
                 key: ValueKey('thinking'),
                 radius: Radii.full,
@@ -260,13 +259,11 @@ class MessageView extends StatelessWidget {
                         constraints: BoxConstraints(maxWidth: math.min(width, Layout.chatCardMax)),
                         child: BlockView(s.blocks.single),
                       )
-                    : prose(s, tail: i == segments.length - 1),
+                    : prose(s),
               ),
           ]);
     // 思考卡收成回复上方的一行（正文开始流出时就收），用 RiseSwitcher 长出来，不是一跳
-    final summary = !thinking && message.thought.trim().isNotEmpty;
-    // 活动时间线（v1.28）：用过工具就在回复上方多一行“做了 N 步”，生成中有完成的步骤时就出现（“已做 N 步”）
-    final activity = message.steps.isNotEmpty && (!message.pending || message.steps.any((s) => !s.running));
+    final summary = !thinking && hasThought;
     final quote = showQuote ? message.quote : null;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       // §C：回复不紧挨着它回应的那句时，顶上一行连接线 + 原话（和用户引用同一个 QuoteLine）
@@ -274,11 +271,6 @@ class MessageView extends StatelessWidget {
       ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: RiseSwitcher(child: summary ? ThoughtSummary(key: const ValueKey('summary'), message: message) : null),
-      ),
-      ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: RiseSwitcher(
-            child: activity ? ActivitySummary(key: const ValueKey('activity'), steps: message.steps, pending: message.pending) : null),
       ),
       // 模型调用失败在自动重试 / 换了备用模型（v1.50）：只在生成中出现，回复完成随占位消息一起换掉
       ConstrainedBox(
@@ -297,6 +289,19 @@ class MessageView extends StatelessWidget {
             layoutBuilder: (current, previous) => Stack(alignment: Alignment.topLeft, children: [...previous, ?current]),
             child: body,
           ),
+        ),
+      ),
+      // 步骤胶囊（v3.5.5）：用过工具就在回复下方一颗——生成中显示当前那一步，生成完收成“N 个步骤 · 12 秒”，点开看全部步骤
+      ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: RiseSwitcher(
+          child: steps.isEmpty
+              ? null
+              : Padding(
+                  key: const ValueKey('steps'),
+                  padding: EdgeInsets.only(left: Sp.x1, top: waiting && !thinking ? 0 : Sp.x1),
+                  child: StepCapsule(steps: steps, pending: message.pending),
+                ),
         ),
       ),
       // 没正常说完：一行说明（原来挤在操作行尾）；正在朗读：一行“点按停止”（原来是操作行里的停止键）
@@ -444,38 +449,6 @@ class _SpeakingLine extends ConsumerWidget {
                 ),
               ),
             ),
-    );
-  }
-}
-
-/// 正在跑的那一步：转圈 + “运行命令 · ls -la…”（摘要等宽、一行省略）。
-class _ToolChip extends StatelessWidget {
-  const _ToolChip(this.step);
-  final ActivityStep step;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: FadeSlideIn(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: Sp.x3, vertical: Sp.x1 + 2),
-          decoration: BoxDecoration(color: context.tileFill, borderRadius: BorderRadius.circular(Radii.full)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.6, color: p.accent)),
-            const SizedBox(width: Sp.x2),
-            Text(step.detail.isEmpty ? '正在${step.title}…' : '正在${step.title}', style: context.text.bodySmall),
-            if (step.detail.isNotEmpty)
-              Flexible(
-                child: Text(' · ${step.detail}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.text.bodySmall?.copyWith(fontFamily: 'monospace', fontSize: Fs.xs, color: p.text2)),
-              ),
-          ]),
-        ),
-      ),
     );
   }
 }

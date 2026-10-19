@@ -34,11 +34,18 @@ export function activitySpanMs(steps: ActivityStep[]): number | null {
   return end - first;
 }
 
-export function activitySummary(steps: ActivityStep[], pending = false): string {
-  if (pending) return `执行中 · ${steps.length} 个步骤`;
+/** 步骤胶囊收起后的文字（v3.5.5）：“3 个步骤 · 12 秒”。生成中的文字见 capsuleLabel。 */
+export function activitySummary(steps: ActivityStep[]): string {
   const span = activitySpanMs(steps);
   const d = span == null ? null : stepDuration(span);
   return d == null ? `${steps.length} 个步骤` : `${steps.length} 个步骤 · ${d}`;
+}
+
+/** 生成中胶囊里“当前正在做的那一步”（v3.5.5，照 Hark；= App capsuleLabel）：最后一个进行中的步骤 → ["正在运行命令", "ls -la"]；
+ *  没有进行中的（两步之间模型在想）→ ["正在思考", ""]。 */
+export function capsuleLabel(steps: ActivityStep[]): [string, string] {
+  const run = [...steps].reverse().find((s) => s.state === "running");
+  return run ? [`正在${run.title}`, run.detail ?? ""] : ["正在思考", ""];
 }
 
 /** 时间线自己展开：一轮结束时最后一步是出错的（没补救回来）。其余默认收成一行（与 App activityOpensItself 同款）。 */

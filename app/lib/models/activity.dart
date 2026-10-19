@@ -1,5 +1,5 @@
 // 活动时间线（v1.28）：一条回复里助手每次用工具 = 一步（服务器 app/activity.py 定义形状，随消息落库）。
-// 生成中由 WS tool.status 的 step 实时更新；完成后在回复上方收成一行“做了 4 步 · 12 秒 ›”，点开逐步回看。
+// 生成中由 WS tool.status 的 step 实时更新：回复下方一颗胶囊只显示当前那一步；完成后胶囊收成“4 个步骤 · 12 秒 ›”，点开逐步回看（v3.5.5）。
 // 这里只放纯规则（文案、计时、读屏），界面在 features/chat/activity_view.dart；网页版同款 lib/activity.ts。
 
 enum ActivityState { running, done, error, denied, stopped }
@@ -173,13 +173,20 @@ int? activitySpanMs(List<ActivityStep> steps) {
 
 int failedSteps(List<ActivityStep> steps) => steps.where((s) => s.failed).length;
 
-/// 回复上方那一行：“做了 4 步 · 12 秒”；生成中 “已做 2 步”。
-String activitySummary(List<ActivityStep> steps, {bool pending = false}) {
+/// 步骤胶囊收起后的文字（v3.5.5）：“3 个步骤 · 12 秒”。生成中的文字见 [capsuleLabel]。
+String activitySummary(List<ActivityStep> steps) {
   final n = steps.length;
-  if (pending) return '执行中 · $n 个步骤';
   final span = activitySpanMs(steps);
   final d = span == null ? null : stepDuration(span);
   return d == null ? '$n 个步骤' : '$n 个步骤 · $d';
+}
+
+/// 生成中胶囊里“当前正在做的那一步”（v3.5.5，照 Hark）：最后一个进行中的步骤 → (“正在运行命令”, “ls -la”)；
+/// 没有进行中的步骤（两步之间模型在想）→ (“正在思考”, “”)。网页 lib/activity.ts capsuleLabel 同规则。
+(String, String) capsuleLabel(List<ActivityStep> steps) {
+  final run = steps.lastWhere((s) => s.running, orElse: () => const ActivityStep(id: '', title: ''));
+  if (run.id.isEmpty && run.title.isEmpty) return ('正在思考', '');
+  return ('正在${run.title}', run.detail);
 }
 
 /// 时间线要不要自己展开：一轮结束时最后一步是出错的（没有后续步骤把它补救回来）——用户该看看哪里卡住了。

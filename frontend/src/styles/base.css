@@ -54,6 +54,8 @@ a { color: var(--accent); text-decoration: none; }
 @keyframes meter-grow { from { transform: scaleX(0); } }
 @keyframes bar-grow { from { transform: scaleY(0); } }
 @keyframes float-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }  /* 顶栏回来 */
+@keyframes swap-in { from { opacity: 0; transform: translateY(50%); } }   /* v3.5.5 小块文字换值（步骤胶囊）：新字从下淡入（= App SwapSwitcher） */
+@keyframes swap-out { to { opacity: 0; transform: translateY(-50%); } }   /* 旧字往上淡出 */
 @keyframes float-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }   /* 输入胶囊回来 */
 @keyframes stack-fan { from { transform: none; } }  /* v2.99 图片一摞：后面几张从正下方扇开到各自的错开 + 轻转（终态写在元素上） */
 .send-btn.ghost { background: var(--tile); color: var(--text-2); }

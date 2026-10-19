@@ -615,3 +615,10 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 - 修：MainActivity 多管齐下（preferredDisplayModeId + preferredRefreshRate + FlutterSurfaceView 的 Surface.setFrameRate，API31+ CHANGE_FRAME_RATE_ALWAYS；onResume / 焦点 / surface 创建变化后重设）。Flutter 3.47 无帧率 manifest 开关。
 - 自检加滑动中系统刷新率采样（每 200ms）、实测 fps、Flyme 设置提示。视觉零改动。
 
+
+## 2026-10-19 v3.5.5 步骤胶囊（两端；HANDOFF 第二节第 31 条，用户 18:50“操作 / 工具调用全部展开，占空间且丑，改成 Hark 式一颗小胶囊”）
+- 决定：一条回复的过程只用**一颗胶囊**表达，放在回复**下方**：生成中显示“当前正在做的那一步”（最后一个进行中的步骤 → “正在{标题} · 摘要”；步骤之间模型在想 → “正在思考”），换步骤原地交叉淡入淡出；前面一颗脉冲点。生成完胶囊收成安静的“N 个步骤 · 12 秒”（失败补“· N 项失败”，警示色），点开 = 原来的竖向步骤时间线（逐步、diff、失败原因，一样不少）；一轮停在出错的一步仍自己展开。
+- 替换 / 删除：回复**上方**的“执行中 · N 个步骤 / N 个步骤 · 12 秒 ›”行（App ActivitySummary → StepCapsule，Web ActivitySummary → StepCapsule，同文件改写）；回复卡里逐条列出的“正在运行命令…”小条（App _ToolChip、Web .tool-run / .tool-spin）删除；为小条硬塞一张空回复卡的逻辑删除；还没出字但已在跑工具时不再出空卡 / 跳点，只有胶囊。`activitySummary(pending)` 的“执行中”分支删除，生成中文案由新 `capsuleLabel` 出（两端同规则）。
+- 不动：需要用户操作或真正的结果仍在回复里展开（正文、审批 / 表单 / 文件 / 改动卡 / 浏览器 / 订单等卡片块）；思考摘要行、重试行不动；PlanBlock / DelegateBlock 是带结果的卡，本轮不收（列给用户）。
+- 样式：胶囊 = 发丝描边 + 卡片半透明底（App Palette.card + hairline，Web --card + --border，不加模糊——第二节 27），全圆角，单行小字 text-2（完成后 text-3），高 28；读屏：生成中 liveRegion 播报当前步骤。只动 opacity / transform；reduce-motion 直接换字。
+- 成本：每条回复少一行 + 少 N 个小条；生成中只有一个 PulseDot（33ms Timer）和一次文字交叉淡化；无新增合成层 / 模糊。

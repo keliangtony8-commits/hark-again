@@ -172,8 +172,6 @@
 
 @media (max-width: 520px) { .suggestions { grid-template-columns: 1fr; } }
 
-.tool-run { display: inline-flex; align-self: flex-start; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--text-2); background: var(--tile); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-full); animation: rise 200ms var(--ease); }
-.tool-spin { width: 12px; height: 12px; border-radius: var(--r-full); border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 
 /* v2.86.1 一行对齐（用户 18:44“排版怎么回事”）：行内每个控件都是 40px 高、贴底对齐——一行字时全部同一条中线，多行时按钮留在最后一行旁边。
    回形针（项目里是菜单）、思考/模型小胶囊（30px，下边距 5px 垫齐）、说话/发送圆钮同一基准。 */
@@ -322,7 +320,25 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .attach.err .attach-sub { color: var(--danger); }
 
 /* 活动时间线（v1.28）：和“已思考”同一种低调行；展开 = 竖向时间线，圆点之间一根发丝线 */
-.activity-bad { color: var(--warning); }
+/* v3.5.5 步骤胶囊（Activity.tsx StepCapsule，= App StepCapsule）：回复下方一颗——发丝描边 + 卡片半透明底（不模糊，第二节 27），单行小字；
+   生成中 text-2 + 脉冲点、换步骤原地交叉淡入淡出（只动 opacity / transform），生成完收成 text-3 的“N 个步骤 · 12 秒”。点开下面是时间线。 */
+.step-cap-wrap { width: 86%; margin-top: var(--sp-1); animation: rise var(--dur) var(--ease) both; }
+.ai-body:empty + .step-cap-wrap { margin-top: 0; }
+.step-cap { display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 100%; height: 28px; margin: var(--sp-2) 0 var(--sp-2) var(--sp-1); padding: 0 var(--sp-3);
+  border: 1px solid var(--glass-border); background: var(--card); border-radius: var(--r-full); color: var(--text-3); font: inherit; font-size: var(--fs-xs);
+  cursor: pointer; transition: color var(--dur-fast) var(--ease); }
+.step-cap-wrap.live .step-cap { color: var(--text-2); }
+.step-cap:hover { color: var(--text); }
+.step-cap > svg:last-child { flex: none; transition: transform var(--dur) var(--ease); }
+.step-cap.open > svg:last-child { transform: rotate(90deg); }
+.step-cap .step-pulse { flex: none; }
+.cap-text { display: inline-grid; min-width: 0; overflow: hidden; }
+.cap-line { grid-area: 1 / 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap-line.in { animation: swap-in var(--dur) var(--ease) both; }
+.cap-line.out { animation: swap-out var(--dur) var(--ease) both; }
+.cap-detail { color: var(--text-3); }
+.activity-bad { flex: none; color: var(--warning); }
+@media (prefers-reduced-motion: reduce) { .step-cap-wrap, .cap-line.in { animation: none; } .cap-line.out { display: none; } .step-cap > svg:last-child { transition: none; } }
 .activity-steps { list-style: none; margin: 0 0 var(--sp-2); padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-3); background: var(--tile);
   border-radius: var(--r-inner); animation: rise var(--dur) var(--ease) both; }
 .step { position: relative; display: flex; gap: var(--sp-3); padding-bottom: var(--sp-3); animation: rise var(--dur) var(--ease) both; }
@@ -344,7 +360,6 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .step-toggle svg { transition: transform var(--dur-fast) var(--ease); }
 .step-toggle.open svg { transform: rotate(90deg); }
 .step-change { flex: none; display: inline-flex; align-items: center; gap: var(--sp-1); font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-3); }
-.tool-run-detail { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
 @media (prefers-reduced-motion: reduce) { .activity-steps, .step, .step-pulse, .step-diff { animation: none; } .step-toggle svg { transition: none; } }
 
 /* 本对话全部文件（ConversationFilesSheet）：行逐项上浮进场（切筛选时整列表重放），不在了的行淡掉不可点 */

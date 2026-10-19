@@ -1,10 +1,11 @@
-// v1.28 活动时间线：规则（文案/计时/合并/老服务器退化）+ 回复上方“做了 N 步”行、展开逐步、读屏、没成的步骤。
+// v1.28 活动时间线：规则（文案/计时/合并/老服务器退化）+ v3.5.5 步骤胶囊（回复下方一颗：生成中只显示当前一步、完成收成“N 个步骤”、点开逐步、读屏、没成的步骤）。
 import 'package:assistant/features/chat/activity_view.dart';
 import 'package:assistant/features/chat/message_view.dart';
 import 'package:assistant/models/activity.dart';
 import 'package:assistant/models/block.dart';
 import 'package:assistant/models/message.dart';
 import 'package:assistant/theme/app_theme.dart';
+import 'package:assistant/ui/glass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,7 +41,9 @@ void main() {
     expect(m.steps[2].failed, isTrue);
     expect(activitySpanMs(m.steps), 12000); // 05:00:00 → 05:00:05 + 7 秒
     expect(activitySummary(m.steps), '3 个步骤 · 12 秒');
-    expect(activitySummary(m.steps.take(2).toList(), pending: true), '执行中 · 2 个步骤');
+    // v3.5.5 生成中胶囊：最后一个进行中的步骤；两步之间（没有进行中的）= 正在思考
+    expect(capsuleLabel(const [ActivityStep(id: 'a', title: '读文件', detail: 'a.txt', state: ActivityState.done), ActivityStep(id: 'b', title: '运行命令', detail: 'ls')]), ('正在运行命令', 'ls'));
+    expect(capsuleLabel(const [ActivityStep(id: 'a', title: '读文件', state: ActivityState.done)]), ('正在思考', ''));
     expect(failedSteps(m.steps), 1);
     expect(stepDuration(400), isNull); // 不到 1 秒不写（10-14 16:01 满屏 0.0 秒）
     expect(stepDuration(3400), '3 秒');
@@ -56,7 +59,7 @@ void main() {
     expect(Message.fromJson({'id': 'u', 'role': 'user', 'blocks': []}).steps, isEmpty);
   });
 
-  testWidgets('回复上方一行“做了 3 步 · 12 秒 · 1 步没成”，点开逐步回看', (tester) async {
+  testWidgets('完成后：回复下方胶囊“3 个步骤 · 12 秒 · 1 项失败”，点开逐步回看', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(Message.fromJson(_json)));
@@ -65,7 +68,7 @@ void main() {
     expect(find.text('1 项失败'), findsOneWidget);
     expect(find.byType(StepRow), findsNWidgets(3)); // 停在出错的一步：自己展开（v2.79）
     final row = find.text('3 个步骤 · 12 秒');
-    expect(tester.getTopLeft(row).dy, lessThan(tester.getTopLeft(find.text('整理好了。')).dy)); // 在回复上方
+    expect(tester.getTopLeft(row).dy, greaterThan(tester.getBottomLeft(find.text('整理好了。')).dy)); // 在回复下方（v3.5.5）
     expect(find.text('ls -la'), findsOneWidget);
     expect(find.text('退出码 1'), findsOneWidget);
     expect(find.textContaining('0.4'), findsNothing);
@@ -100,23 +103,40 @@ void main() {
     expect(find.byType(StepRow), findsNothing);
   });
 
-  testWidgets('没用工具的回复没有这一行；生成中：正在跑的步骤是小条，有完成的步骤才出“已做 N 步”', (tester) async {
+  testWidgets('没用工具的回复没有胶囊；生成中：只有一颗胶囊显示当前一步，换步骤原地替换，不逐条列出、不撑空卡', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(const Message(id: 'p', role: 'assistant', blocks: [TextBlock('你好')])));
     await tester.pumpAndSettle();
-    expect(find.byType(ActivitySummary), findsNothing);
-
-    const running = ActivityStep(id: 'r', title: '运行命令', detail: 'pip install a');
-    await tester.pumpWidget(_host(const Message(id: 'pending', role: 'assistant', pending: true, blocks: [], steps: [running])));
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(ActivitySummary), findsNothing);
-    expect(find.text('正在运行命令'), findsOneWidget);
-    expect(find.text(' · pip install a'), findsOneWidget);
+    expect(find.byType(StepCapsule), findsNothing);
 
     const done = ActivityStep(id: 'd', title: '读文件', detail: 'a.txt', state: ActivityState.done, ms: 30);
+    const running = ActivityStep(id: 'r', title: '运行命令', detail: 'pip install a');
     await tester.pumpWidget(_host(const Message(id: 'pending', role: 'assistant', pending: true, blocks: [], steps: [done, running])));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('执行中 · 2 个步骤'), findsOneWidget);
+    expect(find.byType(StepCapsule), findsOneWidget);
+    expect(find.text('正在运行命令 · pip install a', findRichText: true), findsOneWidget);
+    expect(find.textContaining('读文件', findRichText: true), findsNothing, reason: '已完成的步骤不逐条列出');
+    expect(find.byType(GlassSurface), findsNothing, reason: '没出字时不撑空回复卡、也不出跳点');
+    expect(find.byType(StepRow), findsNothing);
+
+    // 步骤推进：同一颗胶囊原地换字
+    const next = ActivityStep(id: 'n', title: '写文件', detail: 'b.txt');
+    await tester.pumpWidget(_host(const Message(id: 'pending', role: 'assistant', pending: true, blocks: [], steps: [done, ActivityStep(id: 'r', title: '运行命令', state: ActivityState.done), next])));
+    await tester.pumpAndSettle();
+    expect(find.byType(StepCapsule), findsOneWidget);
+    expect(find.text('正在写文件 · b.txt', findRichText: true), findsOneWidget);
+    expect(find.textContaining('运行命令', findRichText: true), findsNothing);
+
+    // 点胶囊：生成中也能看全部步骤
+    await tester.tap(find.byType(StepCapsule));
+    await tester.pumpAndSettle();
+    expect(find.byType(StepRow), findsNWidgets(3));
+
+    // 生成完：收成“3 个步骤”
+    await tester.pumpWidget(_host(const Message(id: 'pending', role: 'assistant', blocks: [TextBlock('好了')], steps: [done, ActivityStep(id: 'r', title: '运行命令', state: ActivityState.done), ActivityStep(id: 'n', title: '写文件', state: ActivityState.done)])));
+    await tester.pumpAndSettle();
+    expect(find.text('3 个步骤', findRichText: true), findsOneWidget);
+    expect(find.textContaining('正在', findRichText: true), findsNothing);
   });
 }

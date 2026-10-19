@@ -60,7 +60,7 @@ void main() {
     expect(find.text('服务器重启，回答被打断'), findsOneWidget);
     expect(find.text('已停止'), findsNothing);
     expect(find.byIcon(Icons.power_off_outlined), findsOneWidget);
-    await tester.tap(find.byType(ActivitySummary));
+    await tester.tap(find.byType(StepCapsule));
     await tester.pumpAndSettle();
     expect(find.text(_note), findsOneWidget);
   });
