@@ -26,17 +26,19 @@ import { resetProfile } from "./lib/profile";
 import { swrClear } from "./lib/swr";
 import AppShell from "./shell/AppShell";
 import { DialogHost } from "./ui/dialog";
+import { ToastHost } from "./ui/toast";
 
 /** 路由表 = App 的地图。新增页面只在这里登记一行。HashRouter 兼容安卓 WebView。
  *  外壳在 / /chat /projects、对话目录 /chat/history（v3.5.2）、项目页 /projects/:pid（v2.93 §Q）和“我的” /me（v3.5.1 第四个标签，顶栏头像进入）上显示浮动顶栏（shell/TopBar isShellRoot）。 */
 export default function App() {
   const [authed, setAuthed] = useState(!!auth.get());
   useEffect(() => onUnauthorized(() => { auth.clear(); resetProfile(); swrClear(); setAuthed(false); }), []);
-  if (!authed) return <><Login onDone={() => setAuthed(true)} /><DialogHost /></>;
+  if (!authed) return <><Login onDone={() => setAuthed(true)} /><DialogHost /><ToastHost /></>;
 
   return (
     <HashRouter>
       <DialogHost />
+      <ToastHost />
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<HomeScreen />} />

@@ -5,6 +5,7 @@ import { BRAND_NAMES, cardBrand, cardDigits, cardLine, cardNumberError, cvcError
 import { IconCard, IconEdit, IconMore, IconPlus, IconTrash } from "../../ui/icons";
 import { ListGroup, ListRow, Menu, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, StarterCard } from "../../ui/kit";
 import { confirmDialog } from "../../ui/dialog";
+import { toast } from "../../lib/toast";
 
 const EMPTY = { number: "", exp: "", cvc: "", holder: "", postal_code: "", label: "" };
 
@@ -16,7 +17,6 @@ export default function WalletScreen() {
   const [tried, setTried] = useState(false);
   const [rename, setRename] = useState<{ id: string; label: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
 
   const brand = cardBrand(draft?.number ?? "");
   const errs = draft ? { number: cardNumberError(draft.number), exp: expiryError(draft.exp), cvc: cvcError(draft.cvc, brand) } : null;
@@ -33,7 +33,7 @@ export default function WalletScreen() {
       const x = await cards.create({ number: cardDigits(draft.number), exp_month: m, exp_year: y, cvc: draft.cvc.trim(), holder: draft.holder.trim(),
         postal_code: draft.postal_code.trim(), label: draft.label.trim() } as never);
       await cards.reload(); // 服务器按添加先后排
-      setSaved(`已加密保存「${x.label}」`);
+      toast(`已加密保存「${x.label}」`);
       setDraft(null);
     } catch (e) { setErr(e instanceof Error ? e.message : "保存失败"); }
   };
@@ -63,7 +63,6 @@ export default function WalletScreen() {
       <button className="icon-btn" onClick={open} aria-label="添加付款卡"><IconPlus /></button>} />}>
       <PageIntro loading={cards.loading} summary={walletSummary(cards.items)}
         line="结账时我在云浏览器里替你填卡，付款前一定先在订单卡上问你。卡号加密存在你自己的服务器上，之后只显示尾号。" />
-      {saved && <div className="notice ok" role="status" onClick={() => setSaved(null)}>{saved}</div>}
       {cards.loading ? <Skeleton /> : cards.items.length === 0 ? (
         <StarterCard title="钱包是空的" text="添加常用银行卡，网购和预订酒店时无需重复输入卡号。">
           <button className="btn btn-ghost" onClick={open}><IconCard size={16} />添加付款卡</button>

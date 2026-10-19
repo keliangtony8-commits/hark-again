@@ -27,13 +27,13 @@ class _Api implements Api {
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError();
 }
 
-/// 和 app.dart 一样：MaterialApp.showPerformanceOverlay 跟着 perfOverlayProvider。
-class _App extends ConsumerWidget {
+/// 和 app.dart 一样：性能浮层挂在 MaterialApp.builder 的 PerfOverlayLayer 里。
+class _App extends StatelessWidget {
   const _App();
   @override
-  Widget build(BuildContext context, WidgetRef ref) => MaterialApp(
-        showPerformanceOverlay: ref.watch(perfOverlayProvider).value ?? false,
+  Widget build(BuildContext context) => MaterialApp(
         theme: buildTheme(Brightness.light),
+        builder: (_, child) => PerfOverlayLayer(child: child!),
         home: const AboutScreen(),
       );
 }
@@ -49,7 +49,7 @@ Future<void> _pump(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-bool _overlay(WidgetTester tester) => tester.widget<MaterialApp>(find.byType(MaterialApp)).showPerformanceOverlay;
+bool _overlay(WidgetTester tester) => find.byType(PerformanceOverlay).evaluate().isNotEmpty;
 
 Future<void> _tapVersion(WidgetTester tester, int n, {Duration gap = const Duration(milliseconds: 200)}) async {
   for (var i = 0; i < n; i++) {
@@ -93,6 +93,28 @@ void main() {
     expect(_overlay(tester), isFalse);
     await _tapVersion(tester, 2);
     expect(_overlay(tester), isTrue);
+  });
+
+  // 2026-10-19 真机（魅族 20）：打开浮层后“性能浮层已打开…”一直不消失。根因：MaterialApp.showPerformanceOverlay 让 WidgetsApp
+  // 把整棵 App 换进新 Stack → ScaffoldMessenger / 页面全部卸载重建，提示条的动画控制器随旧 messenger 销毁、停在原地；
+  // 开着无障碍服务（accessibleNavigation）时提示条不走过渡，整条一直可见。现在浮层挂在 builder 里一直在的 Stack 上。
+  testWidgets('开关浮层不重建 App（页面 / ScaffoldMessenger 原地不动）；开着无障碍时提示照样定时消失', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(accessibleNavigation: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    SharedPreferences.setMockInitialValues({});
+    await _pump(tester);
+    final page = tester.state(find.byType(AboutScreen));
+    final messenger = tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger));
+
+    await _tapVersion(tester, 5);
+    expect(_overlay(tester), isTrue);
+    expect(identical(tester.state(find.byType(AboutScreen)), page), isTrue, reason: '页面没被卸载重建');
+    expect(identical(tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger)), messenger), isTrue);
+    expect(find.text('性能浮层已打开，再连点 5 次关闭'), findsOneWidget);
+
+    await tester.pump(Timing.toast + const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.byType(SnackBar), findsNothing, reason: '提示定时消失，不挂在那里');
   });
 
   group('PulseDot 30fps', () {

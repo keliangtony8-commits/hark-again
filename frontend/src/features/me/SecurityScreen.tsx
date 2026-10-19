@@ -10,6 +10,7 @@ import CopyButton from "../../ui/CopyButton";
 import { IconKey, IconLock, IconShield } from "../../ui/icons";
 import { ListGroup, ListRow, Page, PageHeader, PageIntro, Section, Sheet, Skeleton, Spot } from "../../ui/kit";
 import LoginSessions from "./LoginSessions";
+import { toast } from "../../lib/toast";
 
 /** 安全（v2.58，= App features/me/security_screen.dart；对标 Hark 设置 → 安全 → 两步验证）。
  *  版式同保险箱：页头摘要 + 一句说明 → 一组行。打开：扫码（电脑上用手机扫）→ 回填 6 位码 → 一次性展示恢复码；
@@ -25,12 +26,10 @@ export default function SecurityScreen() {
   const [codes, setCodes] = useState<{ list: string[]; title: string; account: string; note?: string | null } | null>(null);
   const [devicesKey, setDevicesKey] = useState(0);
   const [ask, setAsk] = useState<Ask>(null);
-  const [note, setNote] = useState<string | null>(null);
 
   const start = async () => {
-    setNote(null);
     try { setSetup(await http.post<TwoFactorSetup>("/api/auth/2fa/setup", {})); }
-    catch (e) { setNote(e instanceof Error ? e.message : "没打开"); }
+    catch (e) { toast(e instanceof Error ? e.message : "没打开"); }
   };
 
   return (
@@ -39,7 +38,6 @@ export default function SecurityScreen() {
         line={s?.enabled
           ? "登录时除了密码，还要验证器 App 里的 6 位码；手机丢了用恢复码。"
           : "打开后，登录要多填验证器 App（Google Authenticator、Microsoft Authenticator 等）里的 6 位码。密码泄露了，别人也进不来。"} />
-      {note && <div className="notice ok" role="status" onClick={() => setNote(null)}>{note}</div>}
       {err ? (
         <div className="error-banner">{err} <button className="text-link" onClick={load}>重试</button></div>
       ) : !s ? <Skeleton rows={2} /> : (
@@ -59,7 +57,7 @@ export default function SecurityScreen() {
           </ListGroup>
         </Section>
       )}
-      <Spot id="sessions"><LoginSessions enter={2} reloadKey={devicesKey} onNote={setNote} /></Spot>
+      <Spot id="sessions"><LoginSessions enter={2} reloadKey={devicesKey} onNote={toast} /></Spot>
       {setup && <SetupSheet setup={setup} onClose={() => { setSetup(null); load(); }}
         onDone={(r) => {
           if (r.token) auth.set(r.token); // 本机是升级前的老登录：服务器换发了新 token
@@ -70,7 +68,7 @@ export default function SecurityScreen() {
       {ask && <ConfirmSheet kind={ask.kind} onClose={() => setAsk(null)} onDone={(r) => {
         const { recovery_codes, ...status } = r; // 恢复码只进弹层，不进缓存
         setAsk(null); setS(status);
-        if (ask.kind === "disable") setNote("两步验证已关闭");
+        if (ask.kind === "disable") toast("两步验证已关闭");
         else if (recovery_codes) setCodes({ list: recovery_codes, title: "新的恢复码", account: "" });
       }} />}
     </Page>

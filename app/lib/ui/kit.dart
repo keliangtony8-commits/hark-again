@@ -604,14 +604,26 @@ class SearchField extends StatelessWidget {
   }
 }
 
-/// 底部一条提示；给了 [action] 就带一个按钮（“撤销”之类，点了调 [onAction]）。
-void showToast(BuildContext context, String text, {String? action, VoidCallback? onAction}) =>
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(text),
-        action: action == null ? null : SnackBarAction(label: action, textColor: context.palette.onInk, onPressed: onAction ?? () {}),
-      ));
+/// 底部一条提示（全 App 唯一入口，= 网页 ui/toast.tsx）；给了 [action] 就带一个按钮（“撤销”之类，点了调 [onAction]）。
+/// 2026-10-19 照 Hark（用户真机：提示很久不消失）：
+/// - 新替旧：先清掉排队的、立刻撤下当前的，再出新的。旧写法 hideCurrentSnackBar 只让当前那条退场，退场中再来的会排进队列，
+///   每条各放满时长（连点 5 次 = 十几秒）。
+/// - 定时消失：短提示 [Timing.toast]，带按钮 [Timing.toastAction]；persist 显式 false——Flutter 3.47 起带 action 的 SnackBar 默认 persist，
+///   永远不自动消失。
+/// - 点一下或往下滑关掉。
+void showToast(BuildContext context, String text, {String? action, VoidCallback? onAction}) {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger
+    ..clearSnackBars()
+    ..removeCurrentSnackBar();
+  messenger.showSnackBar(SnackBar(
+    content: GestureDetector(behavior: HitTestBehavior.opaque, onTap: messenger.hideCurrentSnackBar, child: Text(text)),
+    duration: action == null ? Timing.toast : Timing.toastAction,
+    persist: false,
+    dismissDirection: DismissDirection.down,
+    action: action == null ? null : SnackBarAction(label: action, textColor: context.palette.onInk, onPressed: onAction ?? () {}),
+  ));
+}
 
 /// 浮在内容底部的一条（输入胶囊）：内容铺满到底、从它下面滚过去。
 /// 它量出底条的实际高度（多行、附件托盘、编辑条都会变高）加进 MediaQuery.padding.bottom，

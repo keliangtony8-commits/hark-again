@@ -187,9 +187,13 @@ button.row-body { text-align: left; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .text-link { display: block; margin: 0 0 var(--sp-4); font-size: var(--fs-sm); color: var(--accent); font-weight: var(--fw-title); }
 .error-banner { align-self: center; font-size: var(--fs-sm); color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); padding: var(--sp-2) var(--sp-4); border-radius: var(--r-full); }
-.notice { margin: 0 0 var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner); font-size: var(--fs-sm); font-weight: var(--fw-title); cursor: pointer; animation: rise 200ms var(--ease); }
-.notice.ok { background: var(--tile); color: var(--text); }
-.notice.err { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
+/* 底部提示（ui/toast.tsx，= App SnackBar 浮条：墨色底、圆角 inner、小字）：短提示 2 秒、带按钮 4 秒自动收起，点一下 / 下滑关掉，新替旧。 */
+.toast-wrap { position: fixed; left: 0; right: 0; bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); z-index: 80; display: flex; justify-content: center; padding: 0 var(--sp-4); pointer-events: none; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: var(--sp-3); max-width: 480px; width: 100%; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-inner);
+  background: var(--ink); color: var(--on-ink); font-size: var(--fs-sm); box-shadow: var(--elev-float); cursor: pointer; touch-action: pan-x; animation: rise var(--dur) var(--ease); }
+.toast.out { animation: fade var(--dur) var(--ease) reverse forwards; }
+.toast-text { flex: 1; min-width: 0; }
+.toast-action { flex: none; border: 0; background: none; color: var(--on-ink); font: inherit; font-weight: var(--fw-title); padding: var(--sp-1) var(--sp-2); margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-2)) calc(-1 * var(--sp-1)) 0; cursor: pointer; }
 
 /* 搜索框（kit SearchField） */
 .search-field { display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-1) 0 var(--sp-3); height: 38px;

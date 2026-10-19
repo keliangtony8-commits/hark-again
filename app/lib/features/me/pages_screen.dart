@@ -133,12 +133,13 @@ class PageRow extends ConsumerWidget {
   }
 
   Future<void> _patch(BuildContext context, WidgetRef ref, Map<String, dynamic> body, String done) async {
-    final messenger = ScaffoldMessenger.of(context);
+    String text;
     try {
       await ref.read(pagesProvider.notifier).patch(pg.id, body);
-      messenger..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text(done)));
+      text = done;
     } on ApiError catch (e) {
-      messenger..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text(e.message)));
+      text = e.message;
     }
+    if (context.mounted) showToast(context, text);
   }
 }

@@ -6,6 +6,7 @@ import {
   type CompactResult, type ConversationContext,
 } from "../../lib/conversationContext";
 import { IconRule } from "../../ui/icons";
+import { toast } from "../../lib/toast";
 
 /** 对话记忆卡（本对话用量 Sheet 里）：原文占预算多少、较早多少条已压成摘要（可展开）、“整理上文”手动压缩。
  *  与 App 的 ConversationMemoryCard 同规则；正在回复时后端 409，原因原样显示在卡片下方。 */
@@ -13,7 +14,6 @@ export default function ConversationMemory({ conversationId }: { conversationId:
   const { data: ctx, mutate: setCtx } = useSwr<ConversationContext>(`/api/conversations/${conversationId}/context`);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
 
   if (!ctx || ctx.messages === 0) return null;
   const fill = contextFill(ctx);
@@ -24,10 +24,10 @@ export default function ConversationMemory({ conversationId }: { conversationId:
     setBusy(true);
     try {
       const r = await http.post<CompactResult>(`/api/conversations/${conversationId}/compact`, {});
-      setNote(compactToast(ctx, r));
+      toast(compactToast(ctx, r));
       setCtx(r);
     } catch (e) {
-      setNote(e instanceof Error ? e.message : "整理失败，稍后再试");
+      toast(e instanceof Error ? e.message : "整理失败，稍后再试");
     } finally {
       setBusy(false);
     }
@@ -77,7 +77,6 @@ export default function ConversationMemory({ conversationId }: { conversationId:
           {busy ? "整理中…" : "整理上文"}
         </button>
       </div>
-      {note && <div key={note} className="share-note ctx-note" role="status">{note}</div>}
     </div>
   );
 }

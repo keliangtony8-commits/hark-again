@@ -417,6 +417,9 @@ abstract final class Timing {
   static const searchDebounce = Duration(milliseconds: 300);
   static const inboxPoll = Duration(minutes: 2); // 前台时多久问一次“有新报告吗”（后台不问）
   static const bannerHold = Duration(seconds: 4); // 端内横幅停留多久
+  // 底部提示（ui/kit.dart showToast = 网页 ui/toast.tsx）：照 Hark 短提示约 2 秒；带“撤销”等按钮的多留一会儿够点到，也一定定时消失
+  static const toast = Duration(seconds: 2);
+  static const toastAction = Duration(seconds: 4);
   static const taskRunPoll = Duration(seconds: 4); // 任务详情页有运行在排队/进行时多久刷新一次
   static const outboxGiveUp = Duration(seconds: 45); // 待发送的消息等多久没连上就标“发送失败”
   // 聊天长连接（core/chat_socket.dart；节奏参考 Codex remote_control：10 s ping、60 s 没回音算断、连上满 60 s 才清退避）

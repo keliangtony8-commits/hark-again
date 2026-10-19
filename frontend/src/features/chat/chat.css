@@ -299,7 +299,6 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .share-stale { animation: rise var(--dur) var(--ease); }
 .share-stop { align-self: center; }
-.share-note { color: var(--text-2); font-size: var(--fs-xs); text-align: center; margin-top: var(--sp-3); animation: fade var(--dur) var(--ease); }
 /* 朗读键：准备中闪点（与录音中同一节奏）、在读时用墨色（不是强调色） */
 .speak-btn.playing { color: var(--text); }
 .speak-dot { width: 7px; height: 7px; border-radius: var(--r-full); background: currentColor; animation: blink var(--dur-pulse) var(--ease) infinite; }
@@ -384,7 +383,6 @@ a.msg-saved:hover { color: var(--text); text-decoration: underline; text-underli
 .ctx-summary { background: var(--tile); border-radius: var(--r-inner); padding: var(--sp-3); font-size: var(--fs-sm); white-space: pre-wrap; user-select: text; animation: rise var(--dur) var(--ease) both; }
 .ctx-foot { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-1); }
 .ctx-hint { flex: 1; font-size: var(--fs-sm); color: var(--text-3); }
-.ctx-note { margin-top: 0; text-align: start; }
 /* v1.62 工作区规则（AGENTS.md）：每个文件一行，逐项浮入；没整份读进去的换警示色 */
 .ctx-rules { display: grid; gap: var(--sp-1); margin-top: var(--sp-2); }
 .ctx-rules-title { font-size: var(--fs-sm); color: var(--text-2); }

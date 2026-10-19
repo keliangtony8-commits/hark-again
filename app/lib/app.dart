@@ -161,7 +161,6 @@ class AssistantApp extends ConsumerWidget {
     return MaterialApp.router(
       title: appName,
       debugShowCheckedModeBanner: false,
-      showPerformanceOverlay: ref.watch(perfOverlayProvider).value ?? false, // v3.5.2 隐藏开关：关于页连点版本 5 次
       theme: _light,
       darkTheme: _dark,
       themeMode: mode,
@@ -173,7 +172,7 @@ class AssistantApp extends ConsumerWidget {
         maxScaleFactor: A11y.textScaleMax,
         child: AnnotatedRegion<SystemUiOverlayStyle>(
           value: systemOverlay(Theme.of(context).brightness),
-          child: GlassMode(solid: solid, child: SkyScrollPause(child: child!)), // v3.5.2 滑动期间暂停流光（ui/sky.dart）
+          child: GlassMode(solid: solid, child: SkyScrollPause(child: PerfOverlayLayer(child: child!))), // v3.5.2 滑动期间暂停流光（ui/sky.dart）；性能浮层见 core/perf_overlay.dart
         ),
       ),
       routerConfig: ref.watch(routerProvider),

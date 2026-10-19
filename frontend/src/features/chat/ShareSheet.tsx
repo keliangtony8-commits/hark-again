@@ -6,6 +6,7 @@ import type { ConversationShare } from "../../lib/types";
 import { IconCopy, IconGlobe, IconRefresh } from "../../ui/icons";
 import { Sheet, Skeleton } from "../../ui/kit";
 import { confirmDialog } from "../../ui/dialog";
+import { toast } from "../../lib/toast";
 
 /**
  * 分享对话 = 只读网页快照（服务端渲染，同时出现在 我的 → Pages）。与 App conversation_share.dart 同结构：
@@ -16,13 +17,12 @@ export default function ShareSheet({ conversationId, onClose }: { conversationId
   const path = `/api/conversations/${conversationId}/share`;
   const { data: state, error, reload, mutate: setState } = useSwr<ConversationShare>(path);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
 
   const run = async (call: () => Promise<unknown>, done: string) => {
     if (busy) return;
-    setBusy(true); setNote(null);
-    try { setState(await call() as ConversationShare); setNote(done); }
-    catch (e) { setNote((e as Error).message); }
+    setBusy(true);
+    try { setState(await call() as ConversationShare); toast(done); }
+    catch (e) { toast((e as Error).message); }
     finally { setBusy(false); }
   };
   const share = (done: string) => run(() => http.post(path, {}), done);
@@ -31,7 +31,7 @@ export default function ShareSheet({ conversationId, onClose }: { conversationId
       await run(() => http.del(path), "已停止分享");
     }
   };
-  const copy = async (url: string) => setNote((await copyLink(url)) ? "链接已复制" : "浏览器不允许复制，请手动选中链接");
+  const copy = async (url: string) => toast((await copyLink(url)) ? "链接已复制" : "浏览器不允许复制，请手动选中链接");
 
   const live = state?.shared && state.url;
   return (
@@ -65,7 +65,6 @@ export default function ShareSheet({ conversationId, onClose }: { conversationId
           </button>
         </div>
       )}
-      {note && <div className="share-note" role="status" key={note}>{note}</div>}
     </Sheet>
   );
 }

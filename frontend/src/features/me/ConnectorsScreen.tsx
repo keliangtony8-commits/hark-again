@@ -12,6 +12,7 @@ import OAuthSetupSheet from "./OAuthSetupSheet";
 import { confirmDialog } from "../../ui/dialog";
 import { monogramOf } from "../../lib/monogram";
 import { connectorAuthorizable, connectorStatus, startConnect } from "../../lib/connect";
+import { toast } from "../../lib/toast";
 
 const favicon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
 const EMPTY_MCP = { name: "", url: "", token: "" };
@@ -33,7 +34,6 @@ export default function ConnectorsScreen() {
   const secrets = useResource<VaultSecret>("/api/vault");
   const [secretStart, setSecretStart] = useState<SecretDraftStart | null>(null);
   const [params, setParams] = useSearchParams();
-  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [mcpDraft, setMcpDraft] = useState<typeof EMPTY_MCP | null>(null);
   const [mcpBusy, setMcpBusy] = useState(false);
   const [mcpErr, setMcpErr] = useState<string | null>(null);
@@ -44,14 +44,14 @@ export default function ConnectorsScreen() {
   useEffect(() => {
     const ok = params.get("connected"), err = params.get("error");
     if (ok || err) {
-      setNotice(ok ? { ok: true, text: withRetried("连接成功", params.get("retried")) } : { ok: false, text: `连接失败：${err}` });
+      toast(ok ? withRetried("连接成功", params.get("retried")) : `连接失败：${err}`);
       setParams({}, { replace: true });
     }
   }, [params, setParams]);
 
   const connect = async (c: Connector) => {
     try { await startConnect(c.id); }
-    catch (e) { setNotice({ ok: false, text: e instanceof Error ? e.message : "无法开始连接" }); }
+    catch (e) { toast(e instanceof Error ? e.message : "无法开始连接"); }
   };
   const disconnect = async (c: Connector) => {
     if (!(await confirmDialog({ title: `断开 ${c.name}？`, text: `账号 ${c.account} 的授权会被撤销，用到它的任务会停下。`, action: "断开" }))) return;
@@ -71,7 +71,7 @@ export default function ConnectorsScreen() {
     try {
       const added = await http.post<McpServerInfo>("/api/connectors/mcp", mcpDraft);
       await servers.reload(); setMcpDraft(null);
-      setNotice({ ok: true, text: withRetried(`已连接 ${added.name}`, added.retried_note) });
+      toast(withRetried(`已连接 ${added.name}`, added.retried_note));
     }
     catch (e) { setMcpErr(e instanceof Error ? e.message : "添加失败"); }
     finally { setMcpBusy(false); }
@@ -89,7 +89,6 @@ export default function ConnectorsScreen() {
         { label: `${k.label} · ${k.desc}`, icon: addIcon(k.kind), onSelect: () => add(k.kind) }))} />} />}>
       <PageIntro loading={accounts.loading} summary={connectorSummary(accounts.items, servers.loading ? null : servers.items, secrets.loading ? null : secrets.items)}
         line="一键授权的账号、MCP 服务器，以及加密保存的网站登录、API Key 和环境变量。发邮件、提交代码这类动作，永远先问你；密钥我只知道“有”，看不到内容。" />
-      {notice && <div className={`notice ${notice.ok ? "ok" : "err"}`} onClick={() => setNotice(null)}>{notice.text}</div>}
 
       {/* v2.90.2 只画服务器配好了的（或已连过的）；缺配置时给部署者一行，点开是引导，不放点了会失败的按钮 */}
       {(accounts.loading || shown.length > 0 || missing.length > 0) && (
@@ -158,7 +157,7 @@ export default function ConnectorsScreen() {
       )}
 
       {secretStart && <SecretSheet key={`${secretStart.kind}:${secretStart.name ?? ""}`} start={secretStart} secrets={secrets}
-        onClose={() => setSecretStart(null)} onSaved={(text) => setNotice({ ok: true, text })} />}
+        onClose={() => setSecretStart(null)} onSaved={toast} />}
 
       {setupOpen && <OAuthSetupSheet missing={missing} onClose={() => setSetupOpen(false)} />}
 
