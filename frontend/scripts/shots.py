@@ -403,6 +403,14 @@ def main():
                 page.screenshot(path=str(OUT / f"{name}-{theme}-project-refs.png"))
                 page.goto(base + "/#/chat")
                 page.wait_for_timeout(500)
+                # v3.5.5：新对话空态——最后一张建议卡不能停在输入胶囊下（放得下整组露出，放不下滚到底整张露出；
+                # 用户真机那次是浏览器标签页多报 44px 顶部安全区，v3.5.1 已修；App 同一条在 test/chat_empty_footer_test.dart）
+                page.screenshot(path=str(OUT / f"{name}-{theme}-chat-empty.png"))
+                page.evaluate("document.querySelector('.thread').scrollTo(0, 1e6)")
+                page.wait_for_timeout(300)
+                bottom, footer = page.evaluate("[[...document.querySelectorAll('.suggestion')].pop().getBoundingClientRect().bottom,"
+                                               " document.querySelector('.floating-footer').getBoundingClientRect().top]")
+                assert bottom <= footer, f"{name}-{theme} 空态最后一张建议卡底边 {bottom} 被输入胶囊（顶边 {footer}）挡住"
                 if name == "desktop":
                     page.get_by_text("DeepSeek 和 GPT 的价格对比").first.click()
                 else:
