@@ -1,7 +1,9 @@
 // v2.82 浏览器接管页（docs/home-redesign.md §H）：接管 = 一个全屏页面，聊天卡只做预览 + 入口。
 // 手势（坐标换算都在 models/browser_view.dart）：
-//   点一下 = 点网页；单指拖动 / 鼠标滚轮 = 滚网页；双指 = 放大平移画面（只是看得清，不动网页）；
-//   长按后拖动 = 按住鼠标拖（滑块验证码）：down → move… → up。拖动/滚动攒 Timing.takeoverInput 发一次。
+//   点一下 = 点网页（带真实按住时长 hold：手指按下→抬起的时间，服务端照这个时长按住，browser/live.py）；
+//   单指拖动 / 鼠标滚轮 = 滚网页；双指 = 放大平移画面（只是看得清，不动网页）；
+//   长按后拖动 = 按住鼠标拖（滑块验证码）：down → move… → up。外接鼠标没按住时移动 = 悬停（move）。
+//   拖动/悬停/滚动攒 Timing.takeoverInput 发一次。
 // 底栏：后退、刷新、打字框（提交 = 把字打进网页；空着提交 = 回车）。助手在等你（handoff pending）时顶部出“需要你来”条，
 // 完成/做不了走卡片传进来的 onAnswer（和卡上的条是同一个 HandoffBar），答完关页。
 // v2.89 §M：画面和输入走卡片的同一条实时连接（BrowserLive，推流，不再轮询截图、不再一次操作一个 HTTP）；
@@ -53,9 +55,10 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
   Offset _pan = Offset.zero, _focalScene = Offset.zero;
   bool _pinching = false;
 
-  // 攒着没发的滚动 / 拖动
+  // 攒着没发的滚动 / 拖动或悬停的指针位置
   double _scrollDy = 0, _scrollDx = 0;
-  Offset? _scrollAt, _dragTo;
+  Offset? _scrollAt, _moveTo;
+  Duration? _downAt, _upAt; // 原始指针按下 / 抬起的时刻（Listener 先于手势竞技场收到，tap 回调时两头都已记下）
 
   BrowserLive get _live => widget.live;
 
@@ -87,7 +90,16 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
   void _tap(TapUpDetails d, Size box) {
     _touch();
     final at = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan);
-    if (at != null) _send({'t': 'mouse', 'kind': 'click', 'x': at.dx, 'y': at.dy});
+    if (at == null) return;
+    _moveTo = null; // 还没发的悬停不能晚于这次点
+    final hold = takeoverHoldMs(_downAt, _upAt);
+    _send({'t': 'mouse', 'kind': 'click', 'x': at.dx, 'y': at.dy, 'hold': ?hold});
+  }
+
+  void _hover(PointerHoverEvent e, Size box) {
+    if (e.kind != PointerDeviceKind.mouse) return; // 只有鼠标会悬停；触控笔悬停不当鼠标移动
+    _moveTo = takeoverPoint(e.localPosition, box, scale: _scale, pan: _pan) ?? _moveTo;
+    if (_moveTo != null) _schedule();
   }
 
   void _scaleStart(ScaleStartDetails d) {
@@ -133,19 +145,19 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
     final at = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan);
     if (at == null) return;
     Haptics.tap();
-    _dragTo = null;
+    _moveTo = null;
     _send({'t': 'mouse', 'kind': 'down', 'x': at.dx, 'y': at.dy});
   }
 
   void _dragMove(LongPressMoveUpdateDetails d, Size box) {
-    _dragTo = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan) ?? _dragTo;
+    _moveTo = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan) ?? _moveTo;
     _schedule();
   }
 
   void _dragEnd(LongPressEndDetails d, Size box) {
     _flush?.cancel();
-    final at = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan) ?? _dragTo;
-    _dragTo = null;
+    final at = takeoverPoint(d.localPosition, box, scale: _scale, pan: _pan) ?? _moveTo;
+    _moveTo = null;
     if (at != null) _send({'t': 'mouse', 'kind': 'up', 'x': at.dx, 'y': at.dy});
   }
 
@@ -154,8 +166,8 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
   void _sendNow() {
     _flush?.cancel();
     _flush = null;
-    if (_dragTo != null) {
-      final to = _dragTo!;
+    if (_moveTo != null) {
+      final to = _moveTo!;
       _live.send({'t': 'mouse', 'kind': 'move', 'x': to.dx, 'y': to.dy});
     }
     if (_scrollDy.abs() >= 1 || _scrollDx.abs() >= 1) {
@@ -244,6 +256,9 @@ class _BrowserTakeoverPageState extends ConsumerState<BrowserTakeoverPage> {
         _live.view(takeoverFit(box).width * _scale * MediaQuery.devicePixelRatioOf(context)); // 放大了要更清楚的帧
         return Listener(
           onPointerSignal: (e) => _wheel(e, box),
+          onPointerDown: (e) => _downAt = e.timeStamp,
+          onPointerUp: (e) => _upAt = e.timeStamp,
+          onPointerHover: (e) => _hover(e, box),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             excludeFromSemantics: true,

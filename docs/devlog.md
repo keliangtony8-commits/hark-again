@@ -615,3 +615,20 @@ dawn / day / dusk、深色全套不动；插值关键帧不动（night ↔ dawn 
 - 修：MainActivity 多管齐下（preferredDisplayModeId + preferredRefreshRate + FlutterSurfaceView 的 Surface.setFrameRate，API31+ CHANGE_FRAME_RATE_ALWAYS；onResume / 焦点 / surface 创建变化后重设）。Flutter 3.47 无帧率 manifest 开关。
 - 自检加滑动中系统刷新率采样（每 200ms）、实测 fps、Flyme 设置提示。视觉零改动。
 
+
+## 2026-10-19 接管点不动 Cloudflare Turnstile：查根因（两端 + 浏览器服务；分支 wip/takeover-input）
+- 现象（用户真机 10-19）：接管电脑时有些东西点不到，典型 Turnstile 复选框，“明明点中了就是没反应”。
+- 链路：App GestureDetector / Web 鼠标事件 → 0–1 坐标（models/browser_view.dart / lib/browserView.ts takeoverPoint，按 1280×800 contain）→ WS `/api/browser/live` → browser/live.parse → service._input → Playwright page.mouse（CDP Input.dispatchMouseEvent，页面级坐标，由浏览器做命中测试，进得了 OOPIF / 封闭 shadow root，不走选择器 / element.click）。
+- 证据：
+  1. **Web 横屏 / 电脑窗口坐标错（确定的 bug）**：`.takeover-screen{width:100%;max-height:100%;aspect-ratio}` 宽被定死，高被 max-height 截 → 框拉满舞台宽，图 `object-fit:cover` 裁掉上下；而 takeoverPoint 按舞台 contain 推算画面位置。Chromium 实测 1920×1080：框 1872×934 vs 算的 1494×934（左偏 189）；图实际 1872×1170 上下各裁 118。真站 Turnstile 复选框（网页 222,312）会被送到 (116,290)，偏 106px；左右各 189px 宽的带子点了直接不发。竖屏手机（宽受限）恰好不受影响，所以以前没测出来。App 用 AspectRatio + Center，本来就是真 contain，widget 测试在 500×1000 / 1600×700 两种尺寸按画面实际矩形验过，没偏。
+  2. **事件送到了**：复现页（browser/takeover_probe.py：封闭 shadow root → 跨源 iframe 127.0.0.2 → 复选框）和真 Turnstile（官方测试钥匙 3x…FF，强制交互）都点得中：iframe 里收到 isTrusted、pointerType=mouse、buttons=1、detail=1，测试钥匙拿到令牌。所以不是“没送进 iframe”，也没有触摸 / 鼠标类型错配（服务端一直发鼠标）。
+  3. **但送进去的是机器序列**：旧 page.mouse.click = 指针瞬移到点上（之前没有任何 mousemove）、按下与抬起同一毫秒；网页版没按住时的鼠标移动从不转发（悬停菜单也够不着）。
+  4. **浏览器自报自动化**：navigator.webdriver=true（Playwright 默认 --enable-automation）、UA `HeadlessChrome/…`、userAgentData.brands 含 HeadlessChrome、outerWidth/Height=0。
+  5. 真站（scrapingcourse.com/cloudflare-challenge 的 managed challenge，沙盒出口是 AWS 机房 IP）：点下去 → 转圈 → ~5s 退回复选框，复现了用户的“没反应”。逐项消融（只改输入序列 / 只去自动化标记 / 新无头 / 全部）都仍被退回 → 沙盒里分不清剩下的是机房 IP、CDP 本身还是无头渲染特征；**这一项沙盒无法验证，不写成已修好**。
+- 决定（替换，不叠加）：
+  - Web：`.takeover-screen` 改成真 contain（舞台 `container-type:size`，框宽 `min(100cqw, 100cqh×1.6)`）；BrowserTakeover 按画面框自己的矩形换算（不再按舞台推算，CSS 和算式不会再各说各的）。
+  - 两端：点一下带真实按住时长 `hold`（App 用原始 PointerDown/Up 的 timeStamp，Web 用 pointerdown→mouseup 的 timeStamp）；没按住的鼠标移动 = 悬停 move（Web 电脑端、App 外接鼠标）。
+  - 服务端：click = 从上一位置移过去（APPROACH_STEPS 个 mouseMoved）→ 按下 → 按住 hold → 抬起，删 page.mouse.click；规则在 live.py。新 browser/identity.py：去掉 --enable-automation、加 --disable-blink-features=AutomationControlled（webdriver=false）、UA 用真实大版本的普通 Chrome 精简 UA。**不做**指纹伪造 / 注入脚本改事件。
+- 成本：一次点击多 ~hold 毫秒（WS 接收循环在这期间不处理下一条，用户本来就按着）；悬停 move 每 80ms 最多一条，和拖动同一节流。
+- 测试：browser/test_takeover_chromium.py 新增跨源 iframe 复选框（序列、时长、isTrusted、悬停、无自动化标记；旧代码跑这段会失败）；browser/test_turnstile_chromium.py（官方测试钥匙，要联网）；test_live.py hold 解析与 click 序列；App browser_handoff_test 两种尺寸点哪落哪 + hold + 鼠标悬停；Web tests/takeover.test.ts。
+- **未验证 / 遗留**：线上 VPS（非机房被标的 IP？x86_64，Playwright 1.47 镜像）上真站 Turnstile 是否通过；1.47 旧无头下 brands 仍含 HeadlessChrome、outerWidth=0——要去掉得把镜像升到 Playwright ≥1.49 用 channel="chromium"（新无头），属于换镜像，待用户定。

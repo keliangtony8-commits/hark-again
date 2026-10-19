@@ -1,16 +1,20 @@
 """真 Chromium 端到端（v2.89 实时画面 + 接管；需要 playwright + chromium，没有就跳过）：python3 browser/test_takeover_chromium.py
 CDP screencast 真的推出 JPEG 帧、按观看宽度缩小；接管输入（live.parse → service._input，和 WS 同一条路）真的落到网页上：
-点中一个很小的按钮；滚轮滚到页底；长按拖动滑块（down → move → up）；后退 / 刷新；看不懂的输入被丢掉。"""
+点中一个很小的按钮；滚轮滚到页底；长按拖动滑块（down → move → up）；后退 / 刷新；看不懂的输入被丢掉。
+v3.5.x（接管点不动 Turnstile）：封闭 shadow root 里的跨源 iframe 里的复选框点得中，且收到的是一只真鼠标的完整序列
+（先 pointermove 再按下、按住的时长 = 客户端报的 hold、isTrusted、pointerType=mouse、buttons=1）；没按住的 move = 悬停；
+网页看不到自动化标记（navigator.webdriver、HeadlessChrome UA）。复现页在 takeover_probe.py。"""
 import asyncio, os, sys, tempfile
 sys.path.insert(0, os.path.dirname(__file__))
 try:
     import playwright  # noqa: F401
 except ImportError:
     print("跳过：没装 playwright"); sys.exit(0)
-os.environ.update(BROWSER_TOKEN="t", BROWSER_ALLOW_HOSTS="127.0.0.1")
+os.environ.update(BROWSER_TOKEN="t", BROWSER_ALLOW_HOSTS="127.0.0.1,127.0.0.2")
 import json  # noqa: E402
 import live  # noqa: E402
 import service  # noqa: E402
+import takeover_probe as tp  # noqa: E402
 
 service.STATE = tempfile.mkdtemp()
 service.DOWNLOADS = tempfile.mkdtemp()
@@ -47,6 +51,45 @@ async def inp(**m):
 async def ev(js):
     page = await service._session("t")
     return await page.evaluate(js)
+
+
+async def iframe_checkbox():
+    """Turnstile 的结构：封闭 shadow root → 跨源 iframe（127.0.0.2，独立进程）→ 复选框。按页面坐标点，事件要真的进去。"""
+    url, close = await tp.serve_probe()
+    await service.goto("t", service.GotoIn(url=url))
+    page = await service._session("t")
+    fr = None
+    for _ in range(50):
+        fr = tp.probe_frame(page)
+        if fr and await fr.evaluate("!!window.__ev"):
+            break
+        await asyncio.sleep(0.1)
+    top = await page.evaluate("window.__top")
+    assert top["webdriver"] is False and "Headless" not in top["ua"], top  # identity.py
+    assert "Headless" not in (await fr.evaluate("window.__env"))["ua"]
+
+    # 悬停：没按住的 move 送进 iframe，buttons=0，不会点下去
+    await inp(t="mouse", kind="move", x=(tp.FX + 150) / W, y=(tp.FY + 60) / H)
+    ev = await fr.evaluate("window.__ev")
+    assert any(e["type"] == "pointermove" and e["buttons"] == 0 and e["trusted"] for e in ev), ev
+    assert not any(e["type"] in ("pointerdown", "click") for e in ev)
+    await fr.evaluate("window.__ev = []")
+
+    x, y = tp.BOX_CENTER
+    await inp(t="mouse", x=x / W, y=y / H, hold=120)
+    assert await fr.evaluate("document.getElementById('cb').checked")
+    ev = await fr.evaluate("window.__ev")
+    kinds = [e["type"] for e in ev]
+    assert kinds.index("pointermove") < kinds.index("pointerdown") < kinds.index("pointerup") < kinds.index("click"), kinds
+    moves = [e for e in ev if e["type"] == "pointermove"]
+    assert len(moves) >= 2, moves  # 移过去的，不是瞬移到点上
+    down = next(e for e in ev if e["type"] == "pointerdown")
+    up = next(e for e in ev if e["type"] == "pointerup")
+    click = next(e for e in ev if e["type"] == "click")
+    assert all(e["trusted"] for e in ev) and down["pt"] == "mouse" and down["buttons"] == 1 and up["buttons"] == 0
+    assert click["target"] == "cb" and click["detail"] == 1
+    assert up["t"] - down["t"] >= 100, (down, up)  # 按住了客户端报的 120ms（以前同一毫秒）
+    close()
 
 
 async def main():
@@ -100,6 +143,8 @@ async def main():
     await ev("document.getElementById('out').dataset.tiny='x'")
     await inp(t="nav", action="reload")
     assert await ev("document.getElementById('out').dataset.tiny") is None
+
+    await iframe_checkbox()
 
     assert live.parse('{"t":"mouse","kind":"drag"}') is None and live.parse('{"t":"nav","action":"forward"}') is None
     srv.close()

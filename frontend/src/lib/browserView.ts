@@ -21,6 +21,11 @@ export const TAKEOVER_INPUT_MS = 80;
 /** 按下后移动超过这么多像素才算拖动（否则松手 = 点一下）。 */
 export const TAKEOVER_DRAG_SLOP = 4;
 
+/** 点一下按住了多久（毫秒，从按下到抬起的真实时长）：随 click 发给服务端，它按这个时长按住再抬起（browser/live.py）。 */
+export function takeoverHold(downAt: number, upAt: number): number {
+  return Math.max(0, Math.round(upAt - downAt));
+}
+
 /** 画面在 box 里按 contain 摆放的位置。 */
 export function takeoverFit(w: number, h: number) {
   const aspect = BROWSER_VIEW.width / BROWSER_VIEW.height;

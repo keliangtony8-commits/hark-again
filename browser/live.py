@@ -7,6 +7,11 @@
 - 分辨率：观看者报自己画面的物理像素宽，取最大值按 VIEWPORT_BUCKET_PX 分桶（拖窗口不会每像素重启一次 screencast），
   夹在 [MIN_DIMENSION, cap]；没人报 → cap。
 - 输入：客户端发 JSON（坐标 0–1，和 v2.82 接管页同一套语义），这里夹取、白名单、截断后才交给 service。
+- 点一下（v3.5.x 接管点不动 Turnstile 查根因）：注入的是一只真鼠标会产生的完整序列——从上一次的位置移过去（中途
+  APPROACH_STEPS 个 mouseMoved，网页 / iframe 收到 pointerover → pointermove…）→ 按下 → 按住用户真实按了多久
+  （客户端量的 hold，毫秒）→ 抬起。以前是 page.mouse.click：指针瞬移到点上、按下抬起同一毫秒，
+  跨源 iframe（Turnstile）收到的是“没移动过、0ms 按压”的点击。hold 不是编的：App / 网页按真实按下→抬起的时间报。
+- 悬停：没按住时的 move = 鼠标移过（网页版电脑端、App 外接鼠标转发真实移动），下拉菜单、悬停才出现的按钮才点得到。
 """
 import asyncio
 import json
@@ -18,6 +23,9 @@ MIN_DIMENSION = 320
 VIEWPORT_BUCKET_PX = 160      # 观看窗口宽按 160px 一档
 SCROLL_MAX = 3000             # 一次滚轮最多滚多少像素（原 service.SCROLL_MAX）
 TEXT_MAX = 8192               # 一次打字最多多少字（BetterWright insertText 上限）
+CLICK_HOLD_MS = 80            # 老客户端不报 hold 时按这么久（普通人点鼠标 / 轻触的典型按压时长量级）
+HOLD_MAX_MS = 1000            # 再长就是长按：客户端走 down → move → up，不走 click
+APPROACH_STEPS = 6            # 点之前从上一个位置移过去，中途发几个 mouseMoved
 MOUSE_KINDS = ("click", "down", "move", "up")
 NAV_ACTIONS = ("back", "reload")
 # 能原样按下的键（网页版直接打字时转发的那些；其余可见字符当文字）
@@ -53,7 +61,7 @@ def effective_max_width(viewer_px, cap: int = MAX_DIMENSION) -> int:
 
 def parse(raw: str) -> dict | None:
     """一条客户端消息 → 干净的命令；看不懂 / 越界的 → None（丢掉，不报错，不断线）。
-    {"t":"mouse","kind":"click|down|move|up","x":0–1,"y":0–1}
+    {"t":"mouse","kind":"click|down|move|up","x":0–1,"y":0–1[,"hold":按了多少毫秒（click）]}
     {"t":"wheel","x","y","dx","dy"}     {"t":"text","text"}     {"t":"key","key"}
     {"t":"nav","action":"back|reload"}  {"t":"view","px":画面物理像素宽}"""
     try:
@@ -68,7 +76,10 @@ def parse(raw: str) -> dict | None:
         kind = m.get("kind", "click")
         if kind not in MOUSE_KINDS:
             return None
-        return {"t": "mouse", "kind": kind, "x": unit("x"), "y": unit("y")}
+        out = {"t": "mouse", "kind": kind, "x": unit("x"), "y": unit("y")}
+        if kind == "click":
+            out["hold"] = int(_clamp(_num(m.get("hold"), CLICK_HOLD_MS), 0, HOLD_MAX_MS))
+        return out
     if t == "wheel":
         return {"t": "wheel", "x": unit("x"), "y": unit("y"),
                 "dx": _clamp(_num(m.get("dx")), -SCROLL_MAX, SCROLL_MAX), "dy": _clamp(_num(m.get("dy")), -SCROLL_MAX, SCROLL_MAX)}

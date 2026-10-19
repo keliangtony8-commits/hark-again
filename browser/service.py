@@ -45,6 +45,7 @@ import dialogs
 import egress
 import forms
 import frames
+import identity
 import live
 import region
 import shadow
@@ -152,9 +153,11 @@ async def _ensure_browser() -> Browser:
                 _pw = await async_playwright().start()
             # proxy per-context：先给浏览器一个占位代理，每个会话再用自己的代理账号（被拦记到对的会话上）；
             # WebRTC 只许走代理（不然 UDP 能绕过关卡直连内网）
+            # 不自报“受自动化控制”（identity.py：用户亲手过人机验证时 Cloudflare 看的就是这些）
             _browser = await _pw.chromium.launch(proxy={"server": "http://per-context"}, args=[
                 # 无头不需要 GPU；不关的话 SwiftShader 的 gpu-process 在 2 核 VPS 上空转吃满一核
-                "--disable-gpu", "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"])
+                "--disable-gpu", "--disable-dev-shm-usage", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                *identity.LAUNCH_ARGS], ignore_default_args=identity.IGNORE_DEFAULT_ARGS)
         except Exception as e:
             _launch_error = (time.time(), launch_reason(e))
             raise HTTPException(503, _launch_error[1])
@@ -174,7 +177,7 @@ async def _session(name: str, want: region.Region | None = None) -> Page:
                 await _evict(min(_sessions, key=lambda n: (_watched_now(n), _used.get(n, 0))))  # 先关没人看的
             path = _state_path(name)
             saved = os.path.exists(path)
-            ctx = await _browser.new_context(viewport=VIEW, **reg.options(),
+            ctx = await _browser.new_context(viewport=VIEW, **reg.options(), user_agent=identity.user_agent(getattr(_browser, "version", "")),
                                              storage_state=path if saved else None, accept_downloads=True,
                                              proxy=_egress.proxy_for(name), service_workers="block")
             if saved:
@@ -1054,7 +1057,7 @@ async def _reopen(name: str) -> None:
 async def _input(name: str, cmd: dict) -> None:
     """用户在接管页里亲手操作（live.parse 洗过的命令）。坐标 0–1 × 视口。
     click/up/text/key = 一次完整操作：弹出的确认框就是他要确认的（dialogs 规则 5）、跟新标签页、存登录态；
-    move 只移动（拖动中一秒几十次），down 只按下。"""
+    move 只移动（拖动中 / 悬停时一秒十几次），down 只按下。"""
     if name not in _sessions:
         return
     _used[name] = time.time()
@@ -1089,8 +1092,11 @@ async def _input(name: str, cmd: dict) -> None:
             if t == "mouse" and cmd["kind"] == "up":
                 await page.mouse.move(x, y, steps=2)
                 await page.mouse.up()
-            elif t == "mouse":
-                await page.mouse.click(x, y)
+            elif t == "mouse":  # 一次完整的点：移过去 → 按下 → 按住真实时长 → 抬起（规则见 live.py 文件头）
+                await page.mouse.move(x, y, steps=live.APPROACH_STEPS)
+                await page.mouse.down()
+                await asyncio.sleep(cmd["hold"] / 1000)
+                await page.mouse.up()
             elif t == "text":
                 await page.keyboard.type(cmd["text"], delay=20)
             elif t == "key":

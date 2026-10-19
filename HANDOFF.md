@@ -7,6 +7,8 @@
 
 ## 〇、最新交接（2026-10-18，接手先读这一节）
 
+> **2026-10-19 接管点不动（Turnstile）根因与修法（分支 wip/takeover-input，未合并、未改版本号、未部署；详见 devlog 同名节）**：① **Web 横屏 / 电脑窗口坐标错**（确定的 bug）：`.takeover-screen` 用 width:100% + max-height，框被拉满舞台宽、图 cover 裁掉上下，而换算按 contain → 1920×1080 下真站复选框偏 106px、左右各 189px 点了不发；手机竖屏碰巧不受影响。修：CSS 真 contain（container query），换算改按画面框自己的矩形。App 本来是真 contain，两种尺寸测试验过。② **事件其实送进了跨源 iframe**（复现页 + 官方测试钥匙 3x…FF 都拿到令牌，isTrusted/mouse/buttons 正确），但送的是机器序列：瞬移 + 按下抬起同一毫秒、网页从不转发悬停。修：click 带客户端量的真实按住时长 hold，服务端“移过去 → 按下 → 按住 hold → 抬起”；没按住的鼠标移动 = 悬停（两端）。③ **浏览器自报自动化**（webdriver=true、HeadlessChrome UA）：新 browser/identity.py 去掉这两处，不做指纹伪造。④ **真站仍不保证**：沙盒（AWS 机房 IP）里真 Cloudflare managed challenge 改完仍“转圈后退回”，消融分不清是 IP、CDP 还是无头特征；1.47 镜像旧无头下 brands 仍含 HeadlessChrome、outerWidth=0（要换 Playwright ≥1.49 新无头 = 换镜像，待用户定）。**下一步**：部署后在 VPS 上用真站验；过不了就只能照旧让用户换个办法 / 走 handoff“做不了”，不要加重试或延时掩盖。
+
 > **2026-10-19 真机结论（魅族 20，v3.5.4，4 次性能自检）**：高刷已生效。滑动中系统刷新率 120Hz（最低=最高），所有变体 ≈121fps、超预算 0%，光栅均值 1.3–2.8ms、p90 ≤3.7ms，UI 0.3–0.8ms。A–H 差异在噪声内 → 视觉层（壁纸/模糊/渐隐/卡片）都不是瓶颈，**不要为性能删效果**。根因确认是 3.5.3 及以前被 Flyme 锁 60Hz；生效的是 `Surface.setFrameRate(ALWAYS)` + `preferredRefreshRate`。请求 144 时系统只给 120（Flyme 普通应用上限，推断），可接受。仅一次 A 变体首跑 49fps/最大 12.1ms，其余三次正常，判为首跑预热/手动触碰，不追。卡顿问题可关闭；服务器仍 3.5.1。
 
 **v3.5.4 = 3.5.3 + 强制高刷多管齐下 + 自检采样刷新率（wip/v3.5.1 分支，版本号 3.5.4 / build 30504，tag v3.5.4；未部署服务器；APK toyuis-3.5.4-arm64.apk 在 VPS 编）**。

@@ -82,7 +82,9 @@ def pure():
     assert w([]) == live.MAX_DIMENSION and w([0, None]) == live.MAX_DIMENSION
     assert w([390]) == 480 and w([390, 1000]) == 1120 and w([100]) == live.MIN_DIMENSION and w([5000]) == live.MAX_DIMENSION
     p = live.parse
-    assert p('{"t":"mouse","x":2,"y":-1}') == {"t": "mouse", "kind": "click", "x": 1.0, "y": 0.0}
+    assert p('{"t":"mouse","x":2,"y":-1}') == {"t": "mouse", "kind": "click", "x": 1.0, "y": 0.0, "hold": live.CLICK_HOLD_MS}  # 老客户端不报 hold
+    assert p('{"t":"mouse","x":0,"y":0,"hold":143.6}')["hold"] == 143 and p('{"t":"mouse","x":0,"y":0,"hold":-5}')["hold"] == 0
+    assert p('{"t":"mouse","x":0,"y":0,"hold":99999}')["hold"] == live.HOLD_MAX_MS and "hold" not in p('{"t":"mouse","kind":"up","x":0,"y":0}')
     assert p('{"t":"mouse","kind":"drag","x":0,"y":0}') is None
     assert p('{"t":"mouse","kind":"down","x":"nan","y":0.2}') == {"t": "mouse", "kind": "down", "x": 0.5, "y": 0.2}
     assert p('{"t":"wheel","dy":99999}') == {"t": "wheel", "x": 0.5, "y": 0.5, "dx": 0.0, "dy": live.SCROLL_MAX}
@@ -142,7 +144,9 @@ def wire():
         while ("press", "Enter") not in calls and time.time() < deadline:
             time.sleep(0.02)
         assert ("Page.startScreencast", 480) in calls, calls  # 手机宽 390 → 480 桶，重挂
-        assert ("click", 640.0, 200.0) in calls and ("wheel", 0.0, 640.0) in calls and ("type", "hi") in calls
+        i = calls.index(("down",))  # 点 = 移过去 → 按下 → 抬起（不是瞬移的 page.mouse.click）
+        assert calls[i - 1] == ("move", 640.0, 200.0) and calls[i + 1] == ("up",) and not any(c[0] == "click" for c in calls)
+        assert ("wheel", 0.0, 640.0) in calls and ("type", "hi") in calls
         assert ("reload",) in calls and ("press", "Enter") in calls and ("save",) in calls
         assert service._watched_now("a-com")
         service._used["a-com"] = time.time() - service.IDLE - 10  # 很久没“操作”，但有人在看

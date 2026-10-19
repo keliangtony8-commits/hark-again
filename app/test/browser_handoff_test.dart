@@ -1,7 +1,8 @@
 // 浏览器接管交还（v1.29 / v2.82）：models/browser_view.dart 规则 + BrowserBlock.handoff 解析 + 画面卡上的“需要你来”条
 // （助手在等你 → 自动推出全屏接管页、完成/做不了回调 onForm 并关页、断线保留按钮、只读场景只显示说明不推页、结束后一行结果）
 // + v2.89 实时画面连接（一条 WS：首帧、断线留着最后一帧重连、浏览器已关闭 → 重新打开 open=1、卡片拆掉就断）
-// + 接管页手势（点、单指滚、长按拖、后退刷新、打字）在同一条连接上发的消息 + 坐标换算。
+// + 接管页手势（点、单指滚、长按拖、后退刷新、打字）在同一条连接上发的消息 + 坐标换算
+// + v3.5.x 点哪落哪（竖屏 / 横屏 / 放大后，按画面实际画出来的位置验）、点一下带真实按住时长 hold、外接鼠标悬停 = move。
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -82,8 +83,8 @@ Map<String, dynamic> card({String? state, bool live = false}) => {
 typedef Reply = (String, Map<String, String>?);
 
 Future<void> pump(WidgetTester tester, Map<String, dynamic> j,
-    {bool Function(String, Map<String, String>?, bool)? onForm, FakeLives? lives}) async {
-  tester.view.physicalSize = const Size(500, 1000);
+    {bool Function(String, Map<String, String>?, bool)? onForm, FakeLives? lives, Size size = const Size(500, 1000)}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
@@ -262,6 +263,52 @@ void main() {
     expect(lives.last.sent.last, {'t': 'view', 'px': 498}); // 换回卡片的宽度（卡片宽 498 物理像素）
     await unmount(tester);
     expect(lives.last.closed, isTrue); // 卡片拆掉：断开
+  });
+
+  for (final size in const [Size(500, 1000), Size(1600, 700)]) {
+    testWidgets('接管页点哪落哪 + 按住时长 + 鼠标悬停（${size.width.toInt()}×${size.height.toInt()}）', (tester) async {
+      final lives = FakeLives();
+      await pump(tester, card(), onForm: (_, _, _) => true, lives: lives, size: size);
+      await tester.tap(find.text(takeoverLabel));
+      await frames(tester);
+      final screen = tester.getRect(find.byType(AspectRatio).last); // 画面实际画在这里
+      expect(screen.width / screen.height, closeTo(browserAspect, 0.01));
+      Offset on(double fx, double fy) => Offset(screen.left + fx * screen.width, screen.top + fy * screen.height);
+
+      // 点一下：按下 → 抬起相隔 137ms，坐标按画面换算
+      lives.last.sent.clear();
+      final g = await tester.createGesture();
+      await g.down(on(0.2, 0.7), timeStamp: const Duration(seconds: 10));
+      await tester.pump(const Duration(milliseconds: 137));
+      await g.up(timeStamp: const Duration(seconds: 10, milliseconds: 137));
+      await frames(tester);
+      final click = lives.input.single;
+      expect((click['kind'], click['hold']), ('click', 137));
+      expect(click['x'] as double, closeTo(0.2, 0.005));
+      expect(click['y'] as double, closeTo(0.7, 0.005));
+
+      // 外接鼠标没按住时移动 = 悬停 move，不点
+      lives.last.sent.clear();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: on(0.5, 0.5));
+      await mouse.moveTo(on(0.9, 0.1));
+      await frames(tester);
+      final moves = lives.input;
+      expect(moves, isNotEmpty);
+      expect(moves.every((m) => m['kind'] == 'move'), isTrue);
+      expect(moves.last['x'] as double, closeTo(0.9, 0.005));
+      expect(moves.last['y'] as double, closeTo(0.1, 0.005));
+      await mouse.removePointer();
+      await tester.tap(find.byTooltip('关闭'));
+      await frames(tester);
+      await unmount(tester);
+    });
+  }
+
+  test('按住时长：缺一头不带，负数夹到 0', () {
+    expect(takeoverHoldMs(null, const Duration(seconds: 1)), isNull);
+    expect(takeoverHoldMs(const Duration(milliseconds: 5), const Duration(microseconds: 98600)), 94);
+    expect(takeoverHoldMs(const Duration(seconds: 2), const Duration(seconds: 1)), 0);
   });
 
   testWidgets('做不了 → onForm(id, null)；断线（返回 false）按钮留着', (tester) async {

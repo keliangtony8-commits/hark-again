@@ -102,9 +102,11 @@
 .takeover-head { display: flex; align-items: center; gap: var(--sp-3); min-height: 44px; margin-bottom: var(--sp-2); }
 .takeover-site { font-size: var(--fs-lg); font-weight: var(--fw-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .takeover .blk-handoff { margin: 0 auto var(--sp-3); width: min(720px, 100%); }
-.takeover-stage { flex: 1; min-height: 0; display: grid; place-items: center; outline: none; cursor: default; user-select: none; }
+.takeover-stage { flex: 1; min-height: 0; display: grid; place-items: center; outline: none; cursor: default; user-select: none; container-type: size; }
 .takeover-stage:focus-visible .takeover-screen { box-shadow: 0 0 0 2px var(--text-3); }
-.takeover-screen { max-width: 100%; max-height: 100%; width: 100%; aspect-ratio: 1280 / 800; border-radius: var(--r-inner); }
+/* 真 contain：宽 = min(舞台宽, 舞台高 × 1.6)。以前 width:100% + max-height 在横屏 / 电脑窗口里把框拉满宽、图被 cover 裁掉上下，
+   而点击按 contain 换算 → 点哪偏哪（BrowserTakeover 现在直接按这个框换算，见 at()） */
+.takeover-screen { width: min(100cqw, 100cqh * 1280 / 800); aspect-ratio: 1280 / 800; border-radius: var(--r-inner); }
 .takeover-screen > img { pointer-events: none; }
 .takeover-hint { margin: var(--sp-2) 0 0; text-align: center; color: var(--text-2); font-size: var(--fs-sm); transition: opacity var(--dur) var(--ease); }
 .takeover-hint.gone { opacity: 0; }

@@ -78,6 +78,14 @@ String browserScreenSemantics({required bool takeover, String? site}) {
   return takeover ? '$where实时画面，已接管，点哪里就点网页哪里' : '$where实时画面，点开接管';
 }
 
+/// 点一下按住了多久（毫秒，手指 / 鼠标真实的按下 → 抬起）：随 click 发给服务端，它按这个时长按住再抬起（browser/live.py）。
+/// 没量到（缺一头）→ null，不带 hold，服务端用默认值。= 网页 lib/browserView.ts takeoverHold。
+int? takeoverHoldMs(Duration? down, Duration? up) {
+  if (down == null || up == null) return null;
+  final ms = (up - down).inMicroseconds / 1000;
+  return ms < 0 ? 0 : ms.round();
+}
+
 /// 截图在 [box] 里按 contain 摆放的位置（上下或左右留边）。
 Rect takeoverFit(Size box) {
   final w = box.width / box.height > browserAspect ? box.height * browserAspect : box.width;
