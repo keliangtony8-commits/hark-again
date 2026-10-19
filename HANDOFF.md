@@ -7,6 +7,8 @@
 
 ## 〇、最新交接（2026-10-18，接手先读这一节）
 
+> **2026-10-19 真机结论（魅族 20，v3.5.4，4 次性能自检）**：高刷已生效。滑动中系统刷新率 120Hz（最低=最高），所有变体 ≈121fps、超预算 0%，光栅均值 1.3–2.8ms、p90 ≤3.7ms，UI 0.3–0.8ms。A–H 差异在噪声内 → 视觉层（壁纸/模糊/渐隐/卡片）都不是瓶颈，**不要为性能删效果**。根因确认是 3.5.3 及以前被 Flyme 锁 60Hz；生效的是 `Surface.setFrameRate(ALWAYS)` + `preferredRefreshRate`。请求 144 时系统只给 120（Flyme 普通应用上限，推断），可接受。仅一次 A 变体首跑 49fps/最大 12.1ms，其余三次正常，判为首跑预热/手动触碰，不追。卡顿问题可关闭；服务器仍 3.5.1。
+
 **v3.5.4 = 3.5.3 + 强制高刷多管齐下 + 自检采样刷新率（wip/v3.5.1 分支，版本号 3.5.4 / build 30504，tag v3.5.4；未部署服务器；APK toyuis-3.5.4-arm64.apk 在 VPS 编）**。
 - **真机结论（魅族 20 / Flyme，3.5.3 自检四次截图）**：系统当前模式 4 · 60.0 Hz；窗口请求模式 2（144Hz）；可选 120/144/90/60；Flutter 报 120Hz。每变体 2.5 秒约 153 帧 ≈ 61fps → 屏幕实际跑 60Hz，preferredDisplayModeId 被 Flyme 忽略。各变体结果双峰随机：要么光栅均 ≈3.5ms、p90 5ms、0% 超预算；要么均 ≈10–11ms、p90 正好 16.7ms；哪个变体落哪边每次不同（A 全开有一次 3.4ms/1%，H 全关有一次 10.9ms/60%）。→ **没有哪一层是 GPU 瓶颈**，真实绘制 ≈3–4ms；16.7ms 是 60Hz 下交换链等 vsync 的反压被计进 rasterDuration。**根因 = 屏幕被锁 60Hz**（外加 Flutter 以为 120Hz 按 8.3ms 节奏出帧、与 60Hz 显示不匹配导致不均匀）。所以不要再按层砍视觉。
 - MainActivity.kt 三招都做：① preferredDisplayModeId（保留）② window.attributes.preferredRefreshRate = 最高 Hz ③ API≥30 遍历 decorView 找 FlutterSurfaceView，对 holder.surface 调 setFrameRate(maxHz, FRAME_RATE_COMPATIBILITY_DEFAULT)，API≥31 用带 CHANGE_FRAME_RATE_ALWAYS 的重载；onCreate / onResume（含下一帧 post）/ onWindowFocusChanged(true) / surfaceCreated / surfaceChanged 后都重设。Flutter 3.47 引擎（FlutterEngineFlags.java）没有帧率相关 manifest meta-data，未加。
