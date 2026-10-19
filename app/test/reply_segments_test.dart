@@ -1,6 +1,7 @@
 // v0.84：回复按段排版——正文类块进回复卡（最宽 bubbleMax），卡片类块（审批/订单/表单/商品/摘要/浏览器）单独成卡、占满聊天区。
 import 'package:assistant/blocks/block_frame.dart';
 import 'package:assistant/features/chat/message_view.dart';
+import 'package:assistant/features/chat/activity_view.dart';
 import 'package:assistant/models/activity.dart';
 import 'package:assistant/models/block.dart';
 import 'package:assistant/models/message.dart';
@@ -65,7 +66,7 @@ void main() {
     expect(tester.getSize(find.byType(BlockFrame)).width, Layout.chatCardMax);
   });
 
-  testWidgets('生成中最后一段是卡片：运行中的工具另起一张小回复卡', (tester) async {
+  testWidgets('生成中最后一段是卡片：运行中的工具不另起回复卡，只在卡下方的步骤胶囊里（v3.5.5）', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     const m = Message(
@@ -77,9 +78,10 @@ void main() {
     );
     await tester.pumpWidget(_host(m));
     await tester.pump(const Duration(milliseconds: 500));
-    final chip = find.textContaining('打开网页');
+    final chip = find.textContaining('正在打开网页', findRichText: true);
     expect(chip, findsOneWidget);
-    expect(find.ancestor(of: chip, matching: find.byType(GlassSurface)), findsOneWidget);
+    expect(find.ancestor(of: chip, matching: find.byType(StepCapsule)), findsOneWidget);
+    expect(find.ancestor(of: chip, matching: find.byType(GlassSurface)), findsNothing);
     expect(tester.getTopLeft(chip).dy, greaterThan(tester.getBottomLeft(find.byType(BlockFrame)).dy));
   });
 }
