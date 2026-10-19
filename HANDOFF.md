@@ -5,7 +5,48 @@
 
 > 写给接手的 AI / 开发者。先通读本文件，再读 `docs/devlog.md` 末尾、`docs/home-redesign.md`、`CHANGELOG.md`。
 
-## 〇、最新交接（2026-10-19，接手先读这一节）
+## 〇、最新交接（2026-10-20 05:40，接手先读这一节）
+
+### 0. 分支总览（全部已 push，未合并 main，服务器仍 3.5.1，最新 APK 3.5.5）
+| 分支 | HEAD | 内容 | 状态 |
+|---|---|---|---|
+| wip/v3.5.1 | 072c84f | v3.5.5（tag 818bfc0）+ 提示浮层修复 | 主线，接手从这里继续 |
+| wip/main-chat | 5a41fbc | 主要聊天+旁聊 **后端+设计**（从 818bfc0 拉，worktree work/wt-mainchat） | 后端完，两端 UI 未开始 |
+| wip/takeover-input | 30935d1 | 接管电脑点击/Cloudflare（worktree work/wt-takeover） | 待用户定是否合并+升级部署 |
+
+### 1. 提示浮层不消失（用户 10-19 20:24 反馈；072c84f，已提交未完全验证）
+- 根因三条（都有测试复现）：①`showToast` 先 hide 再 show，退场中新提示进队列，每条放满 4s（连点 5 次 15s 才消）；②Flutter 3.47 SnackBar 带 action 时 `persist` 默认 true，永不消失；③`MaterialApp.showPerformanceOverlay` 切换会把整个 App 换进新 Stack，ScaffoldMessenger/导航全部卸载重建，出场中的 SnackBar 动画控制器被销毁卡在 0.0；开无障碍（任何无障碍服务读一次界面即 accessibleNavigation=true）时它整条常驻。用户魅族开着无障碍属**推断，未真机验证**。
+- 修法（替换不叠加）：App `ui/kit.dart showToast` 新替旧（清队列+立即撤当前），短 2s / 带按钮 4s（`Timing.toast/toastAction`，tokens.dart），显式 `persist:false`，点击/下滑关；`core/perf_overlay.dart` 新增常驻 `PerfOverlayLayer` 挂 `MaterialApp.builder`，删 `showPerformanceOverlay`；pages_screen 改走 showToast。Web 新增 `lib/toast.ts` + `ui/toast.tsx`（ToastHost 在 App.tsx 挂一次），同规则；替换 Connectors/Security/Wallet/ShareSheet/ConversationMemory 五处，删 `.notice/.share-note/.ctx-note`。
+- 测试：新 `app/test/toast_test.dart`（9 例，开/关无障碍各跑；旧代码 7 例失败）、`perf_overlay_test.dart` +1、`frontend/tests/toast.test.ts` 4 例，全过；flutter analyze 0；Web tsc / npm test 21/21 / build 过。
+- **接手第一件事**：App 全量还剩 22 个测试文件没跑出干净结果（清单 work/toastrun/remaining.txt：send_rise、sheet、shell_page、shell、shots/app_shots、task_*、thinking、usage_*、user_shell、version、wall_retry、wallet）。`cd app && NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost flutter test --concurrency=1 <文件>`，每批约 5 个；着色器资源出错先删 `app/build/unit_test_assets`。之后补 devlog 全局决定 + CHANGELOG“删除/合并”一行，删 work/toastrun/。
+- 待用户定：Web 回复下方“已复制 / 评价已记下”是行内状态，留着还是也改提示？Web 提示明暗截图、魅族真机未验证。
+
+### 2. 主要聊天 + 旁聊（第二节 25；用户 10-19 20:26 确认开做，20:50 要求“借鉴 Muse”）
+- 后端已完成：设计见 `docs/main-chat.md`（§0.5 借鉴 Muse，§7 API，§8 UI 草图，§9 UI 需要的接口），协议已同步 `docs/protocol.md`。要点：对话加 kind(main/side)/parent_id/archived/read_at/writeback_upto/at，表 context_summaries；迁移 0068 建唯一主要聊天、旧个人对话全转旁聊且标已读、幂等可回退；**不把旧消息并进主要聊天**（可 `POST /main/adopt` 把一段旁聊认作主要聊天，仅主聊天为空时）；后台分层压缩（>12000 token 或 75% 触发，最近 6 轮原文，早期原话字面检索最多 3 条注入）；旁聊“带回主要聊天”/归档生成 ~300 字 `side_note` 块插入主聊天；主聊天删/改名/归档 409。203 个后端 smoke 测试全过（`tests/smoke_*.py` 单独跑，venv 无 pytest；`smoke_job_usage` 8 并行偶发 CPU 阈值失败，单跑过，与改动无关）。
+- **两端 UI 未写一行**（两个子 agent 只读完代码就到上限）。已定位要改的文件：
+  - App：目录 HistoryPage/HistoryPanel（features/chat，路由 /chat/history，测试 test/history_test.dart）原地改；chat_controller 默认会话改 `GET /api/conversations/main`；`models/block.dart` 加 side_note，组件仿 `blocks/relay_block.dart`。
+  - Web：`features/chat/ConversationList.tsx`（数据 hooks/useConversations.ts、lib/history.ts）；ChatScreen/useChat/ChatTitle 默认主聊天 + `/read`；lib/types.ts、lib/api.ts；新 `blocks/SideNoteBlock.tsx` 注册 registry.ts、BlockRenderer.tsx，样式 blocks.css 只用现有 token。
+  - UI 规格：顶部固定“主要聊天”（不进时间分组、不可左滑；长按仅 全部文件/分享/导出）；下方“旁聊”分区，unread 蓝点（现有 accent）、written_back=false 小字“未带回”；旁聊长按：带回主要聊天/置顶/重命名/归档/全部文件/分享/导出/删除，左滑=归档；底部“已归档（N）›”进 SheetPage 子页可取消归档/删除；左上 + 叫“新旁聊”；空态文案“具体的事可以开一段旁聊，办完把结论带回主要聊天。”；writeback 返回 unchanged 轻提示、无助手回复 409；流式 message.done 后客户端补调 `POST /{id}/read`；side_note 卡头“来自旁聊 · 标题”，点卡开那段旁聊。
+  - 建议**拆小**：App 目录页 / App 主聊天默认+side_note / Web 目录页 / Web 主聊天默认+side_note，四个任务分开做；同 worktree 并行时只 `git commit -- 自己路径`。做完两端测试+浅深截图+frames.py 帧耗时，再合回 wip/v3.5.1。
+  - 已知限制：回写只刷新调用接口的客户端，另一台设备需重新拉取。
+
+### 3. 接管点击（wip/takeover-input 30935d1，未合并未部署）
+- 已修：Web 横屏坐标映射（CSS cover vs 计算 contain，偏 ~106px）；点击补全移动/按下/保持/抬起序列并传真实按压时长；Web 补转发悬停移动；去 `--enable-automation`、禁 AutomationControlled、普通 Chrome UA。测试页与 Cloudflare 官方测试 sitekey 通过。
+- 真站仍可能被拒（机房 IP、旧 headless、CDP）。若继续：线上镜像 Playwright 1.47 → ≥1.49，`channel="chromium"` 新无头，合并后部署实测；不准靠重试/延时掩盖。**需用户明确同意才部署。**
+
+### 4. 未决（给用户定）
+1. 两端空态不一致：App 胶囊、Web 问候语+四张卡，统一成哪种？
+2. PlanBlock / DelegateBlock 是否收进步骤胶囊（当前倾向不收，属结果）？
+3. 是否合并接管分支 + 升级浏览器镜像 + 部署？
+4. 何时部署服务器（仍 3.5.1）、合回 main。
+
+### 5. 环境备忘
+- Flutter：/workspace/tools/flutter（持久）；Playwright venv /workspace/tools/pw，浏览器 PLAYWRIGHT_BROWSERS_PATH=/workspace/tools/ms-pw，缺的库 /workspace/tools/libs。帧耗时脚本：项目目录 work/frames.py。
+- VPS：`/workspace/tools/pw/bin/python /workspace/tools/ssh/vps.py '<cmd>'`；部署/编 APK 只有用户明确说才做。
+- 沙盒曾有他人 `python3 -c "while 1: pass"` 占满 CPU，测试不稳先 `ps` 查。
+
+### 以下为 v3.5.5 交接原文（10-19）
+
 
 **v3.5.5 = 3.5.4 + 步骤胶囊 + 一批收尾（wip/v3.5.1 分支，版本号 3.5.5 / build 30505，tag v3.5.5；未部署服务器，服务器仍 3.5.1；APK toyuis-3.5.5-arm64.apk 在 VPS 编，取回 /workspace/work/apk/）**。内容：
 - 空态建议被输入框挡（492dc16）：两端复现查根因 = 浏览器标签页多报 44px 顶部安全区（v3.5.1 已修），加回归守卫（App chat_empty_footer_test + Web shots.py 断言）。
@@ -203,7 +244,7 @@ VERSION → 3.3.0，`python3 brand/sync.py`，CHANGELOG 加一节（含“删除
 
 23. **能更好看的就改，不因“旧版就这样 / 只是小瑕疵”放着**（用户 2026-10-16 21:35：“会更好看就改”）：发现视觉瑕疵时，判断改了确实更好看就动手，但要按宗旨统一做（同类组件一起改、两端同改、替换不叠加）并测帧耗时，不为一页单独打补丁。例：v3.5 底部浮条渐隐做在 FloatingFooter 里，所有底部浮条两端统一。
 24. **不要半屏弹层，全部全屏**（用户 2026-10-16 22:27–22:40 真机反馈，原话：“为什么还是半屏显示？”“肯定是做成全屏啊，就这样啊！”“我都说了 你别留那个半屏的 还给我留留留”“丑爆了”“聊天页面的历史记录也是”）：项目切换、聊天历史这类从侧边 / 底部滑出的窄卡（白底圆角卡、右边露出底下页面）一律不要；打开就是铺满整屏、直接落在壁纸上的一页，样子照“项目”列表页（无卡片底）。App 与 Web 同改，旧抽屉样式直接删，不留两套。
-25. **主要聊天 + 旁聊**（用户 2026-10-16 22:40 想法，附 Ziggy 截图：列表顶部固定“主要聊天”，下面“旁聊”分区，未读蓝点、归档）：聊天只有一条永不结束的主对话（无限上下文：旧内容自动压缩成摘要 + 记忆带着走），具体的事开旁聊，旁聊结论回写主对话；替换现在平级的历史对话列表。**待做**：先修完 v3.5.1 这批（全屏 / 断线 / 计划钮 / 顶部空白 / 建议卡被挡），再出设计（数据模型、迁移、提示词、两端 UI）给用户确认后动手。
+25. （2026-10-19 20:26 用户确认开做；后端完成于 wip/main-chat 5a41fbc，UI 待做）**主要聊天 + 旁聊**（用户 2026-10-16 22:40 想法，附 Ziggy 截图：列表顶部固定“主要聊天”，下面“旁聊”分区，未读蓝点、归档）：聊天只有一条永不结束的主对话（无限上下文：旧内容自动压缩成摘要 + 记忆带着走），具体的事开旁聊，旁聊结论回写主对话；替换现在平级的历史对话列表。**待做**：先修完 v3.5.1 这批（全屏 / 断线 / 计划钮 / 顶部空白 / 建议卡被挡），再出设计（数据模型、迁移、提示词、两端 UI）给用户确认后动手。
 26. **照 Hark 的交互细节一个个对齐**（用户 2026-10-16 22:48–22:49：“你看看 hark 做的多好，你的好丑！”“人家点击他，他是做了一个动向…从左往右切过去，这样挺好的。你这样做吧”）：主页 + 新建面板 = 整屏毛玻璃 + 底部输入胶囊（不是白底弹层）；“我的”= 第四个标签横滑切换、导航不消失。今后同类交互先对照 Hark 截图。
 
 27. **卡片 = 带壁纸透色的半透明灰白“假玻璃”，不用纯白**（用户 2026-10-17 定，参考 Hark）：列表里的卡（主页面板卡、今天卡、“我的”列表组 / 用量卡、聊天里的块、子页卡）一律用同一个 token——App `Palette.card` / 网页 `--card`，两端同值（浅 `rgba(248,249,250,0.66)`，深 `rgba(22,23,28,0.62)`，取样见 devlog 2026-10-17）。
