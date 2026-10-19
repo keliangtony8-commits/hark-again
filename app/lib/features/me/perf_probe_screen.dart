@@ -50,7 +50,7 @@ class PerfProbeScreen extends StatelessWidget {
           const PageIntro(line: '还没有结果：到“关于”页打开性能浮层后点“性能自检”。')
         else ...[
           GlassCardInfo(lines: [
-            perfFlymeHint,
+            if (perfNeedsHzHint(r)) perfFlymeHint,
             perfHzLine(r),
             for (final e in r.device.entries) '${e.key}：${e.value}',
             '预算：${ms(r.budgetMs)} ms/帧 · 可滚动 ${r.scrollExtent.round()} px',
@@ -94,7 +94,16 @@ class PerfProbeScreen extends StatelessWidget {
 }
 
 /// v3.5.4 顶部提示：系统不给高刷时让用户自己去系统设置里开（魅族 20 / Flyme 的具体菜单名未能确认，写通用说法）。
+/// v3.5.5 只在 [perfNeedsHzHint] 时出现（真机已跑到 120Hz 时常驻这句会误导）。
 const perfFlymeHint = 'Flyme 若仍 60Hz：到 系统设置 → 显示和亮度 里找“屏幕刷新率”选最高档；若有按应用设置刷新率的选项，给 Toyuis 选高刷';
+
+/// v3.5.5 高刷提示的条件：滑动中采到的系统刷新率（所有变体合起来的最低值）低于 [perfHighHz]。
+/// 读不到刷新率时不出：判断不了，不给可能误导的建议。
+const perfHighHz = 90.0;
+bool perfNeedsHzHint(PerfReport r) {
+  final lo = [for (final (_, s) in r.rows) if (s.hzMin != null) s.hzMin!];
+  return lo.isNotEmpty && lo.reduce((a, b) => a < b ? a : b) < perfHighHz;
+}
 
 /// “滑动中系统刷新率：最低 / 最高”（所有变体合起来）。
 String perfHzLine(PerfReport r) {

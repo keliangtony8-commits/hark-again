@@ -129,6 +129,12 @@ void main() {
     expect(none.hzMin, isNull);
     expect(perfHzLine(PerfReport(device: const {}, rows: [(PerfVariant.a, none)], budgetMs: 8.3)), '滑动中系统刷新率：读不到');
     expect(perfFlymeHint, contains('Flyme 若仍 60Hz'));
+    // v3.5.5 提示只在滑动中刷新率 < 90Hz 时出：60 出、真机 120 不出、读不到不出
+    PerfReport rep(List<double> hz) => PerfReport(device: const {}, rows: [(PerfVariant.a, PerfStats.of([4.0]).withRate(durationUs: 1, hz: hz))], budgetMs: 8.3);
+    expect(perfNeedsHzHint(rep([60, 60, 120])), isTrue);
+    expect(perfNeedsHzHint(rep([120, 120])), isFalse);
+    expect(perfNeedsHzHint(rep([90])), isFalse);
+    expect(perfNeedsHzHint(rep(const [])), isFalse);
   });
 
   testWidgets('切变体：各层真的换、不改树结构（状态不丢）、恢复回全开', (tester) async {
